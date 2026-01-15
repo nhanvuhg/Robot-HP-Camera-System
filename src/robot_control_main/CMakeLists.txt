@@ -59,6 +59,27 @@ ament_target_dependencies(vision_decision_node
 install(TARGETS
   vision_decision_node
   DESTINATION lib/${PROJECT_NAME})
+
+# ============================================================================
+# MOTION EXECUTOR NODE (Refactor Stage 1)
+# ============================================================================
+add_executable(motion_executor src/motion_executor.cpp)
+
+target_include_directories(motion_executor PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+ament_target_dependencies(motion_executor
+  rclcpp
+  std_msgs
+  std_srvs
+  dobot_msgs_v3
+)
+
+install(TARGETS
+  motion_executor
+  DESTINATION lib/${PROJECT_NAME})
   
 install(DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
