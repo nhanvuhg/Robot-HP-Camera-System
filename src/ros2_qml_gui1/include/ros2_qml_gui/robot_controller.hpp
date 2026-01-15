@@ -15,6 +15,8 @@ class RobotController : public QObject
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorMessageChanged)
     Q_PROPERTY(int selectedRow READ selectedRow NOTIFY selectedRowChanged)
     Q_PROPERTY(int selectedSlot READ selectedSlot NOTIFY selectedSlotChanged)
+    Q_PROPERTY(QString systemUptime READ systemUptime NOTIFY systemUptimeChanged)
+    Q_PROPERTY(int trayCount READ trayCount NOTIFY trayCountChanged)
 
 public:
     explicit RobotController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -23,6 +25,8 @@ public:
     QString errorMessage() const { return error_message_; }
     int selectedRow() const { return selected_row_; }
     int selectedSlot() const { return selected_slot_; }
+    QString systemUptime() const { return system_uptime_; }
+    int trayCount() const { return tray_count_; }
 
 public slots:
     void enableSystem(bool enable);
@@ -39,6 +43,8 @@ signals:
     void errorMessageChanged();
     void selectedRowChanged();
     void selectedSlotChanged();
+    void systemUptimeChanged();
+    void trayCountChanged();
     void serviceCallResult(bool success, QString message);
 
 private:
@@ -61,12 +67,16 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr error_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr selected_row_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr selected_slot_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_uptime_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr tray_count_sub_;
     
     // State
     QString system_status_;
     QString error_message_;
     int selected_row_;
     int selected_slot_;
+    QString system_uptime_;
+    int tray_count_;
     
     void callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr client, bool value);
 };

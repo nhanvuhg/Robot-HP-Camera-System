@@ -214,6 +214,12 @@ ApplicationWindow {
                             color: "#6366f1"; font.bold: true; font.pixelSize: 13 
                         }
 
+                        Text { text: "Operation Time:"; color: "#94a3b8"; font.pixelSize: 13 }
+                        Text { text: robotController.systemUptime; color: "#f59e0b"; font.bold: true; font.pixelSize: 13 }
+
+                        Text { text: "Tray Count:"; color: "#94a3b8"; font.pixelSize: 13 }
+                        Text { text: robotController.trayCount; color: "#8b5cf6"; font.bold: true; font.pixelSize: 13 }
+
                         Text { text: "Row:"; color: "#94a3b8"; font.pixelSize: 13 }
                         Text { text: robotController.selectedRow > 0 ? robotController.selectedRow : "-"; color: "#5cf4f1"; font.bold: true; font.pixelSize: 13 }
 

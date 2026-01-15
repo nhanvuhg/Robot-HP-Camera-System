@@ -205,6 +205,58 @@ struct RowFilter
 };
 
 // ============================================================================
+// SLOT DETECTION STRUCTURES (Output Tray)
+// ============================================================================
+
+enum class SlotStableState : int
+{
+    EMPTY = 0,
+    OCC_OK = 1,
+    MIS = 2  // Misoriented
+};
+
+struct SlotDef
+{
+    std::vector<cv::Point2f> corners;  // 4 corners in image coordinates
+    char orient;  // 'H' (horizontal) or 'V' (vertical)
+};
+
+struct Box
+{
+    double x1, y1, x2, y2;
+    
+    static Box fromDetection(const Detection2D& det)
+    {
+        double cx = det.bbox.center.position.x;
+        double cy = det.bbox.center.position.y;
+        double w = det.bbox.size_x;
+        double h = det.bbox.size_y;
+        return {cx - w/2, cy - h/2, cx + w/2, cy + h/2};
+    }
+    
+    char getOrientation() const
+    {
+        double w = x2 - x1;
+        double h = y2 - y1;
+        return (w >= h) ? 'H' : 'V';
+    }
+    
+    static double IoU(const Box& A, const Box& B)
+    {
+        double xA = std::max(A.x1, B.x1);
+        double yA = std::max(A.y1, B.y1);
+        double xB = std::min(A.x2, B.x2);
+        double yB = std::min(A.y2, B.y2);
+        double iw = std::max(0.0, xB - xA);
+        double ih = std::max(0.0, yB - yA);
+        double inter = iw * ih;
+        double areaA = (A.x2 - A.x1) * (A.y2 - A.y1);
+        double areaB = (B.x2 - B.x1) * (B.y2 - B.y1);
+        return inter / std::max(1e-6, areaA + areaB - inter);
+    }
+};
+
+// ============================================================================
 // MAIN ROBOT LOGIC NODE CLASS
 // ============================================================================
 
@@ -369,6 +421,13 @@ private:
     int selected_output_slot_;
     std::mutex output_slot_selection_mutex_;
     rclcpp::Time output_tray_wait_start_;
+    
+    // ✅ Slot debouncing (from robot_logic_example.cpp pattern)
+    static constexpr int SLOT_CONFIRM_FRAMES = 3;  // Frames to confirm stable state
+    std::array<SlotStableState, 9> slot_stable_state_;  // 9 slots (1-indexed usage)
+    std::array<int, 9> slot_empty_streak_;
+    std::array<int, 9> slot_occ_streak_;
+    std::array<int, 9> slot_mis_streak_;
     
     // ========================================================================
     // ROBOT STATE
@@ -706,14 +765,6 @@ void RobotLogicNode::initServices()
         std::bind(&RobotLogicNode::emergencyStopCallback, this,
                  std::placeholders::_1, std::placeholders::_2));
     
-    // New Tray Loaded Service (Reliable replacement for new_tray topic) -- DISABLED
-    /*
-    new_tray_loaded_service_ = create_service<std_srvs::srv::SetBool>(
-        "/revpi/new_tray_loaded_srv",
-        std::bind(&RobotLogicNode::newTrayLoadedCallback, this,
-                 std::placeholders::_1, std::placeholders::_2));
-    */
-    
     // Unified mode selection subscription (1=AUTO, 2=AI, 3=MANUAL)
     set_mode_sub_ = create_subscription<std_msgs::msg::Int32>(
         "/robot/set_mode", 10,
@@ -818,21 +869,43 @@ void RobotLogicNode::initBufferROI()
 
 void RobotLogicNode::initOutputTrayROIs()
 {
+    // ✅ 9 slots from robot_logic_example.cpp (line 1301-1331)
+    // Format: {{BL}, {TL}, {TR}, {BR}} for each slot
     std::vector<std::vector<std::pair<int, int>>> slot_corners = {
-        {{100, 100}, {200, 100}, {200, 200}, {100, 200}},
-        {{220, 100}, {320, 100}, {320, 200}, {220, 200}},
-        {{340, 100}, {440, 100}, {440, 200}, {340, 200}},
-        {{460, 100}, {560, 100}, {560, 200}, {460, 200}},
-        {{100, 220}, {200, 220}, {200, 320}, {100, 320}},
-        {{220, 220}, {320, 220}, {320, 320}, {220, 320}},
-        {{340, 220}, {440, 220}, {440, 320}, {340, 320}},
-        {{460, 220}, {560, 220}, {560, 320}, {460, 320}}
+        // Slot 1 (Bottom-left)
+        {{280, 505}, {280, 415}, {580, 430}, {584, 519}},
+        // Slot 2
+        {{275, 415}, {295, 319}, {579, 327}, {576, 424}},
+        // Slot 3
+        {{297, 315}, {317, 228}, {582, 229}, {580, 320}},
+        // Slot 4
+        {{349, 249}, {362, 172}, {619, 168}, {625, 249}},
+        // Slot 5 (Middle vertical)
+        {{585, 527}, {590, 242}, {690, 240}, {690, 525}},
+        // Slot 6
+        {{699, 517}, {696, 423}, {1010, 415}, {1026, 502}},
+        // Slot 7
+        {{696, 420}, {700, 328}, {989, 328}, {1011, 405}},
+        // Slot 8
+        {{694, 323}, {696, 230}, {966, 230}, {985, 325}},
+        // Slot 9 (Top-right)
+        {{654, 226}, {656, 136}, {917, 140}, {937, 221}}
     };
     
-    for (size_t i = 0; i < 8; ++i)
+    // Initialize 9 ROIs (indices 0-8, usage as 1-9)
+    for (size_t i = 0; i < slot_corners.size() && i < output_tray_rois_.size(); ++i)
     {
         output_tray_rois_[i] = ROIQuad::FromCorners(slot_corners[i]);
     }
+    
+    // ✅ Initialize slot debouncing state
+    slot_stable_state_.fill(SlotStableState::EMPTY);
+    slot_empty_streak_.fill(0);
+    slot_occ_streak_.fill(0);
+    slot_mis_streak_.fill(0);
+    
+    RCLCPP_INFO(this->get_logger(), "[INIT] ✅ Initialized %zu output tray slots with debouncing", 
+                slot_corners.size());
 }
 
 // ============================================================================
@@ -946,8 +1019,9 @@ void RobotLogicNode::camera2Callback(const Detection2DArray::SharedPtr msg)
 {
     if (manual_mode_) return;
     
-    std::array<bool, 8> slot_occupied{};
-    slot_occupied.fill(false);
+    // ✅ Step 1: Detect instant state for each slot (9 slots now)
+    std::array<SlotStableState, 9> instant_state;
+    instant_state.fill(SlotStableState::EMPTY);
     
     for (const auto &det : msg->detections)
     {
@@ -956,51 +1030,95 @@ void RobotLogicNode::camera2Callback(const Detection2DArray::SharedPtr msg)
         const std::string &class_id = det.results[0].hypothesis.class_id;
         float score = det.results[0].hypothesis.score;
         
-        if (class_id != "0" || score < DETECTION_SCORE_THRESH) continue;
+        // Skip class_id 0 (tray) - only detect items (id 1, 2, 3)
+        int cid = -1;
+        try { cid = std::stoi(class_id); } catch (...) { continue; }
+        if (cid == 0) continue;  // Skip tray detection
+        if (cid != 1 && cid != 2 && cid != 3) continue;
+        if (score < DETECTION_SCORE_THRESH) continue;
         
         float cx = det.bbox.center.position.x;
         float cy = det.bbox.center.position.y;
         
-        // ✅ OPTIMIZED: BBox check first (cheap), then polygon (expensive)
-        for (int i = 0; i < 8; ++i)
+        // ✅ Check which slot this detection belongs to (9 slots now)
+        for (size_t i = 0; i < 9 && i < output_tray_rois_.size(); ++i)
         {
-            // Step 1: Fast bbox check (4 comparisons)
-            if (!output_tray_rois_[i].bbox_contains(cx, cy))
-            {
-                continue;  // ← Skip this ROI entirely (saves ~80% checks)
-            }
+            if (!output_tray_rois_[i].bbox_contains(cx, cy)) continue;
             
-            // Step 2: Accurate polygon check (only if bbox matches)
             if (output_tray_rois_[i].contains(cx, cy))
             {
-                slot_occupied[i] = true;
-                break;  // ← Early exit
+                // Mark as occupied (orientation check simplified)
+                instant_state[i] = SlotStableState::OCC_OK;
+                break;
             }
         }
     }
 
-    // Auto Mode override: Ignore occupied slots (Assume all empty -> Pick Slot 1)
+    // Auto Mode override: Ignore occupied slots
     if (!use_ai_for_control_)
     {
-        slot_occupied.fill(false);
+        instant_state.fill(SlotStableState::EMPTY);
     }
     
-    selected_output_slot_ = -1;
-    for (int i = 0; i < 8; ++i)
+    // ✅ Step 2: Update debouncing streaks for stability
+    for (size_t s = 0; s < 9; ++s)
     {
-        if (!slot_occupied[i])
+        if (instant_state[s] == SlotStableState::EMPTY)
         {
-            selected_output_slot_ = i + 1;
-            break;
+            slot_empty_streak_[s]++;
+            slot_occ_streak_[s] = 0;
+            slot_mis_streak_[s] = 0;
+            if (slot_empty_streak_[s] >= SLOT_CONFIRM_FRAMES)
+                slot_stable_state_[s] = SlotStableState::EMPTY;
+        }
+        else if (instant_state[s] == SlotStableState::OCC_OK)
+        {
+            slot_occ_streak_[s]++;
+            slot_empty_streak_[s] = 0;
+            slot_mis_streak_[s] = 0;
+            if (slot_occ_streak_[s] >= SLOT_CONFIRM_FRAMES)
+                slot_stable_state_[s] = SlotStableState::OCC_OK;
+        }
+        else // MIS
+        {
+            slot_mis_streak_[s]++;
+            slot_empty_streak_[s] = 0;
+            slot_occ_streak_[s] = 0;
+            if (slot_mis_streak_[s] >= SLOT_CONFIRM_FRAMES)
+                slot_stable_state_[s] = SlotStableState::MIS;
         }
     }
     
+    // ✅ Step 3: Select first EMPTY slot from stable state (contiguous fill)
+    selected_output_slot_ = -1;
+    for (size_t i = 0; i < 9; ++i)
+    {
+        if (slot_stable_state_[i] == SlotStableState::EMPTY)
+        {
+            // Check contiguous: all slots before this must be OCC
+            bool all_before_occupied = true;
+            for (size_t j = 0; j < i; ++j)
+            {
+                if (slot_stable_state_[j] == SlotStableState::EMPTY)
+                {
+                    all_before_occupied = false;
+                    break;
+                }
+            }
+            if (all_before_occupied)
+            {
+                selected_output_slot_ = static_cast<int>(i + 1);  // 1-indexed
+                break;
+            }
+        }
+    }
+    
+    // Publish selected slot
     auto slot_msg = std::make_shared<std_msgs::msg::Int32>();
     slot_msg->data = selected_output_slot_;
     selected_slot_pub_->publish(*slot_msg);
 
-
-    // Store latest detections (efficient shared_ptr swap)
+    // Store latest detections
     {
         std::lock_guard<std::mutex> lock(detection_mutex_);
         latest_cam1_boxes_ = std::make_shared<std::vector<Detection2D>>(msg->detections);

@@ -38,6 +38,27 @@ target_link_libraries(robot_logic_node ${OpenCV_LIBS})
 install(TARGETS
   robot_logic_node
   DESTINATION lib/${PROJECT_NAME})
+
+# ============================================================================
+# VISION DECISION NODE (Refactor Stage 1)
+# ============================================================================
+add_executable(vision_decision_node src/vision_decision_node.cpp)
+
+target_include_directories(vision_decision_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+ament_target_dependencies(vision_decision_node
+  rclcpp
+  std_msgs
+  vision_msgs
+  geometry_msgs
+)
+
+install(TARGETS
+  vision_decision_node
+  DESTINATION lib/${PROJECT_NAME})
   
 install(DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}

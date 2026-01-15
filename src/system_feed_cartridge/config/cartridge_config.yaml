@@ -1,0 +1,64 @@
+# Cartridge System Configuration
+
+# Servo IP Addresses (Placeholder/Reference)
+servo_ips:
+  1: "192.168.0.101" # InX
+  2: "192.168.0.102" # InY
+  3: "192.168.0.103" # Put Tray
+  4: "192.168.0.104" # OutX
+  5: "192.168.0.105" # OutY
+
+# IO Module
+io_ip: "192.168.0.200"
+
+# Cylinder Channels
+cylinder1_extend_channel: 5
+cylinder1_retract_channel: 4
+cylinder2_extend_channel: 7
+cylinder2_retract_channel: 6
+
+# Servo Positions (mm)
+inx_home: 0.0
+inx_target2: 500.0
+
+iny_home: 0.0
+iny_target2: 200.0
+
+# Servo 3 (Put Tray)
+servo3_home: 0.0
+servo3_push_position: 300.0
+
+# OutX Positions
+outx_home: 0.0
+outx_target1: 100.0
+outx_target2: 400.0
+
+# OutY Positions
+outy_home: 0.0
+outy_target1: 50.0
+outy_target2: 300.0
+
+# Row Positions (mm)
+row_positions:
+  1: 250.0
+  2: 300.0
+  3: 350.0
+  4: 400.0
+  5: 450.0
+  6: 500.0
+  7: 550.0
+  8: 600.0
+
+# Tolerances and Safety
+position_tolerance: 5.0
+iny_safe_position_threshold: 50.0
+outx_safe_position_threshold: 100.0
+
+# Velocities (mm/s)
+servo3_jog_velocity: 50.0
+iny_search_velocity: 30.0
+
+# Timeouts (seconds)
+homing_timeout: 30.0
+move_timeout: 20.0
+cylinder_timeout: 5.0

@@ -8,6 +8,8 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     , error_message_("")
     , selected_row_(-1)
     , selected_slot_(-1)
+    , system_uptime_("00:00:00")
+    , tray_count_(0)
 {
     // Create service clients
     enable_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/enable_system");
@@ -48,6 +50,20 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
             selected_slot_ = msg->data;
             emit selectedSlotChanged();
+        });
+    
+    system_uptime_sub_ = node_->create_subscription<std_msgs::msg::String>(
+        "/robot/system_uptime", 10,
+        [this](const std_msgs::msg::String::SharedPtr msg) {
+            system_uptime_ = QString::fromStdString(msg->data);
+            emit systemUptimeChanged();
+        });
+    
+    tray_count_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
+        "/robot/tray_count", 10,
+        [this](const std_msgs::msg::Int32::SharedPtr msg) {
+            tray_count_ = msg->data;
+            emit trayCountChanged();
         });
     
     qDebug() << "RobotController initialized";
