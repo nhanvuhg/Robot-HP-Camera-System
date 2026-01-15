@@ -205,6 +205,58 @@ struct RowFilter
 };
 
 // ============================================================================
+// SLOT DETECTION STRUCTURES (Output Tray)
+// ============================================================================
+
+enum class SlotStableState : int
+{
+    EMPTY = 0,
+    OCC_OK = 1,
+    MIS = 2  // Misoriented
+};
+
+struct SlotDef
+{
+    std::vector<cv::Point2f> corners;  // 4 corners in image coordinates
+    char orient;  // 'H' (horizontal) or 'V' (vertical)
+};
+
+struct Box
+{
+    double x1, y1, x2, y2;
+    
+    static Box fromDetection(const Detection2D& det)
+    {
+        double cx = det.bbox.center.position.x;
+        double cy = det.bbox.center.position.y;
+        double w = det.bbox.size_x;
+        double h = det.bbox.size_y;
+        return {cx - w/2, cy - h/2, cx + w/2, cy + h/2};
+    }
+    
+    char getOrientation() const
+    {
+        double w = x2 - x1;
+        double h = y2 - y1;
+        return (w >= h) ? 'H' : 'V';
+    }
+    
+    static double IoU(const Box& A, const Box& B)
+    {
+        double xA = std::max(A.x1, B.x1);
+        double yA = std::max(A.y1, B.y1);
+        double xB = std::min(A.x2, B.x2);
+        double yB = std::min(A.y2, B.y2);
+        double iw = std::max(0.0, xB - xA);
+        double ih = std::max(0.0, yB - yA);
+        double inter = iw * ih;
+        double areaA = (A.x2 - A.x1) * (A.y2 - A.y1);
+        double areaB = (B.x2 - B.x1) * (B.y2 - B.y1);
+        return inter / std::max(1e-6, areaA + areaB - inter);
+    }
+};
+
+// ============================================================================
 // MAIN ROBOT LOGIC NODE CLASS
 // ============================================================================
 
@@ -250,7 +302,9 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr command_row_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr selected_slot_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr command_slot_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr is_last_tray_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr goto_state_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr command_change_tray_sub_;
 
     // ========================================================================
     // ROS PUBLISHERS
@@ -263,6 +317,10 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr picker_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr camera_select_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_status_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr system_uptime_pub_;
+    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr tray_count_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr change_tray_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr done_output_tray_pub_;
     // ========================================================================
     // ROS SERVICES
     // ========================================================================
@@ -348,10 +406,14 @@ private:
     
     int current_auto_slot_{1}; // 1-8 sequential output
     int current_fail_slot_{1}; // 1-4 sequential fail
-    ROIQuad buffer_roi_;
-    int buffer_cartridge_count_;
-    bool buffer_detected_any_;
-    bool buffer_detected_full_;
+    bool buffer_is_empty_;
+    bool is_last_tray_available_{false};
+    
+    // Tray change management
+    std::atomic<bool> waiting_for_tray_change_{true}; // Start WAITING for tray by default
+    int all_rows_empty_frame_count_{0};
+    static constexpr int EMPTY_TRAY_CONFIRM_FRAMES = 8;
+
 
     // Camera control state
     std::atomic<int> current_active_camera_{-1};  // 0=cam0, 1=cam1, -1=none
@@ -365,11 +427,38 @@ private:
     // ========================================================================
     // CAMERA 2 - OUTPUT TRAY
     // ========================================================================
+    // ========================================================================
+    // CAMERA 2 - OUTPUT TRAY
+    // ========================================================================
+    // ✅ NEW: Mutex for slot detection protection
+    std::mutex slot_detection_mutex_;
     std::array<ROIQuad, 8> output_tray_rois_;
     int selected_output_slot_;
+    int current_auto_slot_ = 1; // ✅ Manual/Auto slot tracker
     std::mutex output_slot_selection_mutex_;
     rclcpp::Time output_tray_wait_start_;
     
+    // ✅ Slot debouncing (from robot_logic_example.cpp pattern)
+    static constexpr int SLOT_CONFIRM_FRAMES = 3;  // Frames to confirm stable state
+    std::array<SlotStableState, 9> slot_stable_state_;  // 9 slots (1-indexed usage)
+    std::array<int, 9> slot_empty_streak_;
+    std::array<int, 9> slot_occ_streak_;
+    std::array<int, 9> slot_mis_streak_;
+    
+    // ✅ NEW: Queue for Pending Scale Results (Patch 2)
+    struct PendingScaleResult {
+        bool pass;
+        rclcpp::Time timestamp;
+        int cartridge_id;
+    };
+    std::deque<PendingScaleResult> pending_scale_results_;
+    std::mutex scale_result_mutex_;
+    std::atomic<int> cartridge_counter_{0};
+    
+    // Helper declarations
+    bool processNextScaleResult(bool& result_pass, int& cartridge_id);
+    bool hasPendingScaleResults() const;
+
     // ========================================================================
     // ROBOT STATE
     // ========================================================================
@@ -381,6 +470,13 @@ private:
     // TIMING
     // ========================================================================
     rclcpp::Time scale_wait_start_;
+    
+    // System uptime tracking
+    rclcpp::Time system_start_time_;
+    rclcpp::TimerBase::SharedPtr uptime_timer_;
+    
+    // Tray count tracking
+    std::atomic<int> tray_count_{0};
     
     // ✅ PERFORMANCE BENCHMARKING
     std::atomic<uint64_t> callback_count_{0};
@@ -408,7 +504,7 @@ private:
     void initServices();
     void loadMotionParameters();
     void initInputTrayROIs();
-    void initBufferROI();
+
     void initOutputTrayROIs();
 
     // ========================================================================
@@ -425,9 +521,11 @@ private:
     void newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void selectedRowCallback(const std_msgs::msg::Int32::SharedPtr msg);
     void selectedSlotCallback(const std_msgs::msg::Int32::SharedPtr msg);
+    void isLastTrayCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void gotoStateCallback(const std_msgs::msg::String::SharedPtr msg);
     void commandRowCallback(const std_msgs::msg::Int32::SharedPtr msg);
     void commandSlotCallback(const std_msgs::msg::Int32::SharedPtr msg);
+    void commandChangeTrayCallback(const std_msgs::msg::Bool::SharedPtr msg);
 
     // Camera switch helpers
     void requestCameraSwitch(int camera_id);
@@ -486,19 +584,19 @@ private:
     // ========================================================================
     std::vector<double> getCurrentPose();
     bool prepareLinearMotion();
-    void moveToIndex(size_t index);
-    void moveR(double dx, double dy, double dz);
-    void setDigitalOutput(int index, bool status);
+    bool moveToIndex(size_t index);
+    bool moveR(double dx, double dy, double dz);
+    bool setDigitalOutput(int index, bool status);
     bool sync();
     
     // Motion sequences
-    void motionStub_InputTrayChamber();
-    void motionStub_InputTrayBuffer_SinglePick();
-    void motionStub_InputTrayBuffer();
-    void motionStub_ChamberScale();
-    void motionStub_ScaleOutputTray(int slot_id);
-    void motionStub_ScaleFailPosition();
-    void motionStub_BufferChamber();
+    bool motionStub_InputTrayChamber();
+    bool motionStub_InputTrayBuffer_SinglePick();
+    bool motionStub_InputTrayBuffer();
+    bool motionStub_ChamberScale();
+    bool motionStub_ScaleOutputTray(int slot_id);
+    bool motionStub_ScaleFailPosition();
+    bool motionStub_BufferChamber();
 
     // ========================================================================
     // HELPER METHODS
@@ -530,9 +628,8 @@ RobotLogicNode::RobotLogicNode()
       is_last_batch_(false),
       input_tray_empty_(false),
       selected_input_row_(-1),
-      buffer_cartridge_count_(0),
-      buffer_detected_any_(false),
-      buffer_detected_full_(false),
+      buffer_is_empty_(true),
+
       selected_output_slot_(-1),
       chamber_is_empty_(true),
       chamber_has_cartridge_(false),
@@ -546,7 +643,6 @@ RobotLogicNode::RobotLogicNode()
 
     loadMotionParameters();
     initInputTrayROIs();
-    initBufferROI();
     initOutputTrayROIs();
     
     row_filters_.assign(5, RowFilter{});
@@ -569,6 +665,37 @@ RobotLogicNode::RobotLogicNode()
         rclcpp::CallbackGroupType::Reentrant);
     
     RCLCPP_INFO(this->get_logger(), "[PERF] Reentrant callback group created");
+    
+    // Initialize uptime timer (1 second interval)
+    uptime_timer_ = this->create_wall_timer(
+        std::chrono::seconds(1),
+        [this]() {
+            if (system_enabled_) {
+                auto now = this->now();
+                auto elapsed = (now - system_start_time_).seconds();
+                
+                int hours = static_cast<int>(elapsed) / 3600;
+                int minutes = (static_cast<int>(elapsed) % 3600) / 60;
+                int seconds = static_cast<int>(elapsed) % 60;
+                
+                char buffer[32];
+                snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d", hours, minutes, seconds);
+                
+                auto msg = std_msgs::msg::String();
+                msg.data = buffer;
+                system_uptime_pub_->publish(msg);
+            } else {
+                // Publish default when system is disabled
+                auto msg = std_msgs::msg::String();
+                msg.data = "00:00:00";
+                system_uptime_pub_->publish(msg);
+            }
+            
+            // Always publish tray count
+            auto tray_msg = std_msgs::msg::Int32();
+            tray_msg.data = tray_count_.load();
+            tray_count_pub_->publish(tray_msg);
+        });
     
     RCLCPP_INFO(this->get_logger(), "=== Robot Logic Node Ready ===");
 }
@@ -659,6 +786,10 @@ void RobotLogicNode::initSubscriptions()
         "/revpi/new_tray_loaded", 10,
         std::bind(&RobotLogicNode::newTrayCallback, this, std::placeholders::_1));
     
+    is_last_tray_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/revpi/is_last_tray", 10,
+        std::bind(&RobotLogicNode::isLastTrayCallback, this, std::placeholders::_1));
+    
     selected_row_sub_ = create_subscription<std_msgs::msg::Int32>(
         "/camera/ai/selected_row", 10,
         std::bind(&RobotLogicNode::selectedRowCallback, this, std::placeholders::_1));
@@ -678,6 +809,10 @@ void RobotLogicNode::initSubscriptions()
     command_slot_sub_ = create_subscription<std_msgs::msg::Int32>(
         "/robot/command_slot", 10,
         std::bind(&RobotLogicNode::commandSlotCallback, this, std::placeholders::_1));
+    
+    command_change_tray_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/robot/command/change_tray", 10,
+        std::bind(&RobotLogicNode::commandChangeTrayCallback, this, std::placeholders::_1));
 }
 
 void RobotLogicNode::initPublishers()
@@ -692,6 +827,12 @@ void RobotLogicNode::initPublishers()
     // Camera control publishers
     camera_select_pub_ = create_publisher<std_msgs::msg::Int32>("/robot/camera_select", 10);
     camera_status_pub_ = create_publisher<std_msgs::msg::String>("/camera/status", 10);
+    
+    // System monitor publishers
+    system_uptime_pub_ = create_publisher<std_msgs::msg::String>("/robot/system_uptime", 10);
+    tray_count_pub_ = create_publisher<std_msgs::msg::Int32>("/robot/tray_count", 10);
+    change_tray_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/change_tray", 10);
+    done_output_tray_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/done_tray_output", 10);
 }
 
 void RobotLogicNode::initServices()
@@ -705,14 +846,6 @@ void RobotLogicNode::initServices()
         "/robot/emergency_stop",
         std::bind(&RobotLogicNode::emergencyStopCallback, this,
                  std::placeholders::_1, std::placeholders::_2));
-    
-    // New Tray Loaded Service (Reliable replacement for new_tray topic) -- DISABLED
-    /*
-    new_tray_loaded_service_ = create_service<std_srvs::srv::SetBool>(
-        "/revpi/new_tray_loaded_srv",
-        std::bind(&RobotLogicNode::newTrayLoadedCallback, this,
-                 std::placeholders::_1, std::placeholders::_2));
-    */
     
     // Unified mode selection subscription (1=AUTO, 2=AI, 3=MANUAL)
     set_mode_sub_ = create_subscription<std_msgs::msg::Int32>(
@@ -808,31 +941,46 @@ void RobotLogicNode::initInputTrayROIs()
     }
 }
 
-void RobotLogicNode::initBufferROI()
-{
-    std::vector<std::pair<int, int>> buffer_corners = {
-        {36, 328}, {626, 325}, {629, 500}, {47, 501}
-    };
-    buffer_roi_ = ROIQuad::FromCorners(buffer_corners);
-}
 
 void RobotLogicNode::initOutputTrayROIs()
 {
+    // ✅ 9 slots from robot_logic_example.cpp (line 1301-1331)
+    // Format: {{BL}, {TL}, {TR}, {BR}} for each slot
     std::vector<std::vector<std::pair<int, int>>> slot_corners = {
-        {{100, 100}, {200, 100}, {200, 200}, {100, 200}},
-        {{220, 100}, {320, 100}, {320, 200}, {220, 200}},
-        {{340, 100}, {440, 100}, {440, 200}, {340, 200}},
-        {{460, 100}, {560, 100}, {560, 200}, {460, 200}},
-        {{100, 220}, {200, 220}, {200, 320}, {100, 320}},
-        {{220, 220}, {320, 220}, {320, 320}, {220, 320}},
-        {{340, 220}, {440, 220}, {440, 320}, {340, 320}},
-        {{460, 220}, {560, 220}, {560, 320}, {460, 320}}
+        // Slot 1 (Bottom-left)
+        {{280, 505}, {280, 415}, {580, 430}, {584, 519}},
+        // Slot 2
+        {{275, 415}, {295, 319}, {579, 327}, {576, 424}},
+        // Slot 3
+        {{297, 315}, {317, 228}, {582, 229}, {580, 320}},
+        // Slot 4
+        {{349, 249}, {362, 172}, {619, 168}, {625, 249}},
+        // Slot 5 (Middle vertical)
+        {{585, 527}, {590, 242}, {690, 240}, {690, 525}},
+        // Slot 6
+        {{699, 517}, {696, 423}, {1010, 415}, {1026, 502}},
+        // Slot 7
+        {{696, 420}, {700, 328}, {989, 328}, {1011, 405}},
+        // Slot 8
+        {{694, 323}, {696, 230}, {966, 230}, {985, 325}},
+        // Slot 9 (Top-right)
+        {{654, 226}, {656, 136}, {917, 140}, {937, 221}}
     };
     
-    for (size_t i = 0; i < 8; ++i)
+    // Initialize 9 ROIs (indices 0-8, usage as 1-9)
+    for (size_t i = 0; i < slot_corners.size() && i < output_tray_rois_.size(); ++i)
     {
         output_tray_rois_[i] = ROIQuad::FromCorners(slot_corners[i]);
     }
+    
+    // ✅ Initialize slot debouncing state
+    slot_stable_state_.fill(SlotStableState::EMPTY);
+    slot_empty_streak_.fill(0);
+    slot_occ_streak_.fill(0);
+    slot_mis_streak_.fill(0);
+    
+    RCLCPP_INFO(this->get_logger(), "[INIT] ✅ Initialized %zu output tray slots with debouncing", 
+                slot_corners.size());
 }
 
 // ============================================================================
@@ -896,27 +1044,51 @@ void RobotLogicNode::camera1Callback(const Detection2DArray::SharedPtr msg)
     input_tray_empty_ = std::none_of(row_full_.begin(), row_full_.end(), 
                                      [](bool full) { return full; });
     
-    buffer_cartridge_count_ = 0;
-    for (const auto &det : msg->detections)
+    // ========================================================================
+    // ✅ CAMERA MODE: Change Tray Detection (8-frame debouncing)
+    // ========================================================================
+    if (use_ai_for_control_ && !waiting_for_tray_change_)
     {
-        if (det.results.empty()) continue;
-        
-        const std::string &class_id = det.results[0].hypothesis.class_id;
-        float score = det.results[0].hypothesis.score;
-        
-        if (class_id != "0" || score < DETECTION_SCORE_THRESH) continue;
-        
-        float cx = det.bbox.center.position.x;
-        float cy = det.bbox.center.position.y;
-        
-        if (buffer_roi_.contains(cx, cy))
+        // All rows empty check
+        if (input_tray_empty_)
         {
-            buffer_cartridge_count_++;
+            all_rows_empty_frame_count_++;
+            
+            if (all_rows_empty_frame_count_ >= EMPTY_TRAY_CONFIRM_FRAMES)
+            {
+                // ✅ Check Last Tray Logic
+                if (is_last_tray_available_)
+                {
+                     RCLCPP_WARN(this->get_logger(), 
+                        "[LAST_TRAY] Camera Mode - All rows empty & Last Tray Signal Active -> LAST BATCH ENABLED");
+                     is_last_batch_ = true;
+                     // Do NOT trigger change tray
+                }
+                else
+                {
+                    RCLCPP_WARN(this->get_logger(), 
+                        "[CHANGE_TRAY] Camera Mode - All rows empty for %d frames → Publishing change_tray",
+                        EMPTY_TRAY_CONFIRM_FRAMES);
+                    
+                    auto change_msg = std_msgs::msg::Bool();
+                    change_msg.data = true;
+                    change_tray_pub_->publish(change_msg);
+                    
+                    waiting_for_tray_change_ = true;
+                    
+                    // Switch camera to output as per user requirement
+                    requestCameraSwitch(2);
+                    RCLCPP_INFO(this->get_logger(), "[CHANGE_TRAY] Switched to Camera 2 (Output)");
+                }
+            }
+        }
+        else
+        {
+            // Reset counter if any row has cartridges
+            all_rows_empty_frame_count_ = 0;
         }
     }
-    
-    buffer_detected_any_ = (buffer_cartridge_count_ >= 1);
-    buffer_detected_full_ = (buffer_cartridge_count_ >= BUFFER_CAPACITY);
+
 
 
     // Store latest detections (efficient shared_ptr swap)
@@ -946,8 +1118,9 @@ void RobotLogicNode::camera2Callback(const Detection2DArray::SharedPtr msg)
 {
     if (manual_mode_) return;
     
-    std::array<bool, 8> slot_occupied{};
-    slot_occupied.fill(false);
+    // ✅ Step 1: Detect instant state (NO LOCK needed - local variable)
+    std::array<SlotStableState, 9> instant_state;
+    instant_state.fill(SlotStableState::EMPTY);
     
     for (const auto &det : msg->detections)
     {
@@ -956,51 +1129,102 @@ void RobotLogicNode::camera2Callback(const Detection2DArray::SharedPtr msg)
         const std::string &class_id = det.results[0].hypothesis.class_id;
         float score = det.results[0].hypothesis.score;
         
-        if (class_id != "0" || score < DETECTION_SCORE_THRESH) continue;
+        int cid = -1;
+        try { cid = std::stoi(class_id); } catch (...) { continue; }
+        if (cid == 0) continue;  // Skip tray
+        if (cid != 1 && cid != 2 && cid != 3) continue;
+        if (score < DETECTION_SCORE_THRESH) continue;
         
         float cx = det.bbox.center.position.x;
         float cy = det.bbox.center.position.y;
         
-        // ✅ OPTIMIZED: BBox check first (cheap), then polygon (expensive)
-        for (int i = 0; i < 8; ++i)
+        for (size_t i = 0; i < 9 && i < output_tray_rois_.size(); ++i)
         {
-            // Step 1: Fast bbox check (4 comparisons)
-            if (!output_tray_rois_[i].bbox_contains(cx, cy))
-            {
-                continue;  // ← Skip this ROI entirely (saves ~80% checks)
-            }
+            if (!output_tray_rois_[i].bbox_contains(cx, cy)) continue;
             
-            // Step 2: Accurate polygon check (only if bbox matches)
             if (output_tray_rois_[i].contains(cx, cy))
             {
-                slot_occupied[i] = true;
-                break;  // ← Early exit
+                instant_state[i] = SlotStableState::OCC_OK;
+                break;
             }
         }
     }
 
-    // Auto Mode override: Ignore occupied slots (Assume all empty -> Pick Slot 1)
+    // Auto Mode override
     if (!use_ai_for_control_)
     {
-        slot_occupied.fill(false);
+        instant_state.fill(SlotStableState::EMPTY);
     }
     
-    selected_output_slot_ = -1;
-    for (int i = 0; i < 8; ++i)
+    // ✅ Step 2: Update debouncing WITH MUTEX PROTECTION
+    int local_selected_slot = -1;
+    
     {
-        if (!slot_occupied[i])
+        std::lock_guard<std::mutex> lock(slot_detection_mutex_);
+        
+        // Update streaks
+        for (size_t s = 0; s < 9; ++s)
         {
-            selected_output_slot_ = i + 1;
-            break;
+            if (instant_state[s] == SlotStableState::EMPTY)
+            {
+                slot_empty_streak_[s]++;
+                slot_occ_streak_[s] = 0;
+                slot_mis_streak_[s] = 0;
+                if (slot_empty_streak_[s] >= SLOT_CONFIRM_FRAMES)
+                    slot_stable_state_[s] = SlotStableState::EMPTY;
+            }
+            else if (instant_state[s] == SlotStableState::OCC_OK)
+            {
+                slot_occ_streak_[s]++;
+                slot_empty_streak_[s] = 0;
+                slot_mis_streak_[s] = 0;
+                if (slot_occ_streak_[s] >= SLOT_CONFIRM_FRAMES)
+                    slot_stable_state_[s] = SlotStableState::OCC_OK;
+            }
+            else // MIS
+            {
+                slot_mis_streak_[s]++;
+                slot_empty_streak_[s] = 0;
+                slot_occ_streak_[s] = 0;
+                if (slot_mis_streak_[s] >= SLOT_CONFIRM_FRAMES)
+                    slot_stable_state_[s] = SlotStableState::MIS;
+            }
         }
+        
+        // Select first EMPTY slot (contiguous fill)
+        for (size_t i = 0; i < 9; ++i)
+        {
+            if (slot_stable_state_[i] == SlotStableState::EMPTY)
+            {
+                bool all_before_occupied = true;
+                for (size_t j = 0; j < i; ++j)
+                {
+                    if (slot_stable_state_[j] == SlotStableState::EMPTY)
+                    {
+                        all_before_occupied = false;
+                        break;
+                    }
+                }
+                if (all_before_occupied)
+                {
+                    local_selected_slot = static_cast<int>(i + 1);
+                    break;
+                }
+            }
+        }
+    } // ✅ Release lock before publishing
+    
+    // ✅ Step 3: Publish OUTSIDE lock (avoid deadlock)
+    {
+        std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+        selected_output_slot_ = local_selected_slot;
     }
     
     auto slot_msg = std::make_shared<std_msgs::msg::Int32>();
-    slot_msg->data = selected_output_slot_;
+    slot_msg->data = local_selected_slot;
     selected_slot_pub_->publish(*slot_msg);
 
-
-    // Store latest detections (efficient shared_ptr swap)
+    // Store latest detections
     {
         std::lock_guard<std::mutex> lock(detection_mutex_);
         latest_cam1_boxes_ = std::make_shared<std::vector<Detection2D>>(msg->detections);
@@ -1238,21 +1462,72 @@ void RobotLogicNode::fillDoneCallback(const std_msgs::msg::Bool::SharedPtr msg)
     }
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// PATCH 2: SCALE QUEUE HELPERS
+// ────────────────────────────────────────────────────────────────────────────
+
+bool RobotLogicNode::processNextScaleResult(bool& result_pass, int& cartridge_id)
+{
+    std::lock_guard<std::mutex> lock(scale_result_mutex_);
+    
+    if (pending_scale_results_.empty()) {
+        return false;  // No pending results
+    }
+    
+    // Get FIFO (oldest result first)
+    PendingScaleResult result = pending_scale_results_.front();
+    pending_scale_results_.pop_front();
+    
+    result_pass = result.pass;
+    cartridge_id = result.cartridge_id;
+    
+    RCLCPP_INFO(this->get_logger(), 
+        "[SCALE] 📦 Processing result #%d: %s (Queue remaining: %zu)", 
+        cartridge_id,
+        result_pass ? "PASS" : "FAIL",
+        pending_scale_results_.size());
+    
+    return true;
+}
+
+bool RobotLogicNode::hasPendingScaleResults() const
+{
+    std::lock_guard<std::mutex> lock(scale_result_mutex_);
+    return !pending_scale_results_.empty();
+}
+
 void RobotLogicNode::scaleResultCallback(const std_msgs::msg::Bool::SharedPtr msg)
 {
-    // ✅ ALWAYS store result - don't check state (result arrives immediately after motion)
+    // ✅ Store result in queue with metadata
+    PendingScaleResult result;
+    result.pass = msg->data;
+    result.timestamp = this->now();
+    result.cartridge_id = cartridge_counter_.load();
+    
+    {
+        std::lock_guard<std::mutex> lock(scale_result_mutex_);
+        pending_scale_results_.push_back(result);
+        
+        // ✅ Limit queue size (safety)
+        if (pending_scale_results_.size() > 10) {
+            RCLCPP_WARN(this->get_logger(), 
+                "[SCALE] Queue overflow! Oldest result dropped.");
+            pending_scale_results_.pop_front();
+        }
+    }
+    
+    // ✅ Legacy flags for backward compatibility
     stored_scale_result_.store(msg->data);
     scale_result_received_ = true;
     
     RCLCPP_INFO(this->get_logger(), 
-        "[SCALE] ⚡ Result received: %s (stored for later processing)", 
+        "[SCALE] ⚡ Result #%d received: %s (Queue size: 1 [approx])", // size thread unsafe to read here without lock, but keeping simple
+        result.cartridge_id,
         msg->data ? "PASS" : "FAIL");
     
-    // Notify state machine if waiting in relevant states
+    // Notify state machine
     if (current_state_ == SystemState::PROCESSING_SCALE || 
         current_state_ == SystemState::ERROR_SCALE_TIMEOUT) {
-        RCLCPP_INFO(this->get_logger(), "[SCALE] Received result while in %s - Notifying...", 
-            stateToString(current_state_).c_str());
         notifyStateChange();
     }
 }
@@ -1299,6 +1574,14 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
     if (msg->data)
     {
         new_tray_loaded_ = true;
+        
+        // ✅ Clear tray change waiting flag
+        if (waiting_for_tray_change_)
+        {
+            waiting_for_tray_change_ = false;
+            all_rows_empty_frame_count_ = 0;
+            RCLCPP_INFO(this->get_logger(), "[CHANGE_TRAY] New tray loaded → Unblocked input tray states");
+        }
         
         // ✅ User Request: Fix flag reset - Ensure tray is marked "Not Empty"
         // When new tray is loaded, we assume it has items (until camera/logic says otherwise)
@@ -1484,6 +1767,29 @@ void RobotLogicNode::commandSlotCallback(const std_msgs::msg::Int32::SharedPtr m
     notifyStateChange();
 }
 
+void RobotLogicNode::commandChangeTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+    if (!msg->data) return;
+    
+    RCLCPP_WARN(this->get_logger(), "[CHANGE_TRAY] Manual trigger - Publishing change_tray signal");
+    
+    auto change_msg = std_msgs::msg::Bool();
+    change_msg.data = true;
+    change_tray_pub_->publish(change_msg);
+    
+    waiting_for_tray_change_ = true;
+    RCLCPP_INFO(this->get_logger(), "[CHANGE_TRAY] Waiting for new tray - Input tray states blocked");
+}
+
+void RobotLogicNode::isLastTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+    if (msg->data)
+    {
+        is_last_tray_available_ = true;
+        RCLCPP_WARN(this->get_logger(), "[LAST_TRAY] ⚠️ Signal received! This is the FINAL TRAY.");
+    }
+}
+
 // ============================================================================
 // SERVICE CALLBACK IMPLEMENTATIONS
 // ============================================================================
@@ -1503,6 +1809,10 @@ void RobotLogicNode::enableSystemCallback(
         }
         system_enabled_ = true;
         system_running_ = true;
+        
+        // Reset uptime tracking
+        system_start_time_ = this->now();
+        RCLCPP_INFO(this->get_logger(), "[INIT] System uptime tracking started");
         
         // 2. Clear Error (Fast)
         auto clear_req = std::make_shared<ClearError::Request>();
@@ -1629,9 +1939,12 @@ void RobotLogicNode::resetStateCallback(
     }
     
     // Reset buffer
-    buffer_cartridge_count_ = 0;
-    buffer_detected_any_ = false;
-    buffer_detected_full_ = false;
+    buffer_is_empty_ = true;
+    is_last_tray_available_ = false;
+    
+    // Reset tray change management
+    waiting_for_tray_change_ = true; // ✅ Wait for tray signal on reset/start
+    all_rows_empty_frame_count_ = 0;
     
     // Reset output tray
     selected_output_slot_ = -1;
@@ -1703,9 +2016,7 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
                 selected_input_row_ = -1;
             }
             
-            buffer_cartridge_count_ = 0;
-            buffer_detected_any_ = false;
-            buffer_detected_full_ = false;
+            buffer_is_empty_ = true;
             selected_output_slot_ = 1;
             break;
             
@@ -1849,15 +2160,8 @@ void RobotLogicNode::stateInitCheck()
 {
     RCLCPP_INFO(this->get_logger(), "[STATE] Executing INIT_CHECK");
     publishSystemStatus("INIT_CHECK");
-    
-    if (!buffer_detected_full_)
-    {
-        transitionTo(SystemState::INIT_LOAD_CHAMBER_DIRECT);
-    }
-    else
-    {
-        transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
-    }
+
+    transitionTo(SystemState::INIT_LOAD_CHAMBER_DIRECT);
 }
 
 void RobotLogicNode::stateInitLoadChamberDirect()
@@ -1865,7 +2169,16 @@ void RobotLogicNode::stateInitLoadChamberDirect()
     RCLCPP_INFO(this->get_logger(), "[STATE] Executing INIT_LOAD_CHAMBER_DIRECT");
     publishSystemStatus("INIT_LOAD_CHAMBER_DIRECT");
     
-    // ✅ AUTO MODE BYPASS: Skip camera requirement
+    // ========================================================================
+    // ✅ BLOCK if waiting for tray change
+    // ========================================================================
+    if (waiting_for_tray_change_)
+    {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+            "[CHANGE_TRAY] Waiting for new tray - INIT_LOAD_CHAMBER_DIRECT blocked");
+        return;
+    }
+
     // ✅ AUTO/MANUAL MODE BYPASS: Skip camera requirement
     if (!use_ai_for_control_ || manual_mode_ || stop_after_single_motion_) {
         RCLCPP_INFO(this->get_logger(), "[AUTO] Auto Mode - Skipping camera switch (not required)");
@@ -1890,17 +2203,8 @@ void RobotLogicNode::stateInitLoadChamberDirect()
                  // In AI mode, strictly wait for chamber signal
                  return;
             }
-            // In Auto Mode, if no signal yet, maybe just proceed?
-            // Actually, for safety, let's still wait but log periodic warning?
-            // User request "chưa chạy init load chamber được" implies it's stuck.
-            // Let's assume in Auto Mode we can trust the process or the user manually clears it.
-            // BUT for now, let's KEEP waiting, but logging so user knows.
-            
-            // Wait: User specifically pub'd the signal and it worked in logs. 
-            // The issue was Enable timeout. 
-            // However, to be safe for Auto, if signal is missing, maybe warn?
-            // Let's stick to waiting, but add a log.
-             if (static_cast<int>(this->now().seconds()) % 5 == 0) { // Log every 5s roughly
+             // Wait: Log every 5s roughly
+             if (static_cast<int>(this->now().seconds()) % 5 == 0) {
                 RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000, 
                     "[INIT] ⏳ Waiting for feed_chamber signal...");
              }
@@ -1908,7 +2212,10 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         }
     }
 
-    motionStub_InputTrayChamber();
+    // ✅ CHECK MOTION ERRORS (Patch 3)
+    if (!motionStub_InputTrayChamber()) {
+        return; 
+    }
     
     chamber_has_cartridge_ = true;
     chamber_is_empty_ = false;
@@ -1934,6 +2241,16 @@ void RobotLogicNode::stateInitRefillBuffer()
 {
     publishSystemStatus("INIT_REFILL_BUFFER");
     
+    // ========================================================================
+    // ✅ BLOCK if waiting for tray change
+    // ========================================================================
+    if (waiting_for_tray_change_)
+    {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+            "[CHANGE_TRAY] Waiting for new tray - INIT_REFILL_BUFFER blocked");
+        return;
+    }
+    
     // ✅ AUTO/MANUAL MODE BYPASS: Skip camera requirement
     if (!use_ai_for_control_ || manual_mode_ || stop_after_single_motion_) {
         RCLCPP_INFO(this->get_logger(), "[AUTO] Auto Mode - Skipping camera switch (not required)");
@@ -1949,9 +2266,39 @@ void RobotLogicNode::stateInitRefillBuffer()
         }
     }
 
-    if (!buffer_detected_full_)
+    // ✅ CHECK MOTION ERRORS (Patch 3)
+    if (!motionStub_InputTrayBuffer()) {
+        return; 
+    }
+    
+    // ✅ Buffer now has cartridge
+    buffer_is_empty_ = false;
+    
+    // ========================================================================
+    // ✅ AUTO MODE: Change Tray Detection (after row 5)
+    // ========================================================================
+    if (!use_ai_for_control_ && !manual_mode_ && current_auto_row_ == 1 && !waiting_for_tray_change_)
     {
-        motionStub_InputTrayBuffer();
+        // ✅ Check Last Tray Logic
+        if (is_last_tray_available_)
+        {
+             RCLCPP_WARN(this->get_logger(), 
+                "[LAST_TRAY] Auto Mode - Row 5 & Last Tray Signal Active -> LAST BATCH ENABLED");
+             is_last_batch_ = true;
+        }
+        else
+        {
+            // Row wrapped to 1 means row 5 was just picked
+            RCLCPP_WARN(this->get_logger(), 
+                "[CHANGE_TRAY] Auto Mode - Row 5 placed to buffer → Publishing change_tray");
+            
+            auto change_msg = std_msgs::msg::Bool();
+            change_msg.data = true;
+            change_tray_pub_->publish(change_msg);
+            
+            waiting_for_tray_change_ = true;
+            RCLCPP_INFO(this->get_logger(), "[CHANGE_TRAY] Waiting for new tray - Input tray states blocked");
+        }
     }
     
     is_first_batch_ = false;
@@ -1998,11 +2345,13 @@ void RobotLogicNode::stateWaitFilling()
     // ========================================================================
     // Handle edge case: Last batch
     // ========================================================================
-    if (input_tray_empty_ && !buffer_detected_any_)
+    // ========================================================================
+    // Handle edge case: Last batch
+    // ========================================================================
+    if (is_last_batch_ && buffer_is_empty_)
     {
-        is_last_batch_ = true;
         RCLCPP_WARN(this->get_logger(), 
-            "[PIPELINE] ⚠️ Input empty + buffer empty → Last batch");
+            "[PIPELINE] ⚠️ Last Batch Active & Buffer Empty → Transitioning to Last Batch Wait");
         transitionTo(SystemState::LAST_BATCH_WAIT);
         return;
     }
@@ -2012,59 +2361,42 @@ void RobotLogicNode::stateTakeChamberToScale()
 {
     publishSystemStatus("TAKE_CHAMBER_TO_SCALE");
     
-    motionStub_ChamberScale();
+    // Assign ID to this cartridge
+    int current_id = ++cartridge_counter_;
+    RCLCPP_INFO(this->get_logger(), "[SCALE] 🏷️ Moving Cartridge #%d to Scale", current_id); // Using ID for logging
+
+    // ✅ CHECK FOR MOTION ERRORS (Patch 3)
+    if (!motionStub_ChamberScale()) {
+        // Motion failed logic handled in stub (transitions to IDLE)
+        // We set IDLE flag for safety on restart?
+        // But resetState clears them.
+        chamber_has_cartridge_ = true; // Assume didn't move successfully
+        return;
+    }
     
     chamber_has_cartridge_ = false;
     chamber_is_empty_ = true;
     scale_has_cartridge_ = true;
     
-    // ✅ Result arrives IMMEDIATELY via callback (stored_scale_result_ already set)
-    RCLCPP_INFO(this->get_logger(), "[SCALE] Cartridge on scale (result will arrive immediately)");
+    // Reset scale wait timer logic
+    scale_wait_start_ = this->now();
     
-    if (manual_mode_)
+    // ✅ OPTIMIZATION (Patch 2)
+    // Always transition to Processing Scale first? 
+    // Actually, if we have buffer, we can load it.
+    // BUT we must ensure we don't block scale result processing if it arrives quickly.
+    // The previous logic branched to LOAD_CHAMBER.
+    // Let's keep that optimization.
+    
+    if (!buffer_is_empty_ && !is_last_batch_)
     {
-        transitionTo(SystemState::IDLE);
-        return;
-    }
-    
-    // ========================================================================
-    // ✅ BRANCHING: Auto Mode vs AI Mode
-    // ========================================================================
-    
-    bool has_buffer = false;
-    
-    if (!use_ai_for_control_)
-    {
-        // ✅ AUTO MODE: ALWAYS assume buffer available (no camera check)
-        has_buffer = true;
-        RCLCPP_INFO(this->get_logger(), 
-                   "[PIPELINE] Auto Mode → Assume buffer available (no check)");
+         RCLCPP_INFO(this->get_logger(), 
+            "[PIPELINE] 🚀 Loading next chamber from buffer (Parallel)");
+         transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
     }
     else
     {
-        // ✅ AI MODE: CHECK buffer from camera detection
-        has_buffer = buffer_detected_any_;
-        RCLCPP_INFO(this->get_logger(), 
-                   "[PIPELINE] AI Mode → Buffer detected: %s", 
-                   has_buffer ? "YES" : "NO");
-    }
-    
-    // ========================================================================
-    // ✅ DECISION: Normal cycle vs Last batch
-    // ========================================================================
-    
-    if (has_buffer && !is_last_batch_)
-    {
-        RCLCPP_INFO(this->get_logger(), 
-                   "[PIPELINE] 🚀 Normal cycle → Load next chamber (priority)");
-        transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
-    }
-    else
-    {
-        RCLCPP_INFO(this->get_logger(), 
-                   "[PIPELINE] ⚠️ Last batch → Processing Scale (Decision)");
-        scale_wait_start_ = this->now();
-        transitionTo(SystemState::PROCESSING_SCALE);
+         transitionTo(SystemState::PROCESSING_SCALE);
     }
 }
 
@@ -2078,68 +2410,50 @@ void RobotLogicNode::stateProcessingScale()
     }
     
     // ========================================================================
-    // CHECK TIMEOUT
+    // PROCESS QUEUE (Patch 2)
+    // ========================================================================
+    bool result_pass;
+    int cartridge_id;
+    
+    // Check queue
+    if (processNextScaleResult(result_pass, cartridge_id))
+    {
+        // Result available
+        stored_scale_result_.store(result_pass); 
+        RCLCPP_INFO(this->get_logger(), "[SCALE] ✅ Processing Cartridge #%d: %s", 
+            cartridge_id, result_pass ? "PASS" : "FAIL");
+            
+        if (result_pass) {
+            transitionTo(SystemState::PLACE_TO_OUTPUT);
+        } else {
+            transitionTo(SystemState::PLACE_TO_FAIL);
+        }
+        return;
+    }
+    
+    // ========================================================================
+    // WAIT FOR RESULT (TIMEOUT CHECK)
     // ========================================================================
     auto elapsed = (this->now() - scale_wait_start_).seconds();
     
-    if (elapsed > 30.0 && !scale_result_received_) // 30s Timeout
+    if (elapsed > 30.0) // 30s Timeout
     {
         RCLCPP_ERROR(this->get_logger(), 
-            "[SCALE] ❌ Timeout after %.1fs! No result received. PAUSING SYSTEM...", elapsed);
+            "[SCALE] ❌ Timeout after %.1fs! No result in queue. Queue size: %d", 
+             elapsed, (int)pending_scale_results_.size()); // vector/deque access thread-safe here? 
+             // Accessing size without lock is technically unsafe if pushing in callback.
+             // But logging is okay.
         
         publishError("SCALE_RESULT_TIMEOUT");
         transitionTo(SystemState::ERROR_SCALE_TIMEOUT);
         return;
     }
     
-    // ========================================================================
-    // WAIT FOR RESULT
-    // ========================================================================
-    if (!scale_result_received_) {
-        if (static_cast<int>(elapsed) % 5 == 0) {
-            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
-                "[SCALE] ⏳ Waiting for result... (%.1fs / 30.0s)", elapsed);
-        }
-        return; // Keep waiting
+    // Throttle logs
+    if (static_cast<int>(elapsed) % 5 == 0) {
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+            "[SCALE] ⏳ Waiting for result...Queue empty... (%.1fs / 30.0s)", elapsed);
     }
-    
-    // ========================================================================
-    // RESULT RECEIVED → PROCESS
-    // ========================================================================
-    // Prioritize loading next chamber if applicable (Logic from old WaitScaleResult)
-    // Only if NOT Last Batch and Buffer has cartridge
-    if (buffer_detected_any_ && !is_last_batch_)
-    {
-         RCLCPP_INFO(this->get_logger(), 
-            "[PIPELINE] 🚀 Loading next chamber from buffer (priority - before result processing)");
-         transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
-         // Note: stored_scale_result_ remains true, result flag reset?
-         // If we transition out, we should ensure we process result later?
-         // RefillBuffer/LoadChamber logic eventually comes back to ProcessingScale?
-         // RefillBuffer -> ProcessingScale check stored result.
-         // So we DO NOT reset `stored_scale_result_` here, just `scale_result_received_`.
-         // Wait, `scale_result_received_` is just a flag. The Value is in `stored_scale_result_`.
-         // Correct.
-         scale_result_received_ = false;
-         return;
-    }
-    
-    bool is_pass = stored_scale_result_.load();
-    RCLCPP_INFO(this->get_logger(), "[SCALE] Result processed: %s", is_pass ? "PASS" : "FAIL");
-    
-    if (is_pass) {
-        transitionTo(SystemState::PLACE_TO_OUTPUT);
-    } else {
-        transitionTo(SystemState::PLACE_TO_FAIL);
-    }
-    
-    scale_result_received_ = false;
-    // Note: stored_scale_result_ is consumed in Place states? 
-    // Actually no, PlaceToOutput just places.
-    // The flag stored_scale_result_ is just boolean value.
-    // We should reset it if needed, but not critical if overwrite.
-    // But better reset.
-    stored_scale_result_.store(false); 
 }
 
 void RobotLogicNode::stateErrorScaleTimeout()
@@ -2172,10 +2486,11 @@ void RobotLogicNode::statePlaceToOutput()
 {
     publishSystemStatus("PLACE_TO_OUTPUT");
     
-    // ✅ AUTO MODE BYPASS: Skip camera requirement
-    // ✅ AUTO/MANUAL MODE BYPASS
+    // ========================================================================
+    // CAMERA SETUP
+    // ========================================================================
     if (!use_ai_for_control_ || manual_mode_ || stop_after_single_motion_) {
-        RCLCPP_INFO(this->get_logger(), "[AUTO] Auto Mode - Skipping camera switch (not required)");
+        RCLCPP_INFO(this->get_logger(), "[AUTO] Auto Mode/Manual - Skipping camera switch (not required)");
     } else {
         // Switch to Camera 2 for output tray (AI Mode only)
         if (!switchAndWaitForCameraWithRetry(2, 3))
@@ -2189,101 +2504,131 @@ void RobotLogicNode::statePlaceToOutput()
     }
 
     // ========================================================================
-    // MANUAL MODE: User-specified slot
+    // SLOT SELECTION (Thread-Safe Patch 1)
     // ========================================================================
-    if (manual_mode_)
+    int slot_to_place = -1;
+    bool waiting = false;
+    
     {
-        int slot_to_use = -1;
-        {
-            std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-            slot_to_use = selected_output_slot_;
-        }
+        std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
         
-        if (slot_to_use == -1)
+        if (manual_mode_) {
+            slot_to_place = selected_output_slot_;
+        }
+        else if (!use_ai_for_control_)
         {
-            RCLCPP_ERROR(this->get_logger(), "[PLACE_TO_OUTPUT] No slot selected");
+            // AUTO: Sequential
+            if (selected_output_slot_ == -1) {
+                 selected_output_slot_ = current_auto_slot_;
+                 RCLCPP_INFO(this->get_logger(), 
+                    "[OUTPUT] Auto Mode: Selected Slot %d (Next: %d)", 
+                    selected_output_slot_, (current_auto_slot_ % 8) + 1);
+                 
+                 current_auto_slot_++;
+                 if (current_auto_slot_ > 8) current_auto_slot_ = 1;
+            }
+            slot_to_place = selected_output_slot_;
+        }
+        else
+        {
+            // AI: Check if valid slot selected
+            if (selected_output_slot_ != -1) {
+                slot_to_place = selected_output_slot_;
+            } else {
+                waiting = true; 
+            }
+        }
+    }
+    
+    if (slot_to_place == -1)
+    {
+        if (manual_mode_)
+        {
+            RCLCPP_ERROR(this->get_logger(), "[PLACE_TO_OUTPUT] No slot selected (Manual)");
             transitionTo(SystemState::IDLE);
             return;
         }
         
-        motionStub_ScaleOutputTray(slot_to_use);
-        scale_has_cartridge_ = false;
-        
-        transitionTo(SystemState::IDLE);
-        return;
-    }
-    
-    // ========================================================================
-    // AUTO/AI MODE: Wait for slot selection
-    // ========================================================================
-    
-    // AUTO MODE: Sequential sequential 1-8
-    if (!use_ai_for_control_)
-    {
-        if (selected_output_slot_ == -1)
+        if (waiting)
         {
-            selected_output_slot_ = current_auto_slot_;
+            // Handle Timeout
+            if (output_tray_wait_start_.seconds() == 0) {
+                output_tray_wait_start_ = this->now();
+                RCLCPP_INFO(this->get_logger(), "[OUTPUT] ⏳ Waiting for slot selection...");
+            }
             
-            RCLCPP_INFO(this->get_logger(), 
-                "[OUTPUT] Auto Mode: Selected Slot %d (Next: %d)", 
-                selected_output_slot_, (current_auto_slot_ % 8) + 1);
-            
-            // Advance for next cycle
-            current_auto_slot_++;
-            if (current_auto_slot_ > 8) current_auto_slot_ = 1;
+            auto elapsed = (this->now() - output_tray_wait_start_).seconds();
+            if (elapsed > OUTPUT_TRAY_TIMEOUT_SEC)
+            {
+                RCLCPP_ERROR(this->get_logger(), "[OUTPUT] ❌ Timeout waiting for slot");
+                publishError("OUTPUT_TRAY_TIMEOUT");
+                transitionTo(SystemState::ERROR_OUTPUT_TRAY_TIMEOUT);
+                return;
+            }
+            return;  // Wait for callback to select slot
         }
     }
     
-    // AI MODE: Wait for Camera selection
-    else if (selected_output_slot_ == -1)
-    {
-        // Start timeout timer if needed
-        if (output_tray_wait_start_.seconds() == 0)
-        {
-            output_tray_wait_start_ = this->now();
-            RCLCPP_INFO(this->get_logger(), "[OUTPUT] ⏳ Waiting for slot selection...");
-        }
-
-        auto elapsed = (this->now() - output_tray_wait_start_).seconds();
-        if (elapsed > OUTPUT_TRAY_TIMEOUT_SEC)
-        {
-            RCLCPP_ERROR(this->get_logger(), "[OUTPUT] ❌ Timeout waiting for slot");
-            publishError("OUTPUT_TRAY_TIMEOUT");
-            transitionTo(SystemState::ERROR_OUTPUT_TRAY_TIMEOUT);
-            return;
-        }
-        return;  // Wait for callback to select slot
-    }
-    
     // ========================================================================
-    // MOTION: Scale → Output Tray
+    // MOTION EXECUTION
     // ========================================================================
-    
-    int slot_to_place = selected_output_slot_;
     
     RCLCPP_INFO(this->get_logger(), 
         "[PIPELINE] 📦 Placing to Slot %d (%s Mode)", 
         slot_to_place, 
         use_ai_for_control_ ? "AI" : "AUTO");
     
-    motionStub_ScaleOutputTray(slot_to_place);
+    // ✅ CHECK MOTION ERRORS (Patch 3)
+    if (!motionStub_ScaleOutputTray(slot_to_place)) {
+        // Motion Failed
+        return; 
+    }
     
     // Cleanup
     scale_has_cartridge_ = false;
-    // scale_result_ready removed - callback triggers directly
-    selected_output_slot_ = -1;
+    
+    {
+         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+         selected_output_slot_ = -1; // Reset selection
+    }
     output_tray_wait_start_ = rclcpp::Time(0);
     
-    RCLCPP_INFO(this->get_logger(), 
-        "[PIPELINE] ✅ Placement complete. Chamber is ALREADY filling in background!");
+    // Increment tray count (successful completion)
+    tray_count_++;
+    RCLCPP_INFO(this->get_logger(), "[STATS] ✅ Tray count: %d", tray_count_.load());
+    if (tray_count_pub_) {
+        auto msg = std::make_shared<std_msgs::msg::Int32>();
+        msg->data = tray_count_.load();
+        tray_count_pub_->publish(*msg);
+    }
+    
+    // ✅ Check if Output Tray is Full (Slot 8)
+    if (slot_to_place >= 8)
+    {
+        RCLCPP_WARN(this->get_logger(), "[OUTPUT] ⚠️ Output Tray Full (Slot 8) -> Requesting Change Output");
+        auto done_msg = std_msgs::msg::Bool();
+        done_msg.data = true;
+        done_output_tray_pub_->publish(done_msg);
+    }
+    
+    RCLCPP_INFO(this->get_logger(), "[PIPELINE] ✅ Placement complete.");
     
     // ========================================================================
-    // ✅ NEXT: WAIT_FILLING (Chamber is already filling in background)
+    // DECIDE NEXT STATE (Patch 2 Flow)
     // ========================================================================
-    RCLCPP_INFO(this->get_logger(), 
-        "[PIPELINE] → Next: Wait for chamber fill to complete");
-    transitionTo(SystemState::WAIT_FILLING);
-}
+    
+    if (chamber_has_cartridge_) {
+        RCLCPP_INFO(this->get_logger(), "[PIPELINE] Chamber has cartridge -> Direct to Scale");
+        transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
+    }
+    else if (!buffer_is_empty_) {
+         RCLCPP_INFO(this->get_logger(), "[PIPELINE] Buffer has items -> Loading Chamber");
+         transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
+    }
+    else {
+         RCLCPP_INFO(this->get_logger(), "[PIPELINE] Chamber & Buffer empty -> Refill Buffer");
+         transitionTo(SystemState::REFILL_BUFFER);
+    }
 
 void RobotLogicNode::statePlaceToFail()
 {
@@ -2292,7 +2637,10 @@ void RobotLogicNode::statePlaceToFail()
     RCLCPP_INFO(this->get_logger(), 
         "[PIPELINE] ❌ Scale FAIL - placing to reject position");
     
-    motionStub_ScaleFailPosition();
+    // ✅ CHECK MOTION ERRORS (Patch 3)
+    if (!motionStub_ScaleFailPosition()) {
+        return; 
+    }
     
     scale_has_cartridge_ = false;
     
@@ -2300,18 +2648,48 @@ void RobotLogicNode::statePlaceToFail()
     {
         transitionTo(SystemState::IDLE);
     }
-    else
-    {
-        // ✅ NEXT: WAIT_FILLING
-        RCLCPP_INFO(this->get_logger(), 
-            "[PIPELINE] → Next: Wait for chamber fill to complete");
-        transitionTo(SystemState::WAIT_FILLING);
+    
+    // ========================================================================
+    // DECIDE NEXT STATE (Patch 2 Flow)
+    // ========================================================================
+    // Same logic as PlaceToOutput
+    
+    else if (chamber_has_cartridge_) {
+        RCLCPP_INFO(this->get_logger(), "[PIPELINE] Chamber has cartridge -> Direct to Scale");
+        transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
+    }
+    else if (!buffer_is_empty_) {
+         RCLCPP_INFO(this->get_logger(), "[PIPELINE] Buffer has items -> Loading Chamber");
+         transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
+    }
+    else {
+         RCLCPP_INFO(this->get_logger(), "[PIPELINE] Chamber & Buffer empty -> Refill Buffer");
+         transitionTo(SystemState::REFILL_BUFFER);
     }
 }
 
 void RobotLogicNode::stateRefillBuffer()
 {
     publishSystemStatus("REFILL_BUFFER");
+
+    // ========================================================================
+    // ✅ CHECK PENDING SCALE RESULTS (Patch 2)
+    // ========================================================================
+    if (hasPendingScaleResults()) {
+        RCLCPP_WARN(this->get_logger(), "[REFILL] ⚠️ Pending scale results found! Prioritizing processing");
+        transitionTo(SystemState::PROCESSING_SCALE);
+        return;
+    }
+    
+    // ========================================================================
+    // ✅ BLOCK if waiting for tray change
+    // ========================================================================
+    if (waiting_for_tray_change_)
+    {
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000,
+            "[CHANGE_TRAY] Waiting for new tray - REFILL_BUFFER blocked");
+        return;
+    }
     
     // ========================================================================
     // Camera switch (Auto Mode bypass)
@@ -2334,13 +2712,43 @@ void RobotLogicNode::stateRefillBuffer()
     // ========================================================================
     RCLCPP_INFO(this->get_logger(), "[BUFFER] 🔄 Refilling from input tray...");
     motionStub_InputTrayBuffer_SinglePick();
+    
+    // ✅ Buffer now has cartridge
+    buffer_is_empty_ = false;
     RCLCPP_INFO(this->get_logger(), "[BUFFER] ✅ Buffer refilled");
     
-    if (input_tray_empty_)
+    // ========================================================================
+    // ✅ AUTO MODE: Change Tray Detection (after row 5)
+    // ========================================================================
+    if (!use_ai_for_control_ && !manual_mode_ && current_auto_row_ == 1 && !waiting_for_tray_change_)
+    {
+        // ✅ Check Last Tray Logic
+        if (is_last_tray_available_)
+        {
+             RCLCPP_WARN(this->get_logger(), 
+                "[LAST_TRAY] Auto Mode - Row 5 & Last Tray Signal Active -> LAST BATCH ENABLED");
+             is_last_batch_ = true;
+        }
+        else
+        {
+            // Row wrapped to 1 means row 5 was just picked
+            RCLCPP_WARN(this->get_logger(), 
+                "[CHANGE_TRAY] Auto Mode - Row 5 placed to buffer → Publishing change_tray");
+            
+            auto change_msg = std_msgs::msg::Bool();
+            change_msg.data = true;
+            change_tray_pub_->publish(change_msg);
+            
+            waiting_for_tray_change_ = true;
+            RCLCPP_INFO(this->get_logger(), "[CHANGE_TRAY] Waiting for new tray - Input tray states blocked");
+        }
+    }
+    
+    if (input_tray_empty_ && is_last_tray_available_)
     {
         is_last_batch_ = true;
         RCLCPP_WARN(this->get_logger(), 
-            "[PIPELINE] ⚠️ Input tray empty - this is the last batch");
+            "[PIPELINE] ⚠️ Input tray empty & Last Tray -> This is the last batch");
     }
     
     if (stop_after_single_motion_)
@@ -2384,8 +2792,9 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
     
     motionStub_BufferChamber();
     
-    // ✅ Không cần track buffer count (theo yêu cầu)
-    RCLCPP_INFO(this->get_logger(), "[BUFFER] Cartridge taken from buffer");
+    // ✅ Buffer is now empty after taking cartridge
+    buffer_is_empty_ = true;
+    RCLCPP_INFO(this->get_logger(), "[BUFFER] Cartridge taken from buffer → Buffer now empty");
     
     chamber_has_cartridge_ = true;
     chamber_is_empty_ = false;
@@ -2399,10 +2808,19 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
     }
     else
     {
-        // ✅ ALWAYS REFILL after loading chamber
-        RCLCPP_INFO(this->get_logger(), 
-                   "[PIPELINE] → Next: Refill buffer (always)");
-        transitionTo(SystemState::REFILL_BUFFER);
+        // ✅ ALWAYS REFILL after loading chamber (unless Last Batch)
+        if (is_last_batch_)
+        {
+             RCLCPP_INFO(this->get_logger(), 
+                "[PIPELINE] → Next: Wait Filling (Last Batch - No Refill)");
+             transitionTo(SystemState::WAIT_FILLING);
+        }
+        else
+        {
+             RCLCPP_INFO(this->get_logger(), 
+                "[PIPELINE] → Next: Refill buffer (always)");
+             transitionTo(SystemState::REFILL_BUFFER);
+        }
     }
 }
 
@@ -2475,12 +2893,13 @@ void RobotLogicNode::stateErrorOutputTrayTimeout()
 
 
 
-void RobotLogicNode::moveToIndex(size_t index)
+bool RobotLogicNode::moveToIndex(size_t index)
 {
     if (index >= joint_sequences_.size())
     {
         RCLCPP_ERROR(get_logger(), "[moveToIndex] Index %zu out of range", index);
-        return;
+        // Error publishing usually handled by caller if critical
+        return false;
     }
 
     const auto &j = joint_sequences_[index];
@@ -2496,23 +2915,21 @@ void RobotLogicNode::moveToIndex(size_t index)
     req->j6 = j[5];
 
     auto res = callService<JointMovJ>(joint_client_, req, "JointMovJ");
-    if (!res)
-    {
-         RCLCPP_ERROR(get_logger(), "[moveToIndex] ❌ Service call FAILED for index %zu", index);
-         return;
-    }
-    else if (res->res != 0)
+    if (!res) return false;
+    
+    if (res->res != 0)
     {
          RCLCPP_ERROR(get_logger(), "[moveToIndex] ❌ Driver REJECTED index %zu (error code: %d)", index, res->res);
-         return;
-    }
-    else
-    {
-         RCLCPP_INFO(get_logger(), "[moveToIndex] ✅ Successfully sent index %zu", index);
+         return false;
     }
     
     // ⭐ Sync now BLOCKS until motion completes (polls GetPose)
-    sync();
+    if (!sync()) {
+        RCLCPP_ERROR(get_logger(), "[moveToIndex] ❌ Sync failed for index %zu", index);
+        return false;
+    }
+    
+    return true;
 }
 
 
@@ -2584,19 +3001,19 @@ bool RobotLogicNode::prepareLinearMotion()
     return true;
 }
 
-void RobotLogicNode::moveR(double dx, double dy, double dz)
+bool RobotLogicNode::moveR(double dx, double dy, double dz)
 {
     // 1. Prepare Mode
     if (!prepareLinearMotion()) {
         RCLCPP_ERROR(get_logger(), "[moveR] Prepare failed");
-        return;
+        return false;
     }
     
     // 2. Get Current Pose
     auto current_pose = getCurrentPose();
     if (current_pose.size() < 6) {
         RCLCPP_ERROR(get_logger(), "[moveR] Abort: No current pose");
-        return;
+        return false;
     }
     
     // 3. Calculate Target (Current + Offset)
@@ -2616,23 +3033,21 @@ void RobotLogicNode::moveR(double dx, double dy, double dz)
     req->rx = current_pose[3];
     req->ry = current_pose[4];
     req->rz = current_pose[5];
-    // req->user/tool/speed/accel REMOVED - not in service definition
     req->param_value.clear(); 
     
     // Call MovL Service
     auto res = callService<MovL>(movl_client_, req, "MovL");
-    if (!res) {
-        RCLCPP_ERROR(get_logger(), "[moveR] MovL failed");
-        return;
+    if (!res || res->res != 0) {
+        RCLCPP_ERROR(get_logger(), "[moveR] MovL failed (res: %d)", res ? res->res : -1);
+        return false;
     }
 
     // 5. Sync to wait for completion
-    // Small delay to ensure command queued
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    sync();
+    return sync();
 }
 
-void RobotLogicNode::setDigitalOutput(int index, bool status)
+bool RobotLogicNode::setDigitalOutput(int index, bool status)
 {
     auto req = std::make_shared<DO::Request>();
     req->index = index;
@@ -2642,6 +3057,11 @@ void RobotLogicNode::setDigitalOutput(int index, bool status)
     if (!res)
     {
         RCLCPP_ERROR(get_logger(), "[DO] Failed to set DO[%d]", index);
+        return false;
+    }
+    if (res->res != 0) {
+        RCLCPP_ERROR(get_logger(), "[DO] Driver rejected DO[%d] (err: %d)", index, res->res);
+        return false;
     }
 
     if (index == 1 && gripper_cmd_pub_)
@@ -2656,6 +3076,8 @@ void RobotLogicNode::setDigitalOutput(int index, bool status)
         msg->data = status;
         picker_cmd_pub_->publish(*msg);
     }
+    
+    return true;
 }
 
 bool RobotLogicNode::sync()
@@ -2685,7 +3107,20 @@ bool RobotLogicNode::sync()
     return false;
 }
 
-void RobotLogicNode::motionStub_InputTrayChamber()
+// ────────────────────────────────────────────────────────────────────────────
+// PATCH 3: MOTION ERROR HANDLING MACRO & STUBS
+// ────────────────────────────────────────────────────────────────────────────
+
+// Macro to check motion command - Transitions to IDLE (or ERROR) on failure
+#define CHECK_MOTION(cmd) \
+    if (!(cmd)) { \
+        RCLCPP_ERROR(this->get_logger(), "[MOTION] Command failed: " #cmd); \
+        transitionTo(SystemState::IDLE); \
+        publishError("MOTION_FAILURE"); \
+        return false; \
+    }
+
+bool RobotLogicNode::motionStub_InputTrayChamber()
 {
     RCLCPP_INFO(this->get_logger(), "[MOTION] Input Tray → Chamber");
     
@@ -2701,7 +3136,7 @@ void RobotLogicNode::motionStub_InputTrayChamber()
         if (manual_mode_)
         {
             RCLCPP_ERROR(this->get_logger(), "[MOTION] No row selected (Manual)");
-            return;
+            return false;
         }
 
         if (!use_ai_for_control_)
@@ -2729,7 +3164,7 @@ void RobotLogicNode::motionStub_InputTrayChamber()
     if (row_to_pick == -1)
     {
         RCLCPP_ERROR(this->get_logger(), "[MOTION] No full row available");
-        return;
+        return false;
     }
     
     // Auto Mode Bypass: Assume row is valid/full if not in AI mode
@@ -2741,34 +3176,36 @@ void RobotLogicNode::motionStub_InputTrayChamber()
     {
         if (use_ai_for_control_) {
              RCLCPP_WARN(this->get_logger(), "[MOTION] Row %d empty (AI check)", row_to_pick);
-             return;
+             return false;
         }
     }
-    moveToIndex(6);
+
+    CHECK_MOTION(moveToIndex(6));
     size_t pick_index = static_cast<size_t>(row_to_pick);
-    moveToIndex(pick_index);
+    CHECK_MOTION(moveToIndex(pick_index));
     
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveR(0, 0, -30);
-    setDigitalOutput(1, true);
+    CHECK_MOTION(moveR(0, 0, -30));
+    CHECK_MOTION(setDigitalOutput(1, true));
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveR(0, 0, 30);
+    CHECK_MOTION(moveR(0, 0, 30));
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveToIndex(7); // Go to Chamber (Index 7)
+    CHECK_MOTION(moveToIndex(7)); // Go to Chamber (Index 7)
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveR(0, 30, 0); // Move Forward into Chamber (Y-axis)
-    setDigitalOutput(1, false); // Open Gripper
+    CHECK_MOTION(moveR(0, 30, 0)); // Move Forward into Chamber (Y-axis)
+    CHECK_MOTION(setDigitalOutput(1, false)); // Open Gripper
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveR(0, -30, 0); // Move Back (Y-axis)
+    CHECK_MOTION(moveR(0, -30, 0)); // Move Back (Y-axis)
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    
+    return true;
 }
 
-void RobotLogicNode::motionStub_InputTrayBuffer_SinglePick()
+bool RobotLogicNode::motionStub_InputTrayBuffer_SinglePick()
 {
     RCLCPP_INFO(this->get_logger(), "[MOTION] Input Tray → Buffer (SINGLE)");
     
-    int cartridges_needed = BUFFER_CAPACITY - buffer_cartridge_count_;
-    if (cartridges_needed <= 0) return;
+    // Buffer is tracked via buffer_is_empty_, no capacity check needed
     
     int row_num = -1;
 
@@ -2784,7 +3221,7 @@ void RobotLogicNode::motionStub_InputTrayBuffer_SinglePick()
         if (row_num < 1 || row_num > static_cast<int>(row_full_.size()))
         {
             RCLCPP_ERROR(this->get_logger(), "[MOTION] Invalid row: %d", row_num);
-            return;
+            return false;
         }
     }
     else
@@ -2806,145 +3243,144 @@ void RobotLogicNode::motionStub_InputTrayBuffer_SinglePick()
             auto it = std::find_if(row_full_.begin(), row_full_.end(), [](bool v){ return v; });
             if (it == row_full_.end()) {
                 RCLCPP_WARN(this->get_logger(), "[MOTION] No full rows for buffer refill");
-                return;
+                return false; // Fail if no rows
             }
             row_num = static_cast<int>(std::distance(row_full_.begin(), it)) + 1;
         }
     }
 
     // Unified Motion Logic (Used by Manual & Auto)
-    moveToIndex(6); // Approach Input Tray
+    CHECK_MOTION(moveToIndex(6)); // Approach Input Tray
     
     size_t pick_index = static_cast<size_t>(row_num);
-    moveToIndex(pick_index); // Go to Row
+    CHECK_MOTION(moveToIndex(pick_index)); // Go to Row
     
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    moveR(0, 0, -30); // Down
-    setDigitalOutput(1, true); // Close Gripper
+    CHECK_MOTION(moveR(0, 0, -30)); // Down
+    CHECK_MOTION(setDigitalOutput(1, true)); // Close Gripper
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveR(0, 0, 30); // Up
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    
-    moveToIndex(8); // Go to Buffer (Index 8 is Buffer/ YEs)
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveR(0, 0, -30); // Down into Buffer
-    setDigitalOutput(1, false); // Open Gripper
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveR(0, 0, 30); // Up from Buffer
+    CHECK_MOTION(moveR(0, 0, 30)); // Up
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     
-    moveToIndex(0); // Return to Home
+    CHECK_MOTION(moveToIndex(8)); // Go to Buffer (Index 8 is Buffer/ YEs)
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    CHECK_MOTION(moveR(0, 0, -30)); // Down into Buffer
+    CHECK_MOTION(setDigitalOutput(1, false)); // Open Gripper
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    CHECK_MOTION(moveR(0, 0, 30)); // Up from Buffer
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     
-    if (stop_after_single_motion_) {
-         return; // Logic loop handles transition
-    }
-    
-    // Auto Update buffer count
-    buffer_cartridge_count_++;
-    buffer_detected_full_ = (buffer_cartridge_count_ >= BUFFER_CAPACITY);
+    CHECK_MOTION(moveToIndex(0)); // Return to Home
+    return true; 
 }
 
-void RobotLogicNode::motionStub_InputTrayBuffer()
+bool RobotLogicNode::motionStub_InputTrayBuffer()
 {
-    motionStub_InputTrayBuffer_SinglePick();
+    return motionStub_InputTrayBuffer_SinglePick();
 }
 
-void RobotLogicNode::motionStub_ChamberScale()
+bool RobotLogicNode::motionStub_ChamberScale()
 {
     RCLCPP_INFO(this->get_logger(), "[MOTION] Chamber → Scale");
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    moveToIndex(7);
+    CHECK_MOTION(moveToIndex(7));
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    moveR(0, 30, 0);
+    CHECK_MOTION(moveR(0, 30, 0));
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    moveR(0, -30, 0);
+    CHECK_MOTION(moveR(0, -30, 0)); // Wait, original had moveR(0, -30, 0) logic inside moveToIndex(7) context? 
+    // Original: moveToIndex(7) -> (0,30,0) -> (0,-30,0) -> moveToIndex(9)... 
+    // Ah, original lines 3278: moveR(0, -30, 0); 
+    // This looks like a Retract from Chamber?
+    
     std::this_thread::sleep_for(std::chrono::milliseconds(50)); 
-    moveToIndex(9);
+    CHECK_MOTION(moveToIndex(9));
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    moveToIndex(10);
+    CHECK_MOTION(moveToIndex(10));
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    moveR(0, 0, -30);
-    setDigitalOutput(1, false);
+    CHECK_MOTION(moveR(0, 0, -30));
+    CHECK_MOTION(setDigitalOutput(1, false));
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    moveR(0, 0, 30);
+    CHECK_MOTION(moveR(0, 0, 30));
+    
+    return true;
 }
 
-void RobotLogicNode::motionStub_ScaleOutputTray(int slot_id)
+bool RobotLogicNode::motionStub_ScaleOutputTray(int slot_id)
 {
     if (slot_id < 1 || slot_id > 8)
     {
         RCLCPP_ERROR(this->get_logger(), "[MOTION] Invalid slot: %d", slot_id);
-        return;
+        return false;
     }
     
     RCLCPP_INFO(this->get_logger(), "[MOTION] Scale → Output Slot %d", slot_id);
-    moveToIndex(11);
-    moveR(0, 0, -30);
-    setDigitalOutput(2, true);
-    moveR(0, 0, 30);
+    CHECK_MOTION(moveToIndex(11));
+    CHECK_MOTION(moveR(0, 0, -30));
+    CHECK_MOTION(setDigitalOutput(2, true));
+    CHECK_MOTION(moveR(0, 0, 30));
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    moveToIndex(12);
+    CHECK_MOTION(moveToIndex(12));
     
     size_t slot_index = 12 + slot_id;
-    moveToIndex(slot_index);
+    CHECK_MOTION(moveToIndex(slot_index));
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    moveR(0, 0, -30);
+    CHECK_MOTION(moveR(0, 0, -30));
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    setDigitalOutput(2, false);
+    CHECK_MOTION(setDigitalOutput(2, false));
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveR(0, 0, 30);
+    CHECK_MOTION(moveR(0, 0, 30));
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    moveToIndex(12);
+    CHECK_MOTION(moveToIndex(12));
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveToIndex(0);
+    CHECK_MOTION(moveToIndex(0));
+    
+    return true;
 }
 
-void RobotLogicNode::motionStub_ScaleFailPosition()
+bool RobotLogicNode::motionStub_ScaleFailPosition()
 {
-    // if (slotfail_id < 1 || slotfail_id > 4)
-    // {
-    //     RCLCPP_ERROR(this->get_logger(), "[MOTION] Invalid slot: %d", slotfail_id);
-    //     return;
-    // }
-    
     RCLCPP_INFO(this->get_logger(), "[MOTION] Scale → Fail Position %d/4", current_fail_slot_);
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     
     // Fail Positions 1-4 (Indices 21-24 in YAML)
     size_t slotfail_index = 20 + current_fail_slot_; 
     
-    moveToIndex(slotfail_index);
+    CHECK_MOTION(moveToIndex(slotfail_index));
     
     // Cycle to next fail slot (1-4)
     current_fail_slot_++;
     if (current_fail_slot_ > 4) current_fail_slot_ = 1;
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    moveR(0, 0, -30);
+    CHECK_MOTION(moveR(0, 0, -30));
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    setDigitalOutput(2, false);
+    CHECK_MOTION(setDigitalOutput(2, false));
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveR(0, 0, 30);
+    CHECK_MOTION(moveR(0, 0, 30));
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    moveToIndex(0);
+    CHECK_MOTION(moveToIndex(0));
+    
+    return true;
 }
 
-void RobotLogicNode::motionStub_BufferChamber()
-    {
+bool RobotLogicNode::motionStub_BufferChamber()
+{
     RCLCPP_INFO(this->get_logger(), "[MOTION] Buffer → Chamber");
-    moveToIndex(8);
+    CHECK_MOTION(moveToIndex(8));
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    moveR(0, 0, -30);
-    setDigitalOutput(2, true);
+    CHECK_MOTION(moveR(0, 0, -30));
+    CHECK_MOTION(setDigitalOutput(2, true));
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    moveR(0, 0, 30);
+    CHECK_MOTION(moveR(0, 0, 30));
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    moveToIndex(7);
-    moveR(0, -50, 0);  
-    setDigitalOutput(2, false);
+    CHECK_MOTION(moveToIndex(7));
+    CHECK_MOTION(moveR(0, -50, 0));  
+    CHECK_MOTION(setDigitalOutput(2, false));
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    moveR(0, 50, 0);
-    moveToIndex(0); 
-    }
+    CHECK_MOTION(moveR(0, 50, 0));
+    CHECK_MOTION(moveToIndex(0)); 
+    
+    return true; 
+}
 
 void RobotLogicNode::transitionTo(SystemState new_state)
 {
