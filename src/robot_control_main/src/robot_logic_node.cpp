@@ -974,6 +974,8 @@ void RobotLogicNode::loadMotionParameters()
                 joint_sequences_.size(), relmovl_sequences_.size(), digital_output_steps_.size());
 }
 
+// DEPRECATED: Used by camera1Callback which is no longer active
+// Vision processing moved to vision_decision_node.cpp
 void RobotLogicNode::initInputTrayROIs()
 {
     std::vector<std::vector<std::pair<int, int>>> row_corners = {
@@ -992,6 +994,8 @@ void RobotLogicNode::initInputTrayROIs()
 }
 
 
+// DEPRECATED: Used by camera2Callback which is no longer active
+// Vision processing moved to vision_decision_node.cpp
 void RobotLogicNode::initOutputTrayROIs()
 {
     // ✅ 9 slots from robot_logic_example.cpp (line 1301-1331)
@@ -1035,6 +1039,13 @@ void RobotLogicNode::initOutputTrayROIs()
 
 // ============================================================================
 // ROS CALLBACK IMPLEMENTATIONS
+// ============================================================================
+
+// ============================================================================
+// DEPRECATED: camera1Callback and camera2Callback
+// These callbacks are NO LONGER USED - vision processing has been moved to
+// vision_decision_node.cpp. robot_logic_node now subscribes to /vision/* topics.
+// Keeping for reference during refactoring transition. Will be removed in future.
 // ============================================================================
 
 void RobotLogicNode::camera1Callback(const Detection2DArray::SharedPtr msg)
