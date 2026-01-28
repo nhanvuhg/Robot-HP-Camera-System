@@ -39,17 +39,19 @@ public:
     LibcameraDualNode() : Node("libcamera_dual_node"), running_(false)
     {
         RCLCPP_INFO(this->get_logger(), "========================================");
-        RCLCPP_INFO(this->get_logger(), "🎥 Libcamera Dual Node - FIXED VERSION");
+        RCLCPP_INFO(this->get_logger(), "🎥 Libcamera Dual Node - AUTO RECOVERY");
         RCLCPP_INFO(this->get_logger(), "========================================");
 
         // Declare parameters
         this->declare_parameter("width", 640);
         this->declare_parameter("height", 480);
         this->declare_parameter("fps", 30);
+        this->declare_parameter("watchdog_timeout_sec", 5);  // Auto-recovery timeout
 
         width_ = this->get_parameter("width").as_int();
         height_ = this->get_parameter("height").as_int();
         fps_ = this->get_parameter("fps").as_int();
+        watchdog_timeout_sec_ = this->get_parameter("watchdog_timeout_sec").as_int();
 
         // Calculate frame interval
         frame_interval_ = std::chrono::microseconds(1000000 / fps_);
@@ -67,6 +69,10 @@ public:
         auto now = std::chrono::steady_clock::now();
         last_frame_time_[0] = now;
         last_frame_time_[1] = now;
+        last_successful_frame_[0] = now;
+        last_successful_frame_[1] = now;
+        recovery_in_progress_[0] = false;
+        recovery_in_progress_[1] = false;
 
         // Initialize libcamera
         if (!initLibcamera()) {
@@ -82,6 +88,13 @@ public:
         status_timer_ = this->create_wall_timer(
             std::chrono::seconds(5),
             std::bind(&LibcameraDualNode::publishStatus, this));
+
+        // Watchdog timer for auto-recovery
+        watchdog_timer_ = this->create_wall_timer(
+            std::chrono::seconds(2),
+            std::bind(&LibcameraDualNode::watchdogCallback, this));
+        
+        RCLCPP_INFO(this->get_logger(), "🔄 Watchdog enabled: %d sec timeout", watchdog_timeout_sec_);
 
         RCLCPP_INFO(this->get_logger(), "✅ Libcamera initialized successfully!");
     }
@@ -319,9 +332,11 @@ private:
             if (cam_id == 0 && pub_cam0_) {
                 pub_cam0_->publish(msg);
                 frame_count_[0]++;
+                last_successful_frame_[0] = std::chrono::steady_clock::now();
             } else if (cam_id == 1 && pub_cam1_) {
                 pub_cam1_->publish(msg);
                 frame_count_[1]++;
+                last_successful_frame_[1] = std::chrono::steady_clock::now();
             }
         }
 
@@ -365,6 +380,7 @@ private:
         }
     }
 
+
     void publishStatus()
     {
         std_msgs::msg::String msg;
@@ -375,11 +391,115 @@ private:
         RCLCPP_INFO(this->get_logger(), "📊 %s", msg.data.c_str());
     }
 
+    // Watchdog callback - check if cameras are stuck
+    void watchdogCallback()
+    {
+        if (!running_) return;
+        
+        auto now = std::chrono::steady_clock::now();
+        auto timeout = std::chrono::seconds(watchdog_timeout_sec_);
+        
+        // Check camera 0
+        if (camera0_ && !recovery_in_progress_[0]) {
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                now - last_successful_frame_[0]);
+            if (elapsed > timeout) {
+                RCLCPP_WARN(this->get_logger(), 
+                    "⚠️ Camera 0 stuck! No frames for %ld seconds. Attempting recovery...",
+                    elapsed.count());
+                restartCamera(0);
+            }
+        }
+        
+        // Check camera 1
+        if (camera1_ && !recovery_in_progress_[1]) {
+            auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                now - last_successful_frame_[1]);
+            if (elapsed > timeout) {
+                RCLCPP_WARN(this->get_logger(),
+                    "⚠️ Camera 1 stuck! No frames for %ld seconds. Attempting recovery...",
+                    elapsed.count());
+                restartCamera(1);
+            }
+        }
+    }
+
+    // Restart a single camera
+    void restartCamera(int cam_id)
+    {
+        std::lock_guard<std::mutex> lock(process_mutex_);
+        recovery_in_progress_[cam_id] = true;
+        
+        RCLCPP_INFO(this->get_logger(), "🔄 Restarting camera %d...", cam_id);
+        
+        auto& camera = (cam_id == 0) ? camera0_ : camera1_;
+        auto& config = (cam_id == 0) ? config0_ : config1_;
+        auto& allocator = (cam_id == 0) ? allocator0_ : allocator1_;
+        auto& requests = (cam_id == 0) ? requests0_ : requests1_;
+        
+        if (!camera) {
+            recovery_in_progress_[cam_id] = false;
+            return;
+        }
+        
+        try {
+            // 1. Disconnect signal
+            if (cam_id == 0) {
+                camera->requestCompleted.disconnect(this, &LibcameraDualNode::requestComplete0);
+            } else {
+                camera->requestCompleted.disconnect(this, &LibcameraDualNode::requestComplete1);
+            }
+            
+            // 2. Stop camera
+            camera->stop();
+            
+            // 3. Clear requests
+            requests.clear();
+            
+            // 4. Small delay
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            
+            // 5. Reconnect signal
+            if (cam_id == 0) {
+                camera->requestCompleted.connect(this, &LibcameraDualNode::requestComplete0);
+            } else {
+                camera->requestCompleted.connect(this, &LibcameraDualNode::requestComplete1);
+            }
+            
+            // 6. Recreate requests
+            Stream *stream = config->at(0).stream();
+            const auto &buffers = allocator->buffers(stream);
+            
+            for (const auto &buffer : buffers) {
+                std::unique_ptr<Request> request = camera->createRequest();
+                if (request && request->addBuffer(stream, buffer.get()) == 0) {
+                    requests.push_back(std::move(request));
+                }
+            }
+            
+            // 7. Restart
+            if (camera->start() == 0) {
+                for (auto &request : requests) {
+                    camera->queueRequest(request.get());
+                }
+                RCLCPP_INFO(this->get_logger(), "✅ Camera %d recovered!", cam_id);
+                last_successful_frame_[cam_id] = std::chrono::steady_clock::now();
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "❌ Failed to restart camera %d", cam_id);
+            }
+        } catch (const std::exception& e) {
+            RCLCPP_ERROR(this->get_logger(), "❌ Recovery failed for camera %d: %s", cam_id, e.what());
+        }
+        
+        recovery_in_progress_[cam_id] = false;
+    }
+
     // ROS Publishers
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_cam0_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_cam1_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_status_;
     rclcpp::TimerBase::SharedPtr status_timer_;
+    rclcpp::TimerBase::SharedPtr watchdog_timer_;
 
     // libcamera objects
     std::unique_ptr<CameraManager> cm_;
@@ -396,15 +516,20 @@ private:
     int width_;
     int height_;
     int fps_;
+    int watchdog_timeout_sec_;
     std::chrono::microseconds frame_interval_;
 
-    // State - FIX #2: Thread-safe with mutex
+    // State - Thread-safe with mutex
     std::mutex process_mutex_;
     std::atomic<bool> running_;
     std::atomic<int> frame_count_[2] = {0, 0};
     
-    // FIX #5: Per-camera frame timing
+    // Per-camera frame timing
     std::chrono::steady_clock::time_point last_frame_time_[2];
+    
+    // Auto-recovery state
+    std::chrono::steady_clock::time_point last_successful_frame_[2];
+    std::atomic<bool> recovery_in_progress_[2];
 };
 
 int main(int argc, char** argv)
