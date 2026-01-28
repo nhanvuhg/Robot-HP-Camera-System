@@ -185,3 +185,56 @@ cd ~/ros2_ws
 colcon build --packages-select csi_camera --cmake-args -DCMAKE_BUILD_TYPE=Release
 source install/setup.bash
 ```
+
+---
+
+## Auto-Recovery Feature (NEW)
+
+### Tính năng tự động phục hồi
+
+Khi camera timeout (không có frame trong N giây), hệ thống sẽ tự động:
+1. Phát hiện camera bị stuck
+2. Dừng và restart camera đó
+3. Tiếp tục streaming bình thường
+
+### Cách hoạt động
+
+```cpp
+// Watchdog timer chạy mỗi 2 giây
+void watchdogCallback() {
+    auto elapsed = now - last_successful_frame_[cam_id];
+    if (elapsed > timeout) {
+        restartCamera(cam_id);  // Tự động restart
+    }
+}
+
+// Restart camera
+void restartCamera(int cam_id) {
+    camera->requestCompleted.disconnect(...);
+    camera->stop();
+    std::this_thread::sleep_for(500ms);
+    camera->requestCompleted.connect(...);
+    camera->start();
+    // ✅ Camera recovered!
+}
+```
+
+### Parameters
+
+| Parameter | Default | Mô tả |
+|-----------|---------|-------|
+| `watchdog_timeout_sec` | 5 | Thời gian chờ trước khi restart |
+
+### Ví dụ log khi recovery
+
+```
+⚠️ Camera 0 stuck! No frames for 6 seconds. Attempting recovery...
+🔄 Restarting camera 0...
+✅ Camera 0 recovered!
+📊 Cam0: 20755 frames, Cam1: 21000 frames  ← Tiếp tục chạy
+```
+
+### Lợi ích
+- **24/7 Operation**: Chạy liên tục không cần can thiệp
+- **Tự phục hồi**: Xử lý timeout tự động
+- **Không mất dữ liệu**: Camera kia vẫn tiếp tục hoạt động

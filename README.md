@@ -5,22 +5,19 @@
 |--------|-------|
 | FPS | ~30+ per camera |
 | Latency | ~16ms |
-| CPU Usage | ~8% |
+| CPU Usage | ~20-30% (with YOLO) |
+| Auto-Recovery | ✅ 5 sec timeout |
 
 ## 📁 Contents
 
 ```
-libcamera_dual_camera_system/
+Robot-HP-Camera-System/
 ├── ARCHITECTURE.md      # Kiến trúc và cách hoạt động
 ├── SETUP_GUIDE.md       # Hướng dẫn setup chi tiết
 ├── README.md            # File này
 └── backup/
     ├── libcamera_dual_node.cpp    # Camera node chính (libcamera C++)
     ├── dual_csi_camera_node.cpp   # Node cũ (rpicam-still) - reference
-    ├── CMakeLists.txt             # Build configuration
-    ├── package.xml                # ROS 2 package manifest
-    ├── dual_camera_system.launch.py
-    ├── system_csi_dual_model.launch.py  # YOLO launch
     ├── run_all_three_v2.sh        # Script khởi động hệ thống
     └── stop_all.sh                # Script dừng hệ thống
 ```
@@ -30,7 +27,6 @@ libcamera_dual_camera_system/
 ```bash
 # 1. Copy files vào ROS 2 workspace
 cp backup/libcamera_dual_node.cpp ~/ros2_ws/src/csi_camera/src/
-cp backup/CMakeLists.txt ~/ros2_ws/src/csi_camera/
 
 # 2. Build
 cd ~/ros2_ws
@@ -39,6 +35,20 @@ source install/setup.bash
 
 # 3. Run
 ros2 run csi_camera libcamera_dual_node --ros-args -p fps:=30
+```
+
+## 🔄 Auto-Recovery Feature
+
+Hệ thống tự động phục hồi khi camera timeout:
+
+```bash
+# Mặc định 5 giây timeout
+ros2 run csi_camera libcamera_dual_node --ros-args -p watchdog_timeout_sec:=5
+
+# Log khi recovery:
+# ⚠️ Camera 0 stuck! No frames for 6 seconds. Attempting recovery...
+# 🔄 Restarting camera 0...
+# ✅ Camera 0 recovered!
 ```
 
 ## ⚠️ Các điểm quan trọng
