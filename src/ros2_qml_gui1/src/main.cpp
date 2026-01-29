@@ -16,15 +16,9 @@ int main(int argc, char *argv[])
 
     auto camNode = std::make_shared<CamNode>(engine);
 
-    // ============================
-
-    // ============================
-    std::vector<std::string> topics = {
-        "/camera/image_raw_blue",
-        "/camera/image_raw_yellow"
-    };   
-
-    camNode->setup(topics);
+    // Load saved topic selections (or auto-discover if no config)
+    camNode->loadTopicSelections();
+    
     engine.rootContext()->setContextProperty("camNode", camNode.get());
 
     // Initialize Robot Controller

@@ -4,9 +4,21 @@
 #include <cv_bridge/cv_bridge.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/image_encodings.hpp>
+#include <fstream>
+#include <sys/stat.h>
 
 CamNode::CamNode(QQmlApplicationEngine &engine)
-    : QObject(), rclcpp::Node("qml_cam_node"), engine_(&engine) {}
+    : QObject(), rclcpp::Node("qml_cam_node"), engine_(&engine) {
+    // Set config file path
+    const char* home = std::getenv("HOME");
+    if (home) {
+        std::string config_dir = std::string(home) + "/.config/ros2_gui";
+        // Create directory if it doesn't exist
+        mkdir(config_dir.c_str(), 0755);
+        configFilePath_ = config_dir + "/camera_topics.conf";
+        RCLCPP_INFO(this->get_logger(), "Config file: %s", configFilePath_.c_str());
+    }
+}
 
 void CamNode::setup(const std::vector<std::string> &topics)
 {
@@ -116,6 +128,9 @@ void CamNode::updateCameraTopic(int index, const QString &newTopic)
     cameraList_[index] = cam;
 
     emit cameraListChanged();
+    
+    // Auto-save topic selections when changed
+    saveTopicsToFile();
 }
 
 void CamNode::refreshTopics()
@@ -136,3 +151,76 @@ QVariantList CamNode::cameraList() const
 {
     return cameraList_;
 }
+
+// Save current topic selections to file
+void CamNode::saveTopicsToFile()
+{
+    if (configFilePath_.empty()) {
+        RCLCPP_WARN(this->get_logger(), "Config file path not set, cannot save");
+        return;
+    }
+
+    std::ofstream file(configFilePath_);
+    if (!file.is_open()) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to open config file for writing: %s", configFilePath_.c_str());
+        return;
+    }
+
+    // Write each camera's topic
+    for (const auto &cam : cameraList_) {
+        QVariantMap camMap = cam.toMap();
+        QString topic = camMap["topic"].toString();
+        file << topic.toStdString() << std::endl;
+    }
+
+    file.close();
+    RCLCPP_INFO(this->get_logger(), "Saved %zu camera topics to %s", cameraList_.size(), configFilePath_.c_str());
+}
+
+// Load topic selections from file
+std::vector<std::string> CamNode::loadTopicsFromFile()
+{
+    std::vector<std::string> topics;
+
+    if (configFilePath_.empty()) {
+        RCLCPP_WARN(this->get_logger(), "Config file path not set, cannot load");
+        return topics;
+    }
+
+    std::ifstream file(configFilePath_);
+    if (!file.is_open()) {
+        RCLCPP_INFO(this->get_logger(), "Config file not found (first run?), will use defaults");
+        return topics;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (!line.empty()) {
+            topics.push_back(line);
+        }
+    }
+
+    file.close();
+    RCLCPP_INFO(this->get_logger(), "Loaded %zu camera topics from %s", topics.size(), configFilePath_.c_str());
+    return topics;
+}
+
+// Public method callable from QML
+void CamNode::saveTopicSelections()
+{
+    saveTopicsToFile();
+}
+
+// Public method callable from QML - loads and applies saved topics
+void CamNode::loadTopicSelections()
+{
+    auto topics = loadTopicsFromFile();
+    if (!topics.empty()) {
+        setup(topics);
+        RCLCPP_INFO(this->get_logger(), "Restored camera topics from config");
+    } else {
+        // If no saved config, auto-discover topics
+        refreshTopics();
+    }
+}
+

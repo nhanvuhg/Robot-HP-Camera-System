@@ -20,6 +20,8 @@ public:
     Q_INVOKABLE QStringList getAvailableImageTopics();
     Q_INVOKABLE void updateCameraTopic(int index, const QString &newTopic);
     Q_INVOKABLE void refreshTopics();
+    Q_INVOKABLE void saveTopicSelections();
+    Q_INVOKABLE void loadTopicSelections();
 
     QVariantList cameraList() const;
 
@@ -27,11 +29,15 @@ signals:
     void cameraListChanged();
 
 private:
+    void saveTopicsToFile();
+    std::vector<std::string> loadTopicsFromFile();
+
     std::vector<CamProvider *> providers_;
     std::vector<rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr> subs_;
     QVariantList cameraList_;
     QQmlApplicationEngine *engine_;
     int maxCameras_ = 4;
+    std::string configFilePath_ = "";
 };
 
 #endif // CAM_NODE_HPP
