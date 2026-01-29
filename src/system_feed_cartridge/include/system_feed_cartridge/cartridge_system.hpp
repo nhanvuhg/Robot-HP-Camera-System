@@ -122,6 +122,10 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_done_tray_input_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_done_tray_output_;
     
+    // Vision node tray change subscriptions
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_vision_change_input_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_vision_change_output_;
+    
     rclcpp::TimerBase::SharedPtr timer_;
 
     // Configuration

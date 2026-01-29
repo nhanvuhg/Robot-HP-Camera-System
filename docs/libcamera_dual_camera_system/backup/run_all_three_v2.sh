@@ -76,7 +76,7 @@ echo "gripper_festo_node PID=$PID_GRIPPER"
 
 # 4. NEW: libcamera_dual_node (instead of dual_camera_system.launch.py)
 echo "🎥 Starting libcamera_dual_node (HIGH FPS VERSION). Log: $CAMERA_LOG"
-ros2 run csi_camera libcamera_dual_node --ros-args -p fps:=8 -p width:=640 -p height:=480 > "$CAMERA_LOG" 2>&1 &
+ros2 run csi_camera libcamera_dual_node --ros-args -p fps:=30 -p width:=640 -p height:=480 > "$CAMERA_LOG" 2>&1 &
 PID_CAMERA=$!
 echo "libcamera_dual_node PID=$PID_CAMERA"
 
@@ -104,12 +104,12 @@ ros2 run bbox_drawer_cpp overlay_bboxes_node --ros-args \
 PID_OVERLAY=$!
 echo "bbox_drawer_node PID=$PID_OVERLAY"
 
-# 7. GUI with auto-restart on crash
+# 7. GUI
 if [ -n "${DISPLAY:-}" ]; then
-    echo "Starting QML GUI with auto-restart wrapper..."
-    "$WS/run_gui_with_restart.sh" &
+    echo "Starting QML GUI..."
+    ros2 run ros2_qml_gui1 ros2_qml_gui1 > "$GUI_LOG" 2>&1 &
     PID_GUI=$!
-    echo "qml_gui (with auto-restart) PID=$PID_GUI"
+    echo "qml_gui PID=$PID_GUI"
 else
     echo "⚠️  DISPLAY not set - skipping GUI"
     PID_GUI=""
@@ -127,19 +127,13 @@ cleanup() {
     fi
   done
   
-  # Force kill ALL related processes to release hardware
+  # Force kill ALL camera-related processes to release hardware
   pkill -9 libcamera_dual 2>/dev/null || true
   pkill -9 overlay_bboxes 2>/dev/null || true
   pkill -9 -f component_container 2>/dev/null || true
   pkill -9 -f yolo_ros 2>/dev/null || true
   pkill -9 rpicam 2>/dev/null || true
   killall -9 libcamera_dual_node 2>/dev/null || true
-  
-  # Kill gripper and robot nodes
-  pkill -9 -f gripper_festo_node 2>/dev/null || true
-  pkill -9 -f robot_logic_node 2>/dev/null || true
-  pkill -9 -f dobot_bringup 2>/dev/null || true
-  pkill -9 -f ros2_qml_gui1 2>/dev/null || true
   
   sleep 1
   echo "✅ All processes stopped"

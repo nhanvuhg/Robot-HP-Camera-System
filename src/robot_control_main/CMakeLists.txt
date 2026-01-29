@@ -11,6 +11,9 @@ find_package(vision_msgs REQUIRED)    # <--- QUAN TRỌNG
 find_package(geometry_msgs REQUIRED)  # <--- QUAN TRỌNG
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(robot_control_interfaces REQUIRED)
+
 
 add_executable(robot_logic_node src/robot_logic_node.cpp)
 
@@ -30,7 +33,10 @@ ament_target_dependencies(robot_logic_node
   geometry_msgs  # <--- QUAN TRỌNG
   cv_bridge
   OpenCV
+  rclcpp_action
+  robot_control_interfaces
 )
+
 
 # Link trực tiếp thư viện OpenCV (nếu cần)
 target_link_libraries(robot_logic_node ${OpenCV_LIBS})
@@ -75,7 +81,10 @@ ament_target_dependencies(motion_executor
   std_msgs
   std_srvs
   dobot_msgs_v3
+  rclcpp_action
+  robot_control_interfaces
 )
+
 
 install(TARGETS
   motion_executor

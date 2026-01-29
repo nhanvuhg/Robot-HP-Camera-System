@@ -5,10 +5,12 @@
 #   R,dx,dy,dz               = Relative Move
 #   D,index,status           = Digital Output (0=OFF, 1=ON)
 
-robot_logic_nova5:
+/**:
   ros__parameters:
     robot_namespace: "nova5_HP"
+    safe_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Standard safe Cartesian position
     motion_sequence:
+
       # INDEX 0: HOME & SAFE POSITIONS
       - "J,98.8239,35.7241,-156.9667,76.4762,88.5355,181.8536"    # 0: Home position
       
@@ -41,4 +43,3 @@ robot_logic_nova5:
       - "J,40.1904,-22.7308,-127.3686,98.1424,67.0259,208.3746" #22 Fail pos 2 
       - "J,3.3134,-18.7710,-141.3166,113.6500,91.5959,180.1677" #23 Fail pos 3
       - "J,2.6302,-23.3322,-129.3397,106.2176,92.0798,179.6747" #24 Fail pos 4
-      

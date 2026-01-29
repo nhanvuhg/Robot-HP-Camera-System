@@ -25,7 +25,9 @@
 #include "std_msgs/msg/int32.hpp"
 #include "std_msgs/msg/int32_multi_array.hpp"
 #include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/header.hpp"
 #include "vision_msgs/msg/detection2_d_array.hpp"
+
 
 #include <vector>
 #include <array>
@@ -143,6 +145,8 @@ enum class ControlMode : uint8_t {
 // VISION DECISION NODE
 // ============================================================================
 
+using namespace std::chrono_literals;
+
 class VisionDecisionNode : public rclcpp::Node {
 public:
     VisionDecisionNode() : Node("vision_decision_node") {
@@ -166,6 +170,15 @@ public:
             "/vision/output_tray/selected_slot", 10);
         pub_slot_status_ = create_publisher<std_msgs::msg::Int32MultiArray>(
             "/vision/output_tray/slot_status", 10);
+        pub_heartbeat_ = create_publisher<std_msgs::msg::Header>(
+            "/vision/heartbeat", 10);
+        
+        // Tray change publishers
+        pub_change_tray_input_ = create_publisher<std_msgs::msg::Bool>(
+            "/vision/change_tray_input", 10);
+        pub_change_tray_output_ = create_publisher<std_msgs::msg::Bool>(
+            "/vision/change_tray_output", 10);
+
         
         // Subscriptions with SensorDataQoS for low latency
         sub_cam0_ = create_subscription<Detection2DArray>(
@@ -182,8 +195,32 @@ public:
             [this](const std_msgs::msg::Int32::SharedPtr msg) {
                 current_mode_ = static_cast<ControlMode>(msg->data);
                 RCLCPP_INFO(get_logger(), "[VISION] Mode changed to: %d", msg->data);
+                // Reset counter when switching modes
+                if (current_mode_ == ControlMode::AUTO) {
+                    auto_slot_counter_ = 1;
+                }
             });
+
+        // Heartbeat Timer
+        heartbeat_timer_ = create_wall_timer(500ms, [this]() {
+            std_msgs::msg::Header h;
+            h.stamp = this->now();
+            h.frame_id = "vision_decision";
+            pub_heartbeat_->publish(h);
+        });
+
         
+        // Sync for AUTO mode counter
+        sub_place_done_ = create_subscription<std_msgs::msg::Bool>(
+            "/robot/place_done", 10,
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                if (msg->data && current_mode_ == ControlMode::AUTO) {
+                    auto_slot_counter_++;
+                    if (auto_slot_counter_ > 9) auto_slot_counter_ = 1;
+                    RCLCPP_INFO(get_logger(), "[VISION] AUTO Slot incremented to: %d", auto_slot_counter_.load());
+                }
+            });
+
         RCLCPP_INFO(get_logger(), "[VISION] === Vision Decision Node Ready ===");
     }
 
@@ -206,8 +243,11 @@ private:
     std::vector<ROIQuad> input_tray_rois_;
     std::vector<RowFilter> row_filters_;
     std::vector<bool> row_full_;
-    bool input_tray_empty_{false};
+    std::atomic<bool> input_tray_empty_{false};
     int selected_input_row_{-1};
+    
+    // Last place result subscription (for AUTO mode counter)
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_place_done_;
 
     // ========================================================================
     // OUTPUT TRAY STATE
@@ -238,6 +278,21 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_input_empty_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_selected_slot_;
     rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr pub_slot_status_;
+    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr pub_heartbeat_;
+    
+    // Tray change publishers
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_change_tray_input_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_change_tray_output_;
+    
+    // Debounce counters for tray change
+    std::atomic<int> input_empty_streak_{0};
+    std::atomic<int> output_full_streak_{0};
+    std::atomic<bool> tray_input_change_sent_{false};
+    std::atomic<bool> tray_output_change_sent_{false};
+    static constexpr int TRAY_CHANGE_CONFIRM_FRAMES = 10;
+
+    rclcpp::TimerBase::SharedPtr heartbeat_timer_;
+    std::atomic<int> auto_slot_counter_{1};
 
     // ========================================================================
     // INITIALIZATION
@@ -357,6 +412,21 @@ private:
         }
         pub_row_status_->publish(status_msg);
         
+        // Tray change detection with debounce
+        if (input_tray_empty_) {
+            input_empty_streak_++;
+            if (input_empty_streak_ >= TRAY_CHANGE_CONFIRM_FRAMES && !tray_input_change_sent_) {
+                auto change_msg = std_msgs::msg::Bool();
+                change_msg.data = true;
+                pub_change_tray_input_->publish(change_msg);
+                tray_input_change_sent_ = true;
+                RCLCPP_WARN(get_logger(), "[VISION] 📦 INPUT TRAY EMPTY - Change tray signal sent");
+            }
+        } else {
+            input_empty_streak_ = 0;
+            tray_input_change_sent_ = false;  // Reset when new tray loaded
+        }
+        
         // Performance tracking
         auto end = std::chrono::high_resolution_clock::now();
         auto duration_us = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
@@ -375,7 +445,21 @@ private:
     void camera2Callback(const Detection2DArray::SharedPtr msg) {
         if (current_mode_ == ControlMode::MANUAL) return;
         
-        // Step 1: Detect instant state
+        if (current_mode_ == ControlMode::AUTO) {
+            // Bypass YOLO, use counter
+            selected_output_slot_ = auto_slot_counter_;
+            
+            auto slot_msg = std_msgs::msg::Int32();
+            slot_msg.data = selected_output_slot_;
+            pub_selected_slot_->publish(slot_msg);
+
+            auto status_msg = std_msgs::msg::Int32MultiArray();
+            status_msg.data.assign(9, 0); // All fake empty
+            pub_slot_status_->publish(status_msg);
+            return;
+        }
+
+        // Step 1: Detect instant state (AI Mode)
         std::array<SlotStableState, 9> instant_state;
         instant_state.fill(SlotStableState::EMPTY);
         
@@ -402,11 +486,6 @@ private:
                     break;
                 }
             }
-        }
-        
-        // Auto Mode override
-        if (current_mode_ == ControlMode::AUTO) {
-            instant_state.fill(SlotStableState::EMPTY);
         }
         
         // Step 2: Update debouncing with mutex
@@ -468,6 +547,22 @@ private:
             status_msg.data[i] = (slot_stable_state_[i] == SlotStableState::EMPTY) ? 0 : 1;
         }
         pub_slot_status_->publish(status_msg);
+        
+        // Output tray full detection with debounce
+        bool output_full = (local_selected_slot == -1);  // No empty slot found
+        if (output_full) {
+            output_full_streak_++;
+            if (output_full_streak_ >= TRAY_CHANGE_CONFIRM_FRAMES && !tray_output_change_sent_) {
+                auto change_msg = std_msgs::msg::Bool();
+                change_msg.data = true;
+                pub_change_tray_output_->publish(change_msg);
+                tray_output_change_sent_ = true;
+                RCLCPP_WARN(get_logger(), "[VISION] 📦 OUTPUT TRAY FULL - Change tray signal sent");
+            }
+        } else {
+            output_full_streak_ = 0;
+            tray_output_change_sent_ = false;  // Reset when new tray placed
+        }
     }
 };
 

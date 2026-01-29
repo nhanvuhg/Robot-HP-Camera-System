@@ -128,13 +128,19 @@ CartridgeSystem::CartridgeSystem(const rclcpp::NodeOptions& options)
     pub_last_batch_ = this->create_publisher<std_msgs::msg::Bool>("/revpi/is_last_tray", 1); // Renamed
     pub_state_ = this->create_publisher<std_msgs::msg::String>("/system_state", 1);
 
-    // Subscribers
+    // Subscribers - Robot
     sub_start_button_ = this->create_subscription<std_msgs::msg::Bool>(
         "/system/start_button", 1, std::bind(&CartridgeSystem::startButtonCallback, this, std::placeholders::_1));
     sub_done_tray_input_ = this->create_subscription<std_msgs::msg::Bool>(
         "/robot/change_tray", 1, std::bind(&CartridgeSystem::doneTrayInputCallback, this, std::placeholders::_1));
     sub_done_tray_output_ = this->create_subscription<std_msgs::msg::Bool>(
         "/robot/done_tray_output", 1, std::bind(&CartridgeSystem::doneTrayOutputCallback, this, std::placeholders::_1));
+    
+    // Subscribers - Vision (also trigger tray change)
+    sub_vision_change_input_ = this->create_subscription<std_msgs::msg::Bool>(
+        "/vision/change_tray_input", 1, std::bind(&CartridgeSystem::doneTrayInputCallback, this, std::placeholders::_1));
+    sub_vision_change_output_ = this->create_subscription<std_msgs::msg::Bool>(
+        "/vision/change_tray_output", 1, std::bind(&CartridgeSystem::doneTrayOutputCallback, this, std::placeholders::_1));
 
     // Timer
     timer_ = this->create_wall_timer(

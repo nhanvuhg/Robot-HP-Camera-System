@@ -13,6 +13,9 @@
  * Topics Published:
  * - /robot/motion_result (Bool) - True = success, False = failure
  * - /robot/motion_status (String) - Current motion status
+ * - /robot/motion_busy (Bool) - Is motion in progress
+ * - /robot/motion_heartbeat (Header) - Node aliveness with timestamp
+
  * - /robot/gripper_cmd (Bool) - Gripper state feedback
  * - /robot/picker_cmd (Bool) - Picker state feedback
  */
@@ -21,6 +24,11 @@
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/int32.hpp"
+#include "std_msgs/msg/header.hpp"
+#include "rclcpp_action/rclcpp_action.hpp"
+#include "robot_control_interfaces/action/execute_motion.hpp"
+
+
 
 // Dobot Messages
 #include "dobot_msgs_v3/srv/enable_robot.hpp"
@@ -81,18 +89,37 @@ public:
         initServiceClients();
         
         // Publishers
-        pub_result_ = create_publisher<std_msgs::msg::Bool>("/robot/motion_result", 10);
-        pub_status_ = create_publisher<std_msgs::msg::String>("/robot/motion_status", 10);
+        pub_busy_ = create_publisher<std_msgs::msg::Bool>("/robot/motion_busy", 10);
+
+        pub_busy_ = create_publisher<std_msgs::msg::Bool>("/robot/motion_busy", 10);
+        pub_heartbeat_ = create_publisher<std_msgs::msg::Header>("/robot/motion_heartbeat", 10);
         pub_gripper_ = create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
         pub_picker_ = create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
+
         
         // Subscriptions
-        sub_command_ = create_subscription<std_msgs::msg::String>(
-            "/robot/motion_command", 10,
-            std::bind(&MotionExecutorNode::onMotionCommand, this, std::placeholders::_1));
-        
-        RCLCPP_INFO(get_logger(), "[MOTION] === Motion Executor Node Ready ===");
+
+
+        // Heartbeat Timer (500ms)
+        heartbeat_timer_ = create_wall_timer(500ms, [this]() {
+            std_msgs::msg::Header h;
+            h.stamp = this->now();
+            h.frame_id = "motion_executor";
+            pub_heartbeat_->publish(h);
+        });
+
+        // Action Server
+        action_server_ = rclcpp_action::create_server<ExecuteMotion>(
+            this,
+            "/robot/execute_motion",
+            std::bind(&MotionExecutorNode::handle_goal, this, std::placeholders::_1, std::placeholders::_2),
+            std::bind(&MotionExecutorNode::handle_cancel, this, std::placeholders::_1),
+            std::bind(&MotionExecutorNode::handle_accepted, this, std::placeholders::_1)
+        );
+
+        RCLCPP_INFO(get_logger(), "[MOTION] === Motion Executor Node Ready (Action Server Enabled) ===");
     }
+
 
 private:
     // ========================================================================
@@ -102,17 +129,29 @@ private:
     std::vector<std::vector<double>> relmovl_sequences_;
     std::vector<std::pair<int, int>> digital_output_steps_;
     
+    std::vector<double> safe_pose_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    
     std::atomic<bool> motion_in_progress_{false};
+
     int current_fail_slot_{1};
 
     // ========================================================================
     // ROS INTERFACES
-    // ========================================================================
-    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_command_;
-    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_result_;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_status_;
+    // ========================================================================    // ROS INTERFACES
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_busy_;
+
+    rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr pub_heartbeat_;
+
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_gripper_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_picker_;
+    
+    rclcpp::TimerBase::SharedPtr heartbeat_timer_;
+
+    // Action Server Members
+    using ExecuteMotion = robot_control_interfaces::action::ExecuteMotion;
+    using GoalHandleExecuteMotion = rclcpp_action::ServerGoalHandle<ExecuteMotion>;
+    rclcpp_action::Server<ExecuteMotion>::SharedPtr action_server_;
+
     
     // Service Clients
     rclcpp::Client<EnableRobot>::SharedPtr enable_client_;
@@ -162,6 +201,10 @@ private:
         this->declare_parameter("motion_sequence", std::vector<std::string>{});
         std::vector<std::string> seq_lines;
         this->get_parameter("motion_sequence", seq_lines);
+        
+        this->declare_parameter("safe_pose", std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
+        this->get_parameter("safe_pose", safe_pose_);
+
 
         joint_sequences_.clear();
         relmovl_sequences_.clear();
@@ -311,6 +354,29 @@ private:
         return sync();
     }
 
+    bool moveL_Absolute(const std::vector<double>& pose) {
+        if (pose.size() < 6) return false;
+        
+        auto req = std::make_shared<MovL::Request>();
+        req->x = pose[0];
+        req->y = pose[1];
+        req->z = pose[2];
+        req->rx = pose[3];
+        req->ry = pose[4];
+        req->rz = pose[5];
+        req->param_value.clear();
+        
+        auto res = callService<MovL>(movl_client_, req, "MovL");
+        if (!res) return false;
+        if (res->res != 0) {
+            RCLCPP_ERROR(get_logger(), "[moveL] Failed (err: %d)", res->res);
+            return false;
+        }
+
+        return sync();
+    }
+
+
     bool setDigitalOutput(int index, bool status) {
         auto req = std::make_shared<DO::Request>();
         req->index = index;
@@ -410,74 +476,159 @@ private:
         return true;
     }
 
+    // RAII Guard for motion_busy
+    struct MotionBusyGuard {
+        rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub;
+        MotionBusyGuard(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr p) : pub(p) {
+            std_msgs::msg::Bool msg; msg.data = true; pub->publish(msg);
+        }
+        ~MotionBusyGuard() {
+            std_msgs::msg::Bool msg; msg.data = false; pub->publish(msg);
+        }
+    };
+
     // ========================================================================
     // COMMAND HANDLER
+
     // ========================================================================
-    void onMotionCommand(const std_msgs::msg::String::SharedPtr msg) {
+
+
+
+    // ========================================================================
+    // ACTION SERVER CALLBACKS
+    // ========================================================================
+    rclcpp_action::GoalResponse handle_goal(
+        const rclcpp_action::GoalUUID & uuid,
+        std::shared_ptr<const ExecuteMotion::Goal> goal)
+    {
+        (void)uuid;
         if (motion_in_progress_) {
-            RCLCPP_WARN(get_logger(), "[MOTION] Command rejected - motion in progress");
-            return;
+            RCLCPP_WARN(get_logger(), "[ACTION] Rejecting goal: motion in progress");
+            return rclcpp_action::GoalResponse::REJECT;
         }
+        RCLCPP_INFO(get_logger(), "[ACTION] Received goal: %s (slot: %d)", 
+            goal->command.c_str(), goal->slot);
+        return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+    }
+
+    rclcpp_action::CancelResponse handle_cancel(
+        const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
+    {
+        RCLCPP_WARN(get_logger(), "[ACTION] Received request to cancel goal");
         
+        // Safety: If rollback is allowed, execute it
+        if (goal_handle->get_goal()->allow_rollback) {
+            rollbackSafe();
+        }
+
+        return rclcpp_action::CancelResponse::ACCEPT;
+    }
+
+
+    void handle_accepted(const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
+    {
+        // Execute in separate thread
+        std::thread{std::bind(&MotionExecutorNode::executeAction, this, std::placeholders::_1), goal_handle}.detach();
+    }
+
+    void executeAction(const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
+    {
+        RCLCPP_INFO(get_logger(), "[ACTION] Executing motion goal...");
+        auto feedback = std::make_shared<ExecuteMotion::Feedback>();
+        auto result = std::make_shared<ExecuteMotion::Result>();
+        const auto goal = goal_handle->get_goal();
+
         motion_in_progress_ = true;
-        
-        // Parse command: "TYPE:PARAM"
-        std::string cmd = msg->data;
-        std::string type, param_str;
-        
-        size_t colon_pos = cmd.find(':');
-        if (colon_pos != std::string::npos) {
-            type = cmd.substr(0, colon_pos);
-            param_str = cmd.substr(colon_pos + 1);
-        } else {
-            type = cmd;
-            param_str = "";
-        }
-        
-        RCLCPP_INFO(get_logger(), "[MOTION] Command: %s (param: %s)", type.c_str(), param_str.c_str());
-        
+        publishBusy(true);
+
+        feedback->state = "RUNNING";
+        feedback->progress = 0.1f;
+        goal_handle->publish_feedback(feedback);
+
         bool success = false;
-        
-        // Execute command
+        std::string type = goal->command;
+        int param = goal->slot;
+
+        // Map action goal to existing execution methods
         if (type == "INPUT_TRAY_CHAMBER") {
-            int row = param_str.empty() ? 1 : std::stoi(param_str);
-            success = executeInputTrayChamber(row);
+            success = executeInputTrayChamber(param);
         } else if (type == "INPUT_TRAY_BUFFER") {
-            int row = param_str.empty() ? 1 : std::stoi(param_str);
-            success = executeInputTrayBuffer(row);
+            success = executeInputTrayBuffer(param);
         } else if (type == "CHAMBER_SCALE") {
             success = executeChamberScale();
         } else if (type == "SCALE_OUTPUT") {
-            int slot = param_str.empty() ? 1 : std::stoi(param_str);
-            success = executeScaleOutput(slot);
+            success = executeScaleOutput(param);
         } else if (type == "SCALE_FAIL") {
             success = executeScaleFail();
         } else if (type == "BUFFER_CHAMBER") {
             success = executeBufferChamber();
-        } else if (type == "MOVE_INDEX") {
-            int index = std::stoi(param_str);
-            success = moveToIndex(static_cast<size_t>(index));
         } else if (type == "HOME") {
             success = moveToIndex(0);
         } else {
-            RCLCPP_ERROR(get_logger(), "[MOTION] Unknown command: %s", type.c_str());
+            RCLCPP_ERROR(get_logger(), "[ACTION] Unknown command: %s", type.c_str());
         }
+
+        if (goal_handle->is_canceling()) {
+            result->success = false;
+            result->message = "CANCELLED";
+            goal_handle->canceled(result);
+            publishBusy(false);
+            motion_in_progress_ = false;
+            return;
+        }
+
+        result->success = success;
         
-        // Publish result
-        auto result_msg = std_msgs::msg::Bool();
-        result_msg.data = success;
-        pub_result_->publish(result_msg);
-        
-        auto status_msg = std_msgs::msg::String();
-        status_msg.data = success ? "COMPLETE" : "FAILED";
-        pub_status_->publish(status_msg);
-        
+        if (success) {
+            result->message = "COMPLETED";
+            goal_handle->succeed(result);
+            RCLCPP_INFO(get_logger(), "[ACTION] Goal succeeded");
+        } else {
+            result->message = "FAILED";
+            if (goal->allow_rollback) {
+                feedback->state = "ROLLBACK";
+                goal_handle->publish_feedback(feedback);
+                rollbackSafe();
+                result->message = "ROLLED_BACK";
+            }
+            goal_handle->abort(result);
+            RCLCPP_ERROR(get_logger(), "[ACTION] Goal aborted/failed");
+        }
+
+        publishBusy(false);
         motion_in_progress_ = false;
     }
 
-    // ========================================================================
-    // MOTION SEQUENCES (from robot_logic_node.cpp)
-    // ========================================================================
+    void rollbackSafe()
+    {
+        RCLCPP_ERROR(get_logger(), "[ROLLBACK] Executing SAFE rollback");
+        
+        // 1. Move to Safe Coordinates (Absolute)
+        if (safe_pose_.size() == 6 && (std::abs(safe_pose_[0]) > 0.1 || std::abs(safe_pose_[1]) > 0.1 || std::abs(safe_pose_[2]) > 0.1)) {
+            RCLCPP_INFO(get_logger(), "[ROLLBACK] Moving to safe coordinates: %.1f, %.1f, %.1f", 
+                        safe_pose_[0], safe_pose_[1], safe_pose_[2]);
+            moveL_Absolute(safe_pose_);
+        } else {
+            RCLCPP_WARN(get_logger(), "[ROLLBACK] Safe pose not set, moving to HOME index 0");
+            moveToIndex(0);
+        }
+
+        // 2. Release Gripper/Picker
+        setDigitalOutput(1, false); // Gripper off
+        setDigitalOutput(2, false); // Picker off
+        
+        RCLCPP_WARN(get_logger(), "[ROLLBACK] Completed");
+    }
+
+
+    void publishBusy(bool busy)
+    {
+        auto msg = std_msgs::msg::Bool();
+        msg.data = busy;
+        pub_busy_->publish(msg);
+    }
+
+
     bool executeInputTrayChamber(int row) {
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Chamber", row);
         

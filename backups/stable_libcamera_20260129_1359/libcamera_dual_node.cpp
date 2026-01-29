@@ -49,7 +49,7 @@ public:
         this->declare_parameter("width", 640);
         this->declare_parameter("height", 480);
         this->declare_parameter("fps", 15);  // Reduced for stability
-        this->declare_parameter("watchdog_timeout_sec", 12);  // Increased for YOLO processing spikes
+        this->declare_parameter("watchdog_timeout_sec", 5);  // Auto-recovery timeout
 
         width_ = this->get_parameter("width").as_int();
         height_ = this->get_parameter("height").as_int();

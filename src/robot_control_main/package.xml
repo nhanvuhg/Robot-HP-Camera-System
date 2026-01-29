@@ -8,12 +8,15 @@
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>dobot_msgs_v3</depend>
   <depend>vision_msgs</depend>
   <depend>geometry_msgs</depend>
-  <depend>rclcpp</depend>
-  <depend>std_msgs</depend>
-  <depend>dobot_msgs_v3</depend>
-  <depend>std_srvs</depend>
+  <depend>cv_bridge</depend>
+  <depend>robot_control_interfaces</depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

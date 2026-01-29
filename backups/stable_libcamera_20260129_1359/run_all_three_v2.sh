@@ -76,7 +76,7 @@ echo "gripper_festo_node PID=$PID_GRIPPER"
 
 # 4. NEW: libcamera_dual_node (instead of dual_camera_system.launch.py)
 echo "🎥 Starting libcamera_dual_node (HIGH FPS VERSION). Log: $CAMERA_LOG"
-ros2 run csi_camera libcamera_dual_node --ros-args -p fps:=8 -p width:=640 -p height:=480 > "$CAMERA_LOG" 2>&1 &
+ros2 run csi_camera libcamera_dual_node --ros-args -p fps:=15 -p width:=640 -p height:=480 > "$CAMERA_LOG" 2>&1 &
 PID_CAMERA=$!
 echo "libcamera_dual_node PID=$PID_CAMERA"
 
@@ -104,12 +104,12 @@ ros2 run bbox_drawer_cpp overlay_bboxes_node --ros-args \
 PID_OVERLAY=$!
 echo "bbox_drawer_node PID=$PID_OVERLAY"
 
-# 7. GUI with auto-restart on crash
+# 7. GUI
 if [ -n "${DISPLAY:-}" ]; then
-    echo "Starting QML GUI with auto-restart wrapper..."
-    "$WS/run_gui_with_restart.sh" &
+    echo "Starting QML GUI..."
+    ros2 run ros2_qml_gui1 ros2_qml_gui1 > "$GUI_LOG" 2>&1 &
     PID_GUI=$!
-    echo "qml_gui (with auto-restart) PID=$PID_GUI"
+    echo "qml_gui PID=$PID_GUI"
 else
     echo "⚠️  DISPLAY not set - skipping GUI"
     PID_GUI=""
