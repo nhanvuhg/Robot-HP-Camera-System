@@ -16,27 +16,27 @@ from launch_ros.descriptions import ComposableNode
 def generate_launch_description():
     
     # ================================================================
-    # 1. DUAL CSI CAMERA NODE
+    # 1. DUAL CSI CAMERA NODE (Serialized Processing)
     # ================================================================
-    # Runs both cameras in parallel threads
+    # Uses Picamera2 with SERIALIZED PROCESSING PATTERN:
+    # - Single timer alternates between cameras
+    # - Prevents ISP contention freeze on Pi 5 kernel 6.12
     # Publishes:
     #   - /cam0HP/image_raw (Camera 0 - Input Tray)
     #   - /cam1HP/image_raw (Camera 1 - Output Tray)
     
     dual_camera_node = Node(
         package='csi_camera',
-        executable='dual_csi_camera_node',
-        name='dual_csi_camera',
+        executable='picamera2_dual_node.py',
+        name='picamera2_dual_node',
         output='screen',
         parameters=[{
             'width': 640,
             'height': 480,
-            'fps': 15,
-            'cam0_i2c_bus': 6,  # CSI0 on I2C bus 6
-            'cam1_i2c_bus': 4,  # CSI1 on I2C bus 4
+            'fps': 8,  # Reduced from 15 → 8 (Picamera2 dual cam limit)
         }],
         respawn=True,
-        respawn_delay=3.0,
+        respawn_delay=5.0,
     )
     
     # ================================================================
@@ -146,7 +146,7 @@ Launch:
   ros2 launch csi_camera dual_camera_system.launch.py
 
 Verify:
-  # Check both cameras publishing at 30 Hz
+  # Check both cameras publishing (expect ~6-8 Hz with alternating pattern)
   ros2 topic hz /cam0HP/image_raw
   ros2 topic hz /cam1HP/image_raw
   
@@ -160,10 +160,10 @@ Verify:
     → Select /cam1HP/image_overlay
 
 Performance:
-  ✅ True parallel processing - both cameras at full 30 FPS
-  ✅ No switching overhead
-  ✅ Independent YOLO inference on each stream
-  ✅ Double the detection throughput
+  ✅ Serialized processing - both cameras at 6-8 FPS (alternating capture)
+  ✅ Prevents ISP freeze on Pi 5 Kernel 6.12
+  ✅ Independent YOLO inference on each stream (23-24ms with Hailo-8L)
+  ✅ Stable operation without CSI timeout errors
 
 ================================================================================
 """

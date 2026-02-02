@@ -23,6 +23,7 @@ endif()
 # Create executables
 add_executable(csi_camera_node src/csi_camera_node.cpp)
 add_executable(dual_csi_camera_node src/dual_csi_camera_node.cpp)
+add_executable(serialized_dual_camera_node src/serialized_dual_camera_node.cpp)
 
 # EXPERIMENTAL: libcamera direct API node (optional)
 if(LIBCAMERA_FOUND)
@@ -62,6 +63,14 @@ target_include_directories(dual_csi_camera_node PUBLIC
   ${OpenCV_INCLUDE_DIRS}
 )
 
+# Include directories for serialized_dual_camera_node
+target_include_directories(serialized_dual_camera_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+  ${OpenCV_INCLUDE_DIRS}
+  ${LIBCAMERA_INCLUDE_DIRS}
+)
+
 # Link dependencies for csi_camera_node
 ament_target_dependencies(csi_camera_node
   rclcpp
@@ -78,6 +87,14 @@ ament_target_dependencies(dual_csi_camera_node
   cv_bridge
 )
 
+# Link dependencies for serialized_dual_camera_node
+ament_target_dependencies(serialized_dual_camera_node
+  rclcpp
+  sensor_msgs
+  std_msgs
+  cv_bridge
+)
+
 target_link_libraries(csi_camera_node 
   ${OpenCV_LIBS}
 )
@@ -86,10 +103,16 @@ target_link_libraries(dual_csi_camera_node
   ${OpenCV_LIBS}
 )
 
+target_link_libraries(serialized_dual_camera_node
+  ${OpenCV_LIBS}
+  ${LIBCAMERA_LIBRARIES}
+)
+
 # Install executables
 install(TARGETS 
   csi_camera_node
   dual_csi_camera_node
+  serialized_dual_camera_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -99,6 +122,12 @@ if(LIBCAMERA_FOUND)
     DESTINATION lib/${PROJECT_NAME}
   )
 endif()
+
+# Install Python scripts
+install(PROGRAMS
+  scripts/picamera2_dual_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 # Install launch files (optional)
 install(DIRECTORY launch
