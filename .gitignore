@@ -49,3 +49,15 @@ backup_*/
 
 .idea/
 
+# Large binary files - models & videos
+*.mp4
+*.avi
+*.mkv
+*.hef
+*.onnx
+*.pt
+*.engine
+src/YOLO-HailoRT-ROS2/weights/
+
+# ROS 1 backup files
+*.ros1_backup
