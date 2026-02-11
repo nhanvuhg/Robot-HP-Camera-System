@@ -26,12 +26,31 @@ import yaml
 try:
     from edcon.edrive.com_modbus import ComModbus
     from edcon.edrive.motion_handler import MotionHandler
+    from edcon.utils.logging import Logging as EdconLogging
     EDCON_AVAILABLE = True
 except ImportError:
     print("Warning: festo-edcon not found. Running in simulation mode.")
     ComModbus = None
     MotionHandler = None
+    EdconLogging = None
     EDCON_AVAILABLE = False
+
+
+def safe_try(func, retries=3, backoff=2, logger=None):
+    """Call func(), retrying on ConnectionError with exponential backoff.
+    Raises the last ConnectionError if all retries fail."""
+    for attempt in range(1, retries + 1):
+        try:
+            return func()
+        except ConnectionError as e:
+            msg = f"ConnectionError on attempt {attempt}/{retries}: {e}"
+            if logger:
+                logger.warning(msg)
+            else:
+                print(msg)
+            if attempt == retries:
+                raise
+            time.sleep(backoff * attempt)
 
 try:
     from cpx_io.cpx_system.cpx_ap.cpx_ap import CpxAp
@@ -121,6 +140,7 @@ class SystemState(Enum):
     S3_SERVO3_CHECK_S7 = "s3_servo3_check_s7"
     S3_SERVO3_TO_TARGET1 = "s3_servo3_to_target1"
     S3_SERVO3_WAIT_LOAD = "s3_servo3_wait_load"
+    S3_WAIT_HMI_RESUME = "s3_wait_hmi_resume"  # Chờ HMI confirm khi hết khay
     STATE3_COMPLETE = "state3_complete"
 
 
@@ -379,7 +399,13 @@ class CartridgeSystem(Node):
         # ✅ Position 2 / State 3 flags
         self.output_tray_ready = False       # Interlock: robot chỉ place to output khi True
         self._confirm_load_received = False  # HMI xác nhận đã cấp khay output mới
+        self._hmi_resume_confirmed = False   # HMI confirm tiếp tục chu kỳ mới (không cần restart)
         self._servo3_init_done = False       # Servo 3 đã init xong (State 1)
+        
+        # ✅ Parallel State 1: Position 1 + Position 2 chạy đồng thời
+        self._pos1_done = False              # Position 1 (InX/InY) hoàn thành
+        self._pos2_done = False              # Position 2 (Servo 3) hoàn thành
+        self._pos2_state = "IDLE"            # State tracker riêng cho Position 2
         self.change_tray_output_signal = False  # Trigger thay khay output
         self._output_stack_row = 0           # Row index chồng khay output (Position 2)
         
@@ -412,6 +438,7 @@ class CartridgeSystem(Node):
         # ROS 2 Subscribers
         self.create_subscription(Bool, '/system/start_button', self.start_button_callback, qos_default)
         self.create_subscription(Bool, '/robot/change_tray', self.change_tray_input_callback, qos_default)
+        self.create_subscription(Bool, '/vision/change_tray_input', self.change_tray_input_callback, qos_default)  # ✅ AI Mode: Vision detect empty input
         self.create_subscription(Bool, '/robot/motion_busy', self.motion_busy_callback, qos_default)
         self.create_subscription(Bool, '/vision/change_tray_output', self.output_tray_full_callback, qos_default)
         self.create_subscription(Bool, '/robot/done_tray_output', self.output_tray_full_callback, qos_default)
@@ -420,6 +447,7 @@ class CartridgeSystem(Node):
         self.create_subscription(String, '/providesystem/goto_state', self.goto_state_topic_callback, qos_default)
         self.create_subscription(String, '/providesystem/set_target_row', self.set_target_row_topic_callback, qos_default)
         self.create_subscription(String, '/providesystem/servo_limit_cmd', self.servo_limit_cmd_callback, qos_default)
+        self.create_subscription(Bool, '/providesystem/hmi_resume', self.hmi_resume_callback, qos_default)
         
         # ROS 2 Service Servers
         self.create_service(SetBool, '/providesystem/confirm_output_load', self.confirm_output_load_callback)
@@ -436,32 +464,54 @@ class CartridgeSystem(Node):
         self.get_logger().info("Cartridge System Initialized (ROS 2 + festo-edcon MotionHandler)")
     
     def connect_hardware(self):
-        """Connect to Festo servo drives via Modbus TCP + MotionHandler"""
+        """Connect to Festo servo drives via Modbus TCP + MotionHandler.
+        Uses cycle_time=60, timeout_ms=15000 to prevent Modbus communication errors."""
         if not EDCON_AVAILABLE:
             self.get_logger().warn("Running in simulation mode - edcon not available")
             return
+        
+        # Enable edcon logging
+        if EdconLogging:
+            EdconLogging()
         
         try:
             # Connect servos via ComModbus + MotionHandler
             for servo_id, ip in self.config.servo_ips.items():
                 try:
-                    com = ComModbus(ip)
+                    com = ComModbus(
+                        ip_address=ip,
+                        cycle_time=60,
+                        timeout_ms=15000
+                    )
                     mot = MotionHandler(com)
-                    mot.__enter__()  # Start IO handling
-                    mot.acknowledge_faults()
+                    
+                    # Initialize with retry to handle temporary connectivity issues
+                    safe_try(
+                        lambda: mot.acknowledge_faults(),
+                        retries=3, backoff=2,
+                        logger=self.get_logger()
+                    )
                     # Defer enable_powerstage to HOMING state
                     self.servos[servo_id] = mot
-                    self.get_logger().info(f"Connected to Servo {servo_id} at {ip} (Modbus TCP)")
+                    self.get_logger().info(
+                        f"✅ Connected to Servo {servo_id} at {ip} "
+                        f"(Modbus TCP, cycle=60, timeout=15000ms)"
+                    )
+                except ConnectionError as e:
+                    self.get_logger().error(
+                        f"❌ Failed to connect Servo {servo_id} at {ip} "
+                        f"after retries: {e}"
+                    )
                 except Exception as e:
-                    self.get_logger().error(f"Failed to connect Servo {servo_id} at {ip}: {e}")
+                    self.get_logger().error(f"❌ Failed to connect Servo {servo_id} at {ip}: {e}")
             
             # Connect IO module
             if CPXAP_AVAILABLE:
                 try:
                     self.io_module = CpxAp(self.config.io_ip)
-                    self.get_logger().info(f"Connected to IO Module at {self.config.io_ip}")
+                    self.get_logger().info(f"✅ Connected to IO Module at {self.config.io_ip}")
                 except Exception as e:
-                    self.get_logger().error(f"Failed to connect IO Module: {e}")
+                    self.get_logger().error(f"❌ Failed to connect IO Module: {e}")
             
         except Exception as e:
             self.get_logger().error(f"Hardware connection error: {e}")
@@ -471,8 +521,7 @@ class CartridgeSystem(Node):
         self.get_logger().info("Shutting down - closing servo connections...")
         for servo_id, mot in self.servos.items():
             try:
-                mot.stop_motion_task()
-                mot.__exit__(None, None, None)
+                mot.shutdown()
                 self.get_logger().info(f"Servo {servo_id} connection closed")
             except Exception as e:
                 self.get_logger().warn(f"Error closing Servo {servo_id}: {e}")
@@ -593,13 +642,28 @@ class CartridgeSystem(Node):
         self.get_logger().info("Homing all servos...")
         
         try:
-            # Enable powerstage + start homing for each servo
+            # Enable powerstage + start homing for each servo (with retry)
             for servo_id, mot in self.servos.items():
                 try:
-                    mot.acknowledge_faults()
-                    mot.enable_powerstage()
-                    mot.referencing_task(nonblocking=True)
+                    safe_try(
+                        lambda m=mot: m.acknowledge_faults(),
+                        retries=3, backoff=2, logger=self.get_logger()
+                    )
+                    safe_try(
+                        lambda m=mot: m.enable_powerstage(),
+                        retries=3, backoff=2, logger=self.get_logger()
+                    )
+                    if not mot.referenced():
+                        safe_try(
+                            lambda m=mot: m.referencing_task(nonblocking=True),
+                            retries=3, backoff=2, logger=self.get_logger()
+                        )
+                    else:
+                        self.get_logger().info(f"Servo {servo_id} already referenced, skipping")
                     self.get_logger().info(f"Servo {servo_id} homing initiated")
+                except ConnectionError as e:
+                    self.get_logger().error(f"Servo {servo_id} homing failed after retries: {e}")
+                    return False
                 except Exception as e:
                     self.get_logger().error(f"Servo {servo_id} homing start error: {e}")
                     return False
@@ -642,7 +706,10 @@ class CartridgeSystem(Node):
         try:
             mot = self.servos[servo_id]
             pos_counts = int(position * COUNTS_PER_MM)
-            mot.position_task(pos_counts, DEFAULT_VELOCITY, absolute=True, nonblocking=True)
+            safe_try(
+                lambda: mot.position_task(pos_counts, DEFAULT_VELOCITY, absolute=True, nonblocking=True),
+                retries=3, backoff=1, logger=self.get_logger()
+            )
             
             if wait:
                 start_time = time.time()
@@ -823,6 +890,12 @@ class CartridgeSystem(Node):
         response.success = False
         response.message = "Invalid request"
         return response
+    
+    def hmi_resume_callback(self, msg):
+        """Topic /providesystem/hmi_resume - HMI xác nhận tiếp tục chu kỳ mới"""
+        if msg.data:
+            self._hmi_resume_confirmed = True
+            self.get_logger().info("✅ HMI RESUME: Operator confirmed → Resuming cycle")
     
     def pub_output_ready(self, ready: bool):
         """Publish output_tray_ready interlock và update flag"""
@@ -1068,6 +1141,9 @@ class CartridgeSystem(Node):
         # State machine
         self.process_state()
         
+        # ✅ PARALLEL: Process Position 2 (Servo 3) độc lập
+        self.process_pos2_state()
+        
         # Publish state
         self.publish_state()
     
@@ -1086,8 +1162,73 @@ class CartridgeSystem(Node):
         except Exception as e:
             self.get_logger().error(f"Failed to read sensors: {e}")
     
+    def process_pos2_state(self):
+        """Process Position 2 (Servo 3) state machine - Chạy SONG SONG với Position 1"""
+        if self._pos2_state == "IDLE" or self._pos2_state == "DONE":
+            return  # Không cần xử lý
+        
+        # ✅ MANUAL MODE: Pause theo manual mode chung
+        if self.manual_mode and not self.step_pending:
+            return
+        
+        if self._pos2_state == "CHECK_S7":
+            # Servo 3 → Target 1 (safe) rồi check S7
+            if self.move_servo(3, self.config.servo3_target1):
+                if self.sensor_manager.get_sensor(7):  # S7 ON → còn khay
+                    self.get_logger().info("✅ [P2] S7 ON - Khay output có sẵn → Moving servo 3 to S6")
+                    self._pos2_state = "MOVE_TO_S6"
+                else:  # S7 OFF → chưa cấp khay
+                    self.get_logger().warn("⚠️ [P2] S7 OFF - Chưa có khay output → Waiting...")
+                    self.pub_output_ready(False)
+                    self._pos2_state = "WAIT_LOAD"
+        
+        elif self._pos2_state == "WAIT_LOAD":
+            # Chờ S7 ON + confirm từ HMI
+            if self.sensor_manager.get_sensor(7):  # S7 ON
+                if self._confirm_load_received:
+                    self.get_logger().info("✅ [P2] S7 ON + HMI confirmed → Moving servo 3 to S6")
+                    self._confirm_load_received = False
+                    self._pos2_state = "MOVE_TO_S6"
+                else:
+                    self.get_logger().warn("⏳ [P2] S7 ON - Chờ HMI confirm (/providesystem/confirm_output_load)")
+            else:
+                self.get_logger().warn("⏳ [P2] S7 OFF - Chờ cấp khay output mới...")
+        
+        elif self._pos2_state == "MOVE_TO_S6":
+            # Servo 3 jog positive → S6 ON
+            if self.sensor_manager.get_sensor(6):  # S6 ON
+                self.stop_servo3_jog()
+                self.get_logger().info("✅ [P2] S6 ON - Khay output sẵn sàng cho robot")
+                self.pub_output_ready(True)
+                self._servo3_init_done = True
+                self._pos2_done = True
+                self._pos2_state = "DONE"
+                # ✅ Nếu Position 1 đã xong → chuyển STATE1_COMPLETE
+                if self._pos1_done:
+                    self.get_logger().info("🎉 Cả 2 Position xong → STATE1_COMPLETE")
+                    self.state = SystemState.STATE1_COMPLETE
+                else:
+                    self.get_logger().info("⏳ Position 2 done, chờ Position 1 (InX/InY)...")
+            else:
+                # ✅ SAFETY: Check position limit
+                s3_pos, pos_ok = self.get_position_safe(3)
+                if s3_pos is not None and s3_pos >= self.config.servo_limits.get(3, 400.0):
+                    self.stop_servo3_jog()
+                    self.get_logger().error(f"🚨 [P2] Servo 3 reached limit {s3_pos:.1f}mm without S6!")
+                    self._pos2_state = "IDLE"
+                    self.state = SystemState.ERROR
+                elif s3_pos is None and not pos_ok:
+                    self._pos2_state = "IDLE"
+                    self.state = SystemState.ERROR
+                else:
+                    self.start_servo3_jog(self.config.servo3_jog_velocity)
+    
+    # ══════════════════════════════════════════════════════════════════════
+    # process_state() continuation — Main State Machine
+    # ══════════════════════════════════════════════════════════════════════
+    
     def process_state(self):
-        """Process current state - NEW WORKFLOW"""
+        """Process current state - Main state machine (Position 1 + States 2/3)"""
         
         # ✅ MANUAL MODE: Pause execution cho đến khi next_step được gọi
         if self.manual_mode and not self.step_pending:
@@ -1095,6 +1236,7 @@ class CartridgeSystem(Node):
         
         # Track state before execution (for manual mode)
         state_before = self.state
+        
         # ══════════════════════════════════════════════════════════════
         # IDLE - Chờ nút Start
         # ══════════════════════════════════════════════════════════════
@@ -1106,60 +1248,17 @@ class CartridgeSystem(Node):
         # ══════════════════════════════════════════════════════════════
         elif self.state == SystemState.HOMING:
             if self.home_all_servos():
-                self.get_logger().info("✅ Homing complete - Checking Position 2 (Servo 3)")
-                self.state = SystemState.S1_SERVO3_CHECK_S7
+                self.get_logger().info("✅ Homing complete - Starting Position 1 + Position 2 IN PARALLEL")
+                # ✅ PARALLEL: Khởi động cả 2 track đồng thời
+                self._pos1_done = False
+                self._pos2_done = False
+                self._pos2_state = "CHECK_S7"  # Position 2: Servo 3 bắt đầu
+                self.state = SystemState.S1_INY_CONFIRM_SAFE  # Position 1: InX/InY bắt đầu
             else:
                 self.state = SystemState.ERROR
         
-        # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-        # STATE 1 - Position 2 Init: Servo 3 (LoadTrayRobot)
-        # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-        
-        elif self.state == SystemState.S1_SERVO3_CHECK_S7:
-            # Servo 3 → Target 1 (safe) rồi check S7
-            if self.move_servo(3, self.config.servo3_target1):
-                if self.sensor_manager.get_sensor(7):  # S7 ON → còn khay
-                    self.get_logger().info("✅ [S1-P2] S7 ON - Khay output có sẵn → Moving servo 3 to S6")
-                    self.state = SystemState.S1_SERVO3_MOVE_TO_S6
-                else:  # S7 OFF → chưa cấp khay
-                    self.get_logger().warn("⚠️ [S1-P2] S7 OFF - Chưa có khay output → Waiting...")
-                    self.pub_output_ready(False)  # Interlock robot
-                    self.state = SystemState.S1_SERVO3_WAIT_LOAD
-        
-        elif self.state == SystemState.S1_SERVO3_WAIT_LOAD:
-            # Chờ S7 ON + confirm từ HMI. KHÔNG timeout, KHÔNG block hệ thống
-            if self.sensor_manager.get_sensor(7):  # S7 ON
-                if self._confirm_load_received:
-                    self.get_logger().info("✅ [S1-P2] S7 ON + HMI confirmed → Moving servo 3 to S6")
-                    self._confirm_load_received = False
-                    self.state = SystemState.S1_SERVO3_MOVE_TO_S6
-                else:
-                    self.get_logger().warn("⏳ [S1-P2] S7 ON - Chờ HMI confirm (/providesystem/confirm_output_load)")
-            else:
-                self.get_logger().warn("⏳ [S1-P2] S7 OFF - Chờ cấp khay output mới...")
-        
-        elif self.state == SystemState.S1_SERVO3_MOVE_TO_S6:
-            # Servo 3 jog positive → S6 ON (push platform đưa khay lên vị trí robot)
-            if self.sensor_manager.get_sensor(6):  # S6 ON → khay đã ở vị trí robot
-                self.stop_servo3_jog()
-                self.get_logger().info("✅ [S1-P2] S6 ON - Khay output sẵn sàng cho robot")
-                self.pub_output_ready(True)  # Robot được phép place to output
-                self._servo3_init_done = True
-                self.state = SystemState.S1_INY_CONFIRM_SAFE  # Tiếp Position 1
-            else:
-                # ✅ SAFETY: Check position limit trước khi jog tiếp
-                s3_pos, pos_ok = self.get_position_safe(3)
-                if s3_pos is not None and s3_pos >= self.config.servo_limits.get(3, 400.0):
-                    self.stop_servo3_jog()
-                    self.get_logger().error(f"🚨 [S1-P2] Servo 3 reached limit {s3_pos:.1f}mm without S6! STOPPING.")
-                    self.state = SystemState.ERROR
-                elif s3_pos is None and not pos_ok:
-                    self.state = SystemState.ERROR
-                else:
-                    self.start_servo3_jog(self.config.servo3_jog_velocity)
-        
         # ══════════════════════════════════════════════════════════════
-        # STATE 1: CẤP KHAY INPUT VÀO VỊ TRÍ ROBOT
+        # STATE 1: CẤP KHAY INPUT VÀO VỊ TRÍ ROBOT (Position 1: InX, InY)
         # ══════════════════════════════════════════════════════════════
         
         elif self.state == SystemState.S1_INY_CONFIRM_SAFE:
@@ -1278,7 +1377,11 @@ class CartridgeSystem(Node):
             if self.is_iny_safe_for_inx_move():
                 if self.move_servo(1, self.config.inx_home):
                     self.get_logger().info("✅ InX returned to safe position")
-                    self.state = SystemState.STATE1_COMPLETE
+                    self._pos1_done = True  # ✅ Position 1 hoàn thành
+                    if self._pos2_done:
+                        self.state = SystemState.STATE1_COMPLETE
+                    else:
+                        self.get_logger().info("⏳ Position 1 done, chờ Position 2 (Servo 3)...")
                 else:
                     self.state = SystemState.ERROR
             else:
@@ -1318,6 +1421,14 @@ class CartridgeSystem(Node):
                 else:
                     # ⚠️ INTERLOCK: Robot vẫn đang busy, chờ
                     self.get_logger().warn("⏳ change_tray received but Robot BUSY → Waiting...")
+            # ✅ Cũng check output tray signal khi đang chờ input
+            elif self.change_tray_output_signal:
+                if not self.robot_motion_busy:
+                    self.get_logger().info("📤 output_tray_full received while S2_WAIT → Starting State 3")
+                    self.change_tray_output_signal = False
+                    self.state = SystemState.S3_CHECK_SAFE
+                else:
+                    self.get_logger().warn("⏳ output_tray_full received but Robot BUSY → Waiting...")
         
         # ══════════════════════════════════════════════════════════════
         # STATE 2 - PHASE A: Thu hồi khay cũ từ robot → output stack
@@ -1614,8 +1725,8 @@ class CartridgeSystem(Node):
             if not self._last_tray_ack:
                 self.publish_with_retry(self.pub_is_last_tray, Bool(data=True), '/revpi/is_last_tray')
             else:
-                # ✅ Robot đã ACK is_last_tray
-                self.get_logger().info("� [S2] No trays, Robot ACK is_last_tray → Done")
+                # ✅ Robot đã ACK is_last_tray → quay về hub chờ output tray cuối cùng
+                self.get_logger().info("🏁 [S2] No trays left → Waiting for final output tray change")
                 self._last_tray_ack = False
                 self.has_trays_remaining = False
                 self.reset_pub_retry()
@@ -1818,8 +1929,28 @@ class CartridgeSystem(Node):
                 self.get_logger().warn("⏳ [S3] S7 OFF - Chờ cấp khay output mới...")
         
         elif self.state == SystemState.STATE3_COMPLETE:
-            self.get_logger().info("🎉 STATE 3 COMPLETE - Output tray changed successfully")
-            self.state = SystemState.S3_WAIT_TRIGGER
+            if not self.has_trays_remaining and self.last_batch_mode:
+                # ✅ PROCESS DONE: Last batch + hết khay → IDLE, cần Start button + Homing cho chu kỳ mới
+                self.get_logger().info("🏆 PROCESS COMPLETE - Last batch done, cần Start button để bắt đầu chu kỳ mới")
+                self.last_batch_mode = False
+                self.state = SystemState.IDLE
+            elif not self.has_trays_remaining:
+                # ⚠️ Hết khay output nhưng process vẫn chạy → Chờ HMI confirm nạp khay output mới
+                self.get_logger().info("📋 Hết khay output - Chờ HMI confirm nạp khay mới (/providesystem/hmi_resume)")
+                self._hmi_resume_confirmed = False
+                self.state = SystemState.S3_WAIT_HMI_RESUME
+            else:
+                self.get_logger().info("🎉 STATE 3 COMPLETE - Output tray changed → Back to central hub")
+                self.state = SystemState.S2_WAIT_TRIGGER
+        
+        elif self.state == SystemState.S3_WAIT_HMI_RESUME:
+            # Chờ HMI confirm → chỉ chạy Servo 3 nạp khay output mới (KHÔNG homing lại)
+            if self._hmi_resume_confirmed:
+                self.get_logger().info("✅ HMI RESUME → Chạy Servo 3 nạp khay output mới")
+                self._hmi_resume_confirmed = False
+                self.state = SystemState.S3_SERVO3_MOVE_TO_S6  # Chỉ servo 3 push tray, không homing
+            else:
+                self.get_logger().warn("⏳ [S3] Chờ nạp khay output mới + HMI confirm (/providesystem/hmi_resume)")
         
         # ══════════════════════════════════════════════════════════════
         # ERROR
