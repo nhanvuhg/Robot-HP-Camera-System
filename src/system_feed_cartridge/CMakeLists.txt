@@ -40,10 +40,23 @@ install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Install Python script
+# Install Python scripts
 install(PROGRAMS scripts/cartridge_providesystem_py_node.py
   DESTINATION lib/${PROJECT_NAME}
   RENAME cartridge_providesystem_py
+)
+
+install(PROGRAMS scripts/cartridge_gui.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(PROGRAMS scripts/start_cartridge_test.sh
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install launch files
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)

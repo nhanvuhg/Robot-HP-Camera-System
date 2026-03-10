@@ -252,14 +252,6 @@ private:
     // NEW: Motion Mode
     std::atomic<bool> use_action_motion_{true}; // Now Action-Based Only
     
-    // ========================================================================
-    // ASYNC MOTION STATE (Non-blocking)
-    // ========================================================================
-    std::atomic<bool> motion_in_progress_{false};  // true=running, false=idle/done
-    std::atomic<bool> motion_result_{false};        // Result (valid when !motion_in_progress_)
-    std::string motion_current_cmd_;                // Current motion command name
-    int async_slot_{0};                             // Stored slot for async result processing
-    
 
     // Camera control state
     std::atomic<int> current_active_camera_{-1};  // 0=cam0, 1=cam1, -1=none
@@ -406,9 +398,6 @@ private:
     bool setDigitalOutput(int index, bool status);
     bool checkMotionAlive(double timeout_sec = 2.0);
     bool sendMotionAction(const std::string& command, int slot = 0, int timeout_sec = 30);
-    
-    // ✅ ASYNC (Non-blocking) motion - returns immediately
-    void sendMotionActionAsync(const std::string& command, int slot = 0);
     
     // Motion sequences (delegate to motion_executor via topic)
     bool sendMotionCommand(const std::string& command, int timeout_sec = 60);
@@ -1662,64 +1651,29 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         }
     }
 
-    // ✅ ASYNC MOTION: Check if we already sent a goal
-    if (motion_current_cmd_ == "INPUT_TRAY_CHAMBER") {
-        if (motion_in_progress_) return;  // Still moving, poll again next cycle
-        
-        // Motion complete - process result
-        motion_current_cmd_.clear();
-        if (!motion_result_) {
-            RCLCPP_ERROR(this->get_logger(), "[INIT] ❌ InputTrayChamber motion failed");
-            return;
-        }
-        
-        chamber_has_cartridge_ = true;
-        chamber_is_empty_ = false;
-        
-        if (stop_after_single_motion_) {
-            stop_after_single_motion_ = false;
-            transitionTo(SystemState::IDLE);
-            return;
-        }
-        if (manual_mode_) {
-            transitionTo(SystemState::IDLE);
-        } else {
-            transitionTo(SystemState::INIT_REFILL_BUFFER);
-        }
-        return;
+    // ✅ CHECK MOTION ERRORS (Patch 3)
+    if (!motionStub_InputTrayChamber()) {
+        return; 
     }
     
-    // ✅ ASYNC MOTION: Prepare row and send (non-blocking)
-    int row_to_pick = -1;
+    chamber_has_cartridge_ = true;
+    chamber_is_empty_ = false;
+    
+    if (stop_after_single_motion_)
     {
-        std::lock_guard<std::mutex> lock(row_selection_mutex_);
-        row_to_pick = selected_input_row_;
-        selected_input_row_ = -1;
-    }
-    
-    if (row_to_pick == -1) {
-        if (manual_mode_) {
-            RCLCPP_ERROR(this->get_logger(), "[MOTION] No row selected (Manual)");
-            return;
-        }
-        if (!use_ai_for_control_) {
-            row_to_pick = 1;
-            current_auto_row_ = 2;
-            RCLCPP_INFO(this->get_logger(), "[MOTION] Auto Mode: Initial Pick Row %d", row_to_pick);
-        } else {
-            for (size_t i = 0; i < row_full_.size(); ++i) {
-                if (row_full_[i]) { row_to_pick = static_cast<int>(i) + 1; break; }
-            }
-        }
-    }
-    
-    if (row_to_pick == -1) {
-        RCLCPP_ERROR(this->get_logger(), "[MOTION] No full row available");
+        stop_after_single_motion_ = false;
+        transitionTo(SystemState::IDLE);
         return;
     }
-    
-    RCLCPP_INFO(this->get_logger(), "[MOTION] Input Tray → Chamber (Row %d) [ASYNC]", row_to_pick);
-    sendMotionActionAsync("INPUT_TRAY_CHAMBER", row_to_pick);
+
+    if (manual_mode_)
+    {
+        transitionTo(SystemState::IDLE);
+    }
+    else
+    {
+        transitionTo(SystemState::INIT_REFILL_BUFFER);
+    }
 }
 
 void RobotLogicNode::stateInitRefillBuffer()
@@ -1757,80 +1711,58 @@ void RobotLogicNode::stateInitRefillBuffer()
         }
     }
 
-    // ✅ ASYNC MOTION: Check if we already sent a goal
-    if (motion_current_cmd_ == "INPUT_TRAY_BUFFER") {
-        if (motion_in_progress_) return;  // Still moving
-        
-        motion_current_cmd_.clear();
-        if (!motion_result_) {
-            RCLCPP_ERROR(this->get_logger(), "[INIT] ❌ InputTrayBuffer motion failed");
-            return;
+    // ✅ CHECK MOTION ERRORS (Patch 3)
+    if (!motionStub_InputTrayBuffer()) {
+        return; 
+    }
+    
+    // ✅ Buffer now has cartridge
+    buffer_is_empty_ = false;
+    
+    // ========================================================================
+    // ✅ AUTO MODE: Change Tray Detection (after row 5)
+    // ========================================================================
+    if (!use_ai_for_control_ && !manual_mode_ && current_auto_row_ == 1 && !waiting_for_tray_change_)
+    {
+        // ✅ Check Last Tray Logic
+        if (is_last_tray_available_)
+        {
+             RCLCPP_WARN(this->get_logger(), 
+                "[LAST_TRAY] Auto Mode - Row 5 & Last Tray Signal Active -> LAST BATCH ENABLED");
+             is_last_batch_ = true;
         }
-        
-        buffer_is_empty_ = false;
-        
-        // AUTO MODE: Change Tray Detection (after row 5)
-        if (!use_ai_for_control_ && !manual_mode_ && current_auto_row_ == 1 && !waiting_for_tray_change_) {
-            if (is_last_tray_available_) {
-                RCLCPP_WARN(this->get_logger(), "[LAST_TRAY] Auto Mode - Row 5 & Last Tray -> LAST BATCH");
-                is_last_batch_ = true;
-            } else {
-                RCLCPP_WARN(this->get_logger(), "[CHANGE_TRAY] Auto Mode - Row 5 → Publishing change_tray");
-                auto change_msg = std_msgs::msg::Bool();
-                change_msg.data = true;
-                change_tray_pub_->publish(change_msg);
-                waiting_for_tray_change_ = true;
-            }
+        else
+        {
+            // Row wrapped to 1 means row 5 was just picked
+            RCLCPP_WARN(this->get_logger(), 
+                "[CHANGE_TRAY] Auto Mode - Row 5 placed to buffer → Publishing change_tray");
+            
+            auto change_msg = std_msgs::msg::Bool();
+            change_msg.data = true;
+            change_tray_pub_->publish(change_msg);
+            
+            waiting_for_tray_change_ = true;
+            RCLCPP_INFO(this->get_logger(), "[CHANGE_TRAY] Waiting for new tray - Input tray states blocked");
         }
-        
-        is_first_batch_ = false;
-        if (stop_after_single_motion_) {
-            stop_after_single_motion_ = false;
-            transitionTo(SystemState::IDLE);
-            return;
-        }
-        if (manual_mode_) {
-            transitionTo(SystemState::IDLE);
-        } else {
-            transitionTo(SystemState::WAIT_FILLING);
-        }
+    }
+    
+    is_first_batch_ = false;
+
+    if (stop_after_single_motion_)
+    {
+        stop_after_single_motion_ = false;
+        transitionTo(SystemState::IDLE);
         return;
     }
-    
-    // ✅ ASYNC MOTION: Prepare row and send (non-blocking)
-    int row_num = -1;
-    if (stop_after_single_motion_) {
-        std::lock_guard<std::mutex> lock(row_selection_mutex_);
-        row_num = selected_input_row_;
-        selected_input_row_ = -1;
-        if (row_num < 1 || row_num > static_cast<int>(row_full_.size())) {
-            RCLCPP_ERROR(this->get_logger(), "[MOTION] Invalid row: %d", row_num);
-            return;
-        }
-    } else {
-        if (!use_ai_for_control_) {
-            row_num = current_auto_row_;
-            current_auto_row_++;
-            if (current_auto_row_ > 5) {
-                current_auto_row_ = 1;
-                RCLCPP_WARN(this->get_logger(), "[AUTO] 📦 All 5 rows consumed - requesting input tray change");
-                auto change_msg = std_msgs::msg::Bool();
-                change_msg.data = true;
-                change_tray_pub_->publish(change_msg);
-                waiting_for_tray_change_ = true;
-            }
-        } else {
-            auto it = std::find_if(row_full_.begin(), row_full_.end(), [](bool v){ return v; });
-            if (it == row_full_.end()) {
-                RCLCPP_WARN(this->get_logger(), "[MOTION] No full rows for buffer refill");
-                return;
-            }
-            row_num = static_cast<int>(std::distance(row_full_.begin(), it)) + 1;
-        }
+
+    if (manual_mode_)
+    {
+        transitionTo(SystemState::IDLE);
     }
-    
-    RCLCPP_INFO(this->get_logger(), "[MOTION] Input Tray → Buffer (Row %d) [ASYNC]", row_num);
-    sendMotionActionAsync("INPUT_TRAY_BUFFER", row_num);
+    else
+    {
+        transitionTo(SystemState::WAIT_FILLING);
+    }
 }
 
 void RobotLogicNode::stateWaitFilling()
@@ -1866,34 +1798,45 @@ void RobotLogicNode::stateTakeChamberToScale()
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "[STATE] Waiting for motion to finish...");
         return;
     }
-    // ✅ ASYNC MOTION: Check if we already sent a goal
-    if (motion_current_cmd_ == "CHAMBER_SCALE") {
-        if (motion_in_progress_) return;  // Still moving
-        
-        motion_current_cmd_.clear();
-        if (!motion_result_) {
-            chamber_has_cartridge_ = true;  // Assume didn't move
-            return;
-        }
-        
-        chamber_has_cartridge_ = false;
-        chamber_is_empty_ = true;
-        scale_has_cartridge_ = true;
-        scale_wait_start_ = this->now();
-        
-        if (!buffer_is_empty_ && !is_last_batch_) {
-            RCLCPP_INFO(this->get_logger(), "[PIPELINE] 🚀 Loading next chamber from buffer (Parallel)");
-            transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
-        } else {
-            transitionTo(SystemState::PROCESSING_SCALE);
-        }
+
+    // Assign ID to this cartridge
+
+    int current_id = ++cartridge_counter_;
+    RCLCPP_INFO(this->get_logger(), "[SCALE] 🏷️ Moving Cartridge #%d to Scale", current_id); // Using ID for logging
+
+    // ✅ CHECK FOR MOTION ERRORS (Patch 3)
+    if (!motionStub_ChamberScale()) {
+        // Motion failed logic handled in stub (transitions to IDLE)
+        // We set IDLE flag for safety on restart?
+        // But resetState clears them.
+        chamber_has_cartridge_ = true; // Assume didn't move successfully
         return;
     }
-
-    // ✅ ASYNC MOTION: Send (non-blocking)
-    int current_id = ++cartridge_counter_;
-    RCLCPP_INFO(this->get_logger(), "[SCALE] 🏷️ Moving Cartridge #%d to Scale [ASYNC]", current_id);
-    sendMotionActionAsync("CHAMBER_SCALE");
+    
+    chamber_has_cartridge_ = false;
+    chamber_is_empty_ = true;
+    scale_has_cartridge_ = true;
+    
+    // Reset scale wait timer logic
+    scale_wait_start_ = this->now();
+    
+    // ✅ OPTIMIZATION (Patch 2)
+    // Always transition to Processing Scale first? 
+    // Actually, if we have buffer, we can load it.
+    // BUT we must ensure we don't block scale result processing if it arrives quickly.
+    // The previous logic branched to LOAD_CHAMBER.
+    // Let's keep that optimization.
+    
+    if (!buffer_is_empty_ && !is_last_batch_)
+    {
+         RCLCPP_INFO(this->get_logger(), 
+            "[PIPELINE] 🚀 Loading next chamber from buffer (Parallel)");
+         transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
+    }
+    else
+    {
+         transitionTo(SystemState::PROCESSING_SCALE);
+    }
 }
 
 void RobotLogicNode::stateProcessingScale()
@@ -2068,96 +2011,113 @@ void RobotLogicNode::statePlaceToOutput()
     }
     
     // ========================================================================
-    // MOTION EXECUTION (ASYNC)
+    // MOTION EXECUTION
     // ========================================================================
     
-    // ✅ ASYNC: Check if we already sent a goal
-    if (motion_current_cmd_ == "SCALE_OUTPUT") {
-        if (motion_in_progress_) return;  // Still moving
-        
-        motion_current_cmd_.clear();
-        int placed_slot = async_slot_;
-        
-        if (!motion_result_) {
-            RCLCPP_ERROR(this->get_logger(), "[PLACE] ❌ ScaleOutput motion failed");
-            return;
-        }
-        
-        // Cleanup
-        scale_has_cartridge_ = false;
-        
-        // Notify Vision
-        {
-            auto msg = std_msgs::msg::Bool();
-            msg.data = true;
-            place_done_pub_->publish(msg);
-        }
+    RCLCPP_INFO(this->get_logger(), 
+        "[PIPELINE] 📦 Placing to Slot %d (%s Mode)", 
+        slot_to_place, 
+        use_ai_for_control_ ? "AI" : "AUTO");
+    
+    // ✅ CHECK MOTION ERRORS (Patch 3)
+    if (!motionStub_ScaleOutput(slot_to_place)) {
+        // Motion Failed
+        return; 
+    }
+    
+    // Cleanup
+    scale_has_cartridge_ = false;
 
-        // Slot 9 -> Change Tray Logic (AUTO Mode)
-        if (!use_ai_for_control_ && placed_slot >= 9) {
-            RCLCPP_WARN(this->get_logger(), "[PIPELINE] 🏁 Slot 9 reached in AUTO Mode. Requesting tray change...");
-            auto done_output_msg = std_msgs::msg::Bool();
-            done_output_msg.data = true;
-            done_output_tray_pub_->publish(done_output_msg);
-            auto change_msg = std_msgs::msg::Bool();
-            change_msg.data = true;
-            change_tray_pub_->publish(change_msg);
-            waiting_for_tray_change_ = true;
-            transitionTo(SystemState::IDLE);
-            return;
-        }
+    // ✅ Notify Vision to increment AUTO counter
+    {
+        auto msg = std_msgs::msg::Bool();
+        msg.data = true;
+        place_done_pub_->publish(msg);
+    }
+
+    // ✅ Slot 9 -> Change Tray Logic (AUTO Mode)
+    if (!use_ai_for_control_ && slot_to_place >= 9) {
+        RCLCPP_WARN(this->get_logger(), "[PIPELINE] 🏁 Slot 9 reached in AUTO Mode. Requesting tray change...");
         
-        {
-            std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-            selected_output_slot_ = -1;
-        }
-        output_tray_wait_start_ = rclcpp::Time(0);
+        // Publish output tray full signal
+        auto done_output_msg = std_msgs::msg::Bool();
+        done_output_msg.data = true;
+        done_output_tray_pub_->publish(done_output_msg);
+        RCLCPP_INFO(this->get_logger(), "[AUTO] 📦 Output tray full - requesting output tray change");
         
-        tray_count_++;
-        RCLCPP_INFO(this->get_logger(), "[STATS] ✅ Tray count: %d", tray_count_.load());
-        if (tray_count_pub_) {
-            auto msg = std::make_shared<std_msgs::msg::Int32>();
-            msg->data = tray_count_.load();
-            tray_count_pub_->publish(*msg);
-        }
+        // Also publish input tray change if needed
+        auto change_msg = std_msgs::msg::Bool();
+        change_msg.data = true;
+        change_tray_pub_->publish(change_msg);
         
-        if (placed_slot >= 8) {
-            RCLCPP_WARN(this->get_logger(), "[OUTPUT] ⚠️ Output Tray Full (Slot 8) -> Requesting Change Output");
-            auto done_msg = std_msgs::msg::Bool();
-            done_msg.data = true;
-            done_output_tray_pub_->publish(done_msg);
-        }
-        
-        RCLCPP_INFO(this->get_logger(), "[PIPELINE] ✅ Placement complete.");
-        
-        // DECIDE NEXT STATE
-        if (is_last_batch_) {
-            if (chamber_has_cartridge_) {
-                transitionTo(SystemState::LAST_BATCH_WAIT);
-            } else {
-                is_last_batch_ = false;
-                transitionTo(SystemState::IDLE);
-                auto msg = std_msgs::msg::Bool();
-                msg.data = true;
-                last_batch_complete_pub_->publish(msg);
-            }
-        } else if (chamber_has_cartridge_) {
-            transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
-        } else if (!buffer_is_empty_) {
-            transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
-        } else {
-            transitionTo(SystemState::REFILL_BUFFER);
-        }
+        waiting_for_tray_change_ = true;
+        transitionTo(SystemState::IDLE); // Go to IDLE and wait for new_tray_loaded
         return;
     }
     
-    // ✅ ASYNC: Send motion (non-blocking)
-    RCLCPP_INFO(this->get_logger(), 
-        "[PIPELINE] 📦 Placing to Slot %d (%s Mode) [ASYNC]", 
-        slot_to_place, use_ai_for_control_ ? "AI" : "AUTO");
+    {
+         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+         selected_output_slot_ = -1; // Reset selection
+    }
+    output_tray_wait_start_ = rclcpp::Time(0);
     
-    async_slot_ = slot_to_place;
-    sendMotionActionAsync("SCALE_OUTPUT", slot_to_place);
+    // Increment tray count (successful completion)
+    tray_count_++;
+    RCLCPP_INFO(this->get_logger(), "[STATS] ✅ Tray count: %d", tray_count_.load());
+    if (tray_count_pub_) {
+        auto msg = std::make_shared<std_msgs::msg::Int32>();
+        msg->data = tray_count_.load();
+        tray_count_pub_->publish(*msg);
+    }
+    
+    // ✅ Check if Output Tray is Full (Slot 8)
+    if (slot_to_place >= 8)
+    {
+        RCLCPP_WARN(this->get_logger(), "[OUTPUT] ⚠️ Output Tray Full (Slot 8) -> Requesting Change Output");
+        auto done_msg = std_msgs::msg::Bool();
+        done_msg.data = true;
+        done_output_tray_pub_->publish(done_msg);
+    }
+    
+    RCLCPP_INFO(this->get_logger(), "[PIPELINE] ✅ Placement complete.");
+    
+    // ========================================================================
+    // DECIDE NEXT STATE
+    // ========================================================================
+    
+    // ✅ Check is_last_batch FIRST (matches diagram flow)
+    if (is_last_batch_) {
+        if (chamber_has_cartridge_) {
+            // Chamber co cartridge cuoi → LAST_BATCH_WAIT (cho fill_done)
+            RCLCPP_WARN(this->get_logger(), 
+                "[PIPELINE] is_last_batch + chamber has cart → LAST_BATCH_WAIT");
+            transitionTo(SystemState::LAST_BATCH_WAIT);
+        } else {
+            // Het cartridge → IDLE + pub last_batch_complete
+            RCLCPP_WARN(this->get_logger(), 
+                "[PIPELINE] is_last_batch + ALL EMPTY → IDLE");
+            is_last_batch_ = false;
+            transitionTo(SystemState::IDLE);
+            
+            auto msg = std_msgs::msg::Bool();
+            msg.data = true;
+            last_batch_complete_pub_->publish(msg);
+            RCLCPP_INFO(this->get_logger(), 
+                "[PIPELINE] Published /robot/last_batch_complete");
+        }
+    }
+    else if (chamber_has_cartridge_) {
+        RCLCPP_INFO(this->get_logger(), "[PIPELINE] Chamber has cartridge -> Direct to Scale");
+        transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
+    }
+    else if (!buffer_is_empty_) {
+         RCLCPP_INFO(this->get_logger(), "[PIPELINE] Buffer has items -> Loading Chamber");
+         transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
+    }
+    else {
+         RCLCPP_INFO(this->get_logger(), "[PIPELINE] Chamber & Buffer empty -> Refill Buffer");
+         transitionTo(SystemState::REFILL_BUFFER);
+    }
 }
 
 void RobotLogicNode::statePlaceToFail()
@@ -2172,43 +2132,53 @@ void RobotLogicNode::statePlaceToFail()
     RCLCPP_INFO(this->get_logger(), 
         "[PIPELINE] ❌ Scale FAIL - placing to reject position");
     
-    // ✅ ASYNC: Check if we already sent a goal
-    if (motion_current_cmd_ == "SCALE_FAIL") {
-        if (motion_in_progress_) return;
-        
-        motion_current_cmd_.clear();
-        if (!motion_result_) {
-            RCLCPP_ERROR(this->get_logger(), "[FAIL] ❌ ScaleFail motion failed");
-            return;
-        }
-        
-        scale_has_cartridge_ = false;
-        
-        // DECIDE NEXT STATE
-        if (manual_mode_) {
-            transitionTo(SystemState::IDLE);
-        } else if (is_last_batch_) {
-            if (chamber_has_cartridge_) {
-                transitionTo(SystemState::LAST_BATCH_WAIT);
-            } else {
-                is_last_batch_ = false;
-                transitionTo(SystemState::IDLE);
-                auto msg = std_msgs::msg::Bool();
-                msg.data = true;
-                last_batch_complete_pub_->publish(msg);
-            }
-        } else if (chamber_has_cartridge_) {
-            transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
-        } else if (!buffer_is_empty_) {
-            transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
-        } else {
-            transitionTo(SystemState::REFILL_BUFFER);
-        }
-        return;
+    // ✅ CHECK MOTION ERRORS (Patch 3)
+    if (!motionStub_ScaleFail()) {
+        return; 
     }
     
-    // ✅ ASYNC: Send (non-blocking)
-    sendMotionActionAsync("SCALE_FAIL");
+    scale_has_cartridge_ = false;
+    
+    if (manual_mode_)
+    {
+        transitionTo(SystemState::IDLE);
+    }
+    
+    // ========================================================================
+    // DECIDE NEXT STATE (same logic as PlaceToOutput)
+    // ========================================================================
+    
+    // ✅ Check is_last_batch FIRST (matches diagram flow)
+    else if (is_last_batch_) {
+        if (chamber_has_cartridge_) {
+            RCLCPP_WARN(this->get_logger(), 
+                "[PIPELINE] is_last_batch + chamber has cart → LAST_BATCH_WAIT");
+            transitionTo(SystemState::LAST_BATCH_WAIT);
+        } else {
+            RCLCPP_WARN(this->get_logger(), 
+                "[PIPELINE] is_last_batch + ALL EMPTY → IDLE");
+            is_last_batch_ = false;
+            transitionTo(SystemState::IDLE);
+            
+            auto msg = std_msgs::msg::Bool();
+            msg.data = true;
+            last_batch_complete_pub_->publish(msg);
+            RCLCPP_INFO(this->get_logger(), 
+                "[PIPELINE] Published /robot/last_batch_complete");
+        }
+    }
+    else if (chamber_has_cartridge_) {
+        RCLCPP_INFO(this->get_logger(), "[PIPELINE] Chamber has cartridge -> Direct to Scale");
+        transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
+    }
+    else if (!buffer_is_empty_) {
+         RCLCPP_INFO(this->get_logger(), "[PIPELINE] Buffer has items -> Loading Chamber");
+         transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
+    }
+    else {
+         RCLCPP_INFO(this->get_logger(), "[PIPELINE] Chamber & Buffer empty -> Refill Buffer");
+         transitionTo(SystemState::REFILL_BUFFER);
+    }
 }
 
 void RobotLogicNode::stateRefillBuffer()
@@ -2259,97 +2229,80 @@ void RobotLogicNode::stateRefillBuffer()
     // ✅ ALWAYS REFILL - No conditions
     // ========================================================================
     RCLCPP_INFO(this->get_logger(), "[BUFFER] 🔄 Refilling from input tray...");
-    // ASYNC: Check if we already sent a goal
-    if (motion_current_cmd_ == "INPUT_TRAY_BUFFER") {
-        if (motion_in_progress_) return;
-        
-        motion_current_cmd_.clear();
-        if (!motion_result_) {
-            RCLCPP_ERROR(this->get_logger(), "[REFILL] InputTrayBuffer motion failed");
-            return;
+    motionStub_InputTrayBuffer_SinglePick();
+    
+    // ✅ Buffer now has cartridge
+    buffer_is_empty_ = false;
+    RCLCPP_INFO(this->get_logger(), "[BUFFER] ✅ Buffer refilled");
+    
+    // ========================================================================
+    // ✅ AUTO MODE: Change Tray Detection (after row 5)
+    // ========================================================================
+    if (!use_ai_for_control_ && !manual_mode_ && current_auto_row_ == 1 && !waiting_for_tray_change_)
+    {
+        // ✅ Check Last Tray Logic
+        if (is_last_tray_available_)
+        {
+             RCLCPP_WARN(this->get_logger(), 
+                "[LAST_TRAY] Auto Mode - Row 5 & Last Tray Signal Active -> LAST BATCH ENABLED");
+             is_last_batch_ = true;
         }
-        
-        buffer_is_empty_ = false;
-        RCLCPP_INFO(this->get_logger(), "[BUFFER] Buffer refilled");
-        
-        // AUTO MODE: Change Tray Detection (after row 5)
-        if (!use_ai_for_control_ && !manual_mode_ && current_auto_row_ == 1 && !waiting_for_tray_change_) {
-            if (is_last_tray_available_) {
-                RCLCPP_WARN(this->get_logger(), "[LAST_TRAY] Auto Mode - Row 5 & Last Tray -> LAST BATCH");
-                is_last_batch_ = true;
-            } else {
-                RCLCPP_WARN(this->get_logger(), "[CHANGE_TRAY] Auto Mode - Row 5 -> Publishing change_tray");
-                auto change_msg = std_msgs::msg::Bool();
-                change_msg.data = true;
-                change_tray_pub_->publish(change_msg);
-                waiting_for_tray_change_ = true;
-            }
+        else
+        {
+            // Row wrapped to 1 means row 5 was just picked
+            RCLCPP_WARN(this->get_logger(), 
+                "[CHANGE_TRAY] Auto Mode - Row 5 placed to buffer → Publishing change_tray");
+            
+            auto change_msg = std_msgs::msg::Bool();
+            change_msg.data = true;
+            change_tray_pub_->publish(change_msg);
+            
+            waiting_for_tray_change_ = true;
+            RCLCPP_INFO(this->get_logger(), "[CHANGE_TRAY] Waiting for new tray - Input tray states blocked");
         }
-        
-        if (input_tray_empty_ && is_last_tray_available_) {
-            is_last_batch_ = true;
-            RCLCPP_WARN(this->get_logger(), "[PIPELINE] Input tray empty & Last Tray -> last batch");
-        }
-        
-        if (stop_after_single_motion_) {
-            stop_after_single_motion_ = false;
-            transitionTo(SystemState::IDLE);
-            return;
-        }
-        if (manual_mode_) {
-            transitionTo(SystemState::IDLE);
-            return;
-        }
-        
-        if (scale_has_cartridge_) {
-            RCLCPP_INFO(this->get_logger(), "[PIPELINE] Cartridge on scale -> Processing Scale");
-            scale_wait_start_ = this->now();
-            transitionTo(SystemState::PROCESSING_SCALE);
-            return;
-        }
-        
-        RCLCPP_INFO(this->get_logger(), "[PIPELINE] Waiting for chamber fill...");
-        transitionTo(SystemState::WAIT_FILLING);
+    }
+    
+    if (input_tray_empty_ && is_last_tray_available_)
+    {
+        is_last_batch_ = true;
+        RCLCPP_WARN(this->get_logger(), 
+            "[PIPELINE] ⚠️ Input tray empty & Last Tray -> This is the last batch");
+    }
+    
+    if (stop_after_single_motion_)
+    {
+        stop_after_single_motion_ = false;
+        transitionTo(SystemState::IDLE);
         return;
     }
     
-    // ASYNC: Prepare row and send (non-blocking)
-    int row_num = -1;
-    if (stop_after_single_motion_) {
-        std::lock_guard<std::mutex> lock(row_selection_mutex_);
-        row_num = selected_input_row_;
-        selected_input_row_ = -1;
-        if (row_num < 1 || row_num > static_cast<int>(row_full_.size())) {
-            RCLCPP_ERROR(this->get_logger(), "[MOTION] Invalid row: %d", row_num);
-            return;
-        }
-    } else {
-        if (!use_ai_for_control_) {
-            row_num = current_auto_row_;
-            current_auto_row_++;
-            if (current_auto_row_ > 5) {
-                current_auto_row_ = 1;
-                RCLCPP_WARN(this->get_logger(), "[AUTO] All 5 rows consumed - requesting input tray change");
-                auto change_msg = std_msgs::msg::Bool();
-                change_msg.data = true;
-                change_tray_pub_->publish(change_msg);
-                waiting_for_tray_change_ = true;
-            }
-        } else {
-            auto it = std::find_if(row_full_.begin(), row_full_.end(), [](bool v){ return v; });
-            if (it == row_full_.end()) {
-                RCLCPP_WARN(this->get_logger(), "[MOTION] No full rows for buffer refill");
-                return;
-            }
-            row_num = static_cast<int>(std::distance(row_full_.begin(), it)) + 1;
-        }
+    if (manual_mode_)
+    {
+        transitionTo(SystemState::IDLE);
+        return;
     }
     
-    RCLCPP_INFO(this->get_logger(), "[MOTION] Input Tray to Buffer (Row %d) [ASYNC]", row_num);
-    sendMotionActionAsync("INPUT_TRAY_BUFFER", row_num);
+    // ========================================================================
+    // ✅ PROCESS STORED RESULT (AFTER REFILL)
+    // ========================================================================
+    
+    if (scale_has_cartridge_)
+    {
+        RCLCPP_INFO(this->get_logger(), 
+            "[PIPELINE] 📦 Cartridge on scale → Processing Scale (Check result/Take decision)");
+            
+        // Reset wait timer
+        scale_wait_start_ = this->now();
+        transitionTo(SystemState::PROCESSING_SCALE);
+        return;
+    }
+    
+    // ========================================================================
+    // No cartridge on scale → Wait for fill
+    // ========================================================================
+    RCLCPP_INFO(this->get_logger(), "[PIPELINE] ⏳ Waiting for chamber fill...");
+    transitionTo(SystemState::WAIT_FILLING);
 }
-
-
 
 void RobotLogicNode::stateLoadChamberFromBuffer()
 {
@@ -2360,42 +2313,47 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
         return;
     }
 
-    // ✅ ASYNC: Check if we already sent a goal
-    if (motion_current_cmd_ == "BUFFER_CHAMBER") {
-        if (motion_in_progress_) return;
-        
-        motion_current_cmd_.clear();
-        if (!motion_result_) {
-            RCLCPP_ERROR(this->get_logger(), "[LOAD] BufferChamber motion failed");
-            return;
-        }
-        
-        buffer_is_empty_ = true;
-        chamber_has_cartridge_ = true;
-        chamber_is_empty_ = false;
-        RCLCPP_INFO(this->get_logger(), "[PIPELINE] Chamber filling started in background!");
-        
-        if (manual_mode_) {
-            transitionTo(SystemState::IDLE);
-        } else if (scale_has_cartridge_) {
-            RCLCPP_INFO(this->get_logger(), "[PIPELINE] Scale has cartridge, REFILL_BUFFER first");
-            transitionTo(SystemState::REFILL_BUFFER);
-        } else {
-            if (is_last_batch_) {
-                transitionTo(SystemState::WAIT_FILLING);
-            } else {
-                transitionTo(SystemState::REFILL_BUFFER);
-            }
-        }
-        return;
-    }
+    motionStub_BufferChamber();
     
-    // ASYNC: Send (non-blocking)
-    RCLCPP_INFO(this->get_logger(), "[MOTION] Buffer to Chamber [ASYNC]");
-    sendMotionActionAsync("BUFFER_CHAMBER");
+    // ✅ Buffer is now empty after taking cartridge
+    buffer_is_empty_ = true;
+    RCLCPP_INFO(this->get_logger(), "[BUFFER] Cartridge taken from buffer → Buffer now empty");
+    
+    chamber_has_cartridge_ = true;
+    chamber_is_empty_ = false;
+    
+    // ⚡ Chamber bắt đầu FILL ngay tại đây!
+    RCLCPP_INFO(this->get_logger(), "[PIPELINE] ⚡ Chamber filling started in background!");
+    
+    if (manual_mode_)
+    {
+        transitionTo(SystemState::IDLE);
+    }
+    else if (scale_has_cartridge_)
+    {
+        // ✅ REFILL BUFFER TRƯỚC khi xử lý kết quả cân
+        // Flow: LOAD_CHAMBER → REFILL_BUFFER → PROCESSING_SCALE → PLACE
+        RCLCPP_INFO(this->get_logger(), 
+            "[PIPELINE] 📦 Scale has cartridge → REFILL_BUFFER first, then PROCESSING_SCALE");
+        transitionTo(SystemState::REFILL_BUFFER);
+    }
+    else
+    {
+        // No cartridge on scale → normal flow
+        if (is_last_batch_)
+        {
+             RCLCPP_INFO(this->get_logger(), 
+                "[PIPELINE] → Next: Wait Filling (Last Batch - No Refill)");
+             transitionTo(SystemState::WAIT_FILLING);
+        }
+        else
+        {
+             RCLCPP_INFO(this->get_logger(), 
+                "[PIPELINE] → Next: Refill buffer");
+             transitionTo(SystemState::REFILL_BUFFER);
+        }
+    }
 }
-
-
 
 void RobotLogicNode::stateLastBatchWait()
 {
@@ -2616,78 +2574,6 @@ bool RobotLogicNode::sendMotionAction(const std::string& cmd, int slot, int time
             RCLCPP_ERROR(this->get_logger(), "[ACTION] Unknown result code");
             return false;
     }
-}
-
-// ============================================================================
-// ASYNC MOTION (Non-blocking) - Returns immediately
-// ============================================================================
-void RobotLogicNode::sendMotionActionAsync(const std::string& cmd, int slot)
-{
-    if (!motion_action_client_->wait_for_action_server(std::chrono::seconds(1))) {
-        RCLCPP_ERROR(this->get_logger(), "[ASYNC] Action server not available!");
-        publishError("ACTION_SERVER_OFFLINE");
-        motion_in_progress_ = false;
-        motion_result_ = false;
-        return;
-    }
-
-    auto goal_msg = ExecuteMotion::Goal();
-    goal_msg.command = cmd;
-    goal_msg.slot = slot;
-    goal_msg.allow_rollback = true;
-
-    RCLCPP_INFO(this->get_logger(), "[ASYNC] 🚀 Sending goal: %s (slot: %d)", cmd.c_str(), slot);
-
-    auto send_goal_options = rclcpp_action::Client<ExecuteMotion>::SendGoalOptions();
-
-    // Goal accepted/rejected callback
-    send_goal_options.goal_response_callback =
-        [this, cmd](const rclcpp_action::ClientGoalHandle<ExecuteMotion>::SharedPtr & goal_handle) {
-            if (!goal_handle) {
-                RCLCPP_ERROR(this->get_logger(), "[ASYNC] ❌ Goal '%s' rejected by server", cmd.c_str());
-                motion_in_progress_ = false;
-                motion_result_ = false;
-                state_changed_ = true;
-                state_cv_.notify_one();
-            } else {
-                RCLCPP_INFO(this->get_logger(), "[ASYNC] ✅ Goal '%s' accepted", cmd.c_str());
-            }
-        };
-
-    // Result callback - fires when motion completes
-    send_goal_options.result_callback =
-        [this, cmd](const rclcpp_action::ClientGoalHandle<ExecuteMotion>::WrappedResult & result) {
-            switch (result.code) {
-                case rclcpp_action::ResultCode::SUCCEEDED:
-                    motion_result_ = result.result->success;
-                    RCLCPP_INFO(this->get_logger(), "[ASYNC] ✅ '%s' completed: %s", 
-                        cmd.c_str(), result.result->message.c_str());
-                    break;
-                case rclcpp_action::ResultCode::ABORTED:
-                    motion_result_ = false;
-                    RCLCPP_ERROR(this->get_logger(), "[ASYNC] ❌ '%s' aborted", cmd.c_str());
-                    break;
-                case rclcpp_action::ResultCode::CANCELED:
-                    motion_result_ = false;
-                    RCLCPP_WARN(this->get_logger(), "[ASYNC] ⚠️ '%s' canceled", cmd.c_str());
-                    break;
-                default:
-                    motion_result_ = false;
-                    RCLCPP_ERROR(this->get_logger(), "[ASYNC] ❓ '%s' unknown result", cmd.c_str());
-                    break;
-            }
-            motion_in_progress_ = false;
-            
-            // Wake state machine immediately
-            state_changed_ = true;
-            state_cv_.notify_one();
-        };
-
-    // Send goal - returns IMMEDIATELY
-    motion_in_progress_ = true;
-    motion_result_ = false;
-    motion_current_cmd_ = cmd;
-    motion_action_client_->async_send_goal(goal_msg, send_goal_options);
 }
 
 

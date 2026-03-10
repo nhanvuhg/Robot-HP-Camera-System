@@ -33,7 +33,7 @@ def generate_launch_description():
         parameters=[{
             'width': 640,
             'height': 480,
-            'fps': 8,  # Reduced from 15 → 8 (Picamera2 dual cam limit)
+            'fps': 10,  # Increased to 10 (from 8) for higher framerate
         }],
         respawn=True,
         respawn_delay=5.0,

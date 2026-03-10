@@ -30,7 +30,7 @@ class Picamera2DualNode(Node):
         self.get_logger().info('========================================')
         
         # Parameters
-        self.declare_parameter('fps', 8)  # Increased from 5
+        self.declare_parameter('fps', 10)  # Increased from 5
         self.declare_parameter('width', 640)
         self.declare_parameter('height', 480)
         self.declare_parameter('enable_diagnostics', True)

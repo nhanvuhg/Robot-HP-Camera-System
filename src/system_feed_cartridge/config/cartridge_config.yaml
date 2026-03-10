@@ -1,0 +1,72 @@
+servo_ips:
+  1: 192.168.27.248
+  2: 192.168.27.249
+  3: 192.168.27.250
+  4: 192.168.27.251
+  5: 192.168.27.252
+io_ip: 192.168.27.253
+cylinder1_extend_channel: 5
+cylinder1_retract_channel: 4
+cylinder2_extend_channel: 7
+cylinder2_retract_channel: 6
+inx_home: 20.0
+inx_target2: 500.0
+inx_output_stack: 100.0
+iny_home: 10.0
+iny_safe_zone: 50.0
+iny_target2: 200.0
+iny_input_stack:
+  8: 250.0
+  7: 300.0
+  6: 350.0
+  5: 400.0
+  4: 450.0
+  3: 500.0
+  2: 550.0
+  1: 600.0
+iny_output_stack:
+  8: 100.0
+  7: 170.0
+  6: 240.0
+  5: 310.0
+  4: 380.0
+  3: 450.0
+  2: 520.0
+  1: 590.0
+servo3_home: 0.0
+servo3_target1: 50.0
+servo3_push_position: 300.0
+servo3_jog_velocity: 50.0
+outx_home: 0.0
+outx_target1: 100.0
+outx_target2: 400.0
+outx_target3: 500.0
+outy_home: 0.0
+outy_target1: 50.0
+outy_target2: 300.0
+outy_safe_zone: 10.0
+outy_search_velocity: 40.0
+outy_output_table:
+  8: 80.0
+  7: 140.0
+  6: 200.0
+  5: 260.0
+  4: 320.0
+  3: 380.0
+  2: 440.0
+  1: 500.0
+servo_limits:
+  1: 700.0
+  2: 700.0
+  3: 400.0
+  4: 600.0
+  5: 600.0
+iny_search_velocity: 30.0
+iny_slow_velocity: 10.0
+position_tolerance: 5.0
+outx_safe_position_threshold: 100.0
+max_trays: 8
+max_slots_per_output_tray: 9
+homing_timeout: 30.0
+move_timeout: 20.0
+cylinder_timeout: 15.0
