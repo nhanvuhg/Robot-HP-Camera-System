@@ -192,7 +192,7 @@ while true; do
         break
     fi
     if [ -n "${PID_QML_GUI:-}" ] && ! kill -0 "$PID_QML_GUI" 2>/dev/null; then
-        echo "🖥️  GUI đã đóng — dừng hệ thống"
+        echo "[GUI] Closed — dừng hệ thống"
         break
     fi
 done
