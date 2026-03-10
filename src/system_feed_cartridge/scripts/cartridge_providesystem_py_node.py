@@ -2146,10 +2146,15 @@ class CartridgeSystem(Node):
     
     def update_sensors(self):
         """Update sensor readings from hardware (skips simulated sensors)"""
+        # ✅ Skip IO hardware read during HOMING to prevent TCP conflict
+        # (homing thread also uses Modbus TCP → concurrent reads cause CpxAp to drop)
+        if self.state == SystemState.HOMING_RUNNING:
+            return
+
         # Always apply simulated sensor values first
         for sensor_id, state in self._sim_sensors.items():
             self.sensor_manager.update_sensor(sensor_id, state)
-        
+
         if self.io_module is None:
             # Auto-reconnect định kỳ mỗi 10s
             _now = time.time()
