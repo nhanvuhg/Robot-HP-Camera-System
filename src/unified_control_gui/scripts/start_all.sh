@@ -108,7 +108,10 @@ PID_PROVIDE=""
 PID_WEB_GUI=""
 PID_QML_GUI=""
 
+_CLEANUP_DONE=0
 cleanup() {
+    [ "$_CLEANUP_DONE" -eq 1 ] && return
+    _CLEANUP_DONE=1
     echo ""
     echo "🛑 Shutting down..."
     rm -f "$PIDFILE"

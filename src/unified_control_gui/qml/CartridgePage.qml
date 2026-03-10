@@ -192,17 +192,15 @@
                                     font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // 2 modes: AUTO | MANUAL  (JOG là sub-feature trong MANUAL mode)
+                                // 2 modes: AUTO | MANUAL
                                 Row {
                                     id: modeRow
-                                    width: parent.width
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
                                     spacing: 4
 
                                     CBtn {
                                         w: Math.floor((modeRow.width - 4) / 2)
-                                        height: modeRow.height
                                         lbl: "AUTO"; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
                                         active: !modeSelCol.modeBlocked && cartridgeController.currentMode === "auto"
                                         enabled: !modeSelCol.modeBlocked
@@ -210,7 +208,6 @@
                                     }
                                     CBtn {
                                         w: Math.floor((modeRow.width - 4) / 2)
-                                        height: modeRow.height
                                         lbl: "MANUAL"; bg: "#1a0a33"; bc: "#bb86fc"; tc: "#bb86fc"
                                         active: !modeSelCol.modeBlocked && cartridgeController.currentMode === "manual"
                                         enabled: !modeSelCol.modeBlocked
