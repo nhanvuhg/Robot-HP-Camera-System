@@ -513,7 +513,7 @@
                                         ListElement { sid:2;  slabel:"S2";  sdesc:"Stack"    }
                                         ListElement { sid:3;  slabel:"S3";  sdesc:"Stack"    }
                                         ListElement { sid:4;  slabel:"S4";  sdesc:"Detect"   }
-                                        ListElement { sid:5;  slabel:"S5";  sdesc:""         }
+                                        ListElement { sid:5;  slabel:"S5";  sdesc:"Out.Pos1" }
                                         ListElement { sid:6;  slabel:"S6";  sdesc:"Platform" }
                                         ListElement { sid:7;  slabel:"S7";  sdesc:"Output"   }
                                         ListElement { sid:8;  slabel:"S8";  sdesc:""         }

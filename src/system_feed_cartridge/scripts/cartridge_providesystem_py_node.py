@@ -2857,12 +2857,18 @@ class CartridgeSystem(Node):
         # ══════════════════════════════════════════════════════════════
         
         elif self.state == SystemState.S2_CHECK_INTERLOCK:
+            # ✅ Đọc S5 SỚM — xác định output pos1 trống hay có khay
+            # Lưu vào flag để dùng xuyên suốt Phase A (tránh đọc lại giữa chừng)
+            self._s2_output_empty = not self.sensor_manager.get_sensor(5)
+            s5_status = 'TRỐNG (row 1)' if self._s2_output_empty else 'CÓ KHAY (search S4)'
+            self.get_logger().info(f'📡 [S2] S5={("OFF" if self._s2_output_empty else "ON")} → Output pos1 {s5_status}')
+
             # Check INY safe, INX safe, S3
             iny_safe = self.is_iny_safe_for_inx_move()
             s3_status = self.sensor_manager.get_sensor(3)
             
             if iny_safe:
-                self.get_logger().info(f"✅ [S2-A] Interlock OK (INY safe, S3={'ON' if s3_status else 'OFF'})")
+                self.get_logger().info(f'✅ [S2-A] Interlock OK (INY safe, S3={"ON" if s3_status else "OFF"}, S5={"OFF→row1" if self._s2_output_empty else "ON→search"})')
                 self.state = SystemState.S2_INX_TO_TARGET2
             else:
                 self.get_logger().warn("⏳ [S2-A] Waiting INY safe for Phase A...")
@@ -2921,8 +2927,14 @@ class CartridgeSystem(Node):
                 self.get_logger().warn("⏳ [S2-A] Waiting INY safe for INX move to safe zone...")
         
         elif self.state == SystemState.S2_INY_SEARCH_STACK:
+            # ✅ Dùng flag đã đọc từ S2_CHECK_INTERLOCK (S5 đã được snapshot trước khi vào Phase A)
+            if getattr(self, '_s2_output_empty', False):
+                self.stop_iny_jog()
+                self.output_stack_row = 1
+                self.get_logger().info('📭 [S2-A] Output pos1 trống (S5 OFF lúc vào) → Đặt thẳng row 1')
+                self.state = SystemState.S2_INY_TO_NEAREST_ROW
             # ✅ MANUAL MODE: Nếu đã set target row, bỏ qua sensor search
-            if self.manual_mode and self.manual_target_row is not None:
+            elif self.manual_mode and self.manual_target_row is not None:
                 self.output_stack_row = self.manual_target_row
                 self.get_logger().info(f"🎯 MANUAL [S2-A]: Row set to {self.manual_target_row} (skipping search)")
                 self.manual_target_row = None  # Clear after use
