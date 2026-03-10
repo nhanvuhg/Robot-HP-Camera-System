@@ -1360,6 +1360,11 @@ class CartridgeSystem(Node):
         """Topic /system/start_button - Chạy lại từ đầu (bắt buộc HOMING trước)"""
         if not msg.data:
             return
+        # ✅ Phải chọn mode trước (AUTO hoặc MANUAL) — không cho home khi idle
+        if self.operation_mode == 'idle':
+            self.get_logger().warn('⚠️ START bị chặn — chọn AUTO hoặc MANUAL mode trước!')
+            self._notify_gui('warn', '⚠️ Chưa chọn mode', 'Chọn AUTO hoặc MANUAL trước khi nhấn START')
+            return
         self._system_paused = False
         # Reset hoàn toàn trước khi home lại
         self.zero_offset = {}  # Xóa offset cũ — bắt buộc home lại hoàn toàn
@@ -1376,8 +1381,8 @@ class CartridgeSystem(Node):
         self._p2_move_cmd_time = 0.0
         self._servo3_jog_active = False
         self.state = SystemState.HOMING
-        self.get_logger().info("▶\ufe0f  START: zero_offset reset → HOMING (bắt buộc home lại)")
-        self._notify_gui('info', '\u25b6\ufe0f START — HOMING', 'Hệ thống chạy lại từ đầu')
+        self.get_logger().info(f'▶️  START ({self.operation_mode}): zero_offset reset → HOMING')
+        self._notify_gui('info', '▶️ START — HOMING', f'Mode: {self.operation_mode} — Bắt đầu homing')
 
     def stop_button_callback(self, msg):
         """Topic /system/stop_button - Dừng hết, về IDLE"""
