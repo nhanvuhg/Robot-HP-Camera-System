@@ -176,7 +176,7 @@
                             color: root.cBg2; border.color: root.cBorder; radius: 6
                             HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
 
-                            ColumnLayout {
+                            ColumnLayout { id: modeSelCol
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
 
@@ -194,24 +194,26 @@
 
                                 // 2 modes: AUTO | MANUAL  (JOG là sub-feature trong MANUAL mode)
                                 Row {
+                                    id: modeRow
                                     width: parent.width
-                                    Layout.fillWidth: true; Layout.fillHeight: true
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
                                     spacing: 4
 
                                     CBtn {
-                                        w: Math.floor((parent.width - 4) / 2)
-                                        height: parent.parent.height - 4
+                                        w: Math.floor((modeRow.width - 4) / 2)
+                                        height: modeRow.height
                                         lbl: "AUTO"; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
-                                        active: !parent.parent.modeBlocked && cartridgeController.currentMode === "auto"
-                                        enabled: !parent.parent.modeBlocked
+                                        active: !modeSelCol.modeBlocked && cartridgeController.currentMode === "auto"
+                                        enabled: !modeSelCol.modeBlocked
                                         onClicked: cartridgeController.setMode("auto")
                                     }
                                     CBtn {
-                                        w: Math.floor((parent.width - 4) / 2)
-                                        height: parent.parent.height - 4
+                                        w: Math.floor((modeRow.width - 4) / 2)
+                                        height: modeRow.height
                                         lbl: "MANUAL"; bg: "#1a0a33"; bc: "#bb86fc"; tc: "#bb86fc"
-                                        active: !parent.parent.modeBlocked && cartridgeController.currentMode === "manual"
-                                        enabled: !parent.parent.modeBlocked
+                                        active: !modeSelCol.modeBlocked && cartridgeController.currentMode === "manual"
+                                        enabled: !modeSelCol.modeBlocked
                                         onClicked: cartridgeController.setMode("manual")
                                     }
                                 }

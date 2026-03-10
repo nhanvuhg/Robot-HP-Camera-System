@@ -87,11 +87,12 @@ while pgrep -f "cartridge_providesystem_py" > /dev/null 2>&1; do
     _wait=$((_wait + 1))
 done
 
-# Chờ TCP connections đến servo/IO đóng hết (tối đa 15s)
+# Chờ TCP connections đến servo/IO đóng hết (tối đa 30s)
+# CpxAp cycle_time=0.5s nên cần thêm 2-3s để flush connection
 _wait=0
-while ss -tn | grep -qE "192\.168\.27\.(24[89]|25[0-3]):502"; do
-    if [ $_wait -ge 15 ]; then
-        echo "⚠️  TCP connections vẫn còn sau 15s — tiếp tục"
+while ss -tn state established | grep -qE "192\.168\.27\.(24[89]|25[0-3]):502"; do
+    if [ $_wait -ge 30 ]; then
+        echo "⚠️  TCP connections vẫn còn sau 30s — tiếp tục"
         break
     fi
     echo "   ⏳ Đợi TCP connections đóng... ($_wait s)"
