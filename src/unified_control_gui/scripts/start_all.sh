@@ -184,11 +184,15 @@ echo ""
 echo "Press Ctrl+C to stop all"
 echo ""
 
-# Monitor — exit nếu cartridge node chết
+# Monitor — exit nếu cartridge node hoặc QML GUI chết
 while true; do
     sleep 3
     if ! kill -0 "$PID_PROVIDE" 2>/dev/null; then
         echo "⚠️  Cartridge node exited — stopping all"
+        break
+    fi
+    if [ -n "${PID_QML_GUI:-}" ] && ! kill -0 "$PID_QML_GUI" 2>/dev/null; then
+        echo "🖥️  GUI đã đóng — dừng hệ thống"
         break
     fi
 done
