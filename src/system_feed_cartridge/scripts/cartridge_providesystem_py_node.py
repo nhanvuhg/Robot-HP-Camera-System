@@ -1365,15 +1365,14 @@ class CartridgeSystem(Node):
             self.get_logger().warn('⚠️ START bị chặn — chọn AUTO hoặc MANUAL mode trước!')
             self._notify_gui('warn', '⚠️ Chưa chọn mode', 'Chọn AUTO hoặc MANUAL trước khi nhấn START')
             return
+        # ✅ Chặn double-trigger: nếu đang HOMING_RUNNING thì bỏ qua
+        if self.state == SystemState.HOMING_RUNNING:
+            self.get_logger().warn('⚠️ START ignored — đang trong HOMING, chờ hoàn tất')
+            return
         self._system_paused = False
-        # Reset hoàn toàn trước khi home lại
-        self.zero_offset = {}  # Xóa offset cũ — bắt buộc home lại hoàn toàn
-        for sid in list(self.servos.keys()):
-            try:
-                self.stop_servo(sid)
-            except Exception:
-                pass
-        # Reset tất cả state về HOMING
+        # ✅ Reset state flags — KHÔNG stop_servo ở đây (blocking 10s!)
+        # home_all_servos() trong HOMING thread sẽ tự stop servo trước khi home
+        self.zero_offset = {}
         self._pos1_done = False
         self._pos2_done = False
         self._pos2_state = "IDLE"
@@ -1381,8 +1380,8 @@ class CartridgeSystem(Node):
         self._p2_move_cmd_time = 0.0
         self._servo3_jog_active = False
         self.state = SystemState.HOMING
-        self.get_logger().info(f'▶️  START ({self.operation_mode}): zero_offset reset → HOMING')
-        self._notify_gui('info', '▶️ START — HOMING', f'Mode: {self.operation_mode} — Bắt đầu homing')
+        self.get_logger().info(f'▶️  START ({self.operation_mode}): HOMING bắt đầu')
+        self._notify_gui('info', '▶️ START — HOMING', f'Mode: {self.operation_mode} — Đang homing...')
 
     def stop_button_callback(self, msg):
         """Topic /system/stop_button - Dừng hết, về IDLE"""
@@ -1453,10 +1452,10 @@ class CartridgeSystem(Node):
         elif mode == 'jog':
             self.manual_mode = False   # JOG không phải manual mode
             self.manual_auto_run = False
-            self.get_logger().info("🎮 MODE: JOG — KHÔNG tự home. Dùng lệnh 'home N' để home từng servo.")
+            self.get_logger().info(" MODE: JOG — KHÔNG tự home. Dùng lệnh 'home N' để home từng servo.")
             self.get_logger().info("  Format: '1 +'  '1 -'  '1 stop'  'home 1'  'vel 500'  'pos'")
             self.get_logger().info("  Servo IDs: 1=InX, 2=InY, 3=PutTray, 4=OutX, 5=OutY")
-            self._notify_gui('info', '🎮 JOG mode', 'Dùng home N để home servo trước khi jog')
+            self._notify_gui('info', ' JOG mode', 'Dùng home N để home servo trước khi jog')
             
             # Log vị trí hiện tại nếu đã home
             if self.zero_offset:
