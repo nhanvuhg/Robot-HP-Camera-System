@@ -199,32 +199,65 @@
                                     Layout.fillHeight: true
                                     spacing: 6
 
-                                    // ── AUTO ──
+                                    // ── Khi đã chọn: hiện mode active + nút Đổi ──
                                     Rectangle {
+                                        visible: !modeSelCol.modeIsIdle
+                                        width: parent.width
+                                        height: modeCol.height
+                                        radius: 6
+                                        property bool isAuto: cartridgeController.currentMode === "auto"
+                                        color: isAuto ? "#0d3d2e" : "#1e0d3d"
+                                        border.color: isAuto ? root.cGreen : "#bb86fc"
+                                        border.width: 2
+                                        Behavior on color       { ColorAnimation { duration: 200 } }
+                                        Behavior on border.color{ ColorAnimation { duration: 200 } }
+
+                                        Column {
+                                            anchors.centerIn: parent
+                                            spacing: 2
+                                            Text {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                text: "●  " + (parent.parent.isAuto ? "AUTO" : "MANUAL")
+                                                color: parent.parent.isAuto ? root.cGreen : "#bb86fc"
+                                                font.pixelSize: 14; font.bold: true
+                                            }
+                                            Text {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                text: parent.parent.isAuto ? "Camera / Robot tín hiệu" : "Điều khiển tay trực tiếp"
+                                                color: root.cDim; font.pixelSize: 9
+                                            }
+                                        }
+
+                                        // Nút đổi mode — chỉ khi không đang chạy
+                                        Rectangle {
+                                            visible: !modeSelCol.modeBlocked
+                                            anchors { right: parent.right; top: parent.top; margins: 4 }
+                                            width: 36; height: 18; radius: 4
+                                            color: root.cBg2; border.color: root.cBorder
+                                            Text { anchors.centerIn: parent; text: "Đổi"; color: root.cDim; font.pixelSize: 9 }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: cartridgeController.setMode("idle")
+                                            }
+                                        }
+                                    }
+
+                                    // ── AUTO (chỉ hiện khi chưa chọn) ──
+                                    Rectangle {
+                                        visible: modeSelCol.modeIsIdle
                                         width: parent.width
                                         height: (modeCol.height - 6) / 2
                                         radius: 6
-                                        enabled: !modeSelCol.modeBlocked
-                                        property bool isSelected: cartridgeController.currentMode === "auto"
-                                        color: isSelected ? "#0d3d2e" : root.cCard
-                                        border.color: isSelected ? root.cGreen : root.cBorder
-                                        border.width: isSelected ? 2 : 1
-                                        Behavior on color       { ColorAnimation { duration: 150 } }
-                                        Behavior on border.color{ ColorAnimation { duration: 150 } }
-                                        HoverHandler { onHoveredChanged: if (!parent.isSelected) parent.border.color = hovered ? root.cGreen : root.cBorder }
+                                        color: root.cCard
+                                        border.color: root.cBorder
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cGreen : root.cBorder }
                                         MouseArea {
                                             anchors.fill: parent
-                                            enabled: !modeSelCol.modeBlocked
                                             onClicked: cartridgeController.setMode("auto")
                                         }
                                         Row {
-                                            anchors.centerIn: parent
-                                            spacing: 8
-                                            Text {
-                                                text: parent.parent.isSelected ? "●" : "○"
-                                                color: root.cGreen; font.pixelSize: 14
-                                                anchors.verticalCenter: parent.verticalCenter
-                                            }
+                                            anchors.centerIn: parent; spacing: 8
+                                            Text { text: "○"; color: root.cGreen; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
                                             Column {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 Text { text: "AUTO";  color: root.cGreen; font.pixelSize: 12; font.bold: true }
@@ -233,32 +266,22 @@
                                         }
                                     }
 
-                                    // ── MANUAL ──
+                                    // ── MANUAL (chỉ hiện khi chưa chọn) ──
                                     Rectangle {
+                                        visible: modeSelCol.modeIsIdle
                                         width: parent.width
                                         height: (modeCol.height - 6) / 2
                                         radius: 6
-                                        enabled: !modeSelCol.modeBlocked
-                                        property bool isSelected: cartridgeController.currentMode === "manual"
-                                        color: isSelected ? "#1e0d3d" : root.cCard
-                                        border.color: isSelected ? "#bb86fc" : root.cBorder
-                                        border.width: isSelected ? 2 : 1
-                                        Behavior on color       { ColorAnimation { duration: 150 } }
-                                        Behavior on border.color{ ColorAnimation { duration: 150 } }
-                                        HoverHandler { onHoveredChanged: if (!parent.isSelected) parent.border.color = hovered ? "#bb86fc" : root.cBorder }
+                                        color: root.cCard
+                                        border.color: root.cBorder
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#bb86fc" : root.cBorder }
                                         MouseArea {
                                             anchors.fill: parent
-                                            enabled: !modeSelCol.modeBlocked
                                             onClicked: cartridgeController.setMode("manual")
                                         }
                                         Row {
-                                            anchors.centerIn: parent
-                                            spacing: 8
-                                            Text {
-                                                text: parent.parent.isSelected ? "●" : "○"
-                                                color: "#bb86fc"; font.pixelSize: 14
-                                                anchors.verticalCenter: parent.verticalCenter
-                                            }
+                                            anchors.centerIn: parent; spacing: 8
+                                            Text { text: "○"; color: "#bb86fc"; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
                                             Column {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 Text { text: "MANUAL"; color: "#bb86fc"; font.pixelSize: 12; font.bold: true }
