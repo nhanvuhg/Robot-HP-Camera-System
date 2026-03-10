@@ -192,100 +192,134 @@
                                     font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // Bảng chọn mode — dọc, full width, dễ chạm
-                                Column {
-                                    id: modeCol
+                                // ── Dropdown Mode Selector ──────────
+                                Item {
+                                    id: modeDropdown
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
-                                    spacing: 6
+                                    property bool expanded: modeSelCol.modeIsIdle
 
-                                    // ── Khi đã chọn: hiện mode active + nút Đổi ──
+                                    // ── Thanh hiển thị (header) ──
                                     Rectangle {
-                                        visible: !modeSelCol.modeIsIdle
+                                        id: modeHeader
                                         width: parent.width
-                                        height: modeCol.height
+                                        height: 36
                                         radius: 6
-                                        property bool isAuto: cartridgeController.currentMode === "auto"
-                                        color: isAuto ? "#0d3d2e" : "#1e0d3d"
-                                        border.color: isAuto ? root.cGreen : "#bb86fc"
-                                        border.width: 2
-                                        Behavior on color       { ColorAnimation { duration: 200 } }
-                                        Behavior on border.color{ ColorAnimation { duration: 200 } }
+                                        color: root.cCard
+                                        border.color: {
+                                            var m = cartridgeController.currentMode
+                                            if (m === "auto")   return root.cGreen
+                                            if (m === "manual") return "#bb86fc"
+                                            return root.cBorder
+                                        }
+                                        border.width: modeSelCol.modeIsIdle ? 1 : 2
+                                        Behavior on border.color { ColorAnimation { duration: 150 } }
 
-                                        Column {
-                                            anchors.centerIn: parent
-                                            spacing: 2
+                                        Row {
+                                            anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                                            spacing: 8
                                             Text {
-                                                anchors.horizontalCenter: parent.horizontalCenter
-                                                text: "●  " + (parent.parent.isAuto ? "AUTO" : "MANUAL")
-                                                color: parent.parent.isAuto ? root.cGreen : "#bb86fc"
-                                                font.pixelSize: 14; font.bold: true
+                                                id: modeIcon
+                                                text: {
+                                                    var m = cartridgeController.currentMode
+                                                    if (m === "auto")   return "●"
+                                                    if (m === "manual") return "●"
+                                                    return "○"
+                                                }
+                                                color: {
+                                                    var m = cartridgeController.currentMode
+                                                    if (m === "auto")   return root.cGreen
+                                                    if (m === "manual") return "#bb86fc"
+                                                    return root.cDim
+                                                }
+                                                font.pixelSize: 12
+                                                anchors.verticalCenter: parent.verticalCenter
                                             }
                                             Text {
-                                                anchors.horizontalCenter: parent.horizontalCenter
-                                                text: parent.parent.isAuto ? "Camera / Robot tín hiệu" : "Điều khiển tay trực tiếp"
-                                                color: root.cDim; font.pixelSize: 9
+                                                text: {
+                                                    var m = cartridgeController.currentMode
+                                                    if (m === "auto")   return "AUTO"
+                                                    if (m === "manual") return "MANUAL"
+                                                    return "Chọn chế độ..."
+                                                }
+                                                color: {
+                                                    var m = cartridgeController.currentMode
+                                                    if (m === "auto")   return root.cGreen
+                                                    if (m === "manual") return "#bb86fc"
+                                                    return root.cDim
+                                                }
+                                                font.pixelSize: 12; font.bold: !modeSelCol.modeIsIdle
+                                                anchors.verticalCenter: parent.verticalCenter
                                             }
                                         }
+                                        // Mũi tên
+                                        Text {
+                                            anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
+                                            text: modeDropdown.expanded ? "▲" : "▼"
+                                            color: root.cDim; font.pixelSize: 10
+                                        }
 
-                                        // Nút đổi mode — chỉ khi không đang chạy
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: {
+                                                if (!modeSelCol.modeBlocked)
+                                                    modeDropdown.expanded = !modeDropdown.expanded
+                                            }
+                                        }
+                                    }
+
+                                    // ── Options (expanded) ──
+                                    Column {
+                                        id: modeOptions
+                                        visible: modeDropdown.expanded
+                                        anchors { top: modeHeader.bottom; topMargin: 4; left: parent.left; right: parent.right }
+                                        spacing: 4
+
+                                        // AUTO
                                         Rectangle {
-                                            visible: !modeSelCol.modeBlocked
-                                            anchors { right: parent.right; top: parent.top; margins: 4 }
-                                            width: 36; height: 18; radius: 4
-                                            color: root.cBg2; border.color: root.cBorder
-                                            Text { anchors.centerIn: parent; text: "Đổi"; color: root.cDim; font.pixelSize: 9 }
+                                            width: parent.width; height: 32; radius: 5
+                                            color: "#0d3d2e"; border.color: root.cGreen; border.width: 1
+                                            HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.85 : 1.0 }
                                             MouseArea {
                                                 anchors.fill: parent
-                                                onClicked: cartridgeController.setMode("idle")
+                                                onClicked: {
+                                                    cartridgeController.setMode("auto")
+                                                    modeDropdown.expanded = false
+                                                }
+                                            }
+                                            Row {
+                                                anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                                                spacing: 8
+                                                Text { text: "●"; color: root.cGreen; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                                Column {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    Text { text: "AUTO"; color: root.cGreen; font.pixelSize: 11; font.bold: true }
+                                                    Text { text: "Camera / Robot tín hiệu"; color: root.cDim; font.pixelSize: 8 }
+                                                }
                                             }
                                         }
-                                    }
 
-                                    // ── AUTO (chỉ hiện khi chưa chọn) ──
-                                    Rectangle {
-                                        visible: modeSelCol.modeIsIdle
-                                        width: parent.width
-                                        height: (modeCol.height - 6) / 2
-                                        radius: 6
-                                        color: root.cCard
-                                        border.color: root.cBorder
-                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cGreen : root.cBorder }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            onClicked: cartridgeController.setMode("auto")
-                                        }
-                                        Row {
-                                            anchors.centerIn: parent; spacing: 8
-                                            Text { text: "○"; color: root.cGreen; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
-                                            Column {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Text { text: "AUTO";  color: root.cGreen; font.pixelSize: 12; font.bold: true }
-                                                Text { text: "Camera / Robot tín hiệu"; color: root.cDim; font.pixelSize: 9 }
+                                        // MANUAL
+                                        Rectangle {
+                                            width: parent.width; height: 32; radius: 5
+                                            color: "#1e0d3d"; border.color: "#bb86fc"; border.width: 1
+                                            HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.85 : 1.0 }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                onClicked: {
+                                                    cartridgeController.setMode("manual")
+                                                    modeDropdown.expanded = false
+                                                }
                                             }
-                                        }
-                                    }
-
-                                    // ── MANUAL (chỉ hiện khi chưa chọn) ──
-                                    Rectangle {
-                                        visible: modeSelCol.modeIsIdle
-                                        width: parent.width
-                                        height: (modeCol.height - 6) / 2
-                                        radius: 6
-                                        color: root.cCard
-                                        border.color: root.cBorder
-                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#bb86fc" : root.cBorder }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            onClicked: cartridgeController.setMode("manual")
-                                        }
-                                        Row {
-                                            anchors.centerIn: parent; spacing: 8
-                                            Text { text: "○"; color: "#bb86fc"; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
-                                            Column {
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                Text { text: "MANUAL"; color: "#bb86fc"; font.pixelSize: 12; font.bold: true }
-                                                Text { text: "Điều khiển tay trực tiếp"; color: root.cDim; font.pixelSize: 9 }
+                                            Row {
+                                                anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                                                spacing: 8
+                                                Text { text: "●"; color: "#bb86fc"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                                Column {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    Text { text: "MANUAL"; color: "#bb86fc"; font.pixelSize: 11; font.bold: true }
+                                                    Text { text: "Điều khiển tay trực tiếp"; color: root.cDim; font.pixelSize: 8 }
+                                                }
                                             }
                                         }
                                     }
