@@ -2472,7 +2472,7 @@ class CartridgeSystem(Node):
         # ── WAIT_S7: Chờ S7 ON (khay có sẵn) ────────────────────────────────
         elif self._pos2_state == "WAIT_S7":
 
-            if self.sensor_manager.get_sensor(7):  # S7 ON
+            if self.sensor_manager.get_sensor(12):  # S12 ON (CYL3 retracted — đã nhả khay)
                 if self._p2_s7_stable_start is None:
                     self._p2_s7_stable_start = time.time()
                     self.get_logger().info("⏱️  [P2] S7 ON — đếm 3s ổn định trước khi jog...")
@@ -3394,14 +3394,14 @@ class CartridgeSystem(Node):
                 self.start_cylinder_timer()
                 self.clear_guide()
                 self.state = SystemState.S3_CYLINDER2_EXTEND
-                self.log_guide_once("S3_WAIT_S13", "[S3] Cylinder 2 đang extend (kẹp khay output) → Đợi S13 ON (Cyl2 MAX). Kích: '13:1'")
+                self.log_guide_once("S3_WAIT_S15", "[S3] Cylinder 2 đang extend (kẹp khay output) → Đợi S15 ON (Cyl2 MAX). Kích: '15:1'")
             else:
                 self.state = SystemState.ERROR
         
         elif self.state == SystemState.S3_CYLINDER2_EXTEND:
             # Chờ S13 ON (Cylinder 2 MAX - extend = grip khay)
-            if self.sensor_manager.get_sensor(13):  # S13 = Cyl2 MAX
-                self.get_logger().info("✅ [S3] Cylinder 2 extended (S13 ON) - Tray gripped")
+            if self.sensor_manager.get_sensor(15):  # S15 = Cyl2 MAX (extended)
+                self.get_logger().info("✅ [S3] Cylinder 2 extended (S15 ON) - Tray gripped")
                 self._cylinder_start_time = None
                 self.clear_guide()
                 self.state = SystemState.S3_OUTY_TO_TARGET1
@@ -3467,14 +3467,14 @@ class CartridgeSystem(Node):
                 self.start_cylinder_timer()
                 self.clear_guide()
                 self.state = SystemState.S3_CYLINDER2_RETRACT
-                self.log_guide_once("S3_WAIT_S12", "[S3] Cylinder 2 đang retract (thả khay) → Đợi S12 ON (Cyl2 MIN). Kích: '12:1'")
+                self.log_guide_once("S3_WAIT_S14", "[S3] Cylinder 2 đang retract (thả khay) → Đợi S14 ON (Cyl2 MIN). Kích: '14:1'")
             else:
                 self.state = SystemState.ERROR
         
         elif self.state == SystemState.S3_CYLINDER2_RETRACT:
             # Chờ S12 ON (Cylinder 2 MIN - retract = thả khay)
-            if self.sensor_manager.get_sensor(12):  # S12 = Cyl2 MIN
-                self.get_logger().info("✅ [S3] Cylinder 2 retracted (S12 ON) - Tray released to output stack")
+            if self.sensor_manager.get_sensor(14):  # S14 = Cyl2 MIN (retracted)
+                self.get_logger().info("✅ [S3] Cylinder 2 retracted (S14 ON) - Tray released to output stack")
                 self._cylinder_start_time = None
                 self.clear_guide()
                 self.state = SystemState.S3_OUTY_RETURN_HOME
@@ -3527,8 +3527,8 @@ class CartridgeSystem(Node):
         
         elif self.state == SystemState.S3_SERVO3_CHECK_S7:
             # Check S7: còn khay trên platform?
-            if self.sensor_manager.get_sensor(7):  # S7 ON → còn khay
-                self.get_logger().info("✅ [S3] S7 ON - Còn khay output")
+            if self.sensor_manager.get_sensor(12):  # S12 ON (CYL3 hold tray — đứng việc, còn khay)
+                self.get_logger().info("✅ [S3] S12 ON - Còn khay output")
                 self.clear_guide()
                 self.pub_output_ready(True)
                 self.state = SystemState.STATE3_COMPLETE
@@ -3553,7 +3553,7 @@ class CartridgeSystem(Node):
         
         elif self.state == SystemState.S3_SERVO3_WAIT_LOAD:
             # Chờ S7 ON + HMI confirm. KHÔNG timeout, chỉ warning
-            if self.sensor_manager.get_sensor(7):  # S7 ON
+            if self.sensor_manager.get_sensor(12):  # S12 ON (CYL3 — xem sensor 12)
                 if self._confirm_load_received:
                     self.get_logger().info("✅ [S3] S7 ON + HMI confirmed → Moving servo 3 to S6")
                     self.clear_guide()

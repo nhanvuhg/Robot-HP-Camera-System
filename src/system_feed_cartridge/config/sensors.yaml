@@ -12,7 +12,7 @@
 # =============================================================================
 
 # ── TỔNG SỐ CẢNH BIẾN (thay đổi khi thêm/bớt phần cứng) ─────────────────────
-num_sensors: 13    # Tổng số digital sensors từ IO module (1-indexed, hiện tại S1-S13)
+num_sensors: 15    # Tổng số digital sensors từ IO module (1-indexed, hiện tại S1-S15)
 
 # ── LOẠI LOGIC CHUNG ──────────────────────────────────────────────────────────
 sensor_type: PNP   # PNP hoặc NPN
@@ -91,20 +91,20 @@ sensors:
     used_in: [S1_INY_SEARCH_TRAY, S2_INY_SEARCH_STACK]
     active: true
 
-  - id: 7
-    name: S7_CYL3_RETRACTED
+  - id: 12
+    name: S12_CYL3_RETRACTED
     desc: "Cylinder 3 (Hold Tray) đã co lại hoàn toàn — xác nhận đã nhả khay"
     pos: pos1
     role: cyl_retracted
-    used_in: [S1_CYLINDER1_RETRACT]
+    used_in: [S1_CYLINDER3_RETRACT]
     active: true
 
-  - id: 8
-    name: S8_CYL3_EXTENDED
+  - id: 13
+    name: S13_CYL3_EXTENDED
     desc: "Cylinder 3 (Hold Tray) đã đẩy ra — xác nhận đang giữ khay chặt"
     pos: pos1
     role: cyl_extended
-    used_in: [S1_CYLINDER1_EXTEND]
+    used_in: [S1_CYLINDER3_EXTEND]
     active: true
 
   - id: 9
@@ -131,16 +131,16 @@ sensors:
     used_in: [S1_CYLINDER1_EXTEND, S2_CYLINDER1_EXTEND]
     active: true
 
-  - id: 12
-    name: S12_CYL2_RETRACTED
+  - id: 14
+    name: S14_CYL2_RETRACTED
     desc: "Cylinder 2 đã co lại hoàn toàn — giới hạn hành trình thu Pos 2"
     pos: pos2
     role: cyl_retracted
     used_in: [S3_CYLINDER2_RETRACT]
     active: true
 
-  - id: 13
-    name: S13_CYL2_EXTENDED
+  - id: 15
+    name: S15_CYL2_EXTENDED
     desc: "Cylinder 2 đã đẩy ra hoàn toàn — giới hạn hành trình đẩy Pos 2"
     pos: pos2
     role: cyl_extended
