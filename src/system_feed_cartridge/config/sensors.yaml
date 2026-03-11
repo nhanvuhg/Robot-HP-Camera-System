@@ -1,0 +1,181 @@
+# =============================================================================
+# SENSOR CONFIGURATION — Cartridge Feeding System
+# =============================================================================
+# File này định nghĩa toàn bộ cảm biến và kênh IO của hệ thống.
+# Chỉnh sửa file này để:
+#   - Thêm / xóa cảm biến (thay đổi num_sensors)
+#   - Đổi chức năng từng cảm biến (thay đổi role)
+#   - Đổi kênh IO module cho cylinder (thay đổi channel)
+#   - Map sensor ID ↔ trạng thái logic cần kiểm tra trong state machine
+#
+# Phần code đọc file này: CartridgeSystemConfig.load_sensors()
+# =============================================================================
+
+# ── TỔNG SỐ CẢNH BIẾN (thay đổi khi thêm/bớt phần cứng) ─────────────────────
+num_sensors: 13    # Tổng số digital sensors từ IO module (1-indexed, hiện tại S1-S13)
+
+# ── LOẠI LOGIC CHUNG ──────────────────────────────────────────────────────────
+sensor_type: PNP   # PNP hoặc NPN
+sensor_logic: NO   # NO (Normally Open) hoặc NC (Normally Closed)
+# Lưu ý: PNP/NO → sensor ON = 24V = True (đang dùng)
+#         NPN/NC → logic đảo ngược, cần sửa update_sensor() trong node
+
+# =============================================================================
+# DANH SÁCH SENSOR (S1 – S13)
+# =============================================================================
+# Mỗi sensor có các trường:
+#   id     : ID số (phải khớp với thứ tự channel trên IO module)
+#   name   : Tên ngắn gọn
+#   desc   : Mô tả chức năng
+#   pos    : Vị trí vật lý (pos1=Trạm Input, pos2=Trạm Output)
+#   role   : Vai trò trong logic (xem bảng ROLES bên dưới)
+#   used_in: State machine states nào dùng sensor này
+#   active : true = bật, false = vô hiệu hóa sensor (code sẽ bỏ qua)
+#
+# ROLES:
+#   tray_detect    → Phát hiện khay (nhựa hoặc kim loại)
+#   stack_detect   → Phát hiện stack khay
+#   conveyor       → Vị trí trên băng tải
+#   cyl_retracted  → Cylinder đã co lại (giới hạn hành trình thu)
+#   cyl_extended   → Cylinder đã đẩy ra (giới hạn hành trình đẩy)
+#   platform       → Phát hiện vị trí nền tảng (Servo 3)
+#   unused         → Cảm biến hiện chưa dùng (bỏ qua trong logic)
+# =============================================================================
+
+sensors:
+  - id: 1
+    name: S1_CONVEYOR_START
+    desc: "Đầu băng tải đầu vào — phát hiện khay ở điểm bắt đầu"
+    pos: pos1
+    role: conveyor
+    used_in: [S1_INY_SEARCH_TRAY]
+    active: true
+
+  - id: 2
+    name: S2_CONVEYOR_MID
+    desc: "Giữa băng tải đầu vào — phát hiện khay đang di chuyển"
+    pos: pos1
+    role: conveyor
+    used_in: [S1_INY_SEARCH_TRAY]
+    active: true
+
+  - id: 3
+    name: S3_CONVEYOR_END
+    desc: "Cuối băng tải đầu vào — xác nhận khay đến đúng vị trí nhận"
+    pos: pos1
+    role: conveyor
+    used_in: [S1_INY_SEARCH_TRAY]
+    active: true
+
+  - id: 4
+    name: S4_STACK_INPUT
+    desc: "Phát hiện stack khay kim loại (Pos 1) — khi InY đi xuống tìm khay"
+    pos: pos1
+    role: stack_detect
+    used_in: [S1_INY_SEARCH_TRAY, S2_INY_SEARCH_STACK]
+    active: true
+
+  - id: 5
+    name: S5_OUTPUT_DETECT
+    desc: "Phát hiện khay ở khu vực đặt đầu ra — robot đã đặt khay xong"
+    pos: pos1
+    role: tray_detect
+    used_in: [S1_INY_TO_TARGET1, S1_INY_TO_TARGET2]
+    active: true
+
+  - id: 6
+    name: S6_SERVO3_LIMIT
+    desc: "Giới hạn vị trí robot (Pos 2) — đánh dấu Servo 3 đã đến điểm phục vụ robot"
+    pos: pos2
+    role: platform
+    used_in: [S1_SERVO3_MOVE_TO_S6, S3_SERVO3_MOVE_TO_S6]
+    active: true
+
+  - id: 7
+    name: S7_PLATFORM_TRAY
+    desc: "Phát hiện khay nhựa trên nền tảng nâng (Servo 3) — xác nhận đang có khay"
+    pos: pos2
+    role: tray_detect
+    used_in: [S1_SERVO3_CHECK_S7, S3_SERVO3_CHECK_S7]
+    active: true
+
+  - id: 8
+    name: S8_OUTPUT_PLASTIC
+    desc: "Phát hiện khay nhựa tại điểm đầu ra Pos 2"
+    pos: pos2
+    role: tray_detect
+    used_in: [S3_OUTY_TO_TARGET2]
+    active: true
+
+  - id: 9
+    name: S9_STACK_PLASTIC
+    desc: "Phát hiện stack khay nhựa (Pos 2) — khi OutY đi xuống tìm khay"
+    pos: pos2
+    role: stack_detect
+    used_in: [S3_OUTY_TO_TARGET2]
+    active: true
+
+  - id: 10
+    name: S10_CYL1_RETRACTED
+    desc: "Cylinder 1 đã co lại hoàn toàn — giới hạn hành trình thu Pos 1"
+    pos: pos1
+    role: cyl_retracted
+    used_in: [S1_CYLINDER1_RETRACT, S2_CYLINDER1_RETRACT]
+    active: true
+
+  - id: 11
+    name: S11_CYL1_EXTENDED
+    desc: "Cylinder 1 đã đẩy ra hoàn toàn — giới hạn hành trình đẩy Pos 1 (INTERLOCK InY)"
+    pos: pos1
+    role: cyl_extended
+    used_in: [S1_CYLINDER1_EXTEND, S2_CYLINDER1_EXTEND]
+    active: true
+
+  - id: 12
+    name: S12_CYL2_RETRACTED
+    desc: "Cylinder 2 đã co lại hoàn toàn — giới hạn hành trình thu Pos 2"
+    pos: pos2
+    role: cyl_retracted
+    used_in: [S3_CYLINDER2_RETRACT]
+    active: true
+
+  - id: 13
+    name: S13_CYL2_EXTENDED
+    desc: "Cylinder 2 đã đẩy ra hoàn toàn — giới hạn hành trình đẩy Pos 2"
+    pos: pos2
+    role: cyl_extended
+    used_in: [S3_CYLINDER2_EXTEND]
+    active: true
+
+# =============================================================================
+# KÊNH IO MODULE — CYLINDER OUTPUT (Digital Output)
+# =============================================================================
+# IO Module: Festo CPX-AP (IP: 192.168.27.253)
+# Kênh Output (DO) điều khiển van khí nén cho cylinder.
+# Đánh số từ 0; thay đổi nếu đấu nối vật lý khác nhau.
+#
+# Cylinder 1 → Pos 1 (Input Station) — nhặt khay từ stack đầu vào
+# Cylinder 2 → Pos 2 (Output Station) — nhặt khay từ stack đầu ra
+# =============================================================================
+
+cylinder_outputs:
+  cylinder1_extend_channel:  5   # DO channel bật = Cylinder 1 ĐẨY RA
+  cylinder1_retract_channel: 4   # DO channel bật = Cylinder 1 CO LẠI
+  cylinder2_extend_channel:  7   # DO channel bật = Cylinder 2 ĐẨY RA
+  cylinder2_retract_channel: 6   # DO channel bật = Cylinder 2 CO LẠI
+
+# =============================================================================
+# INTERLOCK RULES (mô tả logic an toàn — code đọc từ đây trong tương lai)
+# =============================================================================
+# Hiện tại được hardcode trong node, ghi ở đây để tham khảo và kế hoạch refactor
+#
+# INTERLOCK-1: InY không được đi xuống (hướng dương) khi S11 = ON (Cylinder 1 đang EXTEND)
+#   Sensor: S11 (id: 11)
+#   Servo bị chặn: InY (servo_id: 2), hướng dương
+#   State bị chặn: JOG, S1_CYLINDER1_EXTEND
+#
+# INTERLOCK-2: InX không được di chuyển khi InY ra ngoài safe_zone
+#   Điều kiện: iny_position > iny_safe_zone (config: 50mm)
+#   Servo bị chặn: InX (servo_id: 1)
+#   Áp dụng: toàn bộ state machine ngoài HOMING
+# =============================================================================
