@@ -68,6 +68,39 @@ except ImportError:
 COUNTS_PER_MM = 1000       # 1 mm = 1,000 counts (1 count = 1 µm)
 DEFAULT_VELOCITY = 30      # velocity for position_task
 
+# [FIX-2] Cylinder timeout — 15 giây (thay vì vô hạn)
+CYLINDER_TIMEOUT_S = 15.0
+
+# [FIX-4] Config validation ranges — (min, max) mm
+_CONFIG_RANGES = {
+    "inx_home":             (0.0,   200.0),
+    "inx_safe_zone":        (0.0,   200.0),
+    "inx_target2":          (10.0,  700.0),
+    "inx_output_stack":     (10.0,  700.0),
+    "iny_home":             (0.0,   200.0),
+    "iny_safe_zone":        (5.0,   200.0),
+    "iny_target2":          (10.0,  700.0),
+    "iny_search_velocity":  (1.0,   200.0),
+    "iny_slow_velocity":    (1.0,   100.0),
+    "servo3_home":          (0.0,   50.0),
+    "servo3_target1":       (0.0,   200.0),
+    "servo3_push_position": (10.0,  400.0),
+    "servo3_jog_velocity":  (1.0,   200.0),
+    "outx_home":            (0.0,   200.0),
+    "outx_target1":         (0.0,   200.0),
+    "outx_target2":         (10.0,  700.0),
+    "outx_target3":         (10.0,  700.0),
+    "outy_home":            (0.0,   200.0),
+    "outy_target1":         (0.0,   200.0),
+    "outy_target2":         (10.0,  700.0),
+    "outy_safe_zone":       (5.0,   200.0),
+    "outy_search_velocity": (1.0,   200.0),
+    "position_tolerance":   (0.1,   50.0),
+    "homing_timeout":       (10.0,  300.0),
+    "move_timeout":         (5.0,   120.0),
+}
+_ROW_POSITION_RANGE = (0.0, 960.0)  # mm — giới hạn vật lý trục
+
 
 class SystemState(Enum):
     """State machine states"""
@@ -405,7 +438,10 @@ class CartridgeSystem(Node):
         self.state = SystemState.IDLE
         self.sensor_manager = SensorManager()
         self.prev_sensor_state = {}
-        
+
+        # [FIX-1] Modbus lock — bảo vệ tất cả Modbus TCP access, tránh race condition
+        self._servo_lock = threading.Lock()
+
         # Tray tracking
         self.max_trays = 8  # Maximum trays per stack
         self.detected_trays = 0  # Number of trays detected by sensor 5 (can be 1-8)
@@ -505,6 +541,19 @@ class CartridgeSystem(Node):
         # ✅ Sensor simulation (for testing without CPX IO)
         self._sim_sensors = {}  # {sensor_id: bool} — simulated sensor overrides
         self._io_read_fail_count = 0  # Hardware IO read failure counter
+        # ✅ IO sensor cache for background reader (prevents control loop blocking)
+        self._io_sensor_cache: list = []  # Last known channel values from IO module
+        self._io_bg_lock = threading.Lock()  # Lock for cache access
+        # [FIX-3] IO ready flag — True sau khi bg reader đọc thành công lần đầu
+        self._io_ready = False
+
+        # [FIX-6] INX / INY mutual exclusion flags
+        self._inx_moving = False  # True khi INX đang di chuyển (non-blocking move)
+        self._iny_moving = False  # True khi INY đang di chuyển (non-blocking move)
+
+        # [FIX-8] Watchdog — phát hiện control loop bị block
+        self._watchdog_last_tick = time.time()
+
         self._guide_logged = set()  # Track which guide messages have been logged (prevent spam)
         self._last_notify_time = {}  # {title: timestamp} — rate-limit _notify_gui to 0.5s per title
         
@@ -565,13 +614,17 @@ class CartridgeSystem(Node):
         # Interlock topic — robot sẽ chặn pick/refill khi cartridge đang hoạt động
         self.pub_cartridge_busy = self.create_publisher(Bool, '/cartridge/busy', qos_default)
         self._last_cartridge_busy = None  # Chỉ publish khi thay đổi (tránh spam)
-        
-        self.get_logger().info("Cartridge System Initialized (ROS 2 + festo-edcon MotionHandler)")
+
+        # [FIX-8] Watchdog timer — cảnh báo nếu control loop bị block > 3s
+        self.create_timer(5.0, self._watchdog_tick)
+
+        self.get_logger().info("Cartridge System Initialized (PATCHED — lock/timeout/io_ready/watchdog)")
         self.get_logger().info("=" * 50)
         self.get_logger().info("📋 Chọn mode trước khi bắt đầu:")
         self.get_logger().info("  AUTO: ros2 topic pub --once /providesystem/set_operation_mode std_msgs/String 'data: auto'")
         self.get_logger().info("  JOG:  ros2 topic pub --once /providesystem/set_operation_mode std_msgs/String 'data: jog'")
         self.get_logger().info("=" * 50)
+
     
     def connect_hardware(self):
         """Connect to Festo servo drives via Modbus TCP + MotionHandler.
@@ -632,6 +685,8 @@ class CartridgeSystem(Node):
                     # CPX-AP chỉ chấp nhận 1 kết nối TCP, nếu đọc quá nhanh sẽ drop
                         self.io_module = CpxAp(ip_address=self.config.io_ip, cycle_time=0.5)
                         self.get_logger().info(f"✅ Connected to IO Module at {self.config.io_ip}")
+                        # ✅ Start background IO reader (prevents control loop from ever blocking on IO reads)
+                        threading.Thread(target=self._io_bg_reader_loop, daemon=True, name="io_bg_reader").start()
                         _io_connected = True
                         break
                     except Exception as e:
@@ -647,63 +702,54 @@ class CartridgeSystem(Node):
             self.get_logger().error(f"Hardware connection error: {e}")
     
     def destroy_node(self):
-        """Cleanup: close all MotionHandler connections before destroying node"""
-        self.get_logger().info("Shutting down - closing servo connections...")
+        """[FIX-5] Cleanup: stop all servos FIRST, then close connections."""
+        self.get_logger().info("Shutting down — stopping servos and closing connections...")
+        # Stop all moving servos first (safety)
+        for servo_id in list(self.servos.keys()):
+            try:
+                with self._servo_lock:
+                    self.servos[servo_id].stop_motion_task()
+                self.get_logger().info(f"  Servo {servo_id} stopped")
+            except Exception as e:
+                self.get_logger().warn(f"  Servo {servo_id} stop error: {e}")
+        # Then close connections
         for servo_id, mot in self.servos.items():
             try:
-                mot.shutdown()
-                self.get_logger().info(f"Servo {servo_id} connection closed")
+                with self._servo_lock:
+                    mot.shutdown()
+                self.get_logger().info(f"  Servo {servo_id} connection closed")
             except Exception as e:
-                self.get_logger().warn(f"Error closing Servo {servo_id}: {e}")
+                self.get_logger().warn(f"  Servo {servo_id} shutdown error: {e}")
         super().destroy_node()
-    
-    def start_button_callback(self, msg: Bool):
-        """Handle /system/start_button - An toàn khi nhấn liên tục"""
-        if not msg.data:
-            return
-        if self.operation_mode == 'idle':
-            self.get_logger().warn("⚠️ Start ignored - chọn mode trước")
-            return
-        if self.operation_mode == 'jog':
-            self.get_logger().info("ℹ️ Đang ở JOG mode")
-            return
-        if self.state == SystemState.IDLE:
-            self.get_logger().info("▶️ Start button → Homing")
-            self.state = SystemState.HOMING
-            # ✅ FIX: Cho phép HOMING chạy dù đang ở manual mode
-            if self.manual_mode:
-                self.step_pending = True
-        else:
-            self.get_logger().info(f"ℹ️ Start ignored - đang chạy ({self.state.value})")
-    
-    def stop_button_callback(self, msg: Bool):
-        """Handle /system/stop_button - Dừng toàn bộ, reset về IDLE
-        
-        Usage:
-            ros2 topic pub --once /system/stop_button std_msgs/Bool 'data: true'
-        """
-        if not msg.data:
-            return
-        
-        self.get_logger().warn("⏹️ STOP button pressed!")
-        
-        # Stop all servos
-        for servo_id in self.servos:
-            try:
-                self.stop_servo(servo_id)
-            except:
-                pass
-        self._jog_active_servo = None
-        
-        # Reset state
-        self.state = SystemState.IDLE
-        self.operation_mode = 'idle'
-        self.zero_offset = {}  # Force re-homing on next start
-        self.manual_mode = False
-        self.manual_auto_run = False
-        self._sim_sensors.clear()  # Clear sim overrides on stop
-        
-        self.get_logger().warn("System STOPPED. Chon mode de tiep tuc (se Home lai).")
+
+    # ════════════════════════════════════════════════════════════════
+    # [FIX-1] Thread-safe Modbus wrapper
+    # ════════════════════════════════════════════════════════════════
+
+    def _servo_call(self, func):
+        """Run func() under _servo_lock. Prevents race conditions on Modbus TCP."""
+        with self._servo_lock:
+            return func()
+
+    # ════════════════════════════════════════════════════════════════
+    # [FIX-8] Watchdog
+    # ════════════════════════════════════════════════════════════════
+
+    def _watchdog_tick(self):
+        """Called every 5s by timer. Warns if control loop is not ticking."""
+        now = time.time()
+        gap = now - self._watchdog_last_tick
+        if gap > 3.0:
+            self.get_logger().error(
+                f"🚨 WATCHDOG: Control loop không chạy trong {gap:.1f}s! "
+                "Có thể bị block bởi move_servo(wait=True) hoặc Modbus timeout. "
+                f"State hiện tại: {self.state.name}"
+            )
+            self._notify_gui('error', '🚨 WATCHDOG: Loop bị treo!',
+                             f'Control loop silent {gap:.1f}s — state={self.state.name}')
+
+    # start_button_callback → định nghĩa đầy đủ bên dưới (~line 1350)
+    # stop_button_callback  → định nghĩa đầy đủ bên dưới (~line 1390)
     
     def change_tray_input_callback(self, msg: Bool):
         """Handle /robot/change_tray - Robot yêu cầu thay khay input
@@ -856,7 +902,8 @@ class CartridgeSystem(Node):
         """
         self.get_logger().info("Homing all servos...")
         self._notify_gui("info", "🏠 Homing", "Bắt đầu homing tuần tự...")
-        
+
+
         SERVO_NAMES = {1: "InX", 2: "InY", 3: "Platform", 4: "OutX", 5: "OutY"}
         
         # Homing: trục Y trước, rồi trục X + Platform
@@ -977,62 +1024,47 @@ class CartridgeSystem(Node):
             self.get_logger().info("✅ All servos homed successfully")
             self._notify_gui("info", "✅ Homing Complete", "Tất cả servo đã home thành công.")
             return True
-            
+
         except Exception as e:
-            err = f"Unexpected error: {e}"
             self.get_logger().error(f"Homing error: {e}")
-            self._notify_gui("error", "❌ Homing Failed: Exception", err)
+            self._notify_gui("error", "❌ Homing Failed", str(e))
             return False
     
     def reset_faults_callback(self, msg):
         """Topic /providesystem/reset_faults — Reset lỗi tất cả servo."""
-        self.get_logger().info("🔄 Resetting servo faults...")
         SERVO_NAMES = {1: "InX", 2: "InY", 3: "Platform", 4: "OutX", 5: "OutY"}
         results = []
         for servo_id, mot in self.servos.items():
             name = SERVO_NAMES.get(servo_id, f"S{servo_id}")
             try:
-                mot.acknowledge_faults()
-                results.append(f"{name}: ✅ OK")
-                self.get_logger().info(f"  {name} faults cleared")
+                self._servo_call(lambda m=mot: m.acknowledge_faults())  # [FIX-1]
+                results.append(f"{name}: ✅")
             except Exception as e:
                 results.append(f"{name}: ❌ {e}")
-                self.get_logger().error(f"  {name} fault reset failed: {e}")
-        
-        detail = "  |  ".join(results)
-        self._notify_gui("info", "🔄 Fault Reset Complete", detail)
+        self._notify_gui("info", "🔄 Fault Reset", " | ".join(results))
     
     def _ensure_drive_ready(self, mot, servo_id: int, timeout: float = 5.0) -> bool:
-        """Acknowledge faults, enable powerstage, and wait until drive is ready for motion.
-        
-        Retries enable_powerstage up to 3 times if PLC control is denied.
-        Returns True if drive is ready, False if all retries exhausted.
-        """
+        """[FIX-1] Acknowledge faults + enable powerstage, all under _servo_lock."""
         for attempt in range(3):
             try:
-                mot.acknowledge_faults()
-                mot.enable_powerstage()
-                
-                # Wait for drive to grant PLC control and become ready for motion
+                self._servo_call(lambda m=mot: m.acknowledge_faults())
+                self._servo_call(lambda m=mot: m.enable_powerstage())
                 start = time.time()
                 while time.time() - start < timeout:
-                    if hasattr(mot, 'ready_for_motion') and mot.ready_for_motion():
+                    ready = self._servo_call(
+                        lambda m=mot: m.ready_for_motion() if hasattr(m, 'ready_for_motion') else True
+                    )
+                    if ready:
                         return True
                     time.sleep(0.05)
-                
-                # Fallback: if no ready_for_motion method, assume ready after enable
                 if not hasattr(mot, 'ready_for_motion'):
                     return True
-                
-                # Timeout — try again
-                self.get_logger().warn(f"⚠️ Servo {servo_id}: attempt {attempt+1}/3 — drive not ready after {timeout}s, retrying...")
+                self.get_logger().warn(f"⚠️ Servo {servo_id}: attempt {attempt+1}/3 not ready, retrying...")
                 time.sleep(1.0)
-                
             except Exception as e:
                 self.get_logger().warn(f"⚠️ Servo {servo_id}: _ensure_drive_ready attempt {attempt+1} error: {e}")
                 time.sleep(0.5)
-        
-        self.get_logger().error(f"❌ Servo {servo_id}: drive not ready after 3 attempts (PLC control denied permanently)")
+        self.get_logger().error(f"❌ Servo {servo_id}: drive not ready after 3 attempts")
         return False
 
     def move_servo(self, servo_id: int, position: float, wait: bool = True) -> bool:
@@ -1048,101 +1080,72 @@ class CartridgeSystem(Node):
             if self.manual_mode:
                 self.get_logger().info(f"[SIM] Servo {servo_id} -> {position:.1f}mm (no hw)")
             return True  # Simulation — always OK
-        
-        # Manual (SIM) mode: send command and WAIT for position reached (BLOCKING)
-        if self.manual_mode:
-            try:
-                mot = self.servos[servo_id]
-                offset = self.zero_offset.get(servo_id, 0)
-                pos_counts = offset + int(position * COUNTS_PER_MM)
-                
-                ready = self._ensure_drive_ready(mot, servo_id)
-                if not ready:
-                    self.get_logger().error(f"❌ [SIM] Servo {servo_id} -> {position:.1f}mm ABORTED (PLC control denied)")
-                    return False
-                
-                success = mot.position_task(pos_counts, DEFAULT_VELOCITY, absolute=True, nonblocking=True)
-                if not success:
-                    self.get_logger().error(f"❌ [SIM] Servo {servo_id} -> {position:.1f}mm FAILED (drive rejected)")
-                    return False
-                
-                self.get_logger().info(f"[SIM] Servo {servo_id} -> {position:.1f}mm (cmd sent, waiting...)")
-                
-                # Block until servo reaches target position
-                if wait:
-                    start_time = time.time()
-                    while time.time() - start_time < self.config.move_timeout:
-                        if mot.target_position_reached():
-                            self.get_logger().info(f"[SIM] Servo {servo_id} ✅ reached {position:.1f}mm")
-                            return True
-                        # Push position update to GUI mid-move
-                        try:
-                            self._publish_positions()
-                        except Exception:
-                            pass
-                        time.sleep(0.05)
-                    self.get_logger().error(f"[SIM] Servo {servo_id} TIMEOUT after {self.config.move_timeout}s")
-                    return False
-                return True
-                
-            except Exception as e:
-                self.get_logger().warn(f"❌ [SIM] Servo {servo_id} -> {position:.1f}mm error: {e}")
-                return True  # allow continuing in SIM on hw exception
-        
+
+        # [FIX-6] Set motion flag before non-blocking move
+        if servo_id == 1:
+            self._inx_moving = True
+        elif servo_id == 2:
+            self._iny_moving = True
+
         try:
             mot = self.servos[servo_id]
             offset = self.zero_offset.get(servo_id, 0)
             pos_counts = offset + int(position * COUNTS_PER_MM)
-            
+
             def attempt_move():
                 if not self._ensure_drive_ready(mot, servo_id):
                     raise ConnectionError(f"Servo {servo_id}: drive not ready (PLC control denied)")
-                success = mot.position_task(pos_counts, DEFAULT_VELOCITY, absolute=True, nonblocking=True)
+                success = self._servo_call(  # [FIX-1]
+                    lambda m=mot, p=pos_counts: m.position_task(p, DEFAULT_VELOCITY, absolute=True, nonblocking=True)
+                )
                 if not success:
                     raise ConnectionError(f"Servo {servo_id} rejected position_task (not ready)")
                 return True
-                
+
             safe_try(attempt_move, retries=3, backoff=1, logger=self.get_logger())
-            
+
             if wait:
                 start_time = time.time()
                 while time.time() - start_time < self.config.move_timeout:
-                    if mot.target_position_reached():
+                    if self._servo_call(lambda m=mot: m.target_position_reached()):  # [FIX-1]
                         return True
-                    # Push position update to GUI mid-move
                     try:
                         self._publish_positions()
                     except Exception:
                         pass
                     time.sleep(0.05)
-                
                 self.get_logger().error(f"Servo {servo_id} move timeout")
                 return False
-            
             return True
-            
+
         except Exception as e:
             self.get_logger().error(f"Servo {servo_id} move error: {e}")
             return False
-    
+        finally:
+            # [FIX-6] Clear motion flag after blocking wait (always runs)
+            if wait:
+                if servo_id == 1:
+                    self._inx_moving = False
+                elif servo_id == 2:
+                    self._iny_moving = False
+
+
     def jog_servo(self, servo_id: int, velocity: float):
-        """Jog servo using jog_task(). velocity>0 = positive, <0 = negative."""
+        """Jog servo using jog_task(). [FIX-1] Uses _servo_call for Modbus safety."""
         limit = self.config.servo_limits.get(servo_id, 999999.0)
-        
+
         # InX (servo 1): check InY safe zone trước khi jog
         if servo_id == 1:
             iny_pos = self.get_servo_position(2)
             if iny_pos is not None and iny_pos > self.config.iny_safe_zone:
-                msg = (
+                self.get_logger().error(
                     f"🚨 InX JOG bị chặn — InY đang ở {iny_pos:.1f}mm "
-                    f"(phải < {self.config.iny_safe_zone}mm để an toàn). "
-                    "Về InY về safe zone trước."
+                    f"(phải < {self.config.iny_safe_zone}mm để an toàn)."
                 )
-                self.get_logger().error(msg)
                 self._notify_gui('warn', '🚨 InX bị chặn', f'InY = {iny_pos:.1f}mm > {self.config.iny_safe_zone}mm safe zone')
                 return
-        
-        # Chỉ check soft limit nếu đã home (có zero_offset)
+
+        # Soft limit check (only if homed)
         if servo_id in self.zero_offset:
             current_pos = self.get_servo_position(servo_id)
             if current_pos is not None and current_pos >= limit and velocity > 0:
@@ -1151,56 +1154,60 @@ class CartridgeSystem(Node):
                 return
         else:
             self.get_logger().warn(f"⚠️ Servo {servo_id} chưa home — soft limit KHÔNG áp dụng, cẩn thận!")
-        
+
         if servo_id not in self.servos:
             return
 
-        
         try:
             mot = self.servos[servo_id]
-            
-            # Wait for drive to be ready (acknowledge + enable + wait PLC control)
             self._ensure_drive_ready(mot, servo_id)
-                
-            # Direction mapping per servo:
-            # InY(2)/OutY(5): direct — velocity>0 = jog_positive (tăng encoder = hướng stack dương)
-            # InX(1)/OutX(4)/Platform(3): invert — velocity>0 = jog_negative (negative encoder = work area)
             if servo_id in (2, 5):
-                success = mot.jog_task(jog_positive=(velocity > 0), jog_negative=(velocity < 0), duration=0)
+                self._servo_call(lambda m=mot: m.jog_task(jog_positive=(velocity > 0), jog_negative=(velocity < 0), duration=0))  # [FIX-1]
             else:
-                success = mot.jog_task(jog_positive=(velocity < 0), jog_negative=(velocity > 0), duration=0)
-            if not success:
-                self.get_logger().error(f"❌ Servo {servo_id} jog FAILED (rejected by drive, check state)")
+                self._servo_call(lambda m=mot: m.jog_task(jog_positive=(velocity < 0), jog_negative=(velocity > 0), duration=0))  # [FIX-1]
         except Exception as e:
             self.get_logger().error(f"Servo {servo_id} jog error: {e}")
     
     def stop_servo(self, servo_id: int):
-        """Stop servo immediately using stop_motion_task()"""
+        """Stop servo immediately. [FIX-1/6] Uses _servo_call, clears motion flags."""
         if servo_id not in self.servos:
             return
-        
         try:
-            mot = self.servos[servo_id]
-            mot.stop_motion_task()
+            self._servo_call(lambda m=self.servos[servo_id]: m.stop_motion_task())  # [FIX-1]
         except Exception as e:
             self.get_logger().error(f"Servo {servo_id} stop error: {e}")
+        finally:
+            # [FIX-6] Clear motion flags on stop
+            if servo_id == 1:
+                self._inx_moving = False
+            elif servo_id == 2:
+                self._iny_moving = False
     
     def get_servo_position(self, servo_id: int) -> Optional[float]:
-        """Get current servo position in mm (converts from encoder counts)"""
+        """Get current servo position in mm. No lock — read-only, each servo has own TCP socket."""
         if servo_id not in self.servos:
             return 0.0  # Simulation
-        
         try:
-            counts = self.servos[servo_id].current_position()
+            counts = self.servos[servo_id].current_position()  # Direct call, no lock
             offset = self.zero_offset.get(servo_id, 0)
             return (counts - offset) / COUNTS_PER_MM
         except Exception as e:
             if self.manual_mode:
-                return 0.0  # Simulate position 0 in manual mode
+                return 0.0
             self.get_logger().error(f"Failed to get position from Servo {servo_id}: {e}")
             return None
-    
-    
+
+    def is_inx_safe_for_iny_move(self) -> bool:
+        """[FIX-6] Returns True if InX is NOT actively moving (safe to move INY)."""
+        return not self._inx_moving
+
+    def is_iny_safe_for_inx_move(self) -> bool:
+        """[FIX-6] Returns True if INY is in safe zone AND not actively moving."""
+        if self._iny_moving:
+            return False  # INY currently moving — block INX
+        iny_pos = self.get_servo_position(2)
+        return iny_pos is None or iny_pos <= self.config.iny_safe_zone
+
     def find_nearest_row(self, current_pos: float, row_positions_dict: dict) -> int:
         """Find the next row UP (higher mm) from current position.
         
@@ -1263,12 +1270,23 @@ class CartridgeSystem(Node):
         self._cylinder_start_time = time.time()
     
     def check_cylinder_timeout(self) -> bool:
-        """Check if cylinder operation has timed out.
-        Returns True if TIMED OUT. Currently disabled per user request to wait indefinitely for sensors.
+        """[FIX-2] Check if cylinder operation has timed out (CYLINDER_TIMEOUT_S = 15s).
+        Returns True if TIMED OUT.
         """
-        # Timeout check is completely disabled
+        if self._cylinder_start_time is None:
+            return False
+        elapsed = time.time() - self._cylinder_start_time
+        if elapsed > CYLINDER_TIMEOUT_S:
+            self.get_logger().error(
+                f"🚨 CYLINDER TIMEOUT: {elapsed:.1f}s > {CYLINDER_TIMEOUT_S}s! "
+                "Xi-lanh có thể bị kẹt hoặc sensor bị lỗi. Chuyển ERROR."
+            )
+            self._notify_gui('error', '🚨 Cylinder Timeout',
+                             f'Xi-lanh không phản hồi sau {CYLINDER_TIMEOUT_S}s')
+            return True
         return False
-    
+
+
     def start_motion_delay(self, next_state, duration: float = None):
         """Start a non-blocking delay before transitioning to next_state.
         Sets self.state to S1_MOTION_DELAY (or equivalent) and waits.
@@ -1500,8 +1518,9 @@ class CartridgeSystem(Node):
         Usage:
             ros2 topic pub --once /providesystem/jog_cmd std_msgs/String 'data: "1 +"'
         """
-        if self.operation_mode != 'jog':
-            self.get_logger().warn("❌ Jog command ignored - chưa ở JOG mode")
+        if self.operation_mode not in ('jog', 'manual'):
+            self.get_logger().warn(f"❌ Jog command ignored - cần JOG hoặc MANUAL mode (hiện tại: '{self.operation_mode}')")
+            self._notify_gui('warn', '⚠️ Chưa ở JOG/MANUAL mode', f'Chọn JOG hoặc MANUAL mode trước (hiện: {self.operation_mode})')
             return
         
         cmd = msg.data.strip()
@@ -1867,8 +1886,8 @@ class CartridgeSystem(Node):
         Format: 'servo_id:position_mm'  e.g. '1:250.0'
         Only works in JOG mode.
         """
-        if self.operation_mode != 'jog':
-            self.get_logger().warn("❌ move_to_pos: Chỉ dùng được ở JOG mode")
+        if self.operation_mode not in ('jog', 'manual'):
+            self.get_logger().warn(f"❌ move_to_pos: Chỉ dùng được ở JOG hoặc MANUAL mode (hiện tại: '{self.operation_mode}')")
             return
         
         try:
@@ -1899,58 +1918,71 @@ class CartridgeSystem(Node):
             self.get_logger().error(f"❌ Parse error: {e}")
     
     def update_config_callback(self, msg):
-        """Topic /providesystem/update_config - Update config at runtime
-        Format: JSON string: {"key": "config_key", "data": "json_value"}
-        Row tables: {"key": "iny_input_stack", "data": "{\"1\": 600, \"2\": 550, ...}"}
-        Scalar:     {"key": "inx_target2", "data": "500.0"}
-        """
+        """[FIX-4] Topic /providesystem/update_config - validate range before applying."""
         try:
             data = json.loads(msg.data)
-            key = data.get('key', '')
-            raw_data = data.get('data', '')
-            
-            if not key or not hasattr(self.config, key):
+            key = data.get('key', '') or data.get('table', '')
+            raw_data = data.get('data', '') or data.get('positions', {})
+            if not key:
+                # Flat JSON dict (from GUI): {"inx_target2": 500.0, ...}
+                key  = next((k for k in data if hasattr(self.config, k)), None)
+                if key:
+                    raw_data = data[key]
+                else:
+                    self.get_logger().error(f"❌ No valid config key in: {list(data.keys())}")
+                    return
+
+            if not hasattr(self.config, key):
                 self.get_logger().error(f"❌ Unknown config key: {key}")
                 return
-            
+
             current = getattr(self.config, key)
-            
+
             # Row table (dict) — parse JSON positions
             if isinstance(current, dict) and key in ('iny_input_stack', 'iny_output_stack', 'outy_output_table'):
                 positions = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
+                lo, hi = _ROW_POSITION_RANGE  # [FIX-4] row range validation
                 updated = 0
                 for row_str, pos in positions.items():
                     row = int(row_str)
+                    v = float(pos)
+                    if not (lo <= v <= hi):
+                        self.get_logger().error(f"❌ {key} Row {row}: {v}mm out of [{lo}, {hi}]mm")
+                        self._notify_gui('error', '❌ Config Out of Range', f'{key} Row {row}: {v}mm')
+                        return
                     if row in current:
                         old_val = current[row]
-                        current[row] = float(pos)
-                        if old_val != float(pos):
+                        current[row] = v
+                        if old_val != v:
                             updated += 1
                 self.get_logger().info(f"✅ Updated {key}: {updated} rows changed")
-            
+
             # Scalar value
             else:
                 try:
                     new_val = json.loads(raw_data) if isinstance(raw_data, str) else raw_data
                 except (json.JSONDecodeError, ValueError):
                     new_val = raw_data
-                # Type cast to match existing
                 if isinstance(current, float):
                     new_val = float(new_val)
                 elif isinstance(current, int):
                     new_val = int(new_val)
+                # [FIX-4] range validation for scalar
+                if key in _CONFIG_RANGES:
+                    lo, hi = _CONFIG_RANGES[key]
+                    if not (lo <= float(new_val) <= hi):
+                        self.get_logger().error(f"❌ {key} = {new_val} out of [{lo}, {hi}]")
+                        self._notify_gui('error', '❌ Config Out of Range', f'{key} = {new_val} (limit [{lo}, {hi}])')
+                        return
                 setattr(self.config, key, new_val)
                 self.get_logger().info(f"✅ Updated {key} = {new_val}")
-            
-            # Save to YAML file
+
             self.config.save_to_file()
-            
-            # Publish updated config to GUI
             self._publish_config()
-            
+
         except (json.JSONDecodeError, ValueError) as e:
             self.get_logger().error(f"❌ Config update error: {e}")
-    
+
     def get_config_callback(self, msg):
         """Topic /providesystem/get_config - Request current config data
         Publishes full config to /providesystem/config_data
@@ -2092,6 +2124,9 @@ class CartridgeSystem(Node):
     
     def control_loop_callback(self):
         """Timer callback for main control loop (50 Hz)"""
+        # [FIX-8] Watchdog heartbeat — cập nhật mỗi tick để watchdog_tick biết loop còn sống
+        self._watchdog_last_tick = time.time()
+
         # ── PAUSE gate: khi bị pause thì chỉ update sensor, không chạy state ──
         self.prev_sensor_state = self.sensor_manager.sensors.copy()
         self.update_sensors()
@@ -2123,17 +2158,20 @@ class CartridgeSystem(Node):
                     self.log_guide_once("S3_GLOBAL_WAIT", "[S3] Trigger nhận nhưng Robot BUSY — chờ IDLE...")
 
         # ✅ GLOBAL SAFETY: InY ngoài safe zone → dừng InX (fire 1 lần)
-        iny_pos = self.get_servo_position(2)
-        if iny_pos is not None and iny_pos > self.config.iny_safe_zone:
-            if not getattr(self, '_interlock_fired', False):
-                self._interlock_fired = True
-                self.stop_servo(1)
-                self.get_logger().error(
-                    f"🚨 INTERLOCK: InY = {iny_pos:.1f}mm > {self.config.iny_safe_zone}mm! InX STOPPED."
-                )
-                self._notify_gui('error', '🚨 INTERLOCK: InX dừng!', f'InY={iny_pos:.1f}mm')
-        else:
-            self._interlock_fired = False
+        # SKIP during HOMING: InY intentionally moves to home, and homing thread
+        # uses the same servo 2 Modbus TCP socket → concurrent access = deadlock!
+        if self.state not in (SystemState.HOMING, SystemState.HOMING_RUNNING):
+            iny_pos = self.get_servo_position(2)
+            if iny_pos is not None and iny_pos > self.config.iny_safe_zone:
+                if not getattr(self, '_interlock_fired', False):
+                    self._interlock_fired = True
+                    self.stop_servo(1)
+                    self.get_logger().error(
+                        f"🚨 INTERLOCK: InY = {iny_pos:.1f}mm > {self.config.iny_safe_zone}mm! InX STOPPED."
+                    )
+                    self._notify_gui('error', '🚨 INTERLOCK: InX dừng!', f'InY={iny_pos:.1f}mm')
+            else:
+                self._interlock_fired = False
         
         # State machine
         self.process_state()
@@ -2145,65 +2183,80 @@ class CartridgeSystem(Node):
         self.publish_state()
     
     def update_sensors(self):
-        """Update sensor readings from hardware (skips simulated sensors)"""
-        # ✅ Skip IO hardware read during HOMING to prevent TCP conflict
-        # (homing thread also uses Modbus TCP → concurrent reads cause CpxAp to drop)
-        if self.state == SystemState.HOMING_RUNNING:
-            return
-
-        # Always apply simulated sensor values first
+        """Update sensor readings. [FIX-3] Guard: skip hardware cache until IO module is ready."""
+        # Simulated sensors always applied first
         for sensor_id, state in self._sim_sensors.items():
             self.sensor_manager.update_sensor(sensor_id, state)
 
-        if self.io_module is None:
-            # Auto-reconnect định kỳ mỗi 10s
-            _now = time.time()
-            if _now - getattr(self, '_io_reconnect_at', 0) > 10.0:
-                self._io_reconnect_at = _now
-                try:
-                    self.io_module = CpxAp(ip_address=self.config.io_ip)
-                    self._io_read_fail_count = 0
-                    self.get_logger().info("✅ IO Module reconnected!")
-                    self._notify_gui('info', '✅ IO Module', 'Kết nối lại thành công')
-                except Exception:
-                    pass  # Tiếp tục thử lại lần sau
-            return  # Đang chờ reconnect
-
-        # Auto-disable sau repeated failures (no hardware connected)
-        if self._io_read_fail_count >= 3:
-            self.get_logger().warn(f"IO read failed {self._io_read_fail_count}x — switching to SIMULATION, will retry reconnect in 10s")
-            self._notify_gui('warn', 'IO disconnected', 'SIMULATION mode — tự reconnect sau 10s')
-            try:
-                self.io_module.close()  # type: ignore
-            except Exception:
-                pass
-            self.io_module = None
-            self._io_reconnect_at = 0.0  # Reconnect ngay lần sau (10s)
+        # [FIX-3] Only use real cache after first successful IO read
+        if not self._io_ready:
             return
 
-        try:
-            # CpxAp API: access modules via cpx_ap.modules[n]
-            all_channels = []
-            for mod in self.io_module.modules:
-                if mod.is_function_supported("read_channels"):
-                    channels = mod.read_channels()
-                    if isinstance(channels, list):
-                        all_channels.extend(channels)
-            
-            # Map to sensor IDs (1-based)
-            for sensor_id in range(1, min(16, len(all_channels) + 1)):
-                if sensor_id in self._sim_sensors:
-                    continue  # Skip — this sensor is being simulated
-                self.sensor_manager.update_sensor(sensor_id, all_channels[sensor_id - 1])
-            
-            self._io_read_fail_count = 0  # Reset on success
-                
-        except Exception as e:
-            self._io_read_fail_count += 1
-            if self._io_read_fail_count >= 3:
-                self.get_logger().warn(f"IO read failed {self._io_read_fail_count}x -> SIMULATION ONLY mode")
-                self._notify_gui('warn', 'IO disconnected -> sim only')
-                self.io_module = None  # Disable hardware reads completely
+        with self._io_bg_lock:
+            cached = list(self._io_sensor_cache)
+
+        for sensor_id in range(1, min(16, len(cached) + 1)):
+            if sensor_id not in self._sim_sensors:
+                self.sensor_manager.update_sensor(sensor_id, cached[sensor_id - 1])
+
+    def _io_bg_reader_loop(self):
+        """Background thread: reads IO module channels into cache.
+        NEVER called from control loop — runs independently.
+        If read blocks, only THIS thread is stuck (control loop keeps running).
+        """
+        import time as _time
+        _reconnect_wait = 0.0
+        while rclpy.ok():
+            # ── Reconnect if needed ────────────────────────────────────────────
+            if self.io_module is None:
+                if _time.time() >= _reconnect_wait:
+                    try:
+                        mod = CpxAp(ip_address=self.config.io_ip)
+                        self.io_module = mod
+                        self._io_read_fail_count = 0
+                        self.get_logger().info("✅ [IO-bg] Module reconnected")
+                    except Exception as e:
+                        self.get_logger().warn(f"[IO-bg] Reconnect failed: {e}")
+                        _reconnect_wait = _time.time() + 10.0
+                _time.sleep(0.5)
+                continue
+
+            # ── Check io_thread alive ─────────────────────────────────────────
+            _iot = getattr(self.io_module, 'io_thread', None)
+            if _iot is not None and not _iot.is_alive():
+                self.get_logger().warn("[IO-bg] io_thread dead → marking module dead, reconnecting")
+                self.io_module = None
+                _reconnect_wait = _time.time() + 2.0
+                _time.sleep(0.5)
+                continue
+
+            # ── Read channels ─────────────────────────────────────────────────
+            try:
+                all_channels = []
+                for mod in self.io_module.modules:
+                    if mod.is_function_supported("read_channels"):
+                        ch = mod.read_channels()
+                        if isinstance(ch, list):
+                            all_channels.extend(ch)
+                with self._io_bg_lock:
+                    self._io_sensor_cache = all_channels
+                self._io_read_fail_count = 0
+                if not self._io_ready:  # [FIX-3] Set ready flag on first successful read
+                    self._io_ready = True
+                    self.get_logger().info("✅ [IO-bg] IO ready — sensor data đang chạy")
+            except Exception as e:
+                self._io_read_fail_count += 1
+                if self._io_read_fail_count >= 3:
+                    self.get_logger().warn(f"[IO-bg] Read failed {self._io_read_fail_count}x → reconnect")
+                    try: self.io_module.close()
+                    except Exception: pass
+                    self.io_module = None
+                    self._io_ready = False  # [FIX-3] Reset ready flag on connection loss
+                    _reconnect_wait = _time.time() + 5.0
+
+            _time.sleep(0.05)  # 20Hz read rate
+
+
     
     def sim_sensor_callback(self, msg: String):
         """Handle /providesystem/sim_sensor — simulate sensor signals for testing.
@@ -2503,7 +2556,9 @@ class CartridgeSystem(Node):
         """Process current state - Main state machine (Position 1 + States 2/3)"""
         
         # ✅ MANUAL MODE: Pause execution cho đến khi next_step được gọi
-        if self.manual_mode and not self.step_pending:
+        # ⚡ BYPASS: HOMING/HOMING_RUNNING luôn chạy — không cần step (tự động bắt buộc)
+        _is_homing = self.state in (SystemState.HOMING, SystemState.HOMING_RUNNING)
+        if self.manual_mode and not self.step_pending and not _is_homing:
             return  # Paused, chờ next_step service call
         
         # Track state before execution (for manual mode)
@@ -2523,24 +2578,29 @@ class CartridgeSystem(Node):
             self.state = SystemState.HOMING_RUNNING  # Dùng state tạm để tránh gọi lại
             
             def _do_home():
-                if self.home_all_servos():
+                try:
+                    ok = self.home_all_servos()
+                except Exception as ex:
+                    import traceback; traceback.print_exc()
+                    self.get_logger().error(f"❌ _do_home exception: {ex}")
+                    self.state = SystemState.ERROR
+                    return
+                if ok:
                     if self.operation_mode == 'manual':
-                        # MANUAL mode: dừng ở IDLE, chờ goto_state
-                        self.get_logger().info("✅ MANUAL Homing xong — Sẵn sàng. Dùng goto_state để bắt đầu test.")
-                        self._notify_gui('info', '✅ MANUAL Homed', 'Sẵn sàng — dùng goto_state hoặc nhấn STATE1')
+                        self.get_logger().info("✅ MANUAL Homing xong — Sẵn sàng.")
+                        self._notify_gui('info', '✅ MANUAL Homed', 'Sẵn sàng')
                         self.state = SystemState.IDLE
                     else:
-                        # AUTO mode: chạy tiếp state machine
                         self.get_logger().info("✅ Homing complete — Bắt đầu chu trình tự động")
                         self._pos1_done = False
                         self._pos2_done = False
-                        self._pos2_state = "TO_TARGET1"  # Về Target1 (10mm) sau home
+                        self._pos2_state = "TO_TARGET1"
                         self.state = SystemState.S1_INY_CONFIRM_SAFE
                 else:
                     self.get_logger().error("❌ Homing FAILED")
                     self._notify_gui('error', '❌ Homing FAILED', 'Kiểm tra kết nối servo')
                     self.state = SystemState.ERROR
-            
+
             threading.Thread(target=_do_home, daemon=True).start()
 
         
