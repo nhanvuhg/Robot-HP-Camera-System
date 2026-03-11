@@ -91,22 +91,6 @@ sensors:
     used_in: [S1_INY_SEARCH_TRAY, S2_INY_SEARCH_STACK]
     active: true
 
-  - id: 12
-    name: S12_CYL3_RETRACTED
-    desc: "Cylinder 3 (Hold Tray) đã co lại hoàn toàn — xác nhận đã nhả khay"
-    pos: pos1
-    role: cyl_retracted
-    used_in: [S1_CYLINDER3_RETRACT]
-    active: true
-
-  - id: 13
-    name: S13_CYL3_EXTENDED
-    desc: "Cylinder 3 (Hold Tray) đã đẩy ra — xác nhận đang giữ khay chặt"
-    pos: pos1
-    role: cyl_extended
-    used_in: [S1_CYLINDER3_EXTEND]
-    active: true
-
   - id: 9
     name: S9_STACK_PLASTIC
     desc: "Phát hiện stack khay nhựa (Pos 2) — khi OutY đi xuống tìm khay"
@@ -129,6 +113,22 @@ sensors:
     pos: pos1
     role: cyl_extended
     used_in: [S1_CYLINDER1_EXTEND, S2_CYLINDER1_EXTEND]
+    active: true
+
+  - id: 12
+    name: S12_CYL3_RETRACTED
+    desc: "Cylinder 3 (Hold Tray) đã co lại hoàn toàn — xác nhận đã nhả khay"
+    pos: pos1
+    role: cyl_retracted
+    used_in: [S1_CYLINDER3_RETRACT]
+    active: true
+
+  - id: 13
+    name: S13_CYL3_EXTENDED
+    desc: "Cylinder 3 (Hold Tray) đã đẩy ra — xác nhận đang giữ khay chặt"
+    pos: pos1
+    role: cyl_extended
+    used_in: [S1_CYLINDER3_EXTEND]
     active: true
 
   - id: 14
