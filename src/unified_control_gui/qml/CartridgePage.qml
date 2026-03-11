@@ -76,15 +76,27 @@
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
+                    id: stateBadge
                     height: 28; radius: 8
                     width: sbRow.implicitWidth + 22
-                    color: root.cBg; border.color: root.cBorder
+                    color: root.cBg
+                    border.color: {
+                        var s = cartridgeController.systemState.toUpperCase()
+                        if (s.indexOf("ERROR") !== -1) return root.cRed
+                        if (s === "IDLE" || s === "UNKNOWN" || s === "") return root.cOrange
+                        return root.cGreen
+                    }
+                    Behavior on border.color { ColorAnimation { duration: 200 } }
                     Row { id: sbRow; anchors.centerIn: parent; spacing: 8
                         Rectangle {
-                            width: 9; height: 9; radius: 4.5; color: root.cGreen; anchors.verticalCenter: parent.verticalCenter
+                            id: stateDot
+                            width: 9; height: 9; radius: 4.5
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: stateBadge.border.color
+                            Behavior on color { ColorAnimation { duration: 200 } }
                             SequentialAnimation on opacity { loops: Animation.Infinite
-                                NumberAnimation { to: 0.4; duration: 1000 }
-                                NumberAnimation { to: 1.0; duration: 1000 } }
+                                NumberAnimation { to: 0.35; duration: 900 }
+                                NumberAnimation { to: 1.0;  duration: 900 } }
                         }
                         Text { text: cartridgeController.systemState; color: root.cText
                             font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
@@ -118,6 +130,122 @@
                         font.bold: true; font.letterSpacing: 1
                     }
                 }
+
+                // ── Reset Faults button trong header ──
+                Item { width: 8 }
+                Button {
+                    text: "🔄 Faults"
+                    Layout.preferredHeight: 26
+                    font.pixelSize: 11; font.bold: true
+                    onClicked: cartridgeController.resetFaults()
+                    background: Rectangle { radius: 4; color: "#3a1a0a"; border.color: root.cOrange; border.width: 1 }
+                    contentItem: Text { text: parent.text; font: parent.font; color: root.cOrange;
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                }
+                Item { width: 4 }
+            }
+        }
+
+        // ════════════════════════════════════════════════════════════
+        // NOTIFICATION BANNER — gui_notify từ node (watchdog, cylinder timeout, errors)
+        // ════════════════════════════════════════════════════════════
+        Rectangle {
+            id: notifyBanner
+            anchors { top: header.bottom; left: parent.left; right: parent.right }
+            height: visible ? 36 : 0
+            visible: false
+            z: 9
+            clip: true
+            Behavior on height { NumberAnimation { duration: 200 } }
+
+            property string lvl: "info"   // "info" | "warn" | "error"
+            property string ttl: ""
+            property string dtl: ""
+
+            color: {
+                if (lvl === "error") return "#2a0808"
+                if (lvl === "warn")  return "#2a2008"
+                return "#081e28"
+            }
+            border.color: {
+                if (lvl === "error") return root.cRed
+                if (lvl === "warn")  return root.cOrange
+                return root.cCyan
+            }
+            border.width: 1
+
+            Connections {
+                target: cartridgeController
+                function onNotificationReceived() {
+                    try {
+                        var obj = JSON.parse(cartridgeController.lastNotification)
+                        notifyBanner.lvl = obj.level  || "info"
+                        notifyBanner.ttl = obj.title  || ""
+                        notifyBanner.dtl = obj.detail || ""
+                        notifyBanner.visible = true
+                        bannerTimer.restart()
+                    } catch(e) {}
+                }
+            }
+
+            Timer {
+                id: bannerTimer
+                // info/warn tự ẩn sau 6s — error ở lại cho đến khi bấm ✕
+                interval: notifyBanner.lvl === "error" ? 30000 : 6000
+                onTriggered: { if (notifyBanner.lvl !== "error") notifyBanner.visible = false }
+            }
+
+            RowLayout {
+                anchors { fill: parent; leftMargin: 12; rightMargin: 6 }
+                spacing: 8
+
+                // Level icon
+                Text {
+                    text: {
+                        if (notifyBanner.lvl === "error") return "🚨"
+                        if (notifyBanner.lvl === "warn")  return "⚠"
+                        return "ℹ"
+                    }
+                    font.pixelSize: 13
+                }
+                // Title
+                Text {
+                    text: notifyBanner.ttl
+                    color: {
+                        if (notifyBanner.lvl === "error") return root.cRed
+                        if (notifyBanner.lvl === "warn")  return root.cOrange
+                        return root.cCyan
+                    }
+                    font.pixelSize: 12; font.bold: true
+                }
+                // Detail (fills remaining space)
+                Text {
+                    text: notifyBanner.dtl
+                    color: root.cText; font.pixelSize: 11
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight; opacity: 0.9
+                }
+                // Reset Faults shortcut (chỉ hiện khi error)
+                Button {
+                    visible: notifyBanner.lvl === "error"
+                    text: "Reset"
+                    Layout.preferredHeight: 22
+                    font.pixelSize: 10; font.bold: true
+                    onClicked: { cartridgeController.resetFaults(); notifyBanner.visible = false }
+                    background: Rectangle { radius: 3; color: "#3a0a0a"; border.color: root.cOrange; border.width: 1 }
+                    contentItem: Text { text: parent.text; font: parent.font; color: root.cOrange;
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                }
+                // Dismiss button
+                Button {
+                    text: "✕"
+                    Layout.preferredWidth: 22; Layout.preferredHeight: 22
+                    font.pixelSize: 11
+                    onClicked: notifyBanner.visible = false
+                    background: Rectangle { radius: 3; color: "transparent"; border.color: root.cBorder; border.width: 1 }
+                    contentItem: Text { text: parent.text; font: parent.font; color: root.cDim;
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                }
             }
         }
 
@@ -126,7 +254,7 @@
         // ════════════════════════════════════════════════════════════
         Rectangle {
             id: tabbar
-            anchors { top: header.bottom; left: parent.left; right: parent.right }
+            anchors { top: notifyBanner.bottom; left: parent.left; right: parent.right }
             height: root.tabbarH
             color: "#141428"; border.color: root.cBorder
 
@@ -452,7 +580,7 @@
                                         width: parent.width
                                         height: parent.height - 20 - 4
                                         spacing: root.gap
-                                        property bool isJog: cartridgeController.currentMode === "jog"
+                                        property bool isJog: cartridgeController.currentMode === "jog" || cartridgeController.currentMode === "manual"
 
                                         Repeater {
                                             model: ListModel {
@@ -503,7 +631,7 @@
                                                         }
                                                     }
 
-                                                    // − STOP + (jog mode required)
+                                                    // − STOP + (jog hoặc manual mode)
                                                     Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
                                                         CBtn { lbl:"−"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.isJog
                                                             onPressed: { if(servoRow.isJog) cartridgeController.jogServo(model.sid,"-",parseInt(velInput.text)||30) }
@@ -514,7 +642,7 @@
                                                             onReleased: cartridgeController.jogStop(model.sid) }
                                                     }
 
-                                                    // HOMING (jog mode required)
+                                                    // HOMING (jog hoặc manual mode)
                                                     CBtn { lbl:"HOMING"; w:parent.width; padV:12; padH:12; fontSize:16; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.isJog; onClicked: { if(servoRow.isJog) cartridgeController.homeServo(model.sid) } }
 
                                                     // CLEAR (always available)
