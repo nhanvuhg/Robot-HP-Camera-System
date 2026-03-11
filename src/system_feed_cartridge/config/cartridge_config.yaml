@@ -9,6 +9,8 @@ cylinder1_extend_channel: 5
 cylinder1_retract_channel: 4
 cylinder2_extend_channel: 7
 cylinder2_retract_channel: 6
+cylinder3_retract_channel: 8   # Hold Tray — nhả khay
+cylinder3_extend_channel: 9    # Hold Tray — kẹp giữ khay
 inx_home: 20.0
 inx_target2: 500.0
 inx_output_stack: 100.0

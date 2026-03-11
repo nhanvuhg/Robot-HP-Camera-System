@@ -82,29 +82,29 @@ sensors:
     role: tray_detect
     used_in: [S1_INY_TO_TARGET1, S1_INY_TO_TARGET2]
     active: true
-
+  
   - id: 6
-    name: S6_SERVO3_LIMIT
-    desc: "Giới hạn vị trí robot (Pos 2) — đánh dấu Servo 3 đã đến điểm phục vụ robot"
-    pos: pos2
-    role: platform
-    used_in: [S1_SERVO3_MOVE_TO_S6, S3_SERVO3_MOVE_TO_S6]
+    name: S6_INPUT_STACK_TRAY
+    desc: "Xác nhận có khay ở input stack (Pos 1) — InY chạm khay khi tìm kiếm xuống"
+    pos: pos1
+    role: stack_detect
+    used_in: [S1_INY_SEARCH_TRAY, S2_INY_SEARCH_STACK]
     active: true
 
   - id: 7
-    name: S7_PLATFORM_TRAY
-    desc: "Phát hiện khay nhựa trên nền tảng nâng (Servo 3) — xác nhận đang có khay"
-    pos: pos2
-    role: tray_detect
-    used_in: [S1_SERVO3_CHECK_S7, S3_SERVO3_CHECK_S7]
+    name: S7_CYL3_RETRACTED
+    desc: "Cylinder 3 (Hold Tray) đã co lại hoàn toàn — xác nhận đã nhả khay"
+    pos: pos1
+    role: cyl_retracted
+    used_in: [S1_CYLINDER1_RETRACT]
     active: true
 
   - id: 8
-    name: S8_OUTPUT_PLASTIC
-    desc: "Phát hiện khay nhựa tại điểm đầu ra Pos 2"
-    pos: pos2
-    role: tray_detect
-    used_in: [S3_OUTY_TO_TARGET2]
+    name: S8_CYL3_EXTENDED
+    desc: "Cylinder 3 (Hold Tray) đã đẩy ra — xác nhận đang giữ khay chặt"
+    pos: pos1
+    role: cyl_extended
+    used_in: [S1_CYLINDER1_EXTEND]
     active: true
 
   - id: 9
@@ -159,10 +159,12 @@ sensors:
 # =============================================================================
 
 cylinder_outputs:
-  cylinder1_extend_channel:  5   # DO channel bật = Cylinder 1 ĐẨY RA
+  cylinder1_extend_channel:  5   # DO channel bật = Cylinder 1 ĐẨY RA (Input pickup)
   cylinder1_retract_channel: 4   # DO channel bật = Cylinder 1 CO LẠI
-  cylinder2_extend_channel:  7   # DO channel bật = Cylinder 2 ĐẨY RA
+  cylinder2_extend_channel:  7   # DO channel bật = Cylinder 2 ĐẨY RA (Output pickup)
   cylinder2_retract_channel: 6   # DO channel bật = Cylinder 2 CO LẠI
+  cylinder3_retract_channel: 8   # DO channel bật = Cylinder 3 CO LẠI (Hold Tray — nhả khay)
+  cylinder3_extend_channel:  9   # DO channel bật = Cylinder 3 ĐẨY RA (Hold Tray — kẹp khay)
 
 # =============================================================================
 # INTERLOCK RULES (mô tả logic an toàn — code đọc từ đây trong tương lai)

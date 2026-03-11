@@ -253,6 +253,8 @@ class CartridgeConfig:
         self.cylinder1_retract_channel = 4
         self.cylinder2_extend_channel = 7
         self.cylinder2_retract_channel = 6
+        self.cylinder3_retract_channel = 8   # Hold Tray — nhả khay
+        self.cylinder3_extend_channel = 9    # Hold Tray — kẹp giữ khay
         
         # InX positions (mm)
         self.inx_home = 20.0             # Target 1 — vị trí safe gần home
@@ -399,6 +401,7 @@ class CartridgeConfig:
                 'servo_ips', 'io_ip',
                 'cylinder1_extend_channel', 'cylinder1_retract_channel',
                 'cylinder2_extend_channel', 'cylinder2_retract_channel',
+                'cylinder3_retract_channel', 'cylinder3_extend_channel',
                 'inx_home', 'inx_target2', 'inx_output_stack',
                 'iny_home', 'iny_safe_zone', 'iny_target2',
                 'iny_input_stack', 'iny_output_stack',
@@ -2115,6 +2118,26 @@ class CartridgeSystem(Node):
             except Exception as e:
                 self.get_logger().warn(f"⚠️ Cylinder 2 retract IO error (ignored): {e}")
         self.get_logger().info("Cylinder 2 retracting")
+    
+    def extend_cylinder3(self):
+        """Extend cylinder 3 (Hold Tray) — kẹp giữ khay"""
+        if self.io_module:
+            try:
+                self.io_module.reset_channel(self.config.cylinder3_retract_channel)
+                self.io_module.set_channel(self.config.cylinder3_extend_channel)
+            except Exception as e:
+                self.get_logger().warn(f"⚠️ Cylinder 3 extend IO error (ignored): {e}")
+        self.get_logger().info("🔒 Cylinder 3 (Hold Tray) EXTEND — đang kẹp khay")
+
+    def retract_cylinder3(self):
+        """Retract cylinder 3 (Hold Tray) — nhả khay"""
+        if self.io_module:
+            try:
+                self.io_module.reset_channel(self.config.cylinder3_extend_channel)
+                self.io_module.set_channel(self.config.cylinder3_retract_channel)
+            except Exception as e:
+                self.get_logger().warn(f"⚠️ Cylinder 3 retract IO error (ignored): {e}")
+        self.get_logger().info("🔓 Cylinder 3 (Hold Tray) RETRACT — đã nhả khay")
     
     def publish_state(self):
         """Publish current state"""
