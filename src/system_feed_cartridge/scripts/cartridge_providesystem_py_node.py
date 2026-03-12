@@ -2659,9 +2659,9 @@ class CartridgeSystem(Node):
                 self.move_servo(2, self.config.iny_home, wait=False)
         
         elif self.state == SystemState.S1_INX_TO_CONVEYOR_END:
-            # InX di chuyển đến cuối băng tải — chỉ cần S3 ON (băng tải node riêng điều khiển)
-            if not self.sensor_manager.get_sensor(3):
-                self.log_guide_once("S1_WAIT_S3", "[S1] Chờ S3 ON (khay đến cuối băng tải). Kích: '3:1'")
+            # InX di chuyển đến cuối băng tải — S1 ON = có khay ở đầu băng tải
+            if not self.sensor_manager.get_sensor(1):  # S1 OFF = chưa có khay
+                self.log_guide_once("S1_WAIT_S1", "[S1] Chờ S1 ON (sensor đầu băng tải — có khay). Kích: '1:1'")
                 return
             if self.is_iny_safe_for_inx_move():
                 if 1 in self.servos:
@@ -2673,15 +2673,15 @@ class CartridgeSystem(Node):
                         mot.position_task(pos_counts, DEFAULT_VELOCITY, absolute=True, nonblocking=True)
                     except Exception as e:
                         self.get_logger().error(f"❌ InX non-blocking move error: {e}")
-                self.get_logger().info(f"▶️ S3 ON — InX moving to {self.config.inx_target2:.0f}mm (non-blocking)")
-                self._inx_s3_wait_start = None
+                self.get_logger().info(f"▶️ S1 ON — InX moving to {self.config.inx_target2:.0f}mm (non-blocking) — chờ S3 ON")
+                self._inx_s3_wait_start = None  # reset 30s timer
                 self._inx_arrived = False
-                self._s3_seen_during_move = True  # S3 đã ON trước khi INX đến — ghi nhận sẵn
+                self._s3_seen_during_move = False
                 self.clear_guide()
                 self.state = SystemState.S1_INX_WAIT_STOP
-                self.log_guide_once("S1_INX_MOVING", "[S1] InX đang di chuyển đến Target2 500mm — chờ dừng hoàn toàn")
+                self.log_guide_once("S1_INX_MOVING", "[S1] InX đang di chuyển — chờ S3 ON + InX đến nơi")
             else:
-                self.get_logger().warn("⏳ Chờ InY về safe trước khi InX di chuyển...")
+                self.get_logger().warn("⏳ Waiting InY safe for InX move...")
         
         elif self.state == SystemState.S1_INX_WAIT_STOP:
             # ═══ CRITICAL: INX phải dừng hoàn toàn trước khi INY được phép di chuyển ═══
