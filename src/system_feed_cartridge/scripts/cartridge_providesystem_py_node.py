@@ -119,8 +119,9 @@ class SystemState(Enum):
     S1_INX_WAIT_STOP = "s1_inx_wait_stop"  # Chờ InX dừng hoàn toàn trước khi check S3
     S1_INY_SEARCH_TRAY = "s1_iny_search_tray"
     S1_INY_TO_NEAREST_ROW = "s1_iny_to_nearest_row"
-    S1_CHECK_S5 = "s1_check_s5"                      # [NEW] Check S5 tại row, timeout 2s
+    S1_CHECK_S5 = "s1_check_s5"                      # [NEW] Check S5 tại row, timeout 3s
     S1_WAIT_DASHBOARD_CONFIRM = "s1_wait_dashboard_confirm"  # [NEW] Chờ confirm sau S5 fail
+    S1_WAIT_INX_FOR_RELOAD = "s1_wait_inx_for_reload"       # [NEW] Sau confirm: move INX→500mm thì INY jog
     S1_CYLINDER1_EXTEND = "s1_cylinder1_extend"
     S1_WAIT_S12_INTERLOCK = "s1_wait_s12_interlock"  # [NEW] INY interlock chờ S12 ON
     S1_CYL3_EXTEND = "s1_cyl3_extend"               # [NEW] Extend Cyl3 hold tray, chờ S13
@@ -506,6 +507,10 @@ class CartridgeSystem(Node):
         # ✅ S5 check + retry logic
         self._s5_check_start = None   # Thời điểm bắt đầu chờ S5
         self._s5_retry_count = 0      # Số lần S5 fail (reset về 0 khi thành công)
+        self._s5_row_checked = False  # Đã thử row+1 chưa (row index search)
+        
+        # ✅ INY hold timer tại robot pos (delay trước Cyl1 retract)
+        self._iny_at_robot_start = None
         
         # ✅ INX S3 wait: đợi S3 sau khi InX đến target (30s timeout)
         self._inx_s3_wait_start = None
@@ -2781,8 +2786,9 @@ class CartridgeSystem(Node):
                         self.state = SystemState.ERROR
                     return
                 
-                # Layer 2: Dừng khẩn cấp nếu INY vượt 960mm (giới hạn vật lý trục)
-                INY_AXIS_MAX = 960.0
+                # Layer 2: Dừng khẩn cấp nếu INY vượt row 1 (giới hạn stack)
+                row1_limit = self.config.iny_input_stack.get(1, 600.0)
+                INY_AXIS_MAX = row1_limit  # Không jog vượt quá row 1
                 if iny_pos >= INY_AXIS_MAX:
                     self.stop_iny_jog()
                     self.get_logger().error(f"🚨 EMERGENCY: INY={iny_pos:.1f}mm >= 960mm (giới hạn trục)! Dừng khẩn cấp")
@@ -2854,77 +2860,139 @@ class CartridgeSystem(Node):
                 self.state = SystemState.ERROR
         
         elif self.state == SystemState.S1_CHECK_S5:
-            # ── Kiểm tra S5 xác nhận có khay tại vị trí row (timeout 2s) ──
+            # ── Kiểm tra S5 xác nhận có khay tại vị trí row (timeout 3s) ──
             if self.sensor_manager.get_sensor(5):  # S5 ON → có khay
-                self.get_logger().info("✅ [S1] S5 ON — có khay tại Input Stack. Extend Cyl1 →")
-                self._s5_retry_count = 0  # Reset counter khi thành công
+                self.get_logger().info("✅ [S1] S5 ON — có khay tại Input Stack. Extend Cyl1")
+                self._s5_retry_count = 0
+                self._s5_row_checked = False
                 self._s5_check_start = None
                 self.extend_cylinder1()
                 self.start_cylinder_timer()
                 self.clear_guide()
                 self.state = SystemState.S1_CYLINDER1_EXTEND
-                self.log_guide_once("S1_WAIT_S11", "[S1] Cylinder 1 đang extend → Đợi S11 ON (Cyl1 MAX). Kích: '11:1'")
+                self.log_guide_once("S1_WAIT_S11", "[S1] Cyl1 extend → Đợi S11 ON. Kích: '11:1'")
             else:
-                # Bắt đầu đếm timeout
+                # Bắt đầu đếm timeout 3s
                 if self._s5_check_start is None:
                     self._s5_check_start = time.time()
-                    self.log_guide_once("S1_WAIT_S5", f"[S1] Chờ S5 ON (xác nhận khay tại stack). Timeout: 2s. Kích: '5:1'")
+                    row_info = f"row {self.current_row}"
+                    self.log_guide_once("S1_WAIT_S5", f"[S1] Chờ S5 ON tại {row_info}. Timeout: 3s. Kích: '5:1'")
                 
                 elapsed = time.time() - self._s5_check_start
-                if elapsed >= 2.0:  # Timeout 2s
+                if elapsed >= 3.0:  # Timeout 3s
                     self._s5_check_start = None
-                    self._s5_retry_count += 1
                     
-                    # INY về safe 10mm, INX về safe 10mm (non-blocking)
-                    self.move_servo(2, self.config.iny_home, wait=False)
-                    if 1 in self.servos:
-                        try:
-                            mot = self.servos[1]
-                            offset = self.zero_offset.get(1, 0)
-                            pos_counts = offset + int(self.config.inx_home * COUNTS_PER_MM)
-                            self._ensure_drive_ready(mot, 1)
-                            mot.position_task(pos_counts, DEFAULT_VELOCITY, absolute=True, nonblocking=True)
-                        except Exception as e:
-                            self.get_logger().error(f"❌ INX return safe error: {e}")
-                    
-                    if self._s5_retry_count >= 3:
-                        # ⛔ Fail 3 lần → STOP hệ thống
-                        msg = "⛔ S5 fail 3 lần liên tiếp — DỪNG HỆ THỐNG! Kiểm tra cảm biến S5 và vị trí khay"
-                        self.get_logger().error(msg)
-                        self._notify_gui('error', '⛔ DỪNG HỆ THỐNG', 'S5 fail 3 lần — Kiểm tra cảm biến S5!')
-                        self._s5_retry_count = 0
-                        self.state = SystemState.ERROR
+                    if not self._s5_row_checked:
+                        # ── Lần 1: thử chuyển sang row_index + 1 ──
+                        next_row = self.current_row + 1
+                        if next_row in self.config.iny_input_stack:
+                            self._s5_row_checked = True
+                            self.current_row = next_row
+                            self.stack_row_index = next_row
+                            next_pos = self.config.iny_input_stack[next_row]
+                            self.get_logger().warn(
+                                f"⚠️ [S1] S5 OFF tại row {next_row - 1} → thử row {next_row} ({next_pos}mm)"
+                            )
+                            self.state = SystemState.S1_INY_TO_NEAREST_ROW  # di chuyển sang row+1
+                        else:
+                            # Không còn row nào → fail ngay
+                            self._s5_row_checked = True  # force vào nhánh fail
+                            self._s5_check_start = time.time()  # trigger fail ở lần check tiếp
                     else:
-                        # ⚠️ Cảnh báo + chờ dashboard confirm
-                        retry_msg = f"⚠️ [S1] Không có khay tại Input Stack (lần {self._s5_retry_count}/3) — kiểm tra S5"
-                        self.get_logger().warn(retry_msg)
-                        self._notify_gui('warn', f'⚠️ Không có khay Stack (lần {self._s5_retry_count}/3)',
-                                         'Kiểm tra S5 rồi nhấn Confirm để thử lại')
-                        # Reset về CONFIRM_SAFE để chờ xác nhận
+                        # ── Lần 2: row+1 cũng fail → về home + cảnh báo ──
+                        self.get_logger().error("⛔ [S1] S5 fail cả row và row+1 — GỬI CẢNH BÁO kiểm tra S4/S5")
+                        # INY về home (non-blocking)
+                        self.move_servo(2, self.config.iny_home, wait=False)
+                        # INX về home (non-blocking)
+                        if 1 in self.servos:
+                            try:
+                                mot = self.servos[1]
+                                offset = self.zero_offset.get(1, 0)
+                                pos_counts = offset + int(self.config.inx_home * COUNTS_PER_MM)
+                                self._ensure_drive_ready(mot, 1)
+                                mot.position_task(pos_counts, DEFAULT_VELOCITY, absolute=True, nonblocking=True)
+                            except Exception as e:
+                                self.get_logger().error(f"❌ [S1] INX home error: {e}")
+                        # GUI alert — hiện bảng giữa màn hình
+                        self._notify_gui('error',
+                            '⚠️ Kiểm tra cảm biến S4 hoặc S5',
+                            'Kiểm tra cảm biến S4 hoặc S5 trên hệ thống!\n'
+                            'Nhấn XÁC NHẬN để tiếp tục sau khi đã kiểm tra.')
+                        # Reset
+                        self._s5_row_checked = False
+                        self._s5_retry_count += 1
                         self._inx_arrived = False
                         self._s3_seen_during_move = False
                         self._inx_s3_wait_start = None
                         self.state = SystemState.S1_WAIT_DASHBOARD_CONFIRM
         
         elif self.state == SystemState.S1_WAIT_DASHBOARD_CONFIRM:
-            # ── Chờ operator confirm trên Dashboard ──
-            # Confirm đến qua next_step service hoặc manual_mode step
+            # ── Chờ operator xác nhận trên GUI ──
             if self.step_pending:
                 self.step_pending = False
                 self.clear_guide()
-                # Kiểm tra S3: nếu S3 vẫn ON → còn khay → retry
-                if self.sensor_manager.get_sensor(3):
-                    self.get_logger().info(f"▶️  [S1] Operator confirmed. S3 ON → Retry lần {self._s5_retry_count + 1}/3")
-                    self.state = SystemState.S1_INY_CONFIRM_SAFE  # Retry từ đầu
+                self._s5_row_checked = False
+                self._s5_check_start = None
+                # Kiểm tra S1/S2/S3 — xem còn khay không
+                s1 = self.sensor_manager.get_sensor(1)
+                s2 = self.sensor_manager.get_sensor(2)
+                s3 = self.sensor_manager.get_sensor(3)
+                if s1 or s2 or s3:
+                    # Còn khay — cần đảm bảo INX ở target2=500mm trước khi INY jog
+                    inx_pos = self.get_servo_position(1)
+                    at_target = (inx_pos is not None and
+                                 abs(inx_pos - self.config.inx_target2) <= self.config.position_tolerance)
+                    if at_target:
+                        # INX đã ở 500mm → INY jog tìm khay trực tiếp
+                        self.get_logger().info(
+                            f"▶️  [S1] Confirmed. INX ở {inx_pos:.0f}mm (target2) → INY jog"
+                        )
+                        self.state = SystemState.S1_INY_SEARCH_TRAY
+                    else:
+                        # INX chưa ở 500mm → move INX về 500mm trước
+                        self.get_logger().info(
+                            f"▶️  [S1] Confirmed. INX={inx_pos or '?'}mm ≠ 500mm → INX phải vào 500mm trước"
+                        )
+                        if 1 in self.servos:
+                            try:
+                                mot = self.servos[1]
+                                offset = self.zero_offset.get(1, 0)
+                                pos_counts = offset + int(self.config.inx_target2 * COUNTS_PER_MM)
+                                self._ensure_drive_ready(mot, 1)
+                                mot.position_task(pos_counts, DEFAULT_VELOCITY, absolute=True, nonblocking=True)
+                            except Exception as e:
+                                self.get_logger().error(f"❌ [S1] INX to target2 error: {e}")
+                        self._inx_arrived = False
+                        self._s3_seen_during_move = True  # S3 đã được xác nhận
+                        self.state = SystemState.S1_WAIT_INX_FOR_RELOAD
                 else:
-                    self.get_logger().warn("⚠️ [S1] S3 OFF — Hết khay trên băng tải. Dừng chờ khay mới")
-                    self._notify_gui('warn', '⚠️ S3 OFF', 'Hết khay trên băng tải — đang chờ khay mới')
-                    # Giữ state chờ S3 ON lại
+                    self.get_logger().warn("⚠️ [S1] S1/S2/S3 đều OFF — hết khay. Chờ khay mới")
+                    self._notify_gui('warn', '⚠️ Hết khay', 'S1/S2/S3 OFF — đang chờ khay mới lên băng tải')
                     self.state = SystemState.S1_INY_CONFIRM_SAFE
             else:
+                s1 = self.sensor_manager.get_sensor(1)
+                s2 = self.sensor_manager.get_sensor(2)
+                s3 = self.sensor_manager.get_sensor(3)
                 self.log_guide_once("S1_WAIT_CONFIRM",
-                    f"[S1] Chờ xác nhận từ Dashboard (lần {self._s5_retry_count}/3). "
-                    f"Nhấn 'Next Step' để thử lại. S3={'ON' if self.sensor_manager.get_sensor(3) else 'OFF'}")
+                    f"[S1] Chờ xác nhận sau cảnh báo S4/S5. "
+                    f"Nhấn 'Next Step'. "
+                    f"S1={'ON' if s1 else 'OFF'} S2={'ON' if s2 else 'OFF'} S3={'ON' if s3 else 'OFF'}")
+        
+        elif self.state == SystemState.S1_WAIT_INX_FOR_RELOAD:
+            # ── Chờ INX đến 500mm (sau confirm S4/S5), rồi cho INY jog ──
+            if not self._inx_arrived:
+                if 1 in self.servos:
+                    try:
+                        if self.servos[1].target_position_reached():
+                            self._inx_arrived = True
+                            self.get_logger().info("✅ [S1] INX dừng tại 500mm → INY có thể jog tìm khay")
+                    except Exception:
+                        pass
+                self.log_guide_once("S1_INX_RELOAD", "⏳ [S1] INX đang di chuyển về 500mm — chờ dừng rồi INY jog")
+            else:
+                # INX đã ở 500mm → cho INY jog tìm khay
+                self._inx_arrived = False
+                self.state = SystemState.S1_INY_SEARCH_TRAY
         
         elif self.state == SystemState.S1_CYLINDER1_EXTEND:
             # Chờ S11 ON (Cylinder 1 MAX - extend complete = đã gắp khay)
@@ -2984,14 +3052,19 @@ class CartridgeSystem(Node):
                 self.state = SystemState.ERROR
         
         elif self.state == SystemState.S1_INY_TO_TARGET2:
-            # InY đến Target 2 (200mm) — vị trí đặt khay cho robot
+            # InY đến 200mm — đặt khay lên Cyl3 (hold tray)
             if self.move_servo(2, self.config.iny_target2):
-                self.get_logger().info("✅ [S1] InY at 200mm — nhả Cyl1 (retract)")
-                self.retract_cylinder1()
-                self.start_cylinder_timer()
-                self.clear_guide()
-                self.start_motion_delay(SystemState.S1_CYLINDER1_RETRACT)
-                self.log_guide_once("S1_WAIT_S10", "[S1] Cyl1 retract → Chờ S10 ON + S11 OFF. Kích: '10:1'")
+                # Bắt buộc delay 1s sau khi INY đạt target trước khi retract Cyl1
+                if self._iny_at_robot_start is None:
+                    self._iny_at_robot_start = time.time()
+                    self.get_logger().info("✅ [S1] INY đến 200mm — chờ 1s rồi nhả Cyl1")
+                elif time.time() - self._iny_at_robot_start >= 1.0:
+                    self._iny_at_robot_start = None
+                    self.retract_cylinder1()  # ch4 ON, ch5 OFF
+                    self.start_cylinder_timer()
+                    self.clear_guide()
+                    self.state = SystemState.S1_CYLINDER1_RETRACT
+                    self.log_guide_once("S1_WAIT_S10", "[S1] Cyl1 retract → Chờ S10 ON + S11 OFF")
             else:
                 self.state = SystemState.ERROR
         
