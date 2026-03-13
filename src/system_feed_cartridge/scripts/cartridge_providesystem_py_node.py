@@ -228,6 +228,7 @@ class CartridgeSystem(Node):
         self.state          = SystemState.IDLE
         self.operation_mode = 'auto'   # Mặc định: auto
         self._robot_done    = False    # Tín hiệu robot trả khay xong
+        self._state1_enabled = False   # Phải nhấn STATE1 từ GUI để enable (Plan 3)
         self._gui_confirmed = False    # GUI popup xác nhận
         self._system_paused = False
 
@@ -250,6 +251,8 @@ class CartridgeSystem(Node):
         self.create_subscription(Bool,   '/revpi/robot_done',     self._cb_robot_done, qos)
         self.create_subscription(String, '/providesystem/gui_confirm', self._cb_gui_confirm, qos)
         self.create_subscription(String, '/providesystem/jog_cmd',    self._cb_jog,  qos)
+        self.create_subscription(String, '/providesystem/change_tray_input',
+                                 self._cb_change_tray_input, qos)
         self.create_subscription(String, '/providesystem/sim_sensor', self._cb_sim,  qos)
         self.create_subscription(String, '/providesystem/set_operation_mode',
                                  self._cb_mode, qos)
@@ -497,10 +500,14 @@ class CartridgeSystem(Node):
             return None
 
     def _jog(self, servo_id: int, vel_mm_s: float):
-        """Jog servo. Blocked if not homed."""
+        """Jog servo. Trong manual mode: cho phép JOG kể cả chưa home."""
+        # Chỉ block JOG trong AUTO mode nếu chưa home (an toàn hơn)
         if servo_id not in self.zero_offset and servo_id in self.servos:
-            self.get_logger().error(f"🚫 S{servo_id} JOG blocked — chưa home")
-            return
+            if self.operation_mode != 'manual':
+                self.get_logger().error(f"🚫 S{servo_id} JOG blocked — chưa home (AUTO)")
+                return
+            # Manual: cho phép JOG chưa home, chỉ warn
+            self.get_logger().warn(f"⚠️ S{servo_id} JOG chưa home — vị trí không đảm bảo")
         mot = self.servos.get(servo_id)
         if not mot:
             return
@@ -683,6 +690,7 @@ class CartridgeSystem(Node):
         else:
             # AUTO: home trước khi chạy
             self.zero_offset.clear()
+            self._state1_enabled = True   # AUTO: enable State 1 auto-watch
             self._enter(SystemState.HOMING)
             self._notify('info', '▶️ START — HOMING', '')
 
@@ -694,6 +702,7 @@ class CartridgeSystem(Node):
         self._enter(SystemState.IDLE)
         self._system_paused = False
         self._robot_done = False   # Reset: tránh flag cũ trigger S2A sau STOP
+        self._state1_enabled = False  # Reset: phải chọn lại STATE 1
         self._notify('warn', '⏹️ STOP', '')
 
     def _cb_pause(self, msg: Bool):
@@ -794,6 +803,20 @@ class CartridgeSystem(Node):
         except Exception:
             pass
 
+    def _cb_change_tray_input(self, msg: String):
+        """
+        Lệnh thay khay thủ công từ GUI (cả 2 mode).
+        Equivalent với robot gửi robot_done → cho phép vào STATE 2.
+        """
+        cmd = msg.data.strip().lower()
+        if cmd in ('1', 'true', 'change', 'done'):
+            self.get_logger().info("📦 change_tray_input → _robot_done = True")
+            self._robot_done = True
+            self._notify('info', '📦 Lệnh thay khay', 'robot_done set — vào STATE 2 nếu S13 ON')
+        elif cmd in ('0', 'false', 'reset'):
+            self._robot_done = False
+            self.get_logger().info("🔄 change_tray_input reset → _robot_done = False")
+
     def _cb_sim(self, msg: String):
         """
         Mô phỏng sensor — chỉ hoạt động ở MANUAL mode.
@@ -873,6 +896,7 @@ class CartridgeSystem(Node):
             self.get_logger().info("▶ [MANUAL] goto STATE 1 — vào ngay, chờ S1/S2/S3 trong process")
             self._notify('info', '▶ STATE 1 (manual)',
                          'Đã vào State 1. S1/S2/S3 chưa ON sẽ chờ tại Step 2.')
+            self._state1_enabled = True
             self._enter(SystemState.S1_CONFIRM_SAFE)
 
         elif cmd in ('STATE2', 'STATE_2', 'S2', 'STATE2A', 'S2A'):
@@ -1043,7 +1067,7 @@ class CartridgeSystem(Node):
             return
 
         # Ưu tiên 2: băng tải có khay + vị trí cấp trống → cấp khay
-        if self._can_start_s1():
+        if self._state1_enabled and self._can_start_s1():
             self.get_logger().info(
                 f"▶ AUTO IDLE: S1={self.sensor(1)} S2={self.sensor(2)} "
                 f"S3={self.sensor(3)} S12={self.sensor(12)} → STATE 1 Cấp khay"
@@ -1524,7 +1548,8 @@ class CartridgeSystem(Node):
         if not self._cmd_sent:
             ok = self._nb_move(2, self.config.iny_safe_zone)
             if not ok:
-                self._error("S1 Step8: INY → 50mm thất bại")
+                self.get_logger().warn("⚠️ S1 Step8: INY → 50mm thất bại — thử lại")
+                return
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
@@ -1533,7 +1558,8 @@ class CartridgeSystem(Node):
             )
         else:
             if time.time() > self._step_timeout:
-                self._error("S1 Step8: INY → 50mm timeout")
+                self.get_logger().warn("⚠️ S1 Step8: INY → 50mm timeout → retry")
+                self._cmd_sent = False
             elif self._arrived(2):
                 self.get_logger().info("✅ INY tại 50mm → Cyl2 EXTEND (ch9)")
                 self._cyl2_extend()
@@ -1556,14 +1582,16 @@ class CartridgeSystem(Node):
         if not self._cmd_sent:
             ok = self._nb_move(2, self.config.iny_place)  # 200mm
             if not ok:
-                self._error("S1 Step10: INY → 200mm thất bại")
+                self.get_logger().warn("⚠️ S1 Step10: INY → 200mm thất bại — thử lại")
+                return
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
             self.get_logger().info("▶ INY → 200mm (đặt khay lên Cyl2 Hold Tray)")
         else:
             if time.time() > self._step_timeout:
-                self._error("S1 Step10: INY → 200mm timeout")
+                self.get_logger().warn("⚠️ S1 Step10: INY → 200mm timeout → retry")
+                self._cmd_sent = False
             elif self._arrived(2):
                 self.get_logger().info("✅ INY tại 200mm → chờ 1s → retract Cyl1")
                 self._step_start = time.time()
@@ -1597,13 +1625,15 @@ class CartridgeSystem(Node):
         if not self._cmd_sent:
             ok = self._nb_move(2, self.config.iny_safe_zone)
             if not ok:
-                self._error("S1 Step12: INY → 50mm thất bại")
+                self.get_logger().warn("⚠️ S1 Step12: INY → 50mm thất bại — thử lại")
+                return
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
         else:
             if time.time() > self._step_timeout:
-                self._error("S1 Step12: INY → 50mm timeout")
+                self.get_logger().warn("⚠️ S1 Step12: INY → 50mm timeout → retry")
+                self._cmd_sent = False
             elif self._arrived(2):
                 self.get_logger().info("✅ INY tại 50mm → INX về home")
                 self._enter(SystemState.S1_INX_HOME)
@@ -1617,13 +1647,15 @@ class CartridgeSystem(Node):
         if not self._cmd_sent:
             ok = self._nb_move(1, self.config.inx_home)
             if not ok:
-                self._error("S1 Step13: INX → 20mm thất bại")
+                self.get_logger().warn("⚠️ S1 Step13: INX → 20mm thất bại — thử lại")
+                return
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
         else:
             if time.time() > self._step_timeout:
-                self._error("S1 Step13: INX timeout")
+                self.get_logger().warn("⚠️ S1 Step13: INX timeout → retry")
+                self._cmd_sent = False
             elif self._arrived(1):
                 self.get_logger().info("✅ INX tại 20mm → STATE 1 COMPLETE")
                 self._enter(SystemState.S1_COMPLETE)
@@ -1720,14 +1752,16 @@ class CartridgeSystem(Node):
         if not self._cmd_sent:
             ok = self._nb_move(1, self.config.inx_target)
             if not ok:
-                self._error("S2A A2: INX → 500mm thất bại")
+                self._log_once("S2A_A2_INX_TO_500MM_THẤT_", "⚠️ S2A A2: INX → 500mm thất bại — thử lại vòng tới")
+                return
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
             self.get_logger().info("▶ A2: INX → 500mm")
         else:
             if time.time() > self._step_timeout:
-                self._error("S2A A2: INX timeout")
+                self.get_logger().warn("⚠️ S2A A2: INX timeout → retry move")
+                self._cmd_sent = False
             elif self._arrived(1):
                 self.get_logger().info("✅ A2: INX tại 500mm → A3")
                 self._enter(SystemState.S2A_INY_200_CYL1)
@@ -1738,14 +1772,16 @@ class CartridgeSystem(Node):
         if not self._cmd_sent:
             ok = self._nb_move(2, self.config.iny_place)   # 200mm
             if not ok:
-                self._error("S2A A3: INY → 200mm thất bại")
+                self._log_once("S2A_A3_INY_TO_200MM_THẤT_", "⚠️ S2A A3: INY → 200mm thất bại — thử lại vòng tới")
+                return
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
             self.get_logger().info("▶ A3: INY → 200mm")
         else:
             if time.time() > self._step_timeout:
-                self._error("S2A A3: INY → 200mm timeout")
+                self.get_logger().warn("⚠️ S2A A3: INY → 200mm timeout → retry move")
+                self._cmd_sent = False
             elif self._arrived(2):
                 self.get_logger().info("✅ A3: INY tại 200mm → Cyl1 EXTEND (ch5)")
                 self._cyl1_extend()
@@ -1767,14 +1803,16 @@ class CartridgeSystem(Node):
         if not self._cmd_sent:
             ok = self._nb_move(2, self.config.iny_home)   # 10mm
             if not ok:
-                self._error("S2A A5: INY → 10mm thất bại")
+                self._log_once("S2A_A5_INY_TO_10MM_THẤT_B", "⚠️ S2A A5: INY → 10mm thất bại — thử lại vòng tới")
+                return
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
             self.get_logger().info("▶ A5: INY → 10mm")
         else:
             if time.time() > self._step_timeout:
-                self._error("S2A A5: timeout")
+                self.get_logger().warn("⚠️ S2A A5: timeout → retry")
+                self._cmd_sent = False
             elif self._arrived(2):
                 self.get_logger().info("✅ A5: INY tại 10mm → A6")
                 self._enter(SystemState.S2A_INX_10)
@@ -1790,14 +1828,16 @@ class CartridgeSystem(Node):
             # Theo spec: "INX → 10mm" — dùng min(inx_home, 10mm)
             ok = self._nb_move(1, 10.0)
             if not ok:
-                self._error("S2A A6: INX → 10mm thất bại")
+                self._log_once("S2A_A6_INX_TO_10MM_THẤT_B", "⚠️ S2A A6: INX → 10mm thất bại — thử lại vòng tới")
+                return
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
             self.get_logger().info("▶ A6: INX → 10mm")
         else:
             if time.time() > self._step_timeout:
-                self._error("S2A A6: INX → 10mm timeout")
+                self.get_logger().warn("⚠️ S2A A6: INX → 10mm timeout → retry move")
+                self._cmd_sent = False
             elif self._arrived(1):
                 self.get_logger().info("✅ A6: INX tại 10mm → A7 jog output")
                 self._s4_armed_out = False
@@ -1850,19 +1890,25 @@ class CartridgeSystem(Node):
         """INY → iny_output_stack[row], đến nơi → Cyl1 retract (ch4)."""
         target = self.config.iny_output_stack.get(self._output_row)
         if target is None:
-            self._error(f"S2A A8: output row {self._output_row} không có trong config")
-            return
+            self.get_logger().warn(
+                f"⚠️ S2A A8: output row {self._output_row} không có trong config — dùng row 1"
+            )
+            self._output_row = 1
+            target = self.config.iny_output_stack.get(1)
+            if target is None:
+                return
         if not self._cmd_sent:
             self.get_logger().info(f"▶ A8: INY → {target}mm (output row {self._output_row})")
             ok = self._nb_move(2, target)
             if not ok:
-                self._error(f"S2A A8: INY → {target}mm thất bại")
+                self.get_logger().warn(f"⚠️ S2A A8: INY → {target}mm nb_move fail — retry")
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
         else:
             if time.time() > self._step_timeout:
-                self._error("S2A A8: INY timeout")
+                self.get_logger().warn("⚠️ S2A A8: INY timeout → retry move")
+                self._cmd_sent = False
             elif self._arrived(2):
                 self.get_logger().info("✅ A8: INY tại output row → Cyl1 RETRACT (ch4)")
                 self._cyl1_retract()
@@ -1884,14 +1930,16 @@ class CartridgeSystem(Node):
         if not self._cmd_sent:
             ok = self._nb_move(2, self.config.iny_home)
             if not ok:
-                self._error("S2A A10: INY → 10mm thất bại")
+                self._log_once("S2A_A10_INY_TO_10MM_THẤT_", "⚠️ S2A A10: INY → 10mm thất bại — thử lại vòng tới")
+                return
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
             self.get_logger().info("▶ A10: INY → 10mm")
         else:
             if time.time() > self._step_timeout:
-                self._error("S2A A10: INY timeout")
+                self.get_logger().warn("⚠️ S2A A10: INY timeout → retry move")
+                self._cmd_sent = False
             elif self._arrived(2):
                 self.get_logger().info("✅ A10: INY tại 10mm → A11")
                 self._enter(SystemState.S2A_INX_20)
@@ -1905,14 +1953,16 @@ class CartridgeSystem(Node):
         if not self._cmd_sent:
             ok = self._nb_move(1, self.config.inx_home)  # 20mm
             if not ok:
-                self._error("S2A A11: INX → 20mm thất bại")
+                self._log_once("S2A_A11_INX_TO_20MM_THẤT_", "⚠️ S2A A11: INX → 20mm thất bại — thử lại vòng tới")
+                return
                 return
             self._cmd_sent     = True
             self._step_timeout = time.time() + self.config.move_timeout
             self.get_logger().info("▶ A11: INX → 20mm")
         else:
             if time.time() > self._step_timeout:
-                self._error("S2A A11: INX timeout")
+                self.get_logger().warn("⚠️ S2A A11: INX timeout → retry move")
+                self._cmd_sent = False
             elif self._arrived(1):
                 self.get_logger().info("✅ A11: INX tại 20mm → Rút Cyl2 trước khi complete")
                 self._cyl2_retract()

@@ -70,5 +70,5 @@ outx_safe_position_threshold: 100.0
 max_trays: 8
 max_slots_per_output_tray: 9
 homing_timeout: 30.0
-move_timeout: 20.0
+move_timeout: 60.0
 cylinder_timeout: 15.0

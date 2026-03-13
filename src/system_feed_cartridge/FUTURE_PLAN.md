@@ -4,6 +4,28 @@
 
 ---
 
+## Plan 1: Bỏ Hoàn Toàn Sensor Simulation *(chờ thực hiện)*
+
+**Mục tiêu:** Xóa toàn bộ `_sim_sensors` và logic simulation. Cả 2 mode chỉ đọc sensor thực.
+
+**Việc cần làm:**
+- Xóa `self._sim_sensors: dict = {}` khỏi `__init__`
+- Xóa method `sensor_real()` và `_sensor_raw()`, đổi thành `sensor()` đọc thẳng hardware
+- Xóa `sensor_real()` khỏi nơi nào đang dùng
+- Xóa callback `_cb_sim()` và subscriber tương ứng `/providesystem/sim_sensor`
+- Xóa `_sim_sensors.clear()` trong `_cb_stop()` và `_cb_mode_change()`
+- Xóa UI sim sensor trong GUI
+
+**Files cần sửa:**
+- `scripts/cartridge_providesystem_py_node.py`
+- `scripts/cartridge_gui.py`
+- `qml/CartridgePage.qml` (nếu có nút sim)
+
+> File này lưu các định hướng và kế hoạch cần thực hiện trong tương lai.
+> Khi muốn thực hiện: kêu AI đọc file này và implement.
+
+---
+
 ## 1. Bỏ Hoàn Toàn Sensor Simulation
 
 **Mục tiêu:** Xóa toàn bộ `_sim_sensors` và logic simulation, cả 2 mode đều chỉ đọc sensor thực.
