@@ -98,10 +98,43 @@ QStringList CamNode::getAvailableImageTopics()
     return result;
 }
 
+void CamNode::fetchAvailableTopicsAsync()
+{
+    // Prevent concurrent discovery
+    bool expected = false;
+    if (!fetchingTopics_.compare_exchange_strong(expected, true))
+        return;
+
+    // Run discovery in background thread to avoid blocking UI
+    std::thread([this]() {
+        QStringList result;
+        try {
+            auto topics_and_types = this->get_topic_names_and_types();
+            for (const auto &pair : topics_and_types) {
+                for (const auto &type : pair.second) {
+                    if (type == "sensor_msgs/msg/Image")
+                        result << QString::fromStdString(pair.first);
+                }
+            }
+        } catch (...) {}
+
+        fetchingTopics_ = false;
+        // Emit via queued connection — safe to cross thread boundary
+        emit availableTopicsChanged(result);
+    }).detach();
+}
+
+
 void CamNode::updateCameraTopic(int index, const QString &newTopic)
 {
     if (index < 0 || index >= static_cast<int>(subs_.size()))
         return;
+
+    // Guard: skip empty or invalid topic names
+    if (newTopic.isEmpty()) {
+        RCLCPP_WARN(this->get_logger(), "updateCameraTopic: empty topic for index %d, skipped", index);
+        return;
+    }
 
     subs_[index].reset();
 

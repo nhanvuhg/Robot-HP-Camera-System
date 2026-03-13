@@ -91,12 +91,28 @@ sensors:
     used_in: [S1_INY_SEARCH_TRAY, S2_INY_SEARCH_STACK]
     active: true
 
-  - id: 9
-    name: S9_STACK_PLASTIC
-    desc: "Phát hiện stack khay nhựa (Pos 2) — khi OutY đi xuống tìm khay"
+  - id: 7
+    name: S7_PLATFORM_TRAY
+    desc: "Phát hiện có khay trên Platform (Servo 3) — xác nhận khay đang ở vị trí nạp"
     pos: pos2
-    role: stack_detect
-    used_in: [S3_OUTY_TO_TARGET2]
+    role: tray_detect
+    used_in: [S3_PLATFORM, S4_PLATFORM]
+    active: true
+
+  - id: 8
+    name: S8_FEED_SUCCESS
+    desc: "Cấp khay thành công — xác nhận khay đã được đưa vào vị trí đúng"
+    pos: pos2
+    role: tray_detect
+    used_in: [S3_FEED_CONFIRM]
+    active: true
+
+  - id: 9
+    name: S9_OUTPUT_FINISHED
+    desc: "Phát hiện có khay ở vị trí output khầy thành phẩm — xác nhận khay thành phẩm đã ra"
+    pos: pos2
+    role: tray_detect
+    used_in: [S4_OUTPUT_CHECK]
     active: true
 
   - id: 10
@@ -116,35 +132,35 @@ sensors:
     active: true
 
   - id: 12
-    name: S12_CYL3_RETRACTED
-    desc: "Cylinder 3 (Hold Tray) đã co lại hoàn toàn — xác nhận đã nhả khay"
+    name: S12_CYL2_RETRACTED
+    desc: "Cylinder 2 (Hold Tray) đã co lại hoàn toàn — xác nhận đã nhả khay"
     pos: pos1
     role: cyl_retracted
-    used_in: [S1_CYLINDER3_RETRACT]
+    used_in: [S1_CYLINDER2_RETRACT]
     active: true
 
   - id: 13
-    name: S13_CYL3_EXTENDED
-    desc: "Cylinder 3 (Hold Tray) đã đẩy ra — xác nhận đang giữ khay chặt"
+    name: S13_CYL2_EXTENDED
+    desc: "Cylinder 2 (Hold Tray) đã đẩy ra — xác nhận đang giữ khay chặt"
     pos: pos1
     role: cyl_extended
-    used_in: [S1_CYLINDER3_EXTEND]
+    used_in: [S1_CYLINDER2_EXTEND]
     active: true
 
   - id: 14
-    name: S14_CYL2_RETRACTED
-    desc: "Cylinder 2 đã co lại hoàn toàn — giới hạn hành trình thu Pos 2"
+    name: S14_CYL3_RETRACTED
+    desc: "Cylinder 3 (Pos 2 — đầu ra) đã co lại hoàn toàn — giới hạn hành trình thu"
     pos: pos2
     role: cyl_retracted
-    used_in: [S3_CYLINDER2_RETRACT]
+    used_in: [S3_CYL3_RETRACT, S4_CYL3_RETRACT]
     active: true
 
   - id: 15
-    name: S15_CYL2_EXTENDED
-    desc: "Cylinder 2 đã đẩy ra hoàn toàn — giới hạn hành trình đẩy Pos 2"
+    name: S15_CYL3_EXTENDED
+    desc: "Cylinder 3 (Pos 2 — đầu ra) đã đẩy ra hoàn toàn — giới hạn hành trình đẩy"
     pos: pos2
     role: cyl_extended
-    used_in: [S3_CYLINDER2_EXTEND]
+    used_in: [S3_CYL3_EXTEND, S4_CYL3_EXTEND]
     active: true
 
 # =============================================================================
@@ -161,10 +177,10 @@ sensors:
 cylinder_outputs:
   cylinder1_extend_channel:  5   # DO channel bật = Cylinder 1 ĐẨY RA (Input pickup)
   cylinder1_retract_channel: 4   # DO channel bật = Cylinder 1 CO LẠI
-  cylinder2_extend_channel:  7   # DO channel bật = Cylinder 2 ĐẨY RA (Output pickup)
-  cylinder2_retract_channel: 6   # DO channel bật = Cylinder 2 CO LẠI
-  cylinder3_retract_channel: 8   # DO channel bật = Cylinder 3 CO LẠI (Hold Tray — nhả khay)
-  cylinder3_extend_channel:  9   # DO channel bật = Cylinder 3 ĐẨY RA (Hold Tray — kẹp khay)
+  cylinder2_extend_channel:  9   # DO channel bật = Cylinder 2 ĐẨY RA (Hold Tray — kẹp khay)
+  cylinder2_retract_channel: 8   # DO channel bật = Cylinder 2 CO LẠI (Hold Tray — nhả khay)
+  cylinder3_extend_channel:  7   # DO channel bật = Cylinder 3 ĐẨY RA (Output pickup)
+  cylinder3_retract_channel: 6   # DO channel bật = Cylinder 3 CO LẠI
 
 # =============================================================================
 # INTERLOCK RULES (mô tả logic an toàn — code đọc từ đây trong tương lai)

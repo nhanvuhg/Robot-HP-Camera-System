@@ -13,6 +13,7 @@ Window {
 
     property var availableTopics: []
     property var selectedTopics: []
+    property bool loadingTopics: true
 
     Shortcut {
         sequence: "Escape"
@@ -24,9 +25,23 @@ Window {
             x = (mainWindow.width - width) / 2 + mainWindow.x
             y = (mainWindow.height - height) / 2 + mainWindow.y
         });
+        // Initialize selectedTopics — ensure no undefined entries
+        let list = camNode.cameraList;
+        let topics = [];
+        for (let i = 0; i < list.length; ++i)
+            topics.push(list[i].topic || "");
+        selectedTopics = topics;
+        // Trigger async discovery — does NOT block UI
+        camNode.fetchAvailableTopicsAsync();
+    }
 
-        availableTopics = camNode.getAvailableImageTopics();
-        selectedTopics = camNode.cameraList.map(cam => cam.topic);
+    // Receive result from background thread
+    Connections {
+        target: camNode
+        function onAvailableTopicsChanged(topics) {
+            availableTopics = topics
+            loadingTopics = false
+        }
     }
 
     ColumnLayout {
@@ -44,11 +59,18 @@ Window {
             border.width: 1
             radius: 6
 
+            Text {
+                anchors.centerIn: parent
+                visible: settingsWindow.loadingTopics
+                text: "⏳ Scanning ROS2 topics..."
+                color: "#5cf4f1"; font.pixelSize: 16; font.bold: true
+            }
             GridLayout {
                 columns: 1
                 anchors.fill: parent
                 anchors.margins: 10
                 columnSpacing: 15
+                visible: !settingsWindow.loadingTopics
 
                 Repeater {
                     model: camNode.cameraList
@@ -73,7 +95,11 @@ Window {
 
                             onActivated: (topicIndex) => {
                                 let selected = availableTopics[topicIndex]
-                                selectedTopics[index] = selected
+                                if (!selected || selected === "") return;
+                                // Copy array to trigger QML binding update
+                                let tmp = selectedTopics.slice();
+                                tmp[index] = selected;
+                                selectedTopics = tmp;
                                 modelData.topic = selected
                             }
 
@@ -128,9 +154,15 @@ Window {
 
             onClicked: {
                 for (let i = 0; i < selectedTopics.length; ++i) {
-                    camNode.updateCameraTopic(i, selectedTopics[i])
-                    console.log("Updated camera", i, "to topic:", selectedTopics[i])
+                    let t = selectedTopics[i];
+                    if (!t || t === "") {
+                        console.warn("Skipping camera", i, "— no topic selected")
+                        continue;
+                    }
+                    camNode.updateCameraTopic(i, t)
+                    console.log("Updated camera", i, "to topic:", t)
                 }
+                settingsWindow.close();
             }
         }
     }

@@ -47,7 +47,7 @@ public slots:
     void setTargetRow(int row);
     void startSystem();
     void stopSystem();
-    void nextStep();
+    void pauseSystem();
     void hmiResume();
     void resetFaults();
     void confirmOutput();
@@ -88,6 +88,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   hmi_resume_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   start_button_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   stop_button_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   pause_button_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   confirm_button_pub_;
 
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_state_sub_;

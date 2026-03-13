@@ -20,6 +20,8 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
     hmi_resume_pub_     = node_->create_publisher<std_msgs::msg::Bool>("/providesystem/hmi_resume", qos);
     start_button_pub_   = node_->create_publisher<std_msgs::msg::Bool>("/system/start_button", qos);
     stop_button_pub_    = node_->create_publisher<std_msgs::msg::Bool>("/system/stop_button", qos);
+    pause_button_pub_   = node_->create_publisher<std_msgs::msg::Bool>("/system/pause_button", qos);
+    confirm_button_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/confirm_button", qos);
 
     // Subscribers
     system_state_sub_ = node_->create_subscription<std_msgs::msg::String>(
@@ -142,10 +144,12 @@ void CartridgeController::stopSystem()
     addLog("System STOP", "err");
 }
 
-void CartridgeController::nextStep()
+void CartridgeController::pauseSystem()
 {
-    publishString(goto_state_pub_, "NEXT");
-    addLog("Next step", "info");
+    auto msg = std_msgs::msg::Bool();
+    msg.data = true;
+    pause_button_pub_->publish(msg);
+    addLog("System PAUSE", "info");
 }
 
 void CartridgeController::hmiResume()
@@ -164,8 +168,10 @@ void CartridgeController::resetFaults()
 
 void CartridgeController::confirmOutput()
 {
-    // Uses service call — for now just log  
-    addLog("Confirm output sent", "info");
+    auto msg = std_msgs::msg::Bool();
+    msg.data = true;
+    confirm_button_pub_->publish(msg);  // chỉ set _confirm_load_received
+    addLog("Confirm: đã cấp khạy", "ok");
 }
 
 // === Sensor Simulation ===

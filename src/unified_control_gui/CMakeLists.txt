@@ -12,6 +12,7 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(dobot_msgs_v3 REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(image_transport REQUIRED)
@@ -61,6 +62,7 @@ ament_target_dependencies(${PROJECT_NAME}
   sensor_msgs
   std_msgs
   std_srvs
+  dobot_msgs_v3
   cv_bridge
   image_transport
 )

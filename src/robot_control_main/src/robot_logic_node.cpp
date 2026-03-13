@@ -142,6 +142,7 @@ private:
     rclcpp::Time last_motion_hb_;
     rclcpp::Time last_vision_hb_;
     std::atomic<bool> motion_busy_{false};
+    std::atomic<bool> cartridge_busy_{false};  // True khi cartridge system đang S2/S3
 
     // ========================================================================
     // ROS PUBLISHERS
@@ -160,6 +161,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr done_output_tray_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr place_done_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr last_batch_complete_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr motion_busy_pub_;  // NEW: tự publish busy status
     
     // Motion Executor Communication
     // Action Client
@@ -653,6 +655,18 @@ void RobotLogicNode::initSubscriptions()
     motion_busy_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/robot/motion_busy", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) { motion_busy_ = msg->data; });
+
+    // Interlock: cartridge system báo đang hoạt động — robot phải đợi
+    create_subscription<std_msgs::msg::Bool>(
+        "/cartridge/busy", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            cartridge_busy_ = msg->data;
+            if (msg->data) {
+                RCLCPP_WARN(get_logger(), "[INTERLOCK] 🔒 Cartridge BUSY — pick/refill sẽ bỏ qua");
+            } else {
+                RCLCPP_INFO(get_logger(), "[INTERLOCK] 🔓 Cartridge FREE — robot có thể pick/refill");
+            }
+        });
 }
 
 
@@ -676,6 +690,7 @@ void RobotLogicNode::initPublishers()
     done_output_tray_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/done_tray_output", 10);
     place_done_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/place_done", 10);
     last_batch_complete_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/last_batch_complete", 10);
+    motion_busy_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/motion_busy", 10);  // NEW
     
 
 }
@@ -1618,6 +1633,13 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         return;
     }
 
+    // 🔒 INTERLOCK: Chời khi cartridge system đang thay khạy (S2/S3)
+    if (cartridge_busy_) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge BUSY (S2/S3) — INIT_LOAD_CHAMBER_DIRECT bị chặn, đợi...");
+        return;
+    }
+
     // ========================================================================
 
     // ✅ BLOCK if waiting for tray change
@@ -1697,6 +1719,13 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         selected_input_row_ = -1;
     }
     
+    // Set auto-increment start from selected row + 1
+    if (row_to_pick > 0 && !use_ai_for_control_) {
+        current_auto_row_ = row_to_pick + 1;
+        if (current_auto_row_ > 5) current_auto_row_ = 1;
+        RCLCPP_INFO(this->get_logger(), "[MOTION] Auto Mode: User selected Row %d, next buffer row = %d", row_to_pick, current_auto_row_);
+    }
+    
     if (row_to_pick == -1) {
         if (manual_mode_) {
             RCLCPP_ERROR(this->get_logger(), "[MOTION] No row selected (Manual)");
@@ -1705,7 +1734,7 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         if (!use_ai_for_control_) {
             row_to_pick = 1;
             current_auto_row_ = 2;
-            RCLCPP_INFO(this->get_logger(), "[MOTION] Auto Mode: Initial Pick Row %d", row_to_pick);
+            RCLCPP_INFO(this->get_logger(), "[MOTION] Auto Mode: No row selected, default Pick Row %d", row_to_pick);
         } else {
             for (size_t i = 0; i < row_full_.size(); ++i) {
                 if (row_full_[i]) { row_to_pick = static_cast<int>(i) + 1; break; }
@@ -2217,6 +2246,13 @@ void RobotLogicNode::stateRefillBuffer()
     
     if (motion_busy_) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "[STATE] Waiting for motion to finish...");
+        return;
+    }
+
+    // 🔒 INTERLOCK: Chời khi cartridge system đang thay khạy (S2/S3)
+    if (cartridge_busy_) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge BUSY (S2/S3) — REFILL_BUFFER bị chặn, đợi...");
         return;
     }
 
@@ -2867,6 +2903,11 @@ void RobotLogicNode::transitionTo(SystemState new_state)
             RCLCPP_INFO(get_logger(), "[STATE] %s -> %s", 
                 stateToString(current_state_).c_str(), state_str.c_str());
             publishSystemStatus(state_str);
+
+            // Publish /robot/motion_busy: True khi đang motion, False khi IDLE
+            auto busy_msg = std_msgs::msg::Bool();
+            busy_msg.data = (new_state != SystemState::IDLE);
+            motion_busy_pub_->publish(busy_msg);
         }
     }
 }

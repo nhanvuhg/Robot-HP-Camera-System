@@ -581,6 +581,11 @@
                                         height: parent.height - 20 - 4
                                         spacing: root.gap
                                         property bool isJog: cartridgeController.currentMode === "jog" || cartridgeController.currentMode === "manual"
+                                        property bool jogAllowed: {
+                                            if (!isJog) return false
+                                            var s = cartridgeController.systemState.toLowerCase()
+                                            return s === "idle" || s === "unknown" || s === "" || s.indexOf("error") !== -1
+                                        }
 
                                         Repeater {
                                             model: ListModel {
@@ -633,17 +638,17 @@
 
                                                     // − STOP + (jog hoặc manual mode)
                                                     Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
-                                                        CBtn { lbl:"−"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.isJog
-                                                            onPressed: { if(servoRow.isJog) cartridgeController.jogServo(model.sid,"-",parseInt(velInput.text)||30) }
+                                                        CBtn { lbl:"−"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
+                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-",parseInt(velInput.text)||30) }
                                                             onReleased: cartridgeController.jogStop(model.sid) }
                                                         CBtn { lbl:"STOP"; padV:10; padH:8; fontSize:14; bg:"#4d1a1a"; bc:root.cRed; tc:root.cRed; onClicked: cartridgeController.jogStop(model.sid) }
-                                                        CBtn { lbl:"+"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.isJog
-                                                            onPressed: { if(servoRow.isJog) cartridgeController.jogServo(model.sid,"+",parseInt(velInput.text)||30) }
+                                                        CBtn { lbl:"+"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
+                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+",parseInt(velInput.text)||30) }
                                                             onReleased: cartridgeController.jogStop(model.sid) }
                                                     }
 
                                                     // HOMING (jog hoặc manual mode)
-                                                    CBtn { lbl:"HOMING"; w:parent.width; padV:12; padH:12; fontSize:16; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.isJog; onClicked: { if(servoRow.isJog) cartridgeController.homeServo(model.sid) } }
+                                                    CBtn { lbl:"HOMING"; w:parent.width; padV:12; padH:12; fontSize:16; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
 
                                                     // CLEAR (always available)
                                                     CBtn { lbl:"CLEAR"; w:parent.width; padV:12; padH:12; fontSize:16; bg:"#4d3a0a"; bc:root.cOrange; tc:root.cOrange; onClicked: cartridgeController.clearServo(model.sid) }
@@ -733,6 +738,39 @@
                                 CBtn { lbl:"Clear";   padV:3; padH:6; fontSize:10; bg:root.cCard; bc:root.cBorder; tc:root.cText;  onClicked: cartridgeController.simSensor("clear") }
                             }
 
+                            // ── Quick Preset ──
+                            Text { text: "QUICK PRESET"; color: root.cDim; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.8 }
+                            Row { spacing: 3
+                                // S1 Entry: conditions to enter State 1 + pass Step 3
+                                CBtn {
+                                    lbl: "S1 Entry"
+                                    padV: 3; padH: 6; fontSize: 10
+                                    bg: "#0a1a4d"; bc: root.cAccent; tc: root.cAccent
+                                    onClicked: {
+                                        cartridgeController.simSensor("clear")
+                                        // S1+S3+S10+S12 ON
+                                        var ids = [1,3,10,12]
+                                        ids.forEach(function(id) {
+                                            cartridgeController.simSensor(id + ":1")
+                                        })
+                                    }
+                                }
+                                // S1 Full: full State 1 workflow sensors
+                                CBtn {
+                                    lbl: "S1 Full"
+                                    padV: 3; padH: 6; fontSize: 10
+                                    bg: "#1a0a4d"; bc: "#bb86fc"; tc: "#bb86fc"
+                                    onClicked: {
+                                        cartridgeController.simSensor("clear")
+                                        // S1+S3+S4+S5+S10+S11+S12+S13 ON
+                                        var ids = [1,3,4,5,10,11,12,13]
+                                        ids.forEach(function(id) {
+                                            cartridgeController.simSensor(id + ":1")
+                                        })
+                                    }
+                                }
+                            }
+
                             // ── Status label ──
                             Text { text: "STATUS"; color: root.cDim; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1 }
 
@@ -746,21 +784,21 @@
 
                                 Repeater {
                                     model: ListModel {
-                                        ListElement { sid:1;  slabel:"S1";  sdesc:"Stack"    }
-                                        ListElement { sid:2;  slabel:"S2";  sdesc:"Stack"    }
-                                        ListElement { sid:3;  slabel:"S3";  sdesc:"Stack"    }
-                                        ListElement { sid:4;  slabel:"S4";  sdesc:"Detect"   }
-                                        ListElement { sid:5;  slabel:"S5";  sdesc:"Out.Pos1" }
-                                        ListElement { sid:6;  slabel:"S6";  sdesc:"Platform" }
-                                        ListElement { sid:7;  slabel:"S7";  sdesc:"Output"   }
-                                        ListElement { sid:8;  slabel:"S8";  sdesc:""         }
-                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Safety"   }
-                                        ListElement { sid:10; slabel:"S10"; sdesc:"Cyl1- Retract"}
-                                        ListElement { sid:11; slabel:"S11"; sdesc:"Cyl1+ Extend" }
-                                        ListElement { sid:12; slabel:"S12"; sdesc:"Cyl2- Retract"}
-                                        ListElement { sid:13; slabel:"S13"; sdesc:"Cyl2+ Extend" }
-                                        ListElement { sid:14; slabel:"S14"; sdesc:""         }
-                                        ListElement { sid:15; slabel:"S15"; sdesc:""         }
+                                        ListElement { sid:1;  slabel:"S1";  sdesc:"Belt" }
+                                        ListElement { sid:2;  slabel:"S2";  sdesc:"Belt" }
+                                        ListElement { sid:3;  slabel:"S3";  sdesc:"Belt end"}
+                                        ListElement { sid:4;  slabel:"S4";  sdesc:"Row detect" }
+                                        ListElement { sid:5;  slabel:"S5";  sdesc:"Tray exist" }
+                                        ListElement { sid:6;  slabel:"S6";  sdesc:"Row1 output" }
+                                        ListElement { sid:7;  slabel:"S7";  sdesc:"Platform" }
+                                        ListElement { sid:8;  slabel:"S8";  sdesc:"Feed OK" }
+                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Output fin." }
+                                        ListElement { sid:10; slabel:"S10"; sdesc:"Cyl1 Ret"}
+                                        ListElement { sid:11; slabel:"S11"; sdesc:"Cyl1 Ext" }
+                                        ListElement { sid:12; slabel:"S12"; sdesc:"Cyl2 Ret"}
+                                        ListElement { sid:13; slabel:"S13"; sdesc:"Cyl2 Ext" }
+                                        ListElement { sid:14; slabel:"S14"; sdesc:"Cyl3 Ret"}
+                                        ListElement { sid:15; slabel:"S15"; sdesc:"Cyl3 Ext" }
                                     }
                                     delegate: Rectangle {
                                         id: sBtn
