@@ -490,6 +490,13 @@
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Confirm"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.confirmOutput() }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Resume";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
                                 }
+
+                                // Hàng 3: PLACE OUTPUT / PLACE FAIL
+                                RowLayout {
+                                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "📦 Place Output"; bg: "#0a2a33"; bc: "#00bcd4"; tc: "#00bcd4"; onClicked: robotController.gotoState("PLACE_TO_OUTPUT") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "⛔ Place Fail";   bg: "#33200a"; bc: "#ff9800"; tc: "#ff9800"; onClicked: robotController.gotoState("PLACE_TO_FAIL") }
+                                }
                             }
                         }
 
