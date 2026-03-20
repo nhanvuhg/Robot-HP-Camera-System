@@ -110,23 +110,21 @@ Item {
             // Camera Area + Log stacked vertically
             ColumnLayout {
                 Layout.fillHeight: true
-                Layout.fillWidth: true
+                Layout.preferredWidth: 560
                 spacing: 8
 
-                // Camera Grid — fill height, cameras expand
+                // Camera Grid — 2 rows stacked, fixed sizes
                 Rectangle {
                     color: "#081e29"
-                    Layout.fillWidth: true
+                    Layout.preferredWidth: 560
                     Layout.fillHeight: true
                     border.color: "#134357"
                     radius: 6
+                    clip: true
 
-                    GridLayout {
-                        id: camGrid
-                        columns: 1
-                        rows: 2
-                        rowSpacing: 10; columnSpacing: 10
+                    Column {
                         anchors.fill: parent; anchors.margins: 10
+                        spacing: 10
 
                         Repeater {
                             model: camNode.cameraList
@@ -134,8 +132,8 @@ Item {
                                 cameraName: modelData.name
                                 topic: modelData.topic
                                 providerId: modelData.providerId
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
+                                width: 530
+                                height: 298
                             }
                         }
                     }
@@ -183,8 +181,8 @@ Item {
             // ── System Monitor + Controls ──────────────────────
             Rectangle {
                 Layout.fillHeight: true
-                Layout.preferredWidth: 550
-                Layout.minimumWidth: 450
+                Layout.preferredWidth: 350
+                Layout.minimumWidth: 300
                 color: "#081e29"
                 border.color: "#134357"
                 radius: 6

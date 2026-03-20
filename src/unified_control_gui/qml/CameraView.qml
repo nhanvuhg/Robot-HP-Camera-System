@@ -45,7 +45,7 @@ Item {
                 Item {
                     id: aspectContainer
                     width: previewBox.width
-                    height: previewBox.width * 3 / 4
+                    height: previewBox.width * 9 / 16
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.verticalCenter: parent.verticalCenter
                     clip: true
