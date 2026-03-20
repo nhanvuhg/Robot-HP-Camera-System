@@ -36,18 +36,25 @@ iny_output_stack:
   2: 520.0
   1: 590.0
 servo3_home: 0.0
-servo3_target1: 50.0
+servo3_target1: 10.0        # vị trí chờ cấp khay (mm)
+servo3_target2: 400.0       # vị trí đẩy khay vào robot (mm)
 servo3_push_position: 300.0
 servo3_jog_velocity: 50.0
+servo3_feed_velocity: 50.0  # tốc độ cấp khay (mm/s)
 outx_home: 0.0
 outx_target1: 100.0
 outx_target2: 400.0
-outx_target3: 500.0
+outx_target3: 20.0          # vị trí đặt khay thành phẩm (mm)
 outy_home: 0.0
-outy_target1: 50.0
+outy_target1: 10.0          # safe zone / home OutY
 outy_target2: 300.0
+outy_pick_pos: 100.0        # OutY hạ xuống để gắp khay (mm)
 outy_safe_zone: 10.0
 outy_search_velocity: 40.0
+outy_row1_pos: 700.0        # vị trí row 1 output stack (mm)
+outy_row_limit: 680.0       # giới hạn jog tìm S10 (mm)
+outy_slow_vel: 10.0         # tốc độ chậm khi thả khay (mm/s)
+outy_drop_extra: 20.0       # đoạn thêm sau S10 ON (mm)
 outy_output_table:
   8: 80.0
   7: 140.0

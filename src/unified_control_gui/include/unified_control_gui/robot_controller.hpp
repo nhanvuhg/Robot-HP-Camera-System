@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QVariantList>
 #include <QTimer>
+#include <chrono>
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/set_bool.hpp"
 #include "std_msgs/msg/int32.hpp"
@@ -14,6 +15,7 @@
 #include "dobot_msgs_v3/srv/get_pose.hpp"
 #include "dobot_msgs_v3/srv/joint_mov_j.hpp"
 #include "dobot_msgs_v3/srv/mov_l.hpp"
+#include "dobot_msgs_v3/srv/servo_p.hpp"
 #include "dobot_msgs_v3/srv/do.hpp"
 #include "dobot_msgs_v3/srv/pause.hpp"
 #include "dobot_msgs_v3/srv/clear_error.hpp"
@@ -36,6 +38,8 @@ class RobotController : public QObject
     Q_PROPERTY(QVariantList cartesianPose READ cartesianPose NOTIFY cartesianPoseChanged)
     Q_PROPERTY(int speedRatio READ speedRatio NOTIFY speedRatioChanged)
     Q_PROPERTY(QString errorLog READ errorLog NOTIFY errorLogChanged)
+    Q_PROPERTY(bool jogContinuous READ jogContinuous WRITE setJogContinuous NOTIFY jogContinuousChanged)
+    Q_PROPERTY(double jogStepSize READ jogStepSize WRITE setJogStepSize NOTIFY jogStepSizeChanged)
 
 public:
     explicit RobotController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -50,10 +54,14 @@ public:
     QVariantList cartesianPose() const { return cartesian_pose_; }
     int speedRatio() const { return speed_ratio_; }
     QString errorLog() const { return error_log_; }
+    bool jogContinuous() const { return jog_continuous_; }
+    double jogStepSize() const { return jog_step_size_; }
 
 public slots:
     // System control
     void enableSystem(bool enable);
+    void stopAndResetRobot();  // ResetRobot → ClearError → EnableRobot → mode 4
+    void startSystem(bool start);
     void emergencyStop(bool stop);
     void setManualMode(bool enable);
     void setAiMode(bool enable);
@@ -65,12 +73,17 @@ public slots:
     // Jog control (Manual mode)
     void jogStart(const QString& axisId);  // "j1+" "j1-" "x+" "z-" etc
     void jogStop();
+    void sendJogStep();  // callback-chaining step for continuous JOG
+    void sendCartesianStep();  // ServoP streaming tick for Cartesian jog
+    void setJogContinuous(bool continuous);
+    void setJogStepSize(double size);
     void getAngles();
     void getPose();
     
     // Move to exact position
     void moveJoint(double j1, double j2, double j3, double j4, double j5, double j6);
     void moveLinear(double x, double y, double z, double rx, double ry, double rz);
+    void saveJointPose(const QString& name, double j1, double j2, double j3, double j4, double j5, double j6);
     
     // IO control
     void setDigitalOutput(int index, bool status);
@@ -85,6 +98,8 @@ public slots:
     // Simulation triggers
     void simulateFeedChamber();
     void simulateFillDone();
+    void simulateInputTrayReady();
+    void simulateOutputTrayReady();
 
 signals:
     void systemStatusChanged();
@@ -98,12 +113,16 @@ signals:
     void cartesianPoseChanged();
     void speedRatioChanged();
     void errorLogChanged();
+    void jogContinuousChanged();
+    void jogStepSizeChanged();
+    void jointPoseSaved(bool success, QString message);
 
 private:
     rclcpp::Node::SharedPtr node_;
     
     // Service clients
     rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr enable_client_;
+    rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr start_system_client_;
     rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr emergency_stop_client_;
     rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr manual_mode_client_;
     rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr ai_mode_client_;
@@ -114,6 +133,7 @@ private:
     rclcpp::Client<dobot_msgs_v3::srv::GetPose>::SharedPtr get_pose_client_;
     rclcpp::Client<dobot_msgs_v3::srv::JointMovJ>::SharedPtr joint_movj_client_;
     rclcpp::Client<dobot_msgs_v3::srv::MovL>::SharedPtr movl_client_;
+    rclcpp::Client<dobot_msgs_v3::srv::ServoP>::SharedPtr servo_p_client_;
     rclcpp::Client<dobot_msgs_v3::srv::DO>::SharedPtr do_client_;
     rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedPtr pause_client_;
     rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedPtr clear_error_client_;
@@ -128,6 +148,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr goto_state_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr feed_chamber_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr fill_done_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr input_tray_ready_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr output_tray_ready_pub_;
     
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_status_sub_;
@@ -150,8 +172,20 @@ private:
     QString error_log_;
     QTimer *poll_timer_;
     
+    // JOG state
+    bool jog_continuous_{true};    // true=continuous, false=step
+    double jog_step_size_{1.0};   // step size (degrees or mm)
+    QTimer *jog_timer_{nullptr};
+    QString jog_axis_;
+    bool jog_moving_{false};
+    std::chrono::steady_clock::time_point jog_start_time_;
+    int jog_cart_idx_{-1};
+    bool jog_cart_positive_{true};
+    double jog_cart_target_[6]{0};
+    
     void callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr client, bool value);
     void pollRobotState();
+    void sendMoveJog(const QString& axisId);  // native MoveJog for continuous
 };
 
 #endif // ROBOT_CONTROLLER_HPP

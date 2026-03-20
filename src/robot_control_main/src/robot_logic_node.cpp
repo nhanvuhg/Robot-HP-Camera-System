@@ -174,7 +174,7 @@ private:
     // ROS SERVICES
     // ========================================================================
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr enable_system_service_;
-    // rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr start_system_service_; // NOT NEEDED, using enable_system
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr start_system_service_;
     // rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr new_tray_loaded_service_; // NOT NEEDED
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr emergency_stop_service_;
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr reset_state_service_;
@@ -232,6 +232,7 @@ private:
     std::atomic<bool> stored_scale_result_{false}; // Store actual scale result for pipeline processing
     std::atomic<bool> dual_camera_mode_{true}; // DUAL CAM: Both cameras run in parallel - no switching needed
     int current_auto_row_{1}; // 1-5 for Auto Mode sequencing
+    int motion_fail_count_{0}; // Consecutive motion failure counter
     
     // ========================================================================
     // CAMERA 1 - INPUT TRAY & BUFFER
@@ -303,7 +304,7 @@ private:
     rclcpp::Time scale_wait_start_;
     
     // System uptime tracking
-    rclcpp::Time system_start_time_;
+    rclcpp::Time system_start_time_{0, 0, RCL_ROS_TIME};
     rclcpp::TimerBase::SharedPtr uptime_timer_;
     
     // Tray count tracking
@@ -360,6 +361,10 @@ private:
     // SERVICE CALLBACK METHODS
     // ========================================================================
     void enableSystemCallback(
+        const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+        std::shared_ptr<std_srvs::srv::SetBool::Response> response);
+
+    void startSystemCallback(
         const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
         std::shared_ptr<std_srvs::srv::SetBool::Response> response);
 
@@ -450,7 +455,7 @@ RobotLogicNode::RobotLogicNode()
       is_first_batch_(true),
       is_last_batch_(false),
       input_tray_empty_(false),
-      selected_input_row_(-1),
+      selected_input_row_(1),
       buffer_is_empty_(true),
 
       selected_output_slot_(-1),
@@ -458,14 +463,20 @@ RobotLogicNode::RobotLogicNode()
       chamber_has_cartridge_(false),
       scale_has_cartridge_(false),
       simulate_scale_(false),
-      force_pass_(true)
+      force_pass_(false)
 
 {
     RCLCPP_INFO(this->get_logger(), "=== Robot Logic Node Starting ===");
 
     row_full_.assign(5, false);
     input_tray_empty_ = false;
-    selected_input_row_ = -1;
+    selected_input_row_ = 1;
+
+    // Reentrant callback group for parallel execution
+    callback_group_reentrant_ = this->create_callback_group(
+        rclcpp::CallbackGroupType::Reentrant);
+    
+    RCLCPP_INFO(this->get_logger(), "[PERF] Reentrant callback group created");
 
     initServiceClients();
     initSubscriptions();
@@ -473,12 +484,7 @@ RobotLogicNode::RobotLogicNode()
     initServices();
     
     state_machine_thread_ = std::thread(&RobotLogicNode::stateMachineLoop, this);
-    
-    // Reentrant callback group for parallel execution
-    callback_group_reentrant_ = this->create_callback_group(
-        rclcpp::CallbackGroupType::Reentrant);
-    
-    RCLCPP_INFO(this->get_logger(), "[PERF] Reentrant callback group created");
+
 
     // Log dual camera mode status
     if (dual_camera_mode_) {
@@ -489,7 +495,7 @@ RobotLogicNode::RobotLogicNode()
     uptime_timer_ = this->create_wall_timer(
         std::chrono::seconds(1),
         [this]() {
-            if (system_enabled_) {
+            if (system_enabled_ && system_running_) {
                 auto now = this->now();
                 auto elapsed = (now - system_start_time_).seconds();
                 
@@ -543,12 +549,12 @@ void RobotLogicNode::initServiceClients()
     motion_action_client_ = rclcpp_action::create_client<ExecuteMotion>(this, "/robot/execute_motion");
     auto qos = rclcpp::ServicesQoS();
     
-    enable_client_ = create_client<EnableRobot>("/nova5/dobot_bringup/EnableRobot", qos);
-    clear_error_client_ = create_client<ClearError>("/nova5/dobot_bringup/ClearError", qos);
-    do_client_ = create_client<DO>("/nova5/dobot_bringup/DO", qos);
-    robot_mode_client_ = create_client<RobotMode>("/nova5/dobot_bringup/RobotMode", qos);
-    error_client_ = create_client<GetErrorID>("/nova5/dobot_bringup/GetErrorID", qos);
-    reset_robot_client_ = create_client<ResetRobot>("/nova5/dobot_bringup/ResetRobot", qos);
+    enable_client_ = create_client<EnableRobot>("/nova5/dobot_bringup/EnableRobot", qos, callback_group_reentrant_);
+    clear_error_client_ = create_client<ClearError>("/nova5/dobot_bringup/ClearError", qos, callback_group_reentrant_);
+    do_client_ = create_client<DO>("/nova5/dobot_bringup/DO", qos, callback_group_reentrant_);
+    robot_mode_client_ = create_client<RobotMode>("/nova5/dobot_bringup/RobotMode", qos, callback_group_reentrant_);
+    error_client_ = create_client<GetErrorID>("/nova5/dobot_bringup/GetErrorID", qos, callback_group_reentrant_);
+    reset_robot_client_ = create_client<ResetRobot>("/nova5/dobot_bringup/ResetRobot", qos, callback_group_reentrant_);
 }
 
 void RobotLogicNode::initSubscriptions()
@@ -612,7 +618,7 @@ void RobotLogicNode::initSubscriptions()
         std::bind(&RobotLogicNode::startButtonCallback, this, std::placeholders::_1));
         
     new_tray_sub_ = create_subscription<std_msgs::msg::Bool>(
-        "/revpi/new_tray_loaded", 10,
+        "/cartridge_providesystem/new_tray_loaded", 10,
         std::bind(&RobotLogicNode::newTrayCallback, this, std::placeholders::_1));
     
     is_last_tray_sub_ = create_subscription<std_msgs::msg::Bool>(
@@ -700,23 +706,41 @@ void RobotLogicNode::initServices()
     enable_system_service_ = create_service<std_srvs::srv::SetBool>(
         "/robot/enable_system",
         std::bind(&RobotLogicNode::enableSystemCallback, this,
-                 std::placeholders::_1, std::placeholders::_2));
+                 std::placeholders::_1, std::placeholders::_2),
+        rmw_qos_profile_services_default,
+        callback_group_reentrant_);
     
     emergency_stop_service_ = create_service<std_srvs::srv::SetBool>(
         "/robot/emergency_stop",
         std::bind(&RobotLogicNode::emergencyStopCallback, this,
-                 std::placeholders::_1, std::placeholders::_2));
+                 std::placeholders::_1, std::placeholders::_2),
+        rmw_qos_profile_services_default,
+        callback_group_reentrant_);
+
+    start_system_service_ = create_service<std_srvs::srv::SetBool>(
+        "/robot/start_system",
+        std::bind(&RobotLogicNode::startSystemCallback, this,
+                 std::placeholders::_1, std::placeholders::_2),
+        rmw_qos_profile_services_default,
+        callback_group_reentrant_);
     
     // Unified mode selection subscription (1=AUTO, 2=AI, 3=MANUAL)
+    // Subscriptions don't strictly need reentrant unless they call services
+    auto sub_options = rclcpp::SubscriptionOptions();
+    sub_options.callback_group = callback_group_reentrant_;
+    
     set_mode_sub_ = create_subscription<std_msgs::msg::Int32>(
         "/robot/set_mode", 10,
-        std::bind(&RobotLogicNode::setModeCallback, this, std::placeholders::_1));
+        std::bind(&RobotLogicNode::setModeCallback, this, std::placeholders::_1),
+        sub_options);
     
     // Reset state service - allows resetting without restarting node
     reset_state_service_ = create_service<std_srvs::srv::SetBool>(
         "/robot/reset_state",
         std::bind(&RobotLogicNode::resetStateCallback, this,
-                 std::placeholders::_1, std::placeholders::_2));
+                 std::placeholders::_1, std::placeholders::_2),
+        rmw_qos_profile_services_default,
+        callback_group_reentrant_);
 }
 
 
@@ -1006,7 +1030,7 @@ void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr ms
     
     // 5. Finalize
     system_started_ = true;
-    // new_tray_loaded_ is NOT auto-set - wait for /revpi/new_tray_loaded topic
+    // new_tray_loaded_ is NOT auto-set - wait for /cartridge_providesystem/new_tray_loaded topic
     
     RCLCPP_INFO(this->get_logger(), "[INIT] ✅ System Ready - Waiting for New Tray signal...");
     notifyStateChange();
@@ -1038,7 +1062,7 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
              for (size_t i = 0; i < row_full_.size(); ++i) {
                 row_full_[i] = true;
             }
-            selected_input_row_ = -1; // Reset selection
+            selected_input_row_ = 1; // Reset selection
         }
         
         RCLCPP_INFO(this->get_logger(), "[TRAY] ✅ New tray loaded - Flags reset, Ready to pick!");
@@ -1161,7 +1185,7 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
 
         if (sel != -1)
         {
-            manual_mode_ = true;
+            // AUTO mode: just use the selected row, don't switch to manual
             stop_after_single_motion_ = true;
         }
     }
@@ -1178,9 +1202,7 @@ void RobotLogicNode::commandRowCallback(const std_msgs::msg::Int32::SharedPtr ms
         return;
     }
 
-    manual_mode_ = true;
-    stop_after_single_motion_ = true;
-    
+    // AUTO/AI mode: just set the row, don't switch to manual
     {
         std::lock_guard<std::mutex> lock(row_selection_mutex_);
         selected_input_row_ = row;
@@ -1200,8 +1222,7 @@ void RobotLogicNode::commandSlotCallback(const std_msgs::msg::Int32::SharedPtr m
         return;
     }
 
-    manual_mode_ = true;
-    
+    // AUTO/AI mode: just set the slot, don't switch to manual
     {
         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
         selected_output_slot_ = slot;
@@ -1244,56 +1265,81 @@ void RobotLogicNode::enableSystemCallback(
 {
     if (request->data)
     {
-        RCLCPP_INFO(this->get_logger(), "[SERVICE] ⚡ Enable System Service Called (Quick Start)...");
+        RCLCPP_INFO(this->get_logger(), "[SERVICE] ⚡ Enable System — Power ON Robot...");
         
-        // 1. Reset Internal Flags
+        // 1. Reset E-Stop flag
         if (emergency_stop_) {
             emergency_stop_ = false;
             RCLCPP_INFO(this->get_logger(), "[INIT] E-Stop flag reset");
         }
         system_enabled_ = true;
-        system_running_ = true;
         
-        // Reset uptime tracking
-        system_start_time_ = this->now();
-        RCLCPP_INFO(this->get_logger(), "[INIT] System uptime tracking started");
-        
-        // 2. Clear Error (Fast)
+        // 2. Clear Error
         auto clear_req = std::make_shared<ClearError::Request>();
         callService<ClearError>(clear_error_client_, clear_req, "ClearError");
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         
-        // 3. Enable Robot (Fast)
+        // 3. Enable Robot (Power ON)
         auto enable_req = std::make_shared<EnableRobot::Request>();
         enable_req->load = 0.0;
         callService<EnableRobot>(enable_client_, enable_req, "EnableRobot");
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
         
-        // 4. Move Home (Action waits automatically)
-        sendMotionAction("HOME");
-        
-        // 5. Finalize
-        system_started_ = true;
-        RCLCPP_INFO(this->get_logger(), "[INIT] ✅ System Ready - Waiting for New Tray signal...");
-        notifyStateChange();
+        RCLCPP_INFO(this->get_logger(), "[INIT] ✅ Robot Power ON — Ready. Press START to begin.");
         
         response->success = true;
-        response->message = "System Enabled & Started (Quick Start)";
+        response->message = "Robot Power ON";
     }
     else
     {
         system_enabled_ = false;
         system_started_ = false;
+        system_running_ = false;
         response->success = true;
         response->message = "System DISABLED";
+    }
+}
+
+void RobotLogicNode::startSystemCallback(
+    const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+    std::shared_ptr<std_srvs::srv::SetBool::Response> response)
+{
+    if (request->data)
+    {
+        if (!system_enabled_) {
+            RCLCPP_WARN(this->get_logger(), "[START] ⚠️ System not enabled! Press ENABLE first.");
+            response->success = false;
+            response->message = "System not enabled. Press ENABLE first.";
+            return;
+        }
         
-        // Disable robot if requested
-        auto req = std::make_shared<EnableRobot::Request>();
-        callService<EnableRobot>(enable_client_, req, "EnableRobot"); // Assuming default is disable? Or empty request checks?
-        // Note: The original code just called EnableRobot without args which usually means Disable/Enable? 
-        // Actually EnableRobot service usually takes args. 
-        // Let's assume sending a default request might not disable it unless args are set.
-        // But to be safe, we just mark system_enabled_ = false.
+        RCLCPP_INFO(this->get_logger(), "[START] 🚀 Starting System — HOME + State Machine...");
+        
+        system_running_ = true;
+        manual_mode_ = false;
+        stop_after_single_motion_ = false;
+        
+        // Reset uptime tracking
+        system_start_time_ = this->now();
+        
+        // Move Home
+        sendMotionAction("HOME");
+        
+        // Start state machine
+        system_started_ = true;
+        RCLCPP_INFO(this->get_logger(), "[START] ✅ System Started — Waiting for tray signal...");
+        notifyStateChange();
+        
+        response->success = true;
+        response->message = "System Started";
+    }
+    else
+    {
+        system_started_ = false;
+        system_running_ = false;
+        RCLCPP_INFO(this->get_logger(), "[START] ⏹ System Stopped");
+        response->success = true;
+        response->message = "System Stopped";
     }
 }
 
@@ -1334,8 +1380,18 @@ void RobotLogicNode::emergencyStopCallback(
         response->success = true;
         response->message = "EMERGENCY STOP ACTIVATED";
         
-        auto req = std::make_shared<EnableRobot::Request>();
-        callService<EnableRobot>(enable_client_, req, "EnableRobot");
+        // Fire-and-forget: async ResetRobot to halt motion immediately
+        // Do NOT use sync callService here — it blocks the service thread and freezes GUI
+        auto req = std::make_shared<ResetRobot::Request>();
+        reset_robot_client_->async_send_request(req,
+            [this](rclcpp::Client<ResetRobot>::SharedFuture future) {
+                try {
+                    auto res = future.get();
+                    RCLCPP_INFO(this->get_logger(), "[E-STOP] ResetRobot result: %d", res->res);
+                } catch (...) {
+                    RCLCPP_WARN(this->get_logger(), "[E-STOP] ResetRobot call failed (async)");
+                }
+            });
         
         publishError("EMERGENCY STOP");
         notifyStateChange();
@@ -1371,7 +1427,7 @@ void RobotLogicNode::resetStateCallback(
     
     // Reset input tray
     input_tray_empty_ = false;
-    selected_input_row_ = -1;
+    selected_input_row_ = 1;
     current_auto_row_ = 1;
     
     // ✅ Clear AI detection states
@@ -1459,7 +1515,7 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
                     row_full_[i] = true;
                 }
                 input_tray_empty_ = false;
-                selected_input_row_ = -1;
+                selected_input_row_ = 1; // Default to 1 to match GUI
             }
             
             buffer_is_empty_ = true;
@@ -1625,6 +1681,17 @@ void RobotLogicNode::stateInitCheck()
 
 void RobotLogicNode::stateInitLoadChamberDirect()
 {
+    static int debug_count = 0;
+    if (debug_count++ % 100 == 0) {
+        RCLCPP_INFO(this->get_logger(), "[DEBUG] motion_cmd: '%s', in_prg: %d, manual: %d, first_batch: %d, feed: %d, ai: %d, wait_tray: %d",
+            motion_current_cmd_.c_str(), 
+            (int)motion_in_progress_.load(), 
+            (int)manual_mode_, 
+            (int)is_first_batch_, 
+            (int)feed_chamber_signal_, 
+            (int)use_ai_for_control_, 
+            (int)waiting_for_tray_change_.load());
+    }
     RCLCPP_INFO(this->get_logger(), "[STATE] Executing INIT_LOAD_CHAMBER_DIRECT");
     publishSystemStatus("INIT_LOAD_CHAMBER_DIRECT");
     
@@ -1666,21 +1733,14 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         }
     }
 
-    if (!manual_mode_)
+    if (!manual_mode_ && is_first_batch_)
     {
-        // Require signal EXCEPT in Auto Mode (Sequential) where we assume readiness
+        // Only require feed_chamber on first batch — after init, cycle runs autonomously
         if (!feed_chamber_signal_)
         {
-            if (use_ai_for_control_) {
-                 // In AI mode, strictly wait for chamber signal
-                 return;
-            }
-             // Wait: Log every 5s roughly
-             if (static_cast<int>(this->now().seconds()) % 5 == 0) {
-                RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000, 
-                    "[INIT] ⏳ Waiting for feed_chamber signal...");
-             }
-             return;
+            RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 5000, 
+                "[INIT] ⏳ Waiting for feed_chamber signal (first batch)...");
+            return;
         }
     }
 
@@ -1691,9 +1751,18 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         // Motion complete - process result
         motion_current_cmd_.clear();
         if (!motion_result_) {
-            RCLCPP_ERROR(this->get_logger(), "[INIT] ❌ InputTrayChamber motion failed");
+            motion_fail_count_++;
+            RCLCPP_ERROR(this->get_logger(), "[INIT] ❌ InputTrayChamber motion failed (%d/3)", motion_fail_count_);
+            if (motion_fail_count_ >= 3) {
+                RCLCPP_ERROR(this->get_logger(), "[INIT] ❌ 3 consecutive failures — Robot may be in error state. Returning to IDLE.");
+                publishError("MOTION_FAILED_3X");
+                motion_fail_count_ = 0;
+                system_enabled_ = false;
+                transitionTo(SystemState::IDLE);
+            }
             return;
         }
+        motion_fail_count_ = 0;  // Reset on success
         
         chamber_has_cartridge_ = true;
         chamber_is_empty_ = false;
@@ -1911,9 +1980,10 @@ void RobotLogicNode::stateTakeChamberToScale()
         scale_wait_start_ = this->now();
         
         if (!buffer_is_empty_ && !is_last_batch_) {
-            RCLCPP_INFO(this->get_logger(), "[PIPELINE] 🚀 Loading next chamber from buffer (Parallel)");
+            RCLCPP_INFO(this->get_logger(), "[PIPELINE] 🚀 Loading next chamber from buffer");
             transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
         } else {
+            // last_batch or buffer empty: just process scale, no refill
             transitionTo(SystemState::PROCESSING_SCALE);
         }
         return;
@@ -1937,6 +2007,15 @@ void RobotLogicNode::stateProcessingScale()
     // ========================================================================
     // PROCESS QUEUE (Patch 2)
     // ========================================================================
+    
+    // ✅ AUTO BYPASS: No scale hardware, force pass
+    if (simulate_scale_ || force_pass_) {
+        RCLCPP_INFO(this->get_logger(), "[SCALE] 🔄 bypass scale processing -> Force PASS");
+        stored_scale_result_.store(true);
+        transitionTo(SystemState::PLACE_TO_OUTPUT);
+        return;
+    }
+
     bool result_pass;
     int cartridge_id;
     
@@ -2160,22 +2239,16 @@ void RobotLogicNode::statePlaceToOutput()
         RCLCPP_INFO(this->get_logger(), "[PIPELINE] ✅ Placement complete.");
         
         // DECIDE NEXT STATE
-        if (is_last_batch_) {
-            if (chamber_has_cartridge_) {
-                transitionTo(SystemState::LAST_BATCH_WAIT);
-            } else {
-                is_last_batch_ = false;
-                transitionTo(SystemState::IDLE);
-                auto msg = std_msgs::msg::Bool();
-                msg.data = true;
-                last_batch_complete_pub_->publish(msg);
-            }
-        } else if (chamber_has_cartridge_) {
-            transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
-        } else if (!buffer_is_empty_) {
-            transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
+        if (is_last_batch_ && !chamber_has_cartridge_) {
+            // Last batch done — no more cartridges
+            is_last_batch_ = false;
+            transitionTo(SystemState::IDLE);
+            auto msg = std_msgs::msg::Bool();
+            msg.data = true;
+            last_batch_complete_pub_->publish(msg);
         } else {
-            transitionTo(SystemState::REFILL_BUFFER);
+            // Continue cycle: wait for next fill_done
+            transitionTo(SystemState::WAIT_FILLING);
         }
         return;
     }
@@ -2216,22 +2289,16 @@ void RobotLogicNode::statePlaceToFail()
         // DECIDE NEXT STATE
         if (manual_mode_) {
             transitionTo(SystemState::IDLE);
-        } else if (is_last_batch_) {
-            if (chamber_has_cartridge_) {
-                transitionTo(SystemState::LAST_BATCH_WAIT);
-            } else {
-                is_last_batch_ = false;
-                transitionTo(SystemState::IDLE);
-                auto msg = std_msgs::msg::Bool();
-                msg.data = true;
-                last_batch_complete_pub_->publish(msg);
-            }
-        } else if (chamber_has_cartridge_) {
-            transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
-        } else if (!buffer_is_empty_) {
-            transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
+        } else if (is_last_batch_ && !chamber_has_cartridge_) {
+            // Last batch done — no more cartridges
+            is_last_batch_ = false;
+            transitionTo(SystemState::IDLE);
+            auto msg = std_msgs::msg::Bool();
+            msg.data = true;
+            last_batch_complete_pub_->publish(msg);
         } else {
-            transitionTo(SystemState::REFILL_BUFFER);
+            // Continue cycle: wait for next fill_done
+            transitionTo(SystemState::WAIT_FILLING);
         }
         return;
     }
@@ -2332,19 +2399,9 @@ void RobotLogicNode::stateRefillBuffer()
             transitionTo(SystemState::IDLE);
             return;
         }
-        if (manual_mode_) {
-            transitionTo(SystemState::IDLE);
-            return;
-        }
         
-        if (scale_has_cartridge_) {
-            RCLCPP_INFO(this->get_logger(), "[PIPELINE] Cartridge on scale -> Processing Scale");
-            scale_wait_start_ = this->now();
-            transitionTo(SystemState::PROCESSING_SCALE);
-            return;
-        }
-        
-        RCLCPP_INFO(this->get_logger(), "[PIPELINE] Waiting for chamber fill...");
+        // ✅ After REFILL_BUFFER done → WAIT_FILLING (cycle continues autonomously)
+        RCLCPP_INFO(this->get_logger(), "[PIPELINE] ✅ Refill Buffer complete → WAIT_FILLING");
         transitionTo(SystemState::WAIT_FILLING);
         return;
     }
@@ -2413,11 +2470,10 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
         
         if (manual_mode_) {
             transitionTo(SystemState::IDLE);
-        } else if (scale_has_cartridge_) {
-            RCLCPP_INFO(this->get_logger(), "[PIPELINE] Scale has cartridge, REFILL_BUFFER first");
-            transitionTo(SystemState::REFILL_BUFFER);
         } else {
+            // Always refill buffer after loading chamber (unless last batch)
             if (is_last_batch_) {
+                RCLCPP_INFO(this->get_logger(), "[PIPELINE] Last batch — skip refill → WAIT_FILLING");
                 transitionTo(SystemState::WAIT_FILLING);
             } else {
                 transitionTo(SystemState::REFILL_BUFFER);
@@ -2904,10 +2960,7 @@ void RobotLogicNode::transitionTo(SystemState new_state)
                 stateToString(current_state_).c_str(), state_str.c_str());
             publishSystemStatus(state_str);
 
-            // Publish /robot/motion_busy: True khi đang motion, False khi IDLE
-            auto busy_msg = std_msgs::msg::Bool();
-            busy_msg.data = (new_state != SystemState::IDLE);
-            motion_busy_pub_->publish(busy_msg);
+            // Removed erroneous motion_busy_ publish here; motion_executor handles it.
         }
     }
 }

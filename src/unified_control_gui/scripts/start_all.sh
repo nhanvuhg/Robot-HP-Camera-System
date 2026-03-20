@@ -2,14 +2,18 @@
 set -uo pipefail
 
 # ═══════════════════════════════════════════════════════════
-# 🚀 START ALL — Cartridge System + GUI
+# 🚀 START ALL — Full System Launcher
 # ═══════════════════════════════════════════════════════════
 # Starts:
 #   1. cartridge_providesystem_py  — Servo control (Festo CMMT-AS)
-#   2. cartridge_gui.py            — HTML GUI (port 8080)
-#   3. unified_control_gui         — QML GUI (HDMI)
+#   2. dobot_bringup_v3            — Dobot Nova5 driver
+#   3. robot_logic_node            — Robot pick-and-place logic
+#   4. gripper_festo_node          — Festo gripper (venv)
+#   5. dual_camera_system          — CSI cameras + YOLO
+#   6. cartridge_gui.py            — HTML GUI (port 8080, optional)
+#   7. unified_control_gui         — QML GUI (HDMI)
 #
-# Usage: bash start_all.sh
+# Usage: bash start_all.sh [--web]
 # Stop:  Ctrl+C (kills all)
 # ═══════════════════════════════════════════════════════════
 
@@ -34,7 +38,7 @@ export FASTRTPS_DEFAULT_PROFILES_FILE="$WS/fastdds_no_shm.xml"
 [ -f "$WS/install/setup.bash" ]  && source "$WS/install/setup.bash"  || echo "⚠️  $WS/install/setup.bash not found — run: colcon build"
 set -u
 
-# Kiểm tra package có sẵn không (check binary trực tiếp — tránh AMENT_PREFIX_PATH stale)
+# Kiểm tra binary có sẵn không
 if [ ! -f "$WS/install/unified_control_gui/lib/unified_control_gui/unified_control_gui" ]; then
     echo "❌ unified_control_gui binary not found. Chạy: cd ~/ros2_ws && colcon build --packages-select unified_control_gui"
     exit 1
@@ -44,9 +48,26 @@ LOG_DIR="$WS/logs"
 mkdir -p "$LOG_DIR"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🚀 Cartridge System — Full Launcher"
+echo "🚀 Full System — Cartridge + Robot Launcher"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+
+# ─── Check for duplicate processes ───
+EXISTING=$(ps aux | grep -E "(cartridge_providesystem_py|robot_logic_node|dobot_bringup|gripper_festo|dual_csi_camera|yolo_ros_hailort|unified_control_gui)" | grep -v -E "(grep|tail|start_all)" | wc -l || true)
+if [ "${EXISTING:-0}" -gt 0 ]; then
+    echo "⚠️  WARNING: Found $EXISTING existing process(es)! Tự động dọn dẹp..."
+    pkill -9 -f "cartridge_providesystem_py" 2>/dev/null || true
+    pkill -9 -f "cartridge_gui.py" 2>/dev/null || true
+    pkill -9 -f "unified_control_gui/unified_control_gui" 2>/dev/null || true
+    pkill -9 -f "robot_logic_node" 2>/dev/null || true
+    pkill -9 -f "motion_executor" 2>/dev/null || true
+    pkill -9 -f "dobot_bringup" 2>/dev/null || true
+    pkill -9 -f "gripper_festo_node" 2>/dev/null || true
+    pkill -9 -f "dual_csi_camera" 2>/dev/null || true
+    pkill -9 -f "yolo_ros_hailort" 2>/dev/null || true
+    pkill -9 -f "component_container" 2>/dev/null || true
+    sleep 2
+fi
 
 # ─── Kill old processes bằng PID file (tránh pkill nhầm) ───
 PIDFILE="/tmp/cartridge_system.pid"
@@ -67,10 +88,19 @@ if [ -f "$PIDFILE" ]; then
     rm -f "$PIDFILE"
 fi
 
-# Fallback pkill nếu còn sót — dùng pattern khớp đúng tên process
+# Fallback pkill — also kill any scripts holding Dobot ports
+# Kill any Python scripts holding Dobot dashboard/motion ports
+pkill -9 -f "192.168.27" 2>/dev/null || true
+fuser -k 29999/tcp 2>/dev/null || true
 pkill -9 -f "cartridge_providesystem_py" 2>/dev/null || true
 pkill -9 -f "cartridge_gui.py" 2>/dev/null || true
 pkill -9 -f "unified_control_gui/unified_control_gui" 2>/dev/null || true
+pkill -9 -f "robot_logic_node" 2>/dev/null || true
+pkill -9 -f "motion_executor" 2>/dev/null || true
+pkill -9 -f "dobot_bringup" 2>/dev/null || true
+pkill -9 -f "gripper_festo_node" 2>/dev/null || true
+pkill -9 -f "dual_csi_camera" 2>/dev/null || true
+pkill -9 -f "yolo_ros_hailort" 2>/dev/null || true
 sleep 1
 
 # Chờ đến khi process cũ kết thúc (tối đa 12s)
@@ -88,7 +118,6 @@ while pgrep -f "cartridge_providesystem_py" > /dev/null 2>&1; do
 done
 
 # Chờ TCP connections đến servo/IO đóng hết (tối đa 30s)
-# CpxAp cycle_time=0.5s nên cần thêm 2-3s để flush connection
 _wait=0
 while ss -tn state established | grep -qE "192\.168\.27\.(24[89]|25[0-3]):502"; do
     if [ $_wait -ge 30 ]; then
@@ -105,6 +134,10 @@ echo ""
 
 # ── PIDs ──
 PID_PROVIDE=""
+PID_DOBOT=""
+PID_ROBOT=""
+PID_GRIPPER=""
+PID_CAMERA=""
 PID_WEB_GUI=""
 PID_QML_GUI=""
 
@@ -115,80 +148,151 @@ cleanup() {
     echo ""
     echo "🛑 Shutting down..."
     rm -f "$PIDFILE"
-    for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_PROVIDE:-}"; do
+    for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_CAMERA:-}" "${PID_GRIPPER:-}" "${PID_ROBOT:-}" "${PID_DOBOT:-}" "${PID_PROVIDE:-}"; do
         [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
     done
-    sleep 1
-    for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_PROVIDE:-}"; do
+    sleep 2
+    for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_CAMERA:-}" "${PID_GRIPPER:-}" "${PID_ROBOT:-}" "${PID_MOTION:-}" "${PID_DOBOT:-}" "${PID_PROVIDE:-}"; do
         [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null || true
     done
+    # Fallback kill all known process names
+    pkill -9 -f "cartridge_providesystem_py" 2>/dev/null || true
     pkill -9 -f "cartridge_gui.py" 2>/dev/null || true
+    pkill -9 -f "unified_control_gui/unified_control_gui" 2>/dev/null || true
+    pkill -9 -f "robot_logic_node" 2>/dev/null || true
+    pkill -9 -f "motion_executor" 2>/dev/null || true
+    pkill -9 -f "dobot_bringup" 2>/dev/null || true
+    pkill -9 -f "gripper_festo_node" 2>/dev/null || true
+    pkill -9 -f "dual_csi_camera" 2>/dev/null || true
+    pkill -9 -f "yolo_ros_hailort" 2>/dev/null || true
+    pkill -9 -f "component_container" 2>/dev/null || true
     echo "✅ All processes stopped."
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT INT TERM HUP QUIT
 
-# ── [1/3] Cartridge Provide System Node (servo control) ──
+# ══════════════════════════════════════════
+# CARTRIDGE FEEDER SYSTEM
+# ══════════════════════════════════════════
+
+# ── [1/7] Cartridge Provide System Node (servo control) ──
 LOG_PROVIDE="$LOG_DIR/cartridge_node.log"
 CARTRIDGE_BIN="$WS/install/system_feed_cartridge/lib/system_feed_cartridge/cartridge_providesystem_py"
-echo "  [1/3] 🔧 Cartridge Provide System Node..."
+echo "  [1/7] 🔧 Cartridge Provide System Node..."
 "$CARTRIDGE_BIN" > "$LOG_PROVIDE" 2>&1 &
 PID_PROVIDE=$!
 echo "        PID=$PID_PROVIDE  Log: $LOG_PROVIDE"
-# Ghi PID ngay để lần sau kill đúng
 echo "$PID_PROVIDE" > "$PIDFILE"
 sleep 3
 
-# ── [2/3] Web GUI (cartridge_gui.py — port 8080) — OPTIONAL ──
-# Mặc định TẮT để tiết kiệm ~70MB RAM. Dùng: bash start_all.sh --web
+# ══════════════════════════════════════════
+# ROBOT SYSTEM
+# ══════════════════════════════════════════
+
+# ── [2/7] Dobot Bringup (Nova5 driver) ──
+LOG_DOBOT="$LOG_DIR/dobot_bringup.log"
+echo "  [2/7] 🤖 Dobot Bringup (Nova5)..."
+ros2 launch dobot_bringup_v3 nova5.launch.py > "$LOG_DOBOT" 2>&1 &
+PID_DOBOT=$!
+echo "        PID=$PID_DOBOT  Log: $LOG_DOBOT"
+echo "$PID_DOBOT" >> "$PIDFILE"
+sleep 2
+
+# ── [3/8] Robot Logic Node (pick-and-place) ──
+LOG_ROBOT="$LOG_DIR/robot_logic_node.log"
+echo "  [3/8] 🧠 Robot Logic Node..."
+ros2 run robot_control_main robot_logic_node --ros-args --params-file "$WS/src/robot_control_main/config/joint_pose_params.yaml" > "$LOG_ROBOT" 2>&1 &
+PID_ROBOT=$!
+echo "        PID=$PID_ROBOT  Log: $LOG_ROBOT"
+echo "$PID_ROBOT" >> "$PIDFILE"
+
+# ── [3.5/8] Motion Executor (Action Server) ──
+LOG_MOTION="$LOG_DIR/motion_executor.log"
+echo "  [3.5/8] ⚙️  Motion Executor Node..."
+ros2 run robot_control_main motion_executor --ros-args --params-file "$WS/src/robot_control_main/config/joint_pose_params.yaml" > "$LOG_MOTION" 2>&1 &
+PID_MOTION=$!
+echo "        PID=$PID_MOTION  Log: $LOG_MOTION"
+echo "$PID_MOTION" >> "$PIDFILE"
+sleep 1
+
+# ── [4/7] Gripper Node (Festo CPX, venv) ──
+LOG_GRIPPER="$LOG_DIR/gripper_festo_node.log"
+echo "  [4/7] 🦾 Gripper Festo Node..."
+"$WS/run_gripper_node.sh" > "$LOG_GRIPPER" 2>&1 &
+PID_GRIPPER=$!
+echo "        PID=$PID_GRIPPER  Log: $LOG_GRIPPER"
+echo "$PID_GRIPPER" >> "$PIDFILE"
+sleep 1
+
+# ── [5/7] Dual Camera System (CSI + YOLO) ──
+LOG_CAMERA="$LOG_DIR/dual_camera_system.log"
+echo "  [5/7] 📷 Dual Camera System (CSI + YOLO)..."
+ros2 launch csi_camera dual_camera_system.launch.py > "$LOG_CAMERA" 2>&1 &
+PID_CAMERA=$!
+echo "        PID=$PID_CAMERA  Log: $LOG_CAMERA"
+echo "$PID_CAMERA" >> "$PIDFILE"
+sleep 1
+
+# ══════════════════════════════════════════
+# GUI
+# ══════════════════════════════════════════
+
+# ── [6/7] Web GUI (cartridge_gui.py — port 8080) — OPTIONAL ──
 LOG_WEB="$LOG_DIR/cartridge_web_gui.log"
 WEB_GUI="$WS/src/system_feed_cartridge/scripts/cartridge_gui.py"
 WEB_GUI_ENABLED=false
 for arg in "$@"; do [ "$arg" = "--web" ] && WEB_GUI_ENABLED=true; done
 
 if $WEB_GUI_ENABLED && [ -f "$WEB_GUI" ]; then
-    echo "  [2/3] 🌐 Web GUI (port 8080)..."
+    echo "  [6/7] 🌐 Web GUI (port 8080)..."
     python3 "$WEB_GUI" > "$LOG_WEB" 2>&1 &
     PID_WEB_GUI=$!
     echo "        PID=$PID_WEB_GUI  Log: $LOG_WEB  Access: http://$(hostname -I | awk '{print $1}'):8080"
     echo "$PID_WEB_GUI" >> "$PIDFILE"
     sleep 1
 else
-    echo "  [2/3] ⏭️  Web GUI skipped (thêm --web để bật)"
+    echo "  [6/7] ⏭️  Web GUI skipped (thêm --web để bật)"
 fi
 
-# ── [3/3] QML GUI (native, HDMI) ──
+# ── [7/7] QML GUI (native, HDMI) ──
 LOG_QML="$LOG_DIR/unified_gui.log"
 QML_BIN="$WS/install/unified_control_gui/lib/unified_control_gui/unified_control_gui"
 if [ -n "${DISPLAY:-}" ]; then
-    echo "  [3/3] 🖥️  QML GUI (DISPLAY=$DISPLAY)..."
+    echo "  [7/7] 🖥️  QML GUI (DISPLAY=$DISPLAY)..."
     "$QML_BIN" > "$LOG_QML" 2>&1 &
     PID_QML_GUI=$!
     echo "        PID=$PID_QML_GUI  Log: $LOG_QML"
     echo "$PID_QML_GUI" >> "$PIDFILE"
 else
-    echo "  [3/3] ⚠️  DISPLAY not set — skipping QML GUI"
+    echo "  [7/7] ⚠️  DISPLAY not set — skipping QML GUI"
 fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ All processes started!"
+echo "✅ All processes started! (7 components)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "📋 Logs:"
-echo "  tail -f $LOG_PROVIDE"
-echo "  tail -f $LOG_WEB"
-[ -n "${PID_QML_GUI:-}" ] && echo "  tail -f $LOG_QML"
+echo "  tail -f $LOG_PROVIDE        # Cartridge feeder"
+echo "  tail -f $LOG_DOBOT          # Dobot driver"
+echo "  tail -f $LOG_ROBOT          # Robot logic"
+echo "  tail -f $LOG_GRIPPER        # Gripper"
+echo "  tail -f $LOG_CAMERA         # Camera + YOLO"
+[ -n "${PID_QML_GUI:-}" ] && echo "  tail -f $LOG_QML             # QML GUI"
 echo ""
-echo "🌐 Web GUI: http://$(hostname -I | awk '{print $1}'):8080"
+echo "🌐 Web GUI: bash start_all.sh --web"
 echo ""
 echo "Press Ctrl+C to stop all"
 echo ""
 
-# Monitor — exit nếu cartridge node hoặc QML GUI chết
+# Monitor — exit nếu critical process chết
 while true; do
     sleep 3
     if ! kill -0 "$PID_PROVIDE" 2>/dev/null; then
         echo "⚠️  Cartridge node exited — stopping all"
+        break
+    fi
+    if [ -n "${PID_DOBOT:-}" ] && ! kill -0 "$PID_DOBOT" 2>/dev/null; then
+        echo "⚠️  Dobot bringup exited — stopping all"
         break
     fi
     if [ -n "${PID_QML_GUI:-}" ] && ! kill -0 "$PID_QML_GUI" 2>/dev/null; then

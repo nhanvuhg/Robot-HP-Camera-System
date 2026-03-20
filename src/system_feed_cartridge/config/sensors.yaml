@@ -12,7 +12,7 @@
 # =============================================================================
 
 # ── TỔNG SỐ CẢNH BIẾN (thay đổi khi thêm/bớt phần cứng) ─────────────────────
-num_sensors: 15    # Tổng số digital sensors từ IO module (1-indexed, hiện tại S1-S15)
+num_sensors: 20    # Tổng số digital sensors từ IO module (1-indexed, hiện tại S1-S9 + S15-S20, S10-S14 dự phòng)
 
 # ── LOẠI LOGIC CHUNG ──────────────────────────────────────────────────────────
 sensor_type: PNP   # PNP hoặc NPN
@@ -21,7 +21,7 @@ sensor_logic: NO   # NO (Normally Open) hoặc NC (Normally Closed)
 #         NPN/NC → logic đảo ngược, cần sửa update_sensor() trong node
 
 # =============================================================================
-# DANH SÁCH SENSOR (S1 – S13)
+# DANH SÁCH SENSOR (S1 – S9, S15 – S20)
 # =============================================================================
 # Mỗi sensor có các trường:
 #   id     : ID số (phải khớp với thứ tự channel trên IO module)
@@ -116,47 +116,57 @@ sensors:
     active: true
 
   - id: 10
-    name: S10_CYL1_RETRACTED
+    name: S10_OUTPUT_STACK_TRAY
+    desc: "Xác nhận có khay nhựa ở output stack (Pos 2) — tương tự S6 ở Pos 1, dùng để biết stack output còn khay"
+    pos: pos2
+    role: stack_detect
+    used_in: [S2A_INY_JOG_OUTPUT]
+    active: true
+
+  # S11 – S14: DỰ PHÒNG — dành cho sensor mới sẽ thêm
+
+  - id: 15
+    name: S15_CYL1_RETRACTED
     desc: "Cylinder 1 đã co lại hoàn toàn — giới hạn hành trình thu Pos 1"
     pos: pos1
     role: cyl_retracted
     used_in: [S1_CYLINDER1_RETRACT, S2_CYLINDER1_RETRACT]
     active: true
 
-  - id: 11
-    name: S11_CYL1_EXTENDED
+  - id: 16
+    name: S16_CYL1_EXTENDED
     desc: "Cylinder 1 đã đẩy ra hoàn toàn — giới hạn hành trình đẩy Pos 1 (INTERLOCK InY)"
     pos: pos1
     role: cyl_extended
     used_in: [S1_CYLINDER1_EXTEND, S2_CYLINDER1_EXTEND]
     active: true
 
-  - id: 12
-    name: S12_CYL2_RETRACTED
+  - id: 17
+    name: S17_CYL2_RETRACTED
     desc: "Cylinder 2 (Hold Tray) đã co lại hoàn toàn — xác nhận đã nhả khay"
     pos: pos1
     role: cyl_retracted
     used_in: [S1_CYLINDER2_RETRACT]
     active: true
 
-  - id: 13
-    name: S13_CYL2_EXTENDED
+  - id: 18
+    name: S18_CYL2_EXTENDED
     desc: "Cylinder 2 (Hold Tray) đã đẩy ra — xác nhận đang giữ khay chặt"
     pos: pos1
     role: cyl_extended
     used_in: [S1_CYLINDER2_EXTEND]
     active: true
 
-  - id: 14
-    name: S14_CYL3_RETRACTED
+  - id: 19
+    name: S19_CYL3_RETRACTED
     desc: "Cylinder 3 (Pos 2 — đầu ra) đã co lại hoàn toàn — giới hạn hành trình thu"
     pos: pos2
     role: cyl_retracted
     used_in: [S3_CYL3_RETRACT, S4_CYL3_RETRACT]
     active: true
 
-  - id: 15
-    name: S15_CYL3_EXTENDED
+  - id: 20
+    name: S20_CYL3_EXTENDED
     desc: "Cylinder 3 (Pos 2 — đầu ra) đã đẩy ra hoàn toàn — giới hạn hành trình đẩy"
     pos: pos2
     role: cyl_extended
@@ -187,8 +197,8 @@ cylinder_outputs:
 # =============================================================================
 # Hiện tại được hardcode trong node, ghi ở đây để tham khảo và kế hoạch refactor
 #
-# INTERLOCK-1: InY không được đi xuống (hướng dương) khi S11 = ON (Cylinder 1 đang EXTEND)
-#   Sensor: S11 (id: 11)
+# INTERLOCK-1: InY không được đi xuống (hướng dương) khi S16 = ON (Cylinder 1 đang EXTEND)
+#   Sensor: S16 (id: 16)
 #   Servo bị chặn: InY (servo_id: 2), hướng dương
 #   State bị chặn: JOG, S1_CYLINDER1_EXTEND
 #

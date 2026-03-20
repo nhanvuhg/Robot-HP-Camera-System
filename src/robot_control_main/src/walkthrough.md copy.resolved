@@ -1,0 +1,75 @@
+# Walkthrough: Robot JOG Continuous Movement
+
+## Problem
+Robot jog buttons on GUI needed to provide continuous movement for both Joint (J1-J6) and Cartesian (X/Y/Z/Rx/Ry/Rz) axes. MoveJog only works for Joint on this firmware.
+
+## Root Cause Analysis
+
+| Approach | Joint | Cartesian | Result |
+|---|---|---|---|
+| [MoveJog(J1+)](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#430-446) | ✅ res=0, moves | ❌ `X+` → -6, `x+` → 0 no movement | Joint only |
+| [MovJ(pose+offset)](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#383-398) | N/A | ✅ moves but blocks socket, can't stop | Unusable for jog |
+| [ServoP(x,y,z,rx,ry,rz)](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#562-567) | N/A | ✅ moves, non-blocking, stops when streaming stops | **Solution** |
+
+> [!IMPORTANT]
+> Dobot Nova5 firmware on dashboard port 29999 does NOT support Cartesian MoveJog. [ServoP](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#562-567) is the only viable real-time Cartesian control method.
+
+## Final Solution: Hybrid JOG
+
+### Joint (J1-J6): [MoveJog](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#430-446) native
+- Press: [MoveJog(J1+)](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#430-446) — uppercase J required
+- Release: [MoveJog("")](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#430-446) — immediate stop
+- 200ms minimum hold enforced
+
+### Cartesian (X/Y/Z/Rx/Ry/Rz): [ServoP](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#562-567) streaming
+- Press: Start QTimer at 33ms interval (30Hz)
+- Each tick: [ServoP(target ± 0.5mm)](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#562-567) for XYZ, `±0.2°` for rotation
+- Speed: ~15mm/s continuous
+- Release: Stop QTimer → no more ServoP commands → robot stops instantly
+- Target initialized from `cartesian_pose_` cache (polled every 500ms)
+
+## Files Modified
+
+### [robot_controller.hpp](file:///home/pi/ros2_ws/src/unified_control_gui/include/unified_control_gui/robot_controller.hpp)
+- Added `servo_p.hpp` include and `servo_p_client_`
+- Added [sendCartesianStep()](file:///home/pi/ros2_ws/src/unified_control_gui/src/robot_controller.cpp#298-318) slot
+- Added `jog_cart_idx_`, `jog_cart_positive_`, `jog_cart_target_[6]` state
+
+### [robot_controller.cpp](file:///home/pi/ros2_ws/src/unified_control_gui/src/robot_controller.cpp)
+- [jogStart()](file:///home/pi/ros2_ws/src/unified_control_gui/src/robot_controller.cpp#246-297): Joint → MoveJog, Cartesian → start QTimer + ServoP stream
+- [sendCartesianStep()](file:///home/pi/ros2_ws/src/unified_control_gui/src/robot_controller.cpp#298-318): increments target, sends ServoP request
+- [jogStop()](file:///home/pi/ros2_ws/src/unified_control_gui/src/robot_controller.cpp#322-347): Joint → MoveJog(""), Cartesian → stop QTimer
+
+## Verification
+- **Joint J1+**: CLI [MoveJog(J1+)](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#430-446) → res=0, robot physically rotated ✅
+- **Cartesian X+**: CLI [ServoP(x+5mm)](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#562-567) → res=0, pose X: -294 → -289 ✅  
+- **GUI test**: User confirmed both axes work continuously with immediate stop on release ✅
+
+---
+
+# Walkthrough: Dobot Nova 5 Driver Update for New Firmware
+
+## Summary
+Updated the ROS driver to work with the new Dobot controller firmware where **port 30003 (motion) is closed** and all commands go through **port 29999**.
+
+## Changes Made
+
+### 1. [dobot_api.py](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py)
+- [DobotApiDashboard](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#54-494) gained all motion methods ([MovJ](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#383-398), [MovL](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_bringup.py#385-390), [JointMovJ](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#533-548), [MoveJog](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#430-446), [Sync](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#668-674), etc.)
+- **Command syntax:** [MovJ(pose={x,y,z,rx,ry,rz})](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#383-398), [MovJ(joint={j1,...,j6})](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_api.py#383-398)
+
+### 2. [dobot_bringup.py](file:///home/pi/ros2_ws/src/DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/dobot_bringup_v3/dobot_bringup.py)
+- Removed 30003 retry loop (30s startup delay eliminated)
+- `self.move = self.dashboard` — single shared socket
+
+---
+
+# Walkthrough: AUTO Mode Pipeline Testing Setup
+
+## Summary
+Enabled simulation triggers on lock screen, added scale bypass, and fixed cleanup scripts.
+
+## Changes
+- Scale simulation bypass in [stateProcessingScale()](file:///home/pi/ros2_ws/src/robot_control_main/src/robot_logic_node.cpp#1973-2037)
+- Auto mode overlay with 4 simulation buttons (TRAY INPUT/OUTPUT, PICK INPUT/CHAMBER)
+- [start_all.sh](file:///home/pi/ros2_ws/src/unified_control_gui/scripts/start_all.sh) auto-cleanup and signal trap improvements

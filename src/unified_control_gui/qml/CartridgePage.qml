@@ -513,17 +513,18 @@
                                     font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // Grid 2 cột × 3 hàng, fill toàn bộ không gian còn lại
+                                // Grid 2 cột × 4 hàng
                                 GridLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   onClicked: cartridgeController.gotoState("HOMING") }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "IDLE";    bg: root.cCard;   bc: root.cBorder; tc: root.cText;   onClicked: cartridgeController.gotoState("IDLE") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1"; bg: "#1a2050";   bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2"; bg: "#1a2050";   bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE2") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3"; bg: "#1a2050";   bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE3") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "ERROR";   bg: "#4d1a1a";   bc: root.cRed;    tc: root.cRed;   onClicked: cartridgeController.gotoState("ERROR") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nNạp khay In"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE1") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE2") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nCấp khay Out"; bg: "#0a2a1a"; bc: root.cGreen; tc: root.cGreen; onClicked: cartridgeController.gotoState("STATE3") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nThay khay Out"; bg: "#0a2a1a"; bc: root.cGreen; tc: root.cGreen; onClicked: cartridgeController.gotoState("STATE4") }
+                                    CBtn { Layout.columnSpan: 2; Layout.fillWidth: true; Layout.fillHeight: true; lbl: "ERROR"; bg: "#4d1a1a"; bc: root.cRed; tc: root.cRed; onClicked: cartridgeController.gotoState("ERROR") }
                                 }
                             }
                         }
@@ -741,32 +742,43 @@
                             // ── Quick Preset ──
                             Text { text: "QUICK PRESET"; color: root.cDim; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.8 }
                             Row { spacing: 3
-                                // S1 Entry: conditions to enter State 1 + pass Step 3
+                                // S1 Entry: điều kiện vào State 1
                                 CBtn {
                                     lbl: "S1 Entry"
                                     padV: 3; padH: 6; fontSize: 10
                                     bg: "#0a1a4d"; bc: root.cAccent; tc: root.cAccent
                                     onClicked: {
                                         cartridgeController.simSensor("clear")
-                                        // S1+S3+S10+S12 ON
-                                        var ids = [1,3,10,12]
+                                        // S1+S3+S17 ON (băng tải có khay + Cyl2 retracted)
+                                        var ids = [1,3,17]
                                         ids.forEach(function(id) {
                                             cartridgeController.simSensor(id + ":1")
                                         })
                                     }
                                 }
-                                // S1 Full: full State 1 workflow sensors
+                                // S1 Full — S4 ON để test scan trigger
                                 CBtn {
                                     lbl: "S1 Full"
                                     padV: 3; padH: 6; fontSize: 10
                                     bg: "#1a0a4d"; bc: "#bb86fc"; tc: "#bb86fc"
                                     onClicked: {
                                         cartridgeController.simSensor("clear")
-                                        // S1+S3+S4+S5+S10+S11+S12+S13 ON
-                                        var ids = [1,3,4,5,10,11,12,13]
+                                        // S1+S3+S4+S15+S17 ON (S6 bỏ — chỉ cần cho State 2 jog)
+                                        var ids = [1,3,4,15,17]
                                         ids.forEach(function(id) {
                                             cartridgeController.simSensor(id + ":1")
                                         })
+                                    }
+                                }
+                                // S3 Entry: cấp khay Pos2
+                                CBtn {
+                                    lbl: "S3 Entry"
+                                    padV: 3; padH: 6; fontSize: 10
+                                    bg: "#0a3a1a"; bc: root.cGreen; tc: root.cGreen
+                                    onClicked: {
+                                        cartridgeController.simSensor("clear")
+                                        // S7 ON (có khay trên Platform)
+                                        cartridgeController.simSensor("7:1")
                                     }
                                 }
                             }
@@ -784,21 +796,29 @@
 
                                 Repeater {
                                     model: ListModel {
-                                        ListElement { sid:1;  slabel:"S1";  sdesc:"Belt" }
-                                        ListElement { sid:2;  slabel:"S2";  sdesc:"Belt" }
+                                        // S1-S10: Sensor quang & logic
+                                        ListElement { sid:1;  slabel:"S1";  sdesc:"Belt start" }
+                                        ListElement { sid:2;  slabel:"S2";  sdesc:"Belt mid" }
                                         ListElement { sid:3;  slabel:"S3";  sdesc:"Belt end"}
-                                        ListElement { sid:4;  slabel:"S4";  sdesc:"Row detect" }
-                                        ListElement { sid:5;  slabel:"S5";  sdesc:"Tray exist" }
-                                        ListElement { sid:6;  slabel:"S6";  sdesc:"Row1 output" }
+                                        ListElement { sid:4;  slabel:"S4";  sdesc:"Stack In" }
+                                        ListElement { sid:5;  slabel:"S5";  sdesc:"Output det." }
+                                        ListElement { sid:6;  slabel:"S6";  sdesc:"In stack tray" }
                                         ListElement { sid:7;  slabel:"S7";  sdesc:"Platform" }
                                         ListElement { sid:8;  slabel:"S8";  sdesc:"Feed OK" }
-                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Output fin." }
-                                        ListElement { sid:10; slabel:"S10"; sdesc:"Cyl1 Ret"}
-                                        ListElement { sid:11; slabel:"S11"; sdesc:"Cyl1 Ext" }
-                                        ListElement { sid:12; slabel:"S12"; sdesc:"Cyl2 Ret"}
-                                        ListElement { sid:13; slabel:"S13"; sdesc:"Cyl2 Ext" }
-                                        ListElement { sid:14; slabel:"S14"; sdesc:"Cyl3 Ret"}
-                                        ListElement { sid:15; slabel:"S15"; sdesc:"Cyl3 Ext" }
+                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Out finish" }
+                                        ListElement { sid:10; slabel:"S10"; sdesc:"Stack Out" }
+                                        // S11-S14: Dự phòng
+                                        ListElement { sid:11; slabel:"S11"; sdesc:"[reserved]" }
+                                        ListElement { sid:12; slabel:"S12"; sdesc:"[reserved]" }
+                                        ListElement { sid:13; slabel:"S13"; sdesc:"[reserved]" }
+                                        ListElement { sid:14; slabel:"S14"; sdesc:"[reserved]" }
+                                        // S15-S20: Cylinder sensors
+                                        ListElement { sid:15; slabel:"S15"; sdesc:"Cyl1 Ret"}
+                                        ListElement { sid:16; slabel:"S16"; sdesc:"Cyl1 Ext" }
+                                        ListElement { sid:17; slabel:"S17"; sdesc:"Cyl2 Ret"}
+                                        ListElement { sid:18; slabel:"S18"; sdesc:"Cyl2 Ext" }
+                                        ListElement { sid:19; slabel:"S19"; sdesc:"Cyl3 Ret"}
+                                        ListElement { sid:20; slabel:"S20"; sdesc:"Cyl3 Ext" }
                                     }
                                     delegate: Rectangle {
                                         id: sBtn
@@ -848,7 +868,7 @@
 
                             // ── Chú thích ──
                             Text {
-                                text: "<b>S1-S3</b> Stack · <b>S4</b> Detect · <b>S6</b> Platform · <b>S7</b> Output ·\n<b>S10</b> Cyl1 · <b>S11</b> Cyl1 · <b>S12</b> Cyl2 · <b>S13</b> Cyl2"
+                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Stack In · <b>S5</b> Out Det\n<b>S6</b> In tray · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Out fin · <b>S10</b> Stack Out\n<b>S15</b> Cyl1↩ · <b>S16</b> Cyl1↪ · <b>S17</b> Cyl2↩(gate S1) · <b>S18</b> Cyl2↪(gate S4)\n<b>S19</b> Cyl3↩ · <b>S20</b> Cyl3↪   |   S11-S14 dự phòng"
                                 textFormat: Text.RichText; color: root.cDim; font.pixelSize: 8
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                             }
@@ -915,8 +935,8 @@
                     ConfigCard {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        title: "Pos 2: Output Table (OutY)"
-                        configKey: "outy_output_table"
+                        title: "Pos 1: Output Stack (InY)"
+                        configKey: "iny_output_stack"
                         configSource: page2Root.parsedConfig
                     }
 
@@ -928,19 +948,19 @@
                         HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
 
                         property var servoParams: [
-                            { key:"inx_home",            label:"InX Home",      desc:"S1 home" },
-                            { key:"inx_target2",         label:"InX Target",    desc:"S1 lấy khay" },
-                            { key:"inx_output_stack",    label:"InX OutStack",  desc:"Đặt khay" },
-                            { key:"iny_home",            label:"InY Home",      desc:"S2 home" },
-                            { key:"iny_target2",         label:"InY Target",    desc:"Robot place" },
-                            { key:"iny_safe_zone",       label:"InY SafeZone",  desc:"Safe zone" },
-                            { key:"servo3_push_position",label:"S3 Push",       desc:"Push pos" },
-                            { key:"outx_home",           label:"OutX Home",     desc:"S4 home" },
-                            { key:"outx_target2",        label:"OutX Target",   desc:"Output stack" },
-                            { key:"outx_target3",        label:"OutX Robot",    desc:"Robot tray" },
-                            { key:"outy_home",           label:"OutY Home",     desc:"S5 home" },
-                            { key:"outy_target2",        label:"OutY Target",   desc:"Pick/place" },
-                            { key:"outy_safe_zone",      label:"OutY SafeZone", desc:"Safe zone" }
+                            { key:"inx_home",        label:"InX Home",      desc:"S1 home" },
+                            { key:"inx_target",      label:"InX Target",    desc:"S1 lấy khay (500mm)" },
+                            { key:"inx_output_pos",  label:"InX OutPos",    desc:"Đặt khay output" },
+                            { key:"iny_home",        label:"InY Home",      desc:"S2 home" },
+                            { key:"iny_place",       label:"InY Place",     desc:"Robot place (200mm)" },
+                            { key:"iny_safe_zone",   label:"InY SafeZone",  desc:"Safe zone" },
+                            { key:"servo3_target2",  label:"S3 Feed",       desc:"Feed pos (400mm)" },
+                            { key:"outx_home",       label:"OutX Home",     desc:"S4 home" },
+                            { key:"outx_target2",    label:"OutX Target2",  desc:"Lấy khay output" },
+                            { key:"outx_target3",    label:"OutX Target3",  desc:"Đặt khay robot" },
+                            { key:"outy_target1",    label:"OutY Target1",  desc:"Nâng khay (safe)" },
+                            { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Hạ gắp khay" },
+                            { key:"outy_row1_pos",   label:"OutY Row1",     desc:"Row1 scan limit" }
                         ]
 
                         Column {
@@ -1049,9 +1069,10 @@
             // ── PAGE 3: ROBOT CONTROL ──────────────────────────────────
             Item {
                 id: page3Root
-                property string currentMode: "manual"  // "auto" | "camera_ai" | "manual"
+                property string currentMode: cartridgeController.currentMode  // bind to system mode
+                property bool manualEnabled: currentMode === "" || currentMode === "manual" || currentMode === "idle"
                 property real stepValue: 1.0
-                property int speedVal: 100
+                property int speedVal: robotController.speedRatio
                 property bool rowLocked: false
                 property int jogStep: 1               // 0.1, 1, 5, 10
 
@@ -1059,12 +1080,28 @@
                     id: p3Inner
                     anchors { fill: parent; margins: 10 }
 
-                    // ════════════════ MANUAL MODE ══════════════════════
+                    // ════════════════ MODE HEADER ══════════════════════
                     Rectangle {
                         id: modeToggle
                         anchors { top: parent.top; left: parent.left; right: parent.right }
-                        height: 32; radius: 5; color: "#2a0a4a"; border.color: "#bb86fc"; border.width: 2
-                        Text { anchors.centerIn: parent; text: "MANUAL MODE"; color: "#bb86fc"; font.pixelSize: 12; font.bold: true }
+                        height: 32; radius: 5
+                        color: page3Root.manualEnabled ? "#2a0a4a" : "#1a1a1a"
+                        border.color: page3Root.manualEnabled ? "#bb86fc" : "#666"; border.width: 2
+                        Behavior on color { ColorAnimation { duration: 200 } }
+                        Behavior on border.color { ColorAnimation { duration: 200 } }
+                        Row {
+                            anchors.centerIn: parent; spacing: 8
+                            Text {
+                                text: page3Root.manualEnabled ? "🔓" : "🔒"
+                                font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Text {
+                                text: page3Root.manualEnabled ? "MANUAL MODE" : "LOCKED — " + page3Root.currentMode.toUpperCase() + " MODE"
+                                color: page3Root.manualEnabled ? "#bb86fc" : "#888"
+                                font.pixelSize: 12; font.bold: true; font.letterSpacing: 1
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
                     }
 
                     // ════════════════ CONTENT AREA ════════════════════════
@@ -1076,6 +1113,9 @@
                         // ──────────── MANUAL MODE: JOG ────────────────────
                         Item {
                             anchors.fill: parent
+                            enabled: page3Root.manualEnabled
+                            opacity: page3Root.manualEnabled ? 1.0 : 0.35
+                            Behavior on opacity { NumberAnimation { duration: 200 } }
 
                             property int colGap: 6
 
@@ -1112,18 +1152,32 @@
                                                 required property int index
                                                 width: cartCol.width; height: 44; spacing: 2
                                                 Rectangle {
-                                                    width: 46; height: 40; radius: 5; color: root.cCard; border.color: root.cBorder; border.width: 2
-                                                    Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: root.cRed; font.pixelSize: 12; font.bold: true }
-                                                    MouseArea { anchors.fill: parent; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop() }
+                                                    id: negBtn
+                                                    width: 46; height: 40; radius: 5
+                                                    color: negMA.pressed ? "#6a2222" : root.cCard
+                                                    border.color: negMA.pressed ? root.cRed : root.cBorder; border.width: negMA.pressed ? 3 : 2
+                                                    scale: negMA.pressed ? 0.92 : 1.0
+                                                    Behavior on color { ColorAnimation { duration: 80 } }
+                                                    Behavior on scale { NumberAnimation { duration: 60 } }
+                                                    Behavior on border.color { ColorAnimation { duration: 80 } }
+                                                    Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: negMA.pressed ? Qt.lighter(root.cRed, 1.3) : root.cRed; font.pixelSize: 12; font.bold: true }
+                                                    MouseArea { id: negMA; anchors.fill: parent; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 96; height: 40; radius: 5; color: "#0d1117"; border.width: 2; border.color: root.cBorder
                                                     Text { anchors.centerIn: parent; text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0.0000"; color: "#FFD700"; font.pixelSize: 16; font.family: "monospace"; font.bold: true }
                                                 }
                                                 Rectangle {
-                                                    width: 46; height: 40; radius: 5; color: root.cCard; border.color: root.cBorder; border.width: 2
-                                                    Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: root.cGreen; font.pixelSize: 12; font.bold: true }
-                                                    MouseArea { anchors.fill: parent; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop() }
+                                                    id: posBtn
+                                                    width: 46; height: 40; radius: 5
+                                                    color: posMA.pressed ? "#1a4a2a" : root.cCard
+                                                    border.color: posMA.pressed ? root.cGreen : root.cBorder; border.width: posMA.pressed ? 3 : 2
+                                                    scale: posMA.pressed ? 0.92 : 1.0
+                                                    Behavior on color { ColorAnimation { duration: 80 } }
+                                                    Behavior on scale { NumberAnimation { duration: 60 } }
+                                                    Behavior on border.color { ColorAnimation { duration: 80 } }
+                                                    Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: posMA.pressed ? Qt.lighter(root.cGreen, 1.3) : root.cGreen; font.pixelSize: 12; font.bold: true }
+                                                    MouseArea { id: posMA; anchors.fill: parent; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                             }
                                         }
@@ -1149,9 +1203,13 @@
                                         }
                                         Row { spacing: 4; width: parent.width
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 34; radius: 5; color: "#0a2a1a"; border.color: root.cCyan
-                                                Text { anchors.centerIn: parent; text: "GET POSE"; color: root.cCyan; font.pixelSize: 12; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: {
+                                                width: parent.width / 2 - 2; height: 34; radius: 5
+                                                color: gpMA.pressed ? "#1a5a3a" : "#0a2a1a"; border.color: gpMA.pressed ? Qt.lighter(root.cCyan, 1.3) : root.cCyan
+                                                border.width: gpMA.pressed ? 2 : 1; scale: gpMA.pressed ? 0.95 : 1.0
+                                                Behavior on color { ColorAnimation { duration: 80 } }
+                                                Behavior on scale { NumberAnimation { duration: 60 } }
+                                                Text { anchors.centerIn: parent; text: "GET POSE"; color: gpMA.pressed ? Qt.lighter(root.cCyan, 1.4) : root.cCyan; font.pixelSize: 12; font.bold: true }
+                                                MouseArea { id: gpMA; anchors.fill: parent; onClicked: {
                                                     robotController.getPose()
                                                     for (var i = 0; i < 6; i++) {
                                                         if (robotController.cartesianPose.length > i)
@@ -1160,9 +1218,13 @@
                                                 }}
                                             }
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 34; radius: 5; color: "#0a1a35"; border.color: root.cAccent
-                                                Text { anchors.centerIn: parent; text: "SEND MovL"; color: root.cAccent; font.pixelSize: 12; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: {
+                                                width: parent.width / 2 - 2; height: 34; radius: 5
+                                                color: mlMA.pressed ? "#1a3a65" : "#0a1a35"; border.color: mlMA.pressed ? Qt.lighter(root.cAccent, 1.3) : root.cAccent
+                                                border.width: mlMA.pressed ? 2 : 1; scale: mlMA.pressed ? 0.95 : 1.0
+                                                Behavior on color { ColorAnimation { duration: 80 } }
+                                                Behavior on scale { NumberAnimation { duration: 60 } }
+                                                Text { anchors.centerIn: parent; text: "SEND MovL"; color: mlMA.pressed ? Qt.lighter(root.cAccent, 1.4) : root.cAccent; font.pixelSize: 12; font.bold: true }
+                                                MouseArea { id: mlMA; anchors.fill: parent; onClicked: {
                                                     var vals = []
                                                     for (var i = 0; i < 6; i++) vals.push(parseFloat(cartInputs.itemAt(i).children[1].children[0].text) || 0)
                                                     robotController.moveLinear(vals[0],vals[1],vals[2],vals[3],vals[4],vals[5])
@@ -1191,18 +1253,30 @@
                                                 property int jn: index + 1
                                                 width: jointCol.width; height: 44; spacing: 2
                                                 Rectangle {
-                                                    width: 46; height: 40; radius: 5; color: root.cCard; border.color: root.cBorder; border.width: 2
-                                                    Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: root.cRed; font.pixelSize: 12; font.bold: true }
-                                                    MouseArea { anchors.fill: parent; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop() }
+                                                    width: 46; height: 40; radius: 5
+                                                    color: jnMA.pressed ? "#6a2222" : root.cCard
+                                                    border.color: jnMA.pressed ? root.cRed : root.cBorder; border.width: jnMA.pressed ? 3 : 2
+                                                    scale: jnMA.pressed ? 0.92 : 1.0
+                                                    Behavior on color { ColorAnimation { duration: 80 } }
+                                                    Behavior on scale { NumberAnimation { duration: 60 } }
+                                                    Behavior on border.color { ColorAnimation { duration: 80 } }
+                                                    Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: jnMA.pressed ? Qt.lighter(root.cRed, 1.3) : root.cRed; font.pixelSize: 12; font.bold: true }
+                                                    MouseArea { id: jnMA; anchors.fill: parent; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 96; height: 40; radius: 5; color: "#0d1117"; border.width: 2; border.color: root.cBorder
                                                     Text { anchors.centerIn: parent; text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0.0000"; color: "#FFD700"; font.pixelSize: 16; font.family: "monospace"; font.bold: true }
                                                 }
                                                 Rectangle {
-                                                    width: 46; height: 40; radius: 5; color: root.cCard; border.color: root.cBorder; border.width: 2
-                                                    Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: root.cGreen; font.pixelSize: 12; font.bold: true }
-                                                    MouseArea { anchors.fill: parent; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop() }
+                                                    width: 46; height: 40; radius: 5
+                                                    color: jpMA.pressed ? "#1a4a2a" : root.cCard
+                                                    border.color: jpMA.pressed ? root.cGreen : root.cBorder; border.width: jpMA.pressed ? 3 : 2
+                                                    scale: jpMA.pressed ? 0.92 : 1.0
+                                                    Behavior on color { ColorAnimation { duration: 80 } }
+                                                    Behavior on scale { NumberAnimation { duration: 60 } }
+                                                    Behavior on border.color { ColorAnimation { duration: 80 } }
+                                                    Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: jpMA.pressed ? Qt.lighter(root.cGreen, 1.3) : root.cGreen; font.pixelSize: 12; font.bold: true }
+                                                    MouseArea { id: jpMA; anchors.fill: parent; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                             }
                                         }
@@ -1227,9 +1301,13 @@
                                         }
                                         Row { spacing: 4; width: parent.width
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 34; radius: 5; color: "#0a2a1a"; border.color: root.cCyan
-                                                Text { anchors.centerIn: parent; text: "GET ANGLES"; color: root.cCyan; font.pixelSize: 12; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: {
+                                                width: parent.width / 2 - 2; height: 34; radius: 5
+                                                color: gaMA.pressed ? "#1a5a3a" : "#0a2a1a"; border.color: gaMA.pressed ? Qt.lighter(root.cCyan, 1.3) : root.cCyan
+                                                border.width: gaMA.pressed ? 2 : 1; scale: gaMA.pressed ? 0.95 : 1.0
+                                                Behavior on color { ColorAnimation { duration: 80 } }
+                                                Behavior on scale { NumberAnimation { duration: 60 } }
+                                                Text { anchors.centerIn: parent; text: "GET ANGLES"; color: gaMA.pressed ? Qt.lighter(root.cCyan, 1.4) : root.cCyan; font.pixelSize: 12; font.bold: true }
+                                                MouseArea { id: gaMA; anchors.fill: parent; onClicked: {
                                                     robotController.getAngles()
                                                     for (var i = 0; i < 6; i++) {
                                                         if (robotController.jointAngles.length > i)
@@ -1238,15 +1316,94 @@
                                                 }}
                                             }
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 34; radius: 5; color: "#1a0a33"; border.color: "#bb86fc"
-                                                Text { anchors.centerIn: parent; text: "SEND MovJ"; color: "#bb86fc"; font.pixelSize: 12; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: {
+                                                width: parent.width / 2 - 2; height: 34; radius: 5
+                                                color: mjMA.pressed ? "#3a1a63" : "#1a0a33"; border.color: mjMA.pressed ? Qt.lighter("#bb86fc", 1.3) : "#bb86fc"
+                                                border.width: mjMA.pressed ? 2 : 1; scale: mjMA.pressed ? 0.95 : 1.0
+                                                Behavior on color { ColorAnimation { duration: 80 } }
+                                                Behavior on scale { NumberAnimation { duration: 60 } }
+                                                Text { anchors.centerIn: parent; text: "SEND MovJ"; color: mjMA.pressed ? Qt.lighter("#bb86fc", 1.3) : "#bb86fc"; font.pixelSize: 12; font.bold: true }
+                                                MouseArea { id: mjMA; anchors.fill: parent; onClicked: {
                                                     var vals = []
                                                     for (var i = 0; i < 6; i++) vals.push(parseFloat(jointInputs.itemAt(i).children[1].children[0].text) || 0)
                                                     robotController.moveJoint(vals[0],vals[1],vals[2],vals[3],vals[4],vals[5])
                                                 }}
                                             }
                                         }
+
+                                        // ── SAVE TO YAML ─────────────────────
+                                        Rectangle { width: parent.width; height: 1; color: root.cBorder; opacity: 0.5 }
+                                        Text { text: "SAVE POSE TO YAML"; color: root.cDim; font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.8 }
+
+                                        Row { spacing: 4; width: parent.width
+                                            // Name / comment input
+                                            Rectangle {
+                                                id: poseNameRect
+                                                width: parent.width - 70 - 4; height: 32; radius: 4
+                                                color: "#0d1117"; border.color: "#bb86fc"; border.width: 1
+                                                // Placeholder hint
+                                                Text {
+                                                    anchors { fill: parent; leftMargin: 6; verticalCenter: parent.verticalCenter }
+                                                    text: poseNameInput.text.length === 0 ? "pose name / comment..." : ""
+                                                    color: "#555"; font.pixelSize: 12; font.family: "monospace"
+                                                    verticalAlignment: Text.AlignVCenter
+                                                }
+                                                TextInput {
+                                                    id: poseNameInput
+                                                    anchors { fill: parent; leftMargin: 6; rightMargin: 4; topMargin: 4; bottomMargin: 4 }
+                                                    color: root.cText; font.pixelSize: 12; font.family: "monospace"
+                                                    clip: true; selectByMouse: true
+                                                }
+                                            }
+                                            // SAVE button
+                                            Rectangle {
+                                                id: savePoseBtn
+                                                width: 70; height: 32; radius: 4
+                                                property bool saving: false
+                                                color: saving ? "#1a4d00" : (saveMA.pressed ? "#2a6a00" : "#0a3a00")
+                                                border.color: savePoseBtn.saving ? root.cGreen : (saveMA.pressed ? Qt.lighter(root.cGreen, 1.3) : "#4a8a00")
+                                                border.width: saveMA.pressed ? 2 : 1
+                                                Behavior on color { ColorAnimation { duration: 100 } }
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: savePoseBtn.saving ? "✓ SAVED" : "💾 SAVE"
+                                                    color: savePoseBtn.saving ? root.cGreen : "#88cc44"
+                                                    font.pixelSize: 11; font.bold: true
+                                                }
+                                                MouseArea {
+                                                    id: saveMA; anchors.fill: parent
+                                                    onClicked: {
+                                                        var vals = []
+                                                        for (var i = 0; i < 6; i++)
+                                                            vals.push(parseFloat(jointInputs.itemAt(i).children[1].children[0].text) || 0)
+                                                        robotController.saveJointPose(
+                                                            poseNameInput.text,
+                                                            vals[0], vals[1], vals[2], vals[3], vals[4], vals[5]
+                                                        )
+                                                    }
+                                                }
+                                                Connections {
+                                                    target: robotController
+                                                    function onJointPoseSaved(success, message) {
+                                                        savePoseBtn.saving = success
+                                                        saveStatusText.text = message
+                                                        saveStatusText.color = success ? root.cGreen : root.cRed
+                                                        saveStatusTimer.restart()
+                                                    }
+                                                }
+                                                Timer {
+                                                    id: saveStatusTimer; interval: 3000
+                                                    onTriggered: { savePoseBtn.saving = false; saveStatusText.text = "" }
+                                                }
+                                            }
+                                        }
+                                        // Status toast
+                                        Text {
+                                            id: saveStatusText
+                                            width: parent.width; wrapMode: Text.WordWrap
+                                            text: ""; font.pixelSize: 10; font.family: "monospace"
+                                            color: root.cGreen
+                                        }
+
                                     }
                                 }
 
@@ -1342,6 +1499,9 @@
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
+                                        // Stop & Reset → mode 4 (manual JOG ready)
+                                        CBtn { lbl: "⏹ STOP & RESET"; width: parent.width; bg: "#4a1a00"; bc: "#FF6600"; tc: "#FF6600"; padV: 10; onClicked: robotController.stopAndResetRobot() }
+
                                         // Enable / Disable
                                         Row { spacing: 4; width: parent.width
                                             CBtn { lbl: "ENABLE"; width: (parent.width - 4) / 2; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; padV: 8; onClicked: robotController.enableSystem(true) }
@@ -1352,36 +1512,183 @@
                                         Row { spacing: 4; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 4) / 2; height: 34; radius: 4
-                                                color: "#1a1a00"; border.color: root.cOrange
-                                                Text { anchors.centerIn: parent; text: "PAUSE"; color: root.cOrange; font.pixelSize: 12; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: robotController.pauseRobot() }
+                                                color: pauseMA.pressed ? "#3a3a00" : "#1a1a00"; border.color: pauseMA.pressed ? Qt.lighter(root.cOrange, 1.3) : root.cOrange
+                                                border.width: pauseMA.pressed ? 2 : 1; scale: pauseMA.pressed ? 0.95 : 1.0
+                                                Behavior on color { ColorAnimation { duration: 80 } }
+                                                Behavior on scale { NumberAnimation { duration: 60 } }
+                                                Text { anchors.centerIn: parent; text: "PAUSE"; color: pauseMA.pressed ? Qt.lighter(root.cOrange, 1.3) : root.cOrange; font.pixelSize: 12; font.bold: true }
+                                                MouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 4) / 2; height: 34; radius: 4
-                                                color: "#0a2a1a"; border.color: root.cCyan
-                                                Text { anchors.centerIn: parent; text: "RESUME"; color: root.cCyan; font.pixelSize: 12; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: robotController.resumeRobot() }
+                                                color: resumeMA.pressed ? "#1a5a3a" : "#0a2a1a"; border.color: resumeMA.pressed ? Qt.lighter(root.cCyan, 1.3) : root.cCyan
+                                                border.width: resumeMA.pressed ? 2 : 1; scale: resumeMA.pressed ? 0.95 : 1.0
+                                                Behavior on color { ColorAnimation { duration: 80 } }
+                                                Behavior on scale { NumberAnimation { duration: 60 } }
+                                                Text { anchors.centerIn: parent; text: "RESUME"; color: resumeMA.pressed ? Qt.lighter(root.cCyan, 1.3) : root.cCyan; font.pixelSize: 12; font.bold: true }
+                                                MouseArea { id: resumeMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
                                             }
                                         }
 
                                         // Clear Error
                                         Rectangle {
                                             width: parent.width; height: 34; radius: 4
-                                            color: "#0a1a2a"; border.color: "#4da6ff"
-                                            Text { anchors.centerIn: parent; text: "CLEAR ERROR"; color: "#4da6ff"; font.pixelSize: 12; font.bold: true }
-                                            MouseArea { anchors.fill: parent; onClicked: robotController.clearError() }
+                                            color: ceMA.pressed ? "#1a3a5a" : "#0a1a2a"; border.color: ceMA.pressed ? Qt.lighter("#4da6ff", 1.3) : "#4da6ff"
+                                            border.width: ceMA.pressed ? 2 : 1; scale: ceMA.pressed ? 0.95 : 1.0
+                                            Behavior on color { ColorAnimation { duration: 80 } }
+                                            Behavior on scale { NumberAnimation { duration: 60 } }
+                                            Text { anchors.centerIn: parent; text: "CLEAR ERROR"; color: ceMA.pressed ? Qt.lighter("#4da6ff", 1.3) : "#4da6ff"; font.pixelSize: 12; font.bold: true }
+                                            MouseArea { id: ceMA; anchors.fill: parent; onClicked: robotController.clearError() }
                                         }
 
                                         // E-STOP (biggest button)
                                         Rectangle {
-                                            width: parent.width; height: 50; radius: 5; color: "#4d1a1a"; border.color: root.cRed; border.width: 2
-                                            Text { anchors.centerIn: parent; text: "EMERGENCY\nSTOP"; color: root.cRed; font.pixelSize: 14; font.bold: true; horizontalAlignment: Text.AlignHCenter }
-                                            MouseArea { anchors.fill: parent; onClicked: robotController.emergencyStop(true) }
+                                            width: parent.width; height: 50; radius: 5
+                                            color: esMA.pressed ? "#8a2222" : "#4d1a1a"
+                                            border.color: esMA.pressed ? "#ff4444" : root.cRed; border.width: esMA.pressed ? 4 : 2
+                                            scale: esMA.pressed ? 0.93 : 1.0
+                                            Behavior on color { ColorAnimation { duration: 60 } }
+                                            Behavior on scale { NumberAnimation { duration: 50 } }
+                                            Behavior on border.color { ColorAnimation { duration: 60 } }
+                                            Text { anchors.centerIn: parent; text: "EMERGENCY\nSTOP"; color: esMA.pressed ? "#ff6666" : root.cRed; font.pixelSize: 14; font.bold: true; horizontalAlignment: Text.AlignHCenter }
+                                            MouseArea { id: esMA; anchors.fill: parent; onClicked: robotController.emergencyStop(true) }
                                         }
                                     }
                                 }
                             }
                         } // manual mode
+
+                        // ════════════ AUTOMATED MODE OVERLAY ════════════
+                        Item {
+                            visible: !page3Root.manualEnabled
+                            anchors.fill: parent; z: 100
+
+                            // Dim background & block clicks to manual elements
+                            Rectangle {
+                                anchors.fill: parent; color: "#000000"; opacity: 0.65; radius: 6
+                                MouseArea { anchors.fill: parent; hoverEnabled: true } 
+                            }
+
+                            Column {
+                                anchors.centerIn: parent; spacing: 20
+                                
+                                Text {
+                                    text: "🔒 MANUAL CONTROL DISABLED\nChuyển sang MANUAL mode để JOG robot"
+                                    color: "#aaa"; font.pixelSize: 16; font.bold: true
+                                    horizontalAlignment: Text.AlignHCenter; lineHeight: 1.5
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+
+                                Rectangle { width: 300; height: 1; color: "#444"; anchors.horizontalCenter: parent.horizontalCenter }
+
+                                Text {
+                                    text: "AUTO MODE ACTIONS"
+                                    color: "#bb86fc"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 2
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                }
+
+                                Column {
+                                    spacing: 15; anchors.horizontalCenter: parent.horizontalCenter
+                                    
+                                    // ── ROW 1: TRAY READY SIGNALS ──
+                                    Row {
+                                        spacing: 15; anchors.horizontalCenter: parent.horizontalCenter
+                                        
+                                        // TRAY INPUT READY
+                                        Rectangle {
+                                            width: 160; height: 50; radius: 8
+                                            color: tiMA.pressed ? "#5a3a1a" : "#351a0a"
+                                            border.color: tiMA.pressed ? Qt.lighter("#ffaa4f", 1.2) : "#ffaa4f"
+                                            border.width: tiMA.pressed ? 3 : 2
+                                            scale: tiMA.pressed ? 0.95 : 1.0
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                            Behavior on scale { NumberAnimation { duration: 100 } }
+                                            
+                                            Column {
+                                                anchors.centerIn: parent; spacing: 2
+                                                Text { text: "📥 TRAY INPUT READY"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "(/new_tray_loaded)"; color: "#d29252"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                            }
+                                            MouseArea {
+                                                id: tiMA; anchors.fill: parent
+                                                onClicked: robotController.simulateInputTrayReady()
+                                            }
+                                        }
+
+                                        // TRAY OUTPUT READY
+                                        Rectangle {
+                                            width: 160; height: 50; radius: 8
+                                            color: toMA.pressed ? "#5a3a1a" : "#351a0a"
+                                            border.color: toMA.pressed ? Qt.lighter("#ffaa4f", 1.2) : "#ffaa4f"
+                                            border.width: toMA.pressed ? 3 : 2
+                                            scale: toMA.pressed ? 0.95 : 1.0
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                            Behavior on scale { NumberAnimation { duration: 100 } }
+                                            
+                                            Column {
+                                                anchors.centerIn: parent; spacing: 2
+                                                Text { text: "📤 TRAY OUTPUT READY"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "(tray_output_ready)"; color: "#d29252"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                            }
+                                            MouseArea {
+                                                id: toMA; anchors.fill: parent
+                                                onClicked: robotController.simulateOutputTrayReady()
+                                            }
+                                        }
+                                    }
+
+                                    // ── ROW 2: ACTION TRIGGERS ──
+                                    Row {
+                                        spacing: 15; anchors.horizontalCenter: parent.horizontalCenter
+                                        
+                                        // PICK INPUT
+                                        Rectangle {
+                                            width: 160; height: 50; radius: 8
+                                            color: piMA.pressed ? "#1a3a5a" : "#0a1a35"
+                                            border.color: piMA.pressed ? Qt.lighter("#4f6cff", 1.2) : "#4f6cff"
+                                            border.width: piMA.pressed ? 3 : 2
+                                            scale: piMA.pressed ? 0.95 : 1.0
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                            Behavior on scale { NumberAnimation { duration: 100 } }
+                                            
+                                            Column {
+                                                anchors.centerIn: parent; spacing: 2
+                                                Text { text: "↓ PICK INPUT"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "(Load Khay -> Chamber)"; color: "#888"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                            }
+                                            MouseArea {
+                                                id: piMA; anchors.fill: parent
+                                                onClicked: {
+                                                    page3Root.rowLocked = true;
+                                                    robotController.simulateFeedChamber();
+                                                }
+                                            }
+                                        }
+
+                                        // PICK CHAMBER
+                                        Rectangle {
+                                            width: 160; height: 50; radius: 8
+                                            color: pcMA.pressed ? "#1a3a5a" : "#0a1a35"
+                                            border.color: pcMA.pressed ? Qt.lighter("#4f6cff", 1.2) : "#4f6cff"
+                                            border.width: pcMA.pressed ? 3 : 2
+                                            scale: pcMA.pressed ? 0.95 : 1.0
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                            Behavior on scale { NumberAnimation { duration: 100 } }
+                                            
+                                            Column {
+                                                anchors.centerIn: parent; spacing: 2
+                                                Text { text: "⟳ PICK CHAMBER"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "(Chamber -> Output)"; color: "#888"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                            }
+                                            MouseArea {
+                                                id: pcMA; anchors.fill: parent
+                                                onClicked: robotController.simulateFillDone()
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     } // contentArea
 
                     // ════════════════ ROBOT LOG BAR ══════════════════════
@@ -1437,26 +1744,56 @@
             property int   padH: 12
             property int   fontSize: 12
             property int   w: 0
+            property bool  _pressed: false
+            property bool  _hovered: false
 
             signal clicked(); signal pressed(); signal released()
 
             width:  w > 0 ? w : cbrT.width + padH * 2
             height: cbrT.height + padV * 2
-            radius: 4; color: bg; border.color: bc
-            opacity: active ? 1.0 : 0.5
-            Behavior on border.color { ColorAnimation { duration: 150 } }
-            Behavior on color        { ColorAnimation { duration: 150 } }
-
-            Text { id: cbrT; anchors.centerIn: parent; text: cbr.lbl; color: cbr.tc
-                font.pixelSize: cbr.fontSize; font.bold: true; font.capitalization: Font.AllUppercase }
-
-            MouseArea { anchors.fill: parent
-                onClicked:  { if(cbr.enabled){ cbr.scale=1.0; cbr.clicked() } }
-                onPressed:  { if(cbr.enabled) cbr.scale=0.96; cbr.pressed() }
-                onReleased: { cbr.scale=1.0; cbr.released() }
+            radius: 4
+            color: {
+                if (!active) return bg
+                if (_pressed) return Qt.lighter(bg, 1.6)
+                if (_hovered) return Qt.lighter(bg, 1.2)
+                return bg
             }
-            HoverHandler { onHoveredChanged: cbr.border.color = hovered ? (cbr.bc===root.cBorder?root.cAccent:cbr.bc) : cbr.bc }
-            Behavior on scale { NumberAnimation { duration: 80 } }
+            border.color: {
+                if (_pressed) return Qt.lighter(bc, 1.5)
+                if (_hovered) return (bc === root.cBorder ? root.cAccent : Qt.lighter(bc, 1.3))
+                return bc
+            }
+            border.width: _pressed ? 2 : 1
+            opacity: active ? 1.0 : 0.4
+            scale: _pressed ? 0.93 : 1.0
+
+            Behavior on color        { ColorAnimation { duration: 100 } }
+            Behavior on border.color { ColorAnimation { duration: 100 } }
+            Behavior on scale        { NumberAnimation { duration: 60; easing.type: Easing.OutQuad } }
+            Behavior on opacity      { NumberAnimation { duration: 150 } }
+
+            // Glow effect when pressed
+            Rectangle {
+                anchors.fill: parent; anchors.margins: -2
+                radius: parent.radius + 2; color: "transparent"
+                border.color: cbr._pressed ? Qt.rgba(cbr.bc.r, cbr.bc.g, cbr.bc.b, 0.4) : "transparent"
+                border.width: 3; z: -1
+                Behavior on border.color { ColorAnimation { duration: 100 } }
+            }
+
+            Text { id: cbrT; anchors.centerIn: parent; text: cbr.lbl; color: cbr._pressed ? Qt.lighter(cbr.tc, 1.4) : cbr.tc
+                font.pixelSize: cbr.fontSize; font.bold: true; font.capitalization: Font.AllUppercase
+                Behavior on color { ColorAnimation { duration: 80 } }
+            }
+
+            MouseArea { anchors.fill: parent; hoverEnabled: true
+                onClicked:       { if(cbr.active) cbr.clicked() }
+                onPressed:       { cbr._pressed = true;  cbr.pressed() }
+                onReleased:      { cbr._pressed = false; cbr.released() }
+                onEntered:       cbr._hovered = true
+                onExited:        { cbr._hovered = false; cbr._pressed = false }
+                onCanceled:      { cbr._hovered = false; cbr._pressed = false }
+            }
         }
 
         // ════════════════════════════════════════════════════════════

@@ -1,10 +1,32 @@
 #!/bin/bash
-# Stop all robot control processes cleanly
+# Stop all system processes cleanly (Cartridge + Robot)
 # Usage: ./stop_all.sh
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🛑 Stopping Robot Control System..."
+echo "🛑 Stopping Full System (Cartridge + Robot)..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Kill PID file processes first
+PIDFILE="/tmp/cartridge_system.pid"
+if [ -f "$PIDFILE" ]; then
+    echo "  Stopping PID-tracked processes..."
+    for pid in $(cat "$PIDFILE" 2>/dev/null); do
+        kill -TERM "$pid" 2>/dev/null || true
+    done
+    sleep 1
+    for pid in $(cat "$PIDFILE" 2>/dev/null); do
+        kill -9 "$pid" 2>/dev/null || true
+    done
+    rm -f "$PIDFILE"
+fi
+
+# Kill cartridge feeder
+echo "  Stopping cartridge_providesystem_py..."
+pkill -9 -f "cartridge_providesystem_py" 2>/dev/null
+
+# Kill web GUI
+echo "  Stopping cartridge_gui.py..."
+pkill -9 -f "cartridge_gui.py" 2>/dev/null
 
 # Kill robot logic node
 echo "  Stopping robot_logic_node..."
@@ -35,7 +57,7 @@ pkill -9 -f "system_csi_dual_model" 2>/dev/null
 sleep 1
 
 # Verify all stopped
-REMAINING=$(ps aux | grep -E "(robot_logic_node|dobot_bringup|gripper_festo|csi_camera|yolo)" | grep -v grep | wc -l)
+REMAINING=$(ps aux | grep -E "(cartridge_providesystem|robot_logic_node|dobot_bringup|gripper_festo|csi_camera|yolo|unified_control_gui)" | grep -v grep | wc -l)
 
 echo ""
 if [ $REMAINING -eq 0 ]; then

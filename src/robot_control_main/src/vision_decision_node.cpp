@@ -175,9 +175,9 @@ public:
         
         // Tray change publishers
         pub_change_tray_input_ = create_publisher<std_msgs::msg::Bool>(
-            "/vision/change_tray_input", 10);
+            "/robot/change_tray", 10);
         pub_change_tray_output_ = create_publisher<std_msgs::msg::Bool>(
-            "/vision/change_tray_output", 10);
+            "/robot/done_tray_output", 10);
 
         
         // Subscriptions with SensorDataQoS for low latency

@@ -16,7 +16,7 @@ find_package(dobot_msgs_v3 REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(image_transport REQUIRED)
-find_package(Qt5 REQUIRED COMPONENTS Core Gui Qml Quick Charts QuickControls2 Widgets)
+find_package(Qt5 REQUIRED COMPONENTS Core Gui Qml Quick Charts QuickControls2 Widgets Network)
 
 include_directories(
   include
@@ -54,6 +54,7 @@ target_link_libraries(${PROJECT_NAME}
   Qt5::Charts
   Qt5::QuickControls2
   Qt5::Widgets
+  Qt5::Network
   ${OpenCV_LIBS}
 )
 

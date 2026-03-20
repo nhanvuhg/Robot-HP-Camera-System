@@ -36,6 +36,7 @@
 #include "dobot_msgs_v3/srv/get_angle.hpp"
 #include "dobot_msgs_v3/srv/joint_mov_j.hpp"
 #include "dobot_msgs_v3/srv/mov_l.hpp"
+#include "dobot_msgs_v3/srv/mov_j.hpp"
 #include "dobot_msgs_v3/srv/rel_mov_l.hpp"
 #include "dobot_msgs_v3/srv/rel_mov_l_user.hpp"
 #include "dobot_msgs_v3/srv/do.hpp"
@@ -64,6 +65,7 @@ using GetPose = dobot_msgs_v3::srv::GetPose;
 using GetAngle = dobot_msgs_v3::srv::GetAngle;
 using JointMovJ = dobot_msgs_v3::srv::JointMovJ;
 using MovL = dobot_msgs_v3::srv::MovL;
+using MovJ = dobot_msgs_v3::srv::MovJ;
 using RelMovL = dobot_msgs_v3::srv::RelMovL;
 using RelMovLUser = dobot_msgs_v3::srv::RelMovLUser;
 using DO = dobot_msgs_v3::srv::DO;
@@ -160,6 +162,7 @@ private:
     rclcpp::Client<GetAngle>::SharedPtr angle_client_;
     rclcpp::Client<JointMovJ>::SharedPtr joint_client_;
     rclcpp::Client<MovL>::SharedPtr movl_client_;
+    rclcpp::Client<MovJ>::SharedPtr movj_client_;
     rclcpp::Client<RelMovL>::SharedPtr relmovl_client_;
     rclcpp::Client<RelMovLUser>::SharedPtr relmovluser_client_;
     rclcpp::Client<DO>::SharedPtr do_client_;
@@ -183,6 +186,7 @@ private:
         angle_client_ = create_client<GetAngle>("/nova5/dobot_bringup/GetAngle", qos);
         joint_client_ = create_client<JointMovJ>("/nova5/dobot_bringup/JointMovJ", qos);
         movl_client_ = create_client<MovL>("/nova5/dobot_bringup/MovL", qos);
+        movj_client_ = create_client<MovJ>("/nova5/dobot_bringup/MovJ", qos);
         relmovl_client_ = create_client<RelMovL>("/nova5/dobot_bringup/RelMovL", qos);
         relmovluser_client_ = create_client<RelMovLUser>("/nova5/dobot_bringup/RelMovLUser", qos);
         do_client_ = create_client<DO>("/nova5/dobot_bringup/DO", qos);
@@ -290,6 +294,10 @@ private:
             return false;
         }
 
+        if (!prepareJointMotion()) {
+            RCLCPP_WARN(get_logger(), "[MOTION] Failed to prepare Joint Motion (Speed/Acc)");
+        }
+
         auto req = std::make_shared<JointMovJ::Request>();
         const auto& joints = joint_sequences_[index];
         req->j1 = joints[0];
@@ -312,51 +320,83 @@ private:
     }
 
     bool moveR(double dx, double dy, double dz) {
-        // 1. Prepare Mode
         if (!prepareLinearMotion()) {
             RCLCPP_ERROR(get_logger(), "[moveR] Prepare failed");
             return false;
         }
-        
-        // 2. Get Current Pose
+
         auto current_pose = getCurrentPose();
         if (current_pose.size() < 6) {
             RCLCPP_ERROR(get_logger(), "[moveR] No current pose");
             return false;
         }
-        
-        // 3. Calculate Target (Current + Offset)
-        double target_x = current_pose[0] + dx;
-        double target_y = current_pose[1] + dy;
-        double target_z = current_pose[2] + dz;
-        
-        RCLCPP_DEBUG(get_logger(), "[moveR] %.1f,%.1f,%.1f -> %.1f,%.1f,%.1f",
-            current_pose[0], current_pose[1], current_pose[2],
-            target_x, target_y, target_z);
 
-        // 4. Execute MovL (Absolute Move)
+        // Full pose log for debugging
+        RCLCPP_INFO(get_logger(),
+            "[moveR] Current: X=%.2f Y=%.2f Z=%.2f Rx=%.2f Ry=%.2f Rz=%.2f",
+            current_pose[0], current_pose[1], current_pose[2],
+            current_pose[3], current_pose[4], current_pose[5]);
+
         auto req = std::make_shared<MovL::Request>();
-        req->x = target_x;
-        req->y = target_y;
-        req->z = target_z;
+        req->x  = current_pose[0] + dx;
+        req->y  = current_pose[1] + dy;
+        req->z  = current_pose[2] + dz;
         req->rx = current_pose[3];
         req->ry = current_pose[4];
         req->rz = current_pose[5];
         req->param_value.clear();
-        
+
+        RCLCPP_INFO(get_logger(),
+            "[moveR] Target:  X=%.2f Y=%.2f Z=%.2f Rx=%.2f Ry=%.2f Rz=%.2f",
+            req->x, req->y, req->z, req->rx, req->ry, req->rz);
+
         auto res = callService<MovL>(movl_client_, req, "MovL");
-        if (!res || res->res != 0) {
-            RCLCPP_ERROR(get_logger(), "[moveR] MovL failed");
+        if (!res) {
+            RCLCPP_ERROR(get_logger(), "[moveR] Service call returned nullptr (timeout/unavailable)");
+            return false;
+        }
+        if (res->res != 0) {
+            RCLCPP_ERROR(get_logger(), "[moveR] MovL failed (err: %d)", res->res);
             return false;
         }
 
-        std::this_thread::sleep_for(200ms);
+        return sync();
+    }
+
+
+    bool moveJ_Absolute(const std::vector<double>& pose) {
+        if (pose.size() < 6) return false;
+        
+        if (!prepareJointMotion()) {
+            RCLCPP_WARN(get_logger(), "[MOTION] Failed to prepare Joint Motion (Speed/Acc)");
+        }
+
+        auto req = std::make_shared<MovJ::Request>();
+        req->x = pose[0];
+        req->y = pose[1];
+        req->z = pose[2];
+        req->rx = pose[3];
+        req->ry = pose[4];
+        req->rz = pose[5];
+        req->param_value.clear();
+        
+        auto res = callService<MovJ>(movj_client_, req, "MovJ");
+        if (!res) return false;
+        if (res->res != 0) {
+            RCLCPP_ERROR(get_logger(), "[moveJ] Failed (err: %d)", res->res);
+            return false;
+        }
+
         return sync();
     }
 
     bool moveL_Absolute(const std::vector<double>& pose) {
         if (pose.size() < 6) return false;
         
+        if (!prepareLinearMotion()) {
+            RCLCPP_WARN(get_logger(), "[MOTION] Failed to prepare Linear Motion (Speed/Acc)");
+        }
+
         auto req = std::make_shared<MovL::Request>();
         req->x = pose[0];
         req->y = pose[1];
@@ -405,33 +445,45 @@ private:
     }
 
     bool sync() {
-        auto req = std::make_shared<SyncSrv::Request>();
-        
-        if (!sync_client_->service_is_ready()) {
-            RCLCPP_ERROR(get_logger(), "[SYNC] Service not ready");
-            return false;
+        // Sync() returns -10000 on this firmware (command unsupported).
+        // Instead, poll RobotMode until robot is no longer in motion (mode != 7).
+        // Mode values: 5=standby, 7=running, 9=error
+        if (!robot_mode_client_->service_is_ready()) {
+            RCLCPP_WARN(get_logger(), "[SYNC] RobotMode service not ready, using sleep fallback");
+            rclcpp::sleep_for(std::chrono::milliseconds(500));
+            return true;
         }
-        
-        auto future = sync_client_->async_send_request(req);
-        
-        if (future.wait_for(10s) == std::future_status::ready) {
+
+        const int max_attempts = 100; // 10 seconds max
+        for (int i = 0; i < max_attempts; ++i) {
+            auto req = std::make_shared<RobotMode::Request>();
+            auto future = robot_mode_client_->async_send_request(req);
+            if (future.wait_for(1s) != std::future_status::ready) {
+                RCLCPP_WARN(get_logger(), "[SYNC] RobotMode timeout");
+                break;
+            }
             try {
                 auto res = future.get();
-                return (res != nullptr);
-            } catch (const std::exception& e) {
-                RCLCPP_ERROR(get_logger(), "[SYNC] Exception: %s", e.what());
-                return false;
-            }
+                if (res && res->res == 0) {
+                    // mode field is a string like "5" or "7"
+                    int mode = std::stoi(res->mode);
+                    if (mode != 7) { // 7 = in motion
+                        RCLCPP_DEBUG(get_logger(), "[SYNC] Robot idle (mode=%d) after %d polls", mode, i);
+                        return true;
+                    }
+                }
+            } catch (...) {}
+            rclcpp::sleep_for(std::chrono::milliseconds(100));
         }
-        
-        RCLCPP_WARN(get_logger(), "[SYNC] Timeout");
-        return false;
+
+        RCLCPP_WARN(get_logger(), "[SYNC] Max polls reached, proceeding anyway");
+        return true;
     }
 
     std::vector<double> getCurrentPose() {
         auto req = std::make_shared<GetPose::Request>();
         req->user = 0;
-        req->tool = 1;
+        req->tool = 0;  // tool=0 matches MovL/MovJ base frame
         
         auto res = callService<GetPose>(pose_client_, req, "GetPose");
         
@@ -465,13 +517,27 @@ private:
     bool prepareLinearMotion() {
         // Set SpeedL
         auto speed_req = std::make_shared<SpeedL::Request>();
-        speed_req->r = 50;
+        speed_req->r = 20; // 20% speed
         if (!callService<SpeedL>(speedl_client_, speed_req, "SpeedL")) return false;
 
         // Set AccL
         auto acc_req = std::make_shared<AccL::Request>();
-        acc_req->r = 20;
+        acc_req->r = 20; // 20% acc
         if (!callService<AccL>(accl_client_, acc_req, "AccL")) return false;
+        
+        return true;
+    }
+
+    bool prepareJointMotion() {
+        // Set SpeedJ
+        auto speed_req = std::make_shared<SpeedJ::Request>();
+        speed_req->r = 20; // 20% speed
+        if (!callService<SpeedJ>(speedj_client_, speed_req, "SpeedJ")) return false;
+
+        // Set AccJ
+        auto acc_req = std::make_shared<AccJ::Request>();
+        acc_req->r = 20; // 20% acc
+        if (!callService<AccJ>(accj_client_, acc_req, "AccJ")) return false;
         
         return true;
     }
@@ -534,6 +600,22 @@ private:
     void executeAction(const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
     {
         RCLCPP_INFO(get_logger(), "[ACTION] Executing motion goal...");
+        
+        // Auto-recovery: Clear any lingering errors from previous failures
+        // Without this, robot stays in Mode 9 and ALL commands return -2
+        {
+            auto clr = std::make_shared<ClearError::Request>();
+            auto clr_res = callService<ClearError>(clear_error_client_, clr, "ClearError");
+            if (clr_res) {
+                // Small delay then re-enable
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                auto en = std::make_shared<EnableRobot::Request>();
+                en->load = 0.0;
+                callService<EnableRobot>(enable_client_, en, "EnableRobot");
+                std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            }
+        }
+        
         auto feedback = std::make_shared<ExecuteMotion::Feedback>();
         auto result = std::make_shared<ExecuteMotion::Result>();
         const auto goal = goal_handle->get_goal();
@@ -631,150 +713,88 @@ private:
 
     bool executeInputTrayChamber(int row) {
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Chamber", row);
-        
-        if (row < 1 || row > 5) {
-            RCLCPP_ERROR(get_logger(), "[MOTION] Invalid row: %d", row);
-            return false;
-        }
-        
+        if (row < 1 || row > 5) return false;
         if (!moveToIndex(6)) return false;
         if (!moveToIndex(static_cast<size_t>(row))) return false;
-        
-        std::this_thread::sleep_for(500ms);
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(1, true)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveR(0, 0, 30)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveToIndex(7)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveR(0, 30, 0)) return false;
         if (!setDigitalOutput(1, false)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveR(0, -30, 0)) return false;
-        std::this_thread::sleep_for(500ms);
-        
         return true;
     }
 
     bool executeInputTrayBuffer(int row) {
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Buffer", row);
-        
-        if (row < 1 || row > 5) {
-            RCLCPP_ERROR(get_logger(), "[MOTION] Invalid row: %d", row);
-            return false;
-        }
-        
+        if (row < 1 || row > 5) return false;
         if (!moveToIndex(6)) return false;
         if (!moveToIndex(static_cast<size_t>(row))) return false;
-        
-        std::this_thread::sleep_for(300ms);
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(1, true)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveR(0, 0, 30)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveToIndex(8)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(1, false)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveR(0, 0, 30)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveToIndex(0)) return false;
-        
         return true;
     }
 
     bool executeChamberScale() {
         RCLCPP_INFO(get_logger(), "[MOTION] Chamber → Scale");
-        
-        std::this_thread::sleep_for(300ms);
         if (!moveToIndex(7)) return false;
-        std::this_thread::sleep_for(50ms);
         if (!moveR(0, 30, 0)) return false;
-        std::this_thread::sleep_for(50ms);
         if (!moveR(0, -30, 0)) return false;
-        std::this_thread::sleep_for(50ms);
         if (!moveToIndex(9)) return false;
-        std::this_thread::sleep_for(50ms);
         if (!moveToIndex(10)) return false;
-        std::this_thread::sleep_for(50ms);
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(1, false)) return false;
-        std::this_thread::sleep_for(50ms);
         if (!moveR(0, 0, 30)) return false;
-        
         return true;
     }
 
     bool executeScaleOutput(int slot) {
         RCLCPP_INFO(get_logger(), "[MOTION] Scale → Output Slot %d", slot);
-        
-        if (slot < 1 || slot > 8) {
-            RCLCPP_ERROR(get_logger(), "[MOTION] Invalid slot: %d", slot);
-            return false;
-        }
-        
+        if (slot < 1 || slot > 8) return false;
         if (!moveToIndex(11)) return false;
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(2, true)) return false;
         if (!moveR(0, 0, 30)) return false;
-        std::this_thread::sleep_for(300ms);
         if (!moveToIndex(12)) return false;
         if (!moveToIndex(12 + slot)) return false;
-        std::this_thread::sleep_for(300ms);
         if (!moveR(0, 0, -30)) return false;
-        std::this_thread::sleep_for(200ms);
         if (!setDigitalOutput(2, false)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveR(0, 0, 30)) return false;
-        std::this_thread::sleep_for(300ms);
         if (!moveToIndex(12)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveToIndex(0)) return false;
-        
         return true;
     }
 
     bool executeScaleFail() {
         RCLCPP_INFO(get_logger(), "[MOTION] Scale → Fail Position %d", current_fail_slot_);
-        
-        std::this_thread::sleep_for(500ms);
         if (!moveToIndex(20 + current_fail_slot_)) return false;
-        
         current_fail_slot_++;
         if (current_fail_slot_ > 4) current_fail_slot_ = 1;
-        
-        std::this_thread::sleep_for(300ms);
         if (!moveR(0, 0, -30)) return false;
-        std::this_thread::sleep_for(200ms);
         if (!setDigitalOutput(2, false)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveR(0, 0, 30)) return false;
-        std::this_thread::sleep_for(500ms);
         if (!moveToIndex(0)) return false;
-        
         return true;
     }
 
     bool executeBufferChamber() {
         RCLCPP_INFO(get_logger(), "[MOTION] Buffer → Chamber");
-        
         if (!moveToIndex(8)) return false;
-        std::this_thread::sleep_for(300ms);
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(2, true)) return false;
-        std::this_thread::sleep_for(300ms);
         if (!moveR(0, 0, 30)) return false;
-        std::this_thread::sleep_for(300ms);
         if (!moveToIndex(7)) return false;
         if (!moveR(0, -50, 0)) return false;
         if (!setDigitalOutput(2, false)) return false;
-        std::this_thread::sleep_for(300ms);
         if (!moveR(0, 50, 0)) return false;
         if (!moveToIndex(0)) return false;
-        
         return true;
     }
 };
