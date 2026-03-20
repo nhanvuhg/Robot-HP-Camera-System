@@ -490,13 +490,6 @@
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Confirm"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.confirmOutput() }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Resume";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
                                 }
-
-                                // Hàng 3: PLACE OUTPUT / PLACE FAIL
-                                RowLayout {
-                                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Place Output"; bg: "#0a2a33"; bc: "#00bcd4"; tc: "#00bcd4"; onClicked: robotController.gotoState("PLACE_TO_OUTPUT") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Place Fail";   bg: "#33200a"; bc: "#ff9800"; tc: "#ff9800"; onClicked: robotController.gotoState("PLACE_TO_FAIL") }
-                                }
                             }
                         }
 
@@ -1533,14 +1526,11 @@
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
-                                        // Stop & Reset → mode 4 (manual JOG ready)
-                                        CBtn { lbl: "⏹ STOP & RESET"; width: parent.width; bg: "#4a1a00"; bc: "#FF6600"; tc: "#FF6600"; padV: 10; onClicked: robotController.stopAndResetRobot() }
+                                        // Stop & Reset → IDLE
+                                        CBtn { lbl: "⏹ STOP"; width: parent.width; bg: "#4a1a00"; bc: "#FF6600"; tc: "#FF6600"; padV: 10; onClicked: robotController.stopAndResetRobot() }
 
-                                        // Enable / Disable
-                                        Row { spacing: 4; width: parent.width
-                                            CBtn { lbl: "ENABLE"; width: (parent.width - 4) / 2; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; padV: 8; onClicked: robotController.enableSystem(true) }
-                                            CBtn { lbl: "DISABLE"; width: (parent.width - 4) / 2; bg: root.cCard; bc: root.cBorder; tc: root.cDim; padV: 8; onClicked: robotController.enableSystem(false) }
-                                        }
+                                        // Enable
+                                        CBtn { lbl: "ENABLE"; width: parent.width; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; padV: 8; onClicked: robotController.enableSystem(true) }
 
                                         // Pause / Resume
                                         Row { spacing: 4; width: parent.width
@@ -1717,6 +1707,53 @@
                                             MouseArea {
                                                 id: pcMA; anchors.fill: parent
                                                 onClicked: robotController.simulateFillDone()
+                                            }
+                                        }
+                                    }
+
+                                    // ── ROW 3: PLACE ACTIONS ──
+                                    Row {
+                                        spacing: 15; anchors.horizontalCenter: parent.horizontalCenter
+
+                                        // PLACE OUTPUT
+                                        Rectangle {
+                                            width: 160; height: 50; radius: 8
+                                            color: poMA.pressed ? "#0a3a3a" : "#051a1a"
+                                            border.color: poMA.pressed ? Qt.lighter("#00bcd4", 1.2) : "#00bcd4"
+                                            border.width: poMA.pressed ? 3 : 2
+                                            scale: poMA.pressed ? 0.95 : 1.0
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                            Behavior on scale { NumberAnimation { duration: 100 } }
+
+                                            Column {
+                                                anchors.centerIn: parent; spacing: 2
+                                                Text { text: "📦 PLACE OUTPUT"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "(Scale → Output Tray)"; color: "#888"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                            }
+                                            MouseArea {
+                                                id: poMA; anchors.fill: parent
+                                                onClicked: robotController.gotoState("PLACE_TO_OUTPUT")
+                                            }
+                                        }
+
+                                        // PLACE FAIL
+                                        Rectangle {
+                                            width: 160; height: 50; radius: 8
+                                            color: pfMA.pressed ? "#3a2a0a" : "#1a1505"
+                                            border.color: pfMA.pressed ? Qt.lighter("#ff9800", 1.2) : "#ff9800"
+                                            border.width: pfMA.pressed ? 3 : 2
+                                            scale: pfMA.pressed ? 0.95 : 1.0
+                                            Behavior on color { ColorAnimation { duration: 100 } }
+                                            Behavior on scale { NumberAnimation { duration: 100 } }
+
+                                            Column {
+                                                anchors.centerIn: parent; spacing: 2
+                                                Text { text: "⛔ PLACE FAIL"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "(Scale → Fail Tray)"; color: "#888"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                            }
+                                            MouseArea {
+                                                id: pfMA; anchors.fill: parent
+                                                onClicked: robotController.gotoState("PLACE_TO_FAIL")
                                             }
                                         }
                                     }
