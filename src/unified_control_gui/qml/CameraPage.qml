@@ -309,12 +309,14 @@ Item {
                         Grid { columns: 2; spacing: 6; width: parent.width
                             Repeater {
                                 model: [
-                                    { lbl: "IN_READY",     icon: "📥", bg: "#351a0a", bc: "#ffaa4f" },
-                                    { lbl: "OUT_READY",    icon: "📤", bg: "#351a0a", bc: "#ffaa4f" },
-                                    { lbl: "PICK_INPUT",   icon: "↓", bg: "#0a1a35", bc: "#4f6cff" },
-                                    { lbl: "PICK_CHAMBER", icon: "⟳", bg: "#0a1a35", bc: "#4f6cff" },
-                                    { lbl: "HOME",         icon: "⌂", bg: "#0d2538", bc: "#334155" },
-                                    { lbl: "IDLE",         icon: "◌", bg: "#0d2538", bc: "#334155" }
+                                    { lbl: "IN_READY",      icon: "📥", bg: "#351a0a", bc: "#ffaa4f" },
+                                    { lbl: "OUT_READY",     icon: "📤", bg: "#351a0a", bc: "#ffaa4f" },
+                                    { lbl: "PICK_INPUT",    icon: "↓", bg: "#0a1a35", bc: "#4f6cff" },
+                                    { lbl: "PICK_CHAMBER",  icon: "⟳", bg: "#0a1a35", bc: "#4f6cff" },
+                                    { lbl: "PLACE_OUTPUT",  icon: "📦", bg: "#051a1a", bc: "#00bcd4" },
+                                    { lbl: "PLACE_FAIL",    icon: "⛔", bg: "#1a1505", bc: "#ff9800" },
+                                    { lbl: "HOME",          icon: "⌂", bg: "#0d2538", bc: "#334155" },
+                                    { lbl: "IDLE",          icon: "◌", bg: "#0d2538", bc: "#334155" }
                                 ]
                                 delegate: Rectangle {
                                     required property var modelData
@@ -332,6 +334,8 @@ Item {
                                         else if (modelData.lbl === "OUT_READY") robotController.simulateOutputTrayReady()
                                         else if (modelData.lbl === "PICK_INPUT") { cameraPageRoot.rowLocked = true; robotController.simulateFeedChamber() }
                                         else if (modelData.lbl === "PICK_CHAMBER") robotController.simulateFillDone()
+                                        else if (modelData.lbl === "PLACE_OUTPUT") robotController.gotoState("PLACE_TO_OUTPUT")
+                                        else if (modelData.lbl === "PLACE_FAIL") robotController.gotoState("PLACE_TO_FAIL")
                                         else robotController.gotoState(modelData.lbl)
                                     }}
                                 }
@@ -351,23 +355,15 @@ Item {
                         Rectangle { width: parent.width; height: 52; radius: 5; color: stopResetMA.pressed ? Qt.darker("#4a1a00", 1.2) : "#4a1a00"; border.color: "#FF6600"; border.width: 2
                             scale: stopResetMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "⏹ STOP & RESET → MODE 4"; color: "#FF6600"; font.pixelSize: 14; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#FF6600"; font.pixelSize: 14; font.bold: true }
                             MouseArea { id: stopResetMA; anchors.fill: parent; onClicked: robotController.stopAndResetRobot() }
                         }
 
-                        Row { spacing: 6; width: parent.width
-                            Rectangle { width: (parent.width - 6) / 2; height: 46; radius: 5; color: enMA.pressed ? Qt.darker("#0a2a1a", 1.2) : "#0a2a1a"; border.color: "#10b981"; border.width: 2
-                                scale: enMA.pressed ? 0.95 : 1.0
-                                Behavior on scale { NumberAnimation { duration: 100 } }
-                                Text { anchors.centerIn: parent; text: "ENABLE";  color: "#10b981"; font.pixelSize: 13; font.bold: true }
-                                MouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
-                            }
-                            Rectangle { width: (parent.width - 6) / 2; height: 46; radius: 5; color: disMA.pressed ? Qt.darker("#0d2538", 1.2) : "#0d2538"; border.color: "#334155"; border.width: 2
-                                scale: disMA.pressed ? 0.95 : 1.0
-                                Behavior on scale { NumberAnimation { duration: 100 } }
-                                Text { anchors.centerIn: parent; text: "DISABLE"; color: "#94a3b8"; font.pixelSize: 13; font.bold: true }
-                                MouseArea { id: disMA; anchors.fill: parent; onClicked: robotController.enableSystem(false) }
-                            }
+                        Rectangle { width: parent.width; height: 46; radius: 5; color: enMA.pressed ? Qt.darker("#0a2a1a", 1.2) : "#0a2a1a"; border.color: "#10b981"; border.width: 2
+                            scale: enMA.pressed ? 0.95 : 1.0
+                            Behavior on scale { NumberAnimation { duration: 100 } }
+                            Text { anchors.centerIn: parent; text: "ENABLE";  color: "#10b981"; font.pixelSize: 13; font.bold: true }
+                            MouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
                         }
 
                         Rectangle { width: parent.width; height: 52; radius: 5; color: startMA.pressed ? Qt.darker("#0d3320", 1.3) : "#0d3320"; border.color: "#22c55e"; border.width: 2
