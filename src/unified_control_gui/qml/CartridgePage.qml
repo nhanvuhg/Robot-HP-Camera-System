@@ -480,7 +480,7 @@
                                 RowLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "START";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.startSystem() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    onClicked: cartridgeController.stopSystem() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    onClicked: { robotController.emergencyStop(true); cartridgeController.stopSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
                                 }
 
@@ -1070,7 +1070,7 @@
             Item {
                 id: page3Root
                 property string currentMode: cartridgeController.currentMode  // bind to system mode
-                property bool manualEnabled: currentMode === "" || currentMode === "manual" || currentMode === "idle"
+                property bool manualEnabled: robotController.systemStatus === "IDLE" || robotController.systemStatus === "UNKNOWN" || robotController.systemStatus === ""
                 property real stepValue: 1.0
                 property int speedVal: robotController.speedRatio
                 property bool rowLocked: false

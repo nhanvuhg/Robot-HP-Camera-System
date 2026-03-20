@@ -143,6 +143,7 @@ private:
     rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedPtr reset_robot_client_;
     rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedPtr speed_factor_client_;
     rclcpp::Client<dobot_msgs_v3::srv::GetErrorID>::SharedPtr get_error_id_client_;
+    rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr reset_state_client_;
     
     // Publishers
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr camera_select_pub_;

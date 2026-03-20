@@ -36,6 +36,7 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     reset_robot_client_ = node_->create_client<dobot_msgs_v3::srv::ResetRobot>("/nova5/dobot_bringup/ResetRobot");
     speed_factor_client_ = node_->create_client<dobot_msgs_v3::srv::SpeedFactor>("/nova5/dobot_bringup/SpeedFactor");
     get_error_id_client_ = node_->create_client<dobot_msgs_v3::srv::GetErrorID>("/nova5/dobot_bringup/GetErrorID");
+    reset_state_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/reset_state");
 
     // Create publishers
     camera_select_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/command_camera", 10);
@@ -126,20 +127,38 @@ void RobotController::enableSystem(bool enable)
 void RobotController::stopAndResetRobot()
 {
     qDebug() << "Stop & Reset Robot";
-    
-    // Step 1: ClearError
-    auto clearReq = std::make_shared<dobot_msgs_v3::srv::ClearError::Request>();
-    clear_error_client_->async_send_request(clearReq,
-        [this](rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedFuture f) {
-            try { qDebug() << "ClearError:" << f.get()->res; } catch (...) {}
-            
-            // Step 2: EnableRobot after 300ms
-            QTimer::singleShot(300, this, [this]() {
-                qDebug() << "Calling EnableRobot...";
-                callServiceAsync(enable_client_, true);
-                qDebug() << "Robot should be in mode 4 — JOG ready in ~1s";
+
+    // Step 1: Reset state machine → IDLE (stops auto mode, clears all flags)
+    auto resetReq = std::make_shared<std_srvs::srv::SetBool::Request>();
+    resetReq->data = true;
+    if (reset_state_client_->service_is_ready()) {
+        reset_state_client_->async_send_request(resetReq,
+            [this](rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture f) {
+                try { qDebug() << "Reset state:" << f.get()->message.c_str(); } catch (...) {}
             });
-        });
+    } else {
+        qWarning() << "/robot/reset_state not available (robot_logic_node not running?)";
+    }
+
+    // Step 2: Clear E-stop flag
+    auto estopReq = std::make_shared<std_srvs::srv::SetBool::Request>();
+    estopReq->data = false;
+    if (emergency_stop_client_->service_is_ready()) {
+        emergency_stop_client_->async_send_request(estopReq);
+    }
+
+    // Step 3: ClearError + EnableRobot (after 500ms for reset_state to complete)
+    QTimer::singleShot(500, this, [this]() {
+        auto clearReq = std::make_shared<dobot_msgs_v3::srv::ClearError::Request>();
+        clear_error_client_->async_send_request(clearReq,
+            [this](rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedFuture f) {
+                try { qDebug() << "ClearError:" << f.get()->res; } catch (...) {}
+                QTimer::singleShot(300, this, [this]() {
+                    callServiceAsync(enable_client_, true);
+                    qDebug() << "Robot re-enabled — ready for new commands";
+                });
+            });
+    });
 }
 
 void RobotController::startSystem(bool start)
