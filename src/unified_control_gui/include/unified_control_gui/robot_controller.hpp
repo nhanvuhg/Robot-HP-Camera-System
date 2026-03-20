@@ -101,6 +101,9 @@ public slots:
     void simulateInputTrayReady();
     void simulateOutputTrayReady();
 
+    // Scale result
+    void publishScaleResult(bool pass);
+
 signals:
     void systemStatusChanged();
     void errorMessageChanged();
@@ -150,6 +153,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr fill_done_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr input_tray_ready_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr output_tray_ready_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr scale_result_pub_;
     
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_status_sub_;

@@ -242,7 +242,7 @@ private:
     int selected_input_row_;
     std::mutex row_selection_mutex_;
     
-    int current_auto_slot_{1}; // 1-8 sequential output
+    int current_auto_slot_{1}; // 1-9 sequential output
     int current_fail_slot_{1}; // 1-4 sequential fail
     bool buffer_is_empty_{true};
     bool is_last_tray_available_{false};
@@ -1109,7 +1109,7 @@ void RobotLogicNode::selectedSlotCallback(const std_msgs::msg::Int32::SharedPtr 
 {
     int slot = msg->data;
     
-    if (slot < 1 || slot > 8)
+    if (slot < 1 || slot > 9)
     {
         RCLCPP_WARN(this->get_logger(), "[AI SLOT] Invalid slot: %d", slot);
         return;
@@ -1216,7 +1216,7 @@ void RobotLogicNode::commandRowCallback(const std_msgs::msg::Int32::SharedPtr ms
 void RobotLogicNode::commandSlotCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
     int slot = msg->data;
-    if (slot < 1 || slot > 8)
+    if (slot < 1 || slot > 9)
     {
         RCLCPP_ERROR(this->get_logger(), "[CMD SLOT] Invalid Slot %d", slot);
         return;
@@ -2229,8 +2229,8 @@ void RobotLogicNode::statePlaceToOutput()
             tray_count_pub_->publish(*msg);
         }
         
-        if (placed_slot >= 8) {
-            RCLCPP_WARN(this->get_logger(), "[OUTPUT] ⚠️ Output Tray Full (Slot 8) -> Requesting Change Output");
+        if (placed_slot >= 9) {
+            RCLCPP_WARN(this->get_logger(), "[OUTPUT] ⚠️ Output Tray Full (Slot 9) -> Requesting Change Output");
             auto done_msg = std_msgs::msg::Bool();
             done_msg.data = true;
             done_output_tray_pub_->publish(done_msg);

@@ -46,6 +46,7 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     fill_done_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/fill_machine/fill_done", 10);
     input_tray_ready_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_tray_loaded", 10);
     output_tray_ready_pub_ = node_->create_publisher<std_msgs::msg::Bool>("tray_output_ready", 10);
+    scale_result_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/scale/result", 10);
     
     // Create subscribers
     system_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
@@ -648,5 +649,15 @@ void RobotController::simulateOutputTrayReady()
     msg.data = true;
     output_tray_ready_pub_->publish(msg);
     error_log_ = "[SIMULATION] 📤 OUTPUT TRAY READY Sent";
+    emit errorLogChanged();
+}
+
+void RobotController::publishScaleResult(bool pass)
+{
+    qDebug() << "Scale result:" << (pass ? "PASS" : "FAIL");
+    auto msg = std_msgs::msg::Bool();
+    msg.data = pass;
+    scale_result_pub_->publish(msg);
+    error_log_ = pass ? "[SCALE] ✅ PASS published" : "[SCALE] ❌ FAIL published";
     emit errorLogChanged();
 }
