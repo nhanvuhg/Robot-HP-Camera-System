@@ -123,7 +123,8 @@ Item {
 
                     GridLayout {
                         id: camGrid
-                        columns: 2
+                        columns: 1
+                        rows: 2
                         rowSpacing: 10; columnSpacing: 10
                         anchors.fill: parent; anchors.margins: 10
 
@@ -182,8 +183,8 @@ Item {
             // ── System Monitor + Controls ──────────────────────
             Rectangle {
                 Layout.fillHeight: true
-                Layout.preferredWidth: 350
-                Layout.minimumWidth: 300
+                Layout.preferredWidth: 550
+                Layout.minimumWidth: 450
                 color: "#081e29"
                 border.color: "#134357"
                 radius: 6
