@@ -1157,21 +1157,27 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
         RCLCPP_INFO(this->get_logger(), "[GOTO] Initialized wait timer for PROCESSING_SCALE");
     }
     
-    // Legacy PLACE_TO_OUTPUT check removed or kept if needed for manual testing
-    if (target_state == SystemState::PLACE_TO_OUTPUT)
+    // Force-enable for manual PLACE commands so state machine doesn't kick to IDLE
+    if (target_state == SystemState::PLACE_TO_OUTPUT ||
+        target_state == SystemState::PLACE_TO_FAIL)
     {
-        int slot = -1;
+        system_enabled_ = true;
+        manual_mode_ = true;
+        stop_after_single_motion_ = true;
+        RCLCPP_INFO(this->get_logger(),
+            "[GOTO] Manual %s: system_enabled=true, manual_mode=true",
+            state_name.c_str());
+        
+        // Auto-select slot if none selected (for PLACE_TO_OUTPUT)
+        if (target_state == SystemState::PLACE_TO_OUTPUT)
         {
             std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-            slot = selected_output_slot_;
-        }
-        
-        if (slot == -1)
-        {
-             // For manual goto, we might want to allow it anyway or auto-select?
-             // Let's keep the warning but allow it, OR return if critical.
-             // Original logic returned. Keep it to avoid crash if slot invalid?
-             // Actually, motion stub checks slot.
+            if (selected_output_slot_ == -1)
+            {
+                selected_output_slot_ = current_auto_slot_;
+                RCLCPP_INFO(this->get_logger(),
+                    "[GOTO] Auto-selected slot %d for PLACE_TO_OUTPUT", selected_output_slot_);
+            }
         }
     }
     

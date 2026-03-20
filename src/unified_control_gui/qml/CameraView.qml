@@ -5,7 +5,8 @@ import QtQuick.Layouts 1.15
 Item {
     id: root
     Layout.fillWidth: true
-    Layout.fillHeight: true
+    // Calculate precise height perfectly to hold 16:9 image + 40px text/padding
+    height: width * 9 / 16 + 45
 
     property string cameraName: "Camera"
     property string topic: "/camera/image_raw"

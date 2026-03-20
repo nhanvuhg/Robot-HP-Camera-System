@@ -1411,33 +1411,6 @@
                                             color: root.cGreen
                                         }
 
-                                        // ── SCALE RESULT ─────────────────────
-                                        Rectangle { width: parent.width; height: 1; color: root.cBorder; opacity: 0.5 }
-                                        Text { text: "SCALE RESULT"; color: root.cDim; font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.8 }
-
-                                        Row { spacing: 6; width: parent.width
-                                            Rectangle {
-                                                width: parent.width / 2 - 3; height: 36; radius: 5
-                                                color: spMA.pressed ? "#1a5a1a" : "#0a2a0a"
-                                                border.color: spMA.pressed ? Qt.lighter("#4caf50", 1.3) : "#4caf50"
-                                                border.width: spMA.pressed ? 2 : 1; scale: spMA.pressed ? 0.95 : 1.0
-                                                Behavior on color { ColorAnimation { duration: 80 } }
-                                                Behavior on scale { NumberAnimation { duration: 60 } }
-                                                Text { anchors.centerIn: parent; text: "✅ PASS"; color: spMA.pressed ? Qt.lighter("#4caf50", 1.4) : "#4caf50"; font.pixelSize: 13; font.bold: true }
-                                                MouseArea { id: spMA; anchors.fill: parent; onClicked: robotController.publishScaleResult(true) }
-                                            }
-                                            Rectangle {
-                                                width: parent.width / 2 - 3; height: 36; radius: 5
-                                                color: sfMA.pressed ? "#5a1a1a" : "#2a0a0a"
-                                                border.color: sfMA.pressed ? Qt.lighter("#f44336", 1.3) : "#f44336"
-                                                border.width: sfMA.pressed ? 2 : 1; scale: sfMA.pressed ? 0.95 : 1.0
-                                                Behavior on color { ColorAnimation { duration: 80 } }
-                                                Behavior on scale { NumberAnimation { duration: 60 } }
-                                                Text { anchors.centerIn: parent; text: "❌ FAIL"; color: sfMA.pressed ? Qt.lighter("#f44336", 1.4) : "#f44336"; font.pixelSize: 13; font.bold: true }
-                                                MouseArea { id: sfMA; anchors.fill: parent; onClicked: robotController.publishScaleResult(false) }
-                                            }
-                                        }
-
                                     }
                                 }
 
