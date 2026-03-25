@@ -287,14 +287,6 @@ echo ""
 # Monitor — exit nếu critical process chết
 while true; do
     sleep 3
-    if ! kill -0 "$PID_PROVIDE" 2>/dev/null; then
-        echo "⚠️  Cartridge node exited — stopping all"
-        break
-    fi
-    if [ -n "${PID_DOBOT:-}" ] && ! kill -0 "$PID_DOBOT" 2>/dev/null; then
-        echo "⚠️  Dobot bringup exited — stopping all"
-        break
-    fi
     if [ -n "${PID_QML_GUI:-}" ] && ! kill -0 "$PID_QML_GUI" 2>/dev/null; then
         echo "[GUI] Closed — dừng hệ thống"
         break

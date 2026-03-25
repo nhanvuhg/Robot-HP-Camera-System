@@ -22,6 +22,7 @@ class CartridgeController : public QObject
     Q_PROPERTY(QString configData       READ configData       NOTIFY configDataChanged)
     Q_PROPERTY(QString lastNotification READ lastNotification NOTIFY notificationReceived)
     Q_PROPERTY(QVariantList logEntries  READ logEntries       NOTIFY logEntriesChanged)
+    Q_PROPERTY(QString sensorState      READ sensorState      NOTIFY sensorStateChanged)
 
 public:
     explicit CartridgeController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -32,6 +33,7 @@ public:
     QString configData()       const { return config_data_; }
     QString lastNotification() const { return last_notification_; }
     QVariantList logEntries()  const { return log_entries_; }
+    QString sensorState()      const { return sensor_state_; }
 
 public slots:
     // Servo control
@@ -51,6 +53,7 @@ public slots:
     void hmiResume();
     void resetFaults();
     void confirmOutput();
+    Q_INVOKABLE void s16Respond(bool ok);  // OK=true → S2A→S1, NO=false → IDLE
 
     // Sensor simulation
     void simSensor(const QString &cmd);
@@ -71,8 +74,11 @@ signals:
     void configDataChanged();
     void notificationReceived();
     void logEntriesChanged();
+    void s16WarningRequested();  // emitted when S16 ON warning received from cartridge
+    void sensorStateChanged();
 
 private:
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr gui_confirm_pub_;
     rclcpp::Node::SharedPtr node_;
 
     // Publishers
@@ -96,6 +102,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr config_data_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr gui_notify_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr servo_pos_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sensors_sub_;
 
     // State
     QString system_state_{"UNKNOWN"};
@@ -104,6 +111,7 @@ private:
     QString config_data_{"{}"};
     QString last_notification_;
     QVariantList log_entries_;
+    QString sensor_state_{"000000000000000000"};
 
     void publishString(rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub, const QString &data);
     void addLog(const QString &msg, const QString &type = "info");

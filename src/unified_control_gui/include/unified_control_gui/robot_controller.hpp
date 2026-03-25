@@ -37,9 +37,10 @@ class RobotController : public QObject
     Q_PROPERTY(QVariantList jointAngles READ jointAngles NOTIFY jointAnglesChanged)
     Q_PROPERTY(QVariantList cartesianPose READ cartesianPose NOTIFY cartesianPoseChanged)
     Q_PROPERTY(int speedRatio READ speedRatio NOTIFY speedRatioChanged)
-    Q_PROPERTY(QString errorLog READ errorLog NOTIFY errorLogChanged)
     Q_PROPERTY(bool jogContinuous READ jogContinuous WRITE setJogContinuous NOTIFY jogContinuousChanged)
     Q_PROPERTY(double jogStepSize READ jogStepSize WRITE setJogStepSize NOTIFY jogStepSizeChanged)
+    Q_PROPERTY(bool inReady READ inReady NOTIFY inReadyChanged)
+    Q_PROPERTY(bool outReady READ outReady NOTIFY outReadyChanged)
 
 public:
     explicit RobotController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -56,6 +57,8 @@ public:
     QString errorLog() const { return error_log_; }
     bool jogContinuous() const { return jog_continuous_; }
     double jogStepSize() const { return jog_step_size_; }
+    bool inReady() const { return in_ready_; }
+    bool outReady() const { return out_ready_; }
 
 public slots:
     // System control
@@ -118,6 +121,8 @@ signals:
     void errorLogChanged();
     void jogContinuousChanged();
     void jogStepSizeChanged();
+    void inReadyChanged();
+    void outReadyChanged();
     void jointPoseSaved(bool success, QString message);
 
 private:
@@ -127,6 +132,7 @@ private:
     rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr enable_client_;
     rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr start_system_client_;
     rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr emergency_stop_client_;
+    rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr pause_system_client_;  // NEW: /robot/pause_system
     rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr manual_mode_client_;
     rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr ai_mode_client_;
     
@@ -155,6 +161,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr input_tray_ready_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr output_tray_ready_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr scale_result_pub_;
+    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr speed_ratio_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr system_start_pub_;  // /system/start_button — shared with cartridge
     
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_status_sub_;
@@ -163,6 +171,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr selected_slot_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_uptime_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr tray_count_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr in_ready_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr out_ready_sub_;
     
     // State
     QString system_status_{"UNKNOWN"};
@@ -180,6 +190,10 @@ private:
     // JOG state
     bool jog_continuous_{true};    // true=continuous, false=step
     double jog_step_size_{1.0};   // step size (degrees or mm)
+    
+    bool in_ready_{false};
+    bool out_ready_{false};
+    
     QTimer *jog_timer_{nullptr};
     QString jog_axis_;
     bool jog_moving_{false};

@@ -20,6 +20,8 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     enable_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/enable_system");
     start_system_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/start_system");
     emergency_stop_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/emergency_stop");
+    pause_system_client_   = node_->create_client<std_srvs::srv::SetBool>("/robot/pause_system");  // NEW
+
     manual_mode_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/set_manual_mode");
     ai_mode_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/set_ai_mode");
     
@@ -46,8 +48,10 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     feed_chamber_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/revpi/feed_chamber", 10);
     fill_done_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/fill_machine/fill_done", 10);
     input_tray_ready_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_tray_loaded", 10);
-    output_tray_ready_pub_ = node_->create_publisher<std_msgs::msg::Bool>("tray_output_ready", 10);
+    output_tray_ready_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_trayoutput_loaded", 10);
     scale_result_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/scale/result", 10);
+    speed_ratio_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/speed_ratio", rclcpp::QoS(10).reliable().transient_local());
+    system_start_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/start_button", 10);  // shared with cartridge
     
     // Create subscribers
     system_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
@@ -84,7 +88,25 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
             system_uptime_ = QString::fromStdString(msg->data);
             emit systemUptimeChanged();
         });
-    
+
+    in_ready_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+        "/cartridge_providesystem/new_tray_loaded", rclcpp::QoS(10).reliable(),
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (in_ready_ != msg->data) {
+                in_ready_ = msg->data;
+                emit inReadyChanged();
+            }
+        });
+
+    out_ready_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+        "/cartridge_providesystem/new_trayoutput_loaded", rclcpp::QoS(10).reliable(),
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (out_ready_ != msg->data) {
+                out_ready_ = msg->data;
+                emit outReadyChanged();
+            }
+        });
+
     tray_count_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
         "/robot/tray_count", 10,
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
@@ -99,6 +121,15 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     int savedSpeed = settings.value("speedRatio", 100).toInt();
     speed_ratio_ = qBound(1, savedSpeed, 100);
     qDebug() << "Loaded speed ratio:" << speed_ratio_;
+
+    // Publish initial speed ratio so motion_executor gets it on startup
+    // Use a single-shot timer to ensure publisher is ready before sending
+    QTimer::singleShot(2000, this, [this]() {
+        std_msgs::msg::Int32 msg;
+        msg.data = speed_ratio_;
+        speed_ratio_pub_->publish(msg);
+        qDebug() << "[STARTUP] Published initial speed ratio:" << speed_ratio_;
+    });
 
     // Auto-poll angles/pose every 500ms for realtime display
     poll_timer_ = new QTimer(this);
@@ -164,7 +195,15 @@ void RobotController::stopAndResetRobot()
 void RobotController::startSystem(bool start)
 {
     qDebug() << "Start system:" << start;
+    // Call robot service
     callServiceAsync(start_system_client_, start);
+    // Also publish to shared topic so cartridge system starts too
+    if (start) {
+        auto msg = std_msgs::msg::Bool();
+        msg.data = true;
+        system_start_pub_->publish(msg);
+        qDebug() << "Published /system/start_button = true (cartridge trigger)";
+    }
 }
 
 void RobotController::emergencyStop(bool stop)
@@ -548,25 +587,18 @@ void RobotController::setDigitalOutput(int index, bool status)
 
 void RobotController::pauseRobot()
 {
-    qDebug() << "PauseRobot";
-    auto request = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
-    pause_client_->async_send_request(request,
-        [](rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedFuture future) {
-            try { qDebug() << "Pause result:" << future.get()->res; }
-            catch (const std::exception& e) { qWarning() << "Pause failed:" << e.what(); }
-        });
+    qDebug() << "PauseRobot -> /robot/pause_system true";
+    // Gọi service pause của state machine (dừng arm + block state transitions)
+    callServiceAsync(pause_system_client_, true);
 }
 
 void RobotController::resumeRobot()
 {
-    qDebug() << "ResumeRobot (ResetRobot)";
-    auto request = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
-    reset_robot_client_->async_send_request(request,
-        [](rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedFuture future) {
-            try { qDebug() << "Resume result:" << future.get()->res; }
-            catch (const std::exception& e) { qWarning() << "Resume failed:" << e.what(); }
-        });
+    qDebug() << "ResumeRobot -> /robot/pause_system false";
+    // Gọi service resume của state machine (ResetRobot + unblock state transitions)
+    callServiceAsync(pause_system_client_, false);
 }
+
 
 void RobotController::clearError()
 {
@@ -600,6 +632,11 @@ void RobotController::setSpeedRatio(int ratio)
                     QSettings settings("RobotControl", "ManualMode");
                     settings.setValue("speedRatio", ratio);
                     settings.sync();
+                    // Notify motion_executor about the new speed
+                    std_msgs::msg::Int32 smsg;
+                    smsg.data = ratio;
+                    speed_ratio_pub_->publish(smsg);
+                    qDebug() << "[SPEED] Published speed_ratio to motion_executor:" << ratio;
                 }
             } catch (const std::exception& e) { qWarning() << "SpeedFactor failed:" << e.what(); }
         });
@@ -653,21 +690,21 @@ void RobotController::simulateFillDone()
 
 void RobotController::simulateInputTrayReady()
 {
-    qDebug() << "SimulateInputTrayReady -> /cartridge_providesystem/new_tray_loaded = true";
+    qDebug() << "SimulateInputTrayReady toggling to" << !in_ready_;
     auto msg = std_msgs::msg::Bool();
-    msg.data = true;
+    msg.data = !in_ready_;
     input_tray_ready_pub_->publish(msg);
-    error_log_ = "[SIMULATION] 📥 INPUT TRAY READY Sent";
+    error_log_ = msg.data ? "[SIMULATION] 📥 INPUT TRAY READY (TRUE)" : "[SIMULATION] 📥 INPUT TRAY READY (FALSE)";
     emit errorLogChanged();
 }
 
 void RobotController::simulateOutputTrayReady()
 {
-    qDebug() << "SimulateOutputTrayReady -> tray_output_ready = true";
+    qDebug() << "SimulateOutputTrayReady toggling to" << !out_ready_;
     auto msg = std_msgs::msg::Bool();
-    msg.data = true;
+    msg.data = !out_ready_;
     output_tray_ready_pub_->publish(msg);
-    error_log_ = "[SIMULATION] 📤 OUTPUT TRAY READY Sent";
+    error_log_ = msg.data ? "[SIMULATION] 📤 OUTPUT TRAY READY (TRUE)" : "[SIMULATION] 📤 OUTPUT TRAY READY (FALSE)";
     emit errorLogChanged();
 }
 

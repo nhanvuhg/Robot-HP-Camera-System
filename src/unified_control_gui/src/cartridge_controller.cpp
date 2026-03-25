@@ -22,6 +22,7 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
     stop_button_pub_    = node_->create_publisher<std_msgs::msg::Bool>("/system/stop_button", qos);
     pause_button_pub_   = node_->create_publisher<std_msgs::msg::Bool>("/system/pause_button", qos);
     confirm_button_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/confirm_button", qos);
+    gui_confirm_pub_    = node_->create_publisher<std_msgs::msg::String>("/providesystem/gui_confirm", qos);
 
     // Subscribers
     system_state_sub_ = node_->create_subscription<std_msgs::msg::String>(
@@ -38,6 +39,7 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
             emit configDataChanged();
         });
 
+    // Notification from cartridge py
     gui_notify_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/providesystem/gui_notify", qos,
         [this](const std_msgs::msg::String::SharedPtr msg) {
@@ -52,6 +54,10 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
                 QString logMsg = detail.isEmpty() ? title : title + " — " + detail;
                 QString type = (level == "error") ? "err" : (level == "warn") ? "err" : "info";
                 addLog(logMsg, type);
+                // Detect S16 warning → trigger QML dialog
+                if (title.startsWith("S16")) {
+                    emit s16WarningRequested();
+                }
             } else {
                 addLog(last_notification_, "info");
             }
@@ -63,6 +69,16 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
         [this](const std_msgs::msg::String::SharedPtr msg) {
             servo_positions_ = QString::fromStdString(msg->data);
             emit servoPositionsChanged();
+        });
+
+    sensors_sub_ = node_->create_subscription<std_msgs::msg::String>(
+        "/providesystem/sensors_state", qos,
+        [this](const std_msgs::msg::String::SharedPtr msg) {
+            QString s = QString::fromStdString(msg->data);
+            if (sensor_state_ != s) {
+                sensor_state_ = s;
+                emit sensorStateChanged();
+            }
         });
 
     qDebug() << "CartridgeController initialized";
@@ -172,6 +188,14 @@ void CartridgeController::confirmOutput()
     msg.data = true;
     confirm_button_pub_->publish(msg);  // chỉ set _confirm_load_received
     addLog("Confirm: đã cấp khạy", "ok");
+}
+
+void CartridgeController::s16Respond(bool ok)
+{
+    auto msg = std_msgs::msg::String();
+    msg.data = ok ? "S16_OK" : "S16_NO";
+    gui_confirm_pub_->publish(msg);
+    addLog(ok ? "S16: OK — thực hiện State2 rồi State1" : "S16: NO — chờ restart", ok ? "ok" : "err");
 }
 
 // === Sensor Simulation ===

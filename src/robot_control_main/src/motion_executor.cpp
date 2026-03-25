@@ -93,14 +93,18 @@ public:
         // Publishers
         pub_busy_ = create_publisher<std_msgs::msg::Bool>("/robot/motion_busy", 10);
 
-        pub_busy_ = create_publisher<std_msgs::msg::Bool>("/robot/motion_busy", 10);
         pub_heartbeat_ = create_publisher<std_msgs::msg::Header>("/robot/motion_heartbeat", 10);
         pub_gripper_ = create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
         pub_picker_ = create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
 
         
         // Subscriptions
-
+        speed_ratio_sub_ = create_subscription<std_msgs::msg::Int32>(
+            "/robot/speed_ratio", rclcpp::QoS(10).reliable().transient_local(),
+            [this](const std_msgs::msg::Int32::SharedPtr msg) {
+                current_speed_ratio_ = std::clamp(msg->data, 1, 100);
+                RCLCPP_INFO(get_logger(), "[SPEED] Speed ratio updated: %d%%", current_speed_ratio_);
+            });
 
         // Heartbeat Timer (500ms)
         heartbeat_timer_ = create_wall_timer(500ms, [this]() {
@@ -137,6 +141,9 @@ private:
 
     int current_fail_slot_{1};
 
+    // Speed ratio from GUI (set via /robot/speed_ratio topic)
+    int current_speed_ratio_{14};  // default matches GUI saved value
+
     // ========================================================================
     // ROS INTERFACES
     // ========================================================================    // ROS INTERFACES
@@ -146,6 +153,8 @@ private:
 
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_gripper_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_picker_;
+
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr speed_ratio_sub_;
     
     rclcpp::TimerBase::SharedPtr heartbeat_timer_;
 
@@ -454,6 +463,11 @@ private:
             return true;
         }
 
+        // VITAL FIX: Give the Dobot controller time to transition into mode 7
+        // After sending a move command, the controller is still in mode 5 for ~50-150ms 
+        // before it officially starts trajectory execution.
+        rclcpp::sleep_for(std::chrono::milliseconds(250));
+
         const int max_attempts = 100; // 10 seconds max
         for (int i = 0; i < max_attempts; ++i) {
             auto req = std::make_shared<RobotMode::Request>();
@@ -515,28 +529,32 @@ private:
     }
 
     bool prepareLinearMotion() {
+        int spd = current_speed_ratio_;
+        RCLCPP_INFO(get_logger(), "[MOTION] prepareLinearMotion speed=%d%%", spd);
         // Set SpeedL
         auto speed_req = std::make_shared<SpeedL::Request>();
-        speed_req->r = 20; // 20% speed
+        speed_req->r = spd;
         if (!callService<SpeedL>(speedl_client_, speed_req, "SpeedL")) return false;
 
         // Set AccL
         auto acc_req = std::make_shared<AccL::Request>();
-        acc_req->r = 20; // 20% acc
+        acc_req->r = spd;
         if (!callService<AccL>(accl_client_, acc_req, "AccL")) return false;
         
         return true;
     }
 
     bool prepareJointMotion() {
+        int spd = current_speed_ratio_;
+        RCLCPP_INFO(get_logger(), "[MOTION] prepareJointMotion speed=%d%%", spd);
         // Set SpeedJ
         auto speed_req = std::make_shared<SpeedJ::Request>();
-        speed_req->r = 20; // 20% speed
+        speed_req->r = spd;
         if (!callService<SpeedJ>(speedj_client_, speed_req, "SpeedJ")) return false;
 
         // Set AccJ
         auto acc_req = std::make_shared<AccJ::Request>();
-        acc_req->r = 20; // 20% acc
+        acc_req->r = spd;
         if (!callService<AccJ>(accj_client_, acc_req, "AccJ")) return false;
         
         return true;
@@ -599,86 +617,94 @@ private:
 
     void executeAction(const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
     {
-        RCLCPP_INFO(get_logger(), "[ACTION] Executing motion goal...");
+    RCLCPP_INFO(get_logger(), "[ACTION] Executing motion goal...");
+
+    // ✅ Chỉ clear error khi robot đang ở mode lỗi (mode 9)
+    {
+        auto mode_req = std::make_shared<RobotMode::Request>();
+        auto mode_future = robot_mode_client_->async_send_request(mode_req);
         
-        // Auto-recovery: Clear any lingering errors from previous failures
-        // Without this, robot stays in Mode 9 and ALL commands return -2
-        {
-            auto clr = std::make_shared<ClearError::Request>();
-            auto clr_res = callService<ClearError>(clear_error_client_, clr, "ClearError");
-            if (clr_res) {
-                // Small delay then re-enable
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                auto en = std::make_shared<EnableRobot::Request>();
-                en->load = 0.0;
-                callService<EnableRobot>(enable_client_, en, "EnableRobot");
-                std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        if (mode_future.wait_for(2s) == std::future_status::ready) {
+            try {
+                auto mode_res = mode_future.get();
+                int mode = (mode_res && mode_res->res == 0) ? std::stoi(mode_res->mode) : -1;
+                
+                if (mode == 9) {
+                    RCLCPP_WARN(get_logger(), "[ACTION] Robot in error mode (9) — clearing...");
+                    
+                    auto clr = std::make_shared<ClearError::Request>();
+                    callService<ClearError>(clear_error_client_, clr, "ClearError");
+                    std::this_thread::sleep_for(200ms);
+                    
+                    auto en = std::make_shared<EnableRobot::Request>();
+                    en->load = 0.0;
+                    callService<EnableRobot>(enable_client_, en, "EnableRobot");
+                    std::this_thread::sleep_for(300ms);
+                    
+                    RCLCPP_INFO(get_logger(), "[ACTION] Robot re-enabled after error clear");
+                }
+                // mode 5 = standby, mode 7 = running — không cần làm gì
+            } catch (...) {
+                RCLCPP_WARN(get_logger(), "[ACTION] Failed to parse robot mode — proceeding anyway");
             }
-        }
-        
-        auto feedback = std::make_shared<ExecuteMotion::Feedback>();
-        auto result = std::make_shared<ExecuteMotion::Result>();
-        const auto goal = goal_handle->get_goal();
-
-        motion_in_progress_ = true;
-        publishBusy(true);
-
-        feedback->state = "RUNNING";
-        feedback->progress = 0.1f;
-        goal_handle->publish_feedback(feedback);
-
-        bool success = false;
-        std::string type = goal->command;
-        int param = goal->slot;
-
-        // Map action goal to existing execution methods
-        if (type == "INPUT_TRAY_CHAMBER") {
-            success = executeInputTrayChamber(param);
-        } else if (type == "INPUT_TRAY_BUFFER") {
-            success = executeInputTrayBuffer(param);
-        } else if (type == "CHAMBER_SCALE") {
-            success = executeChamberScale();
-        } else if (type == "SCALE_OUTPUT") {
-            success = executeScaleOutput(param);
-        } else if (type == "SCALE_FAIL") {
-            success = executeScaleFail();
-        } else if (type == "BUFFER_CHAMBER") {
-            success = executeBufferChamber();
-        } else if (type == "HOME") {
-            success = moveToIndex(0);
         } else {
-            RCLCPP_ERROR(get_logger(), "[ACTION] Unknown command: %s", type.c_str());
+            RCLCPP_WARN(get_logger(), "[ACTION] RobotMode check timeout — proceeding anyway");
         }
+    }
 
-        if (goal_handle->is_canceling()) {
-            result->success = false;
-            result->message = "CANCELLED";
-            goal_handle->canceled(result);
-            publishBusy(false);
-            motion_in_progress_ = false;
-            return;
-        }
+    auto feedback = std::make_shared<ExecuteMotion::Feedback>();
+    auto result = std::make_shared<ExecuteMotion::Result>();
+    const auto goal = goal_handle->get_goal();
 
-        result->success = success;
-        
-        if (success) {
-            result->message = "COMPLETED";
-            goal_handle->succeed(result);
-            RCLCPP_INFO(get_logger(), "[ACTION] Goal succeeded");
-        } else {
-            result->message = "FAILED";
-            if (goal->allow_rollback) {
-                feedback->state = "ROLLBACK";
-                goal_handle->publish_feedback(feedback);
-                rollbackSafe();
-                result->message = "ROLLED_BACK";
-            }
-            goal_handle->abort(result);
-            RCLCPP_ERROR(get_logger(), "[ACTION] Goal aborted/failed");
-        }
+    motion_in_progress_ = true;
+    publishBusy(true);
 
+    feedback->state = "RUNNING";
+    feedback->progress = 0.1f;
+    goal_handle->publish_feedback(feedback);
+
+    bool success = false;
+    std::string type = goal->command;
+    int param = goal->slot;
+
+    if (type == "INPUT_TRAY_CHAMBER")  success = executeInputTrayChamber(param);
+    else if (type == "INPUT_TRAY_BUFFER") success = executeInputTrayBuffer(param);
+    else if (type == "CHAMBER_SCALE")  success = executeChamberScale();
+    else if (type == "SCALE_OUTPUT")   success = executeScaleOutput(param);
+    else if (type == "SCALE_FAIL")     success = executeScaleFail();
+    else if (type == "BUFFER_CHAMBER") success = executeBufferChamber();
+    else if (type == "HOME")           success = moveToIndex(0);
+    else RCLCPP_ERROR(get_logger(), "[ACTION] Unknown command: %s", type.c_str());
+
+    if (goal_handle->is_canceling()) {
+        result->success = false;
+        result->message = "CANCELLED";
+        goal_handle->canceled(result);
         publishBusy(false);
         motion_in_progress_ = false;
+        return;
+    }
+
+    result->success = success;
+
+    if (success) {
+        result->message = "COMPLETED";
+        goal_handle->succeed(result);
+        RCLCPP_INFO(get_logger(), "[ACTION] Goal succeeded");
+    } else {
+        result->message = "FAILED";
+        if (goal->allow_rollback) {
+            feedback->state = "ROLLBACK";
+            goal_handle->publish_feedback(feedback);
+            rollbackSafe();
+            result->message = "ROLLED_BACK";
+        }
+        goal_handle->abort(result);
+        RCLCPP_ERROR(get_logger(), "[ACTION] Goal aborted/failed");
+    }
+
+    publishBusy(false);
+    motion_in_progress_ = false;
     }
 
     void rollbackSafe()
@@ -757,7 +783,7 @@ private:
 
     bool executeScaleOutput(int slot) {
         RCLCPP_INFO(get_logger(), "[MOTION] Scale → Output Slot %d", slot);
-        if (slot < 1 || slot > 8) return false;
+        if (slot < 1 || slot > 9) return false;
         if (!moveToIndex(11)) return false;
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(2, true)) return false;
@@ -791,9 +817,9 @@ private:
         if (!setDigitalOutput(2, true)) return false;
         if (!moveR(0, 0, 30)) return false;
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, -50, 0)) return false;
+        if (!moveR(0, 30, 0)) return false;
         if (!setDigitalOutput(2, false)) return false;
-        if (!moveR(0, 50, 0)) return false;
+        if (!moveR(0, -30, 0)) return false;
         if (!moveToIndex(0)) return false;
         return true;
     }

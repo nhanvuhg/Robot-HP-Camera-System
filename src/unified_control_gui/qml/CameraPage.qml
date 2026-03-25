@@ -11,6 +11,12 @@ Item {
     property bool modeLocked: false
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
 
+    // Tính từ systemStatus — chặn đổi mode khi robot đang chạy
+    property bool robotBusy: {
+        var s = (robotController.systemStatus || "").toLowerCase()
+        return s !== "" && s !== "idle" && s !== "ready" && s !== "unknown"
+    }
+
     // Unlock row selection khi process idle/done
     Connections {
         target: robotController
@@ -209,12 +215,22 @@ Item {
                                 delegate: Rectangle {
                                     required property var modelData
                                     property bool isSelected: cameraPageRoot.ctrlMode === modelData.key
+                                    // Bị chặn nếu modeLocked (user nhấn START) HOẶC robot đang chạy
+                                    property bool isLocked: cameraPageRoot.modeLocked || cameraPageRoot.robotBusy
                                     Layout.fillWidth: true; height: 44; radius: 5
                                     color: isSelected ? modelData.bc + "33" : "#0d2538"
-                                    border.color: isSelected ? modelData.bc : (cameraPageRoot.modeLocked ? "#2a3a4a" : "#134357"); border.width: 2
-                                    opacity: (!isSelected && cameraPageRoot.modeLocked) ? 0.35 : 1.0
-                                    Text { anchors.centerIn: parent; text: (cameraPageRoot.modeLocked && !isSelected ? "🔒 " : "") + modelData.lbl; color: isSelected ? modelData.bc : "#94a3b8"; font.pixelSize: 19; font.bold: true }
-                                    MouseArea { anchors.fill: parent; enabled: !cameraPageRoot.modeLocked; onClicked: cameraPageRoot.ctrlMode = modelData.key }
+                                    border.color: isSelected ? modelData.bc : (isLocked ? "#2a3a4a" : "#134357"); border.width: 2
+                                    opacity: (!isSelected && isLocked) ? 0.35 : 1.0
+                                    Text { anchors.centerIn: parent; text: (isLocked && !isSelected ? "🔒 " : "") + modelData.lbl; color: isSelected ? modelData.bc : "#94a3b8"; font.pixelSize: 19; font.bold: true }
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: !parent.isLocked
+                                        onClicked: cameraPageRoot.ctrlMode = modelData.key
+                                        ToolTip.visible: parent.isLocked && containsMouse
+                                        ToolTip.text: "⚠ Robot đang chạy — không thể đổi mode"
+                                        ToolTip.delay: 300
+                                        hoverEnabled: true
+                                    }
                                 }
                             }
                         }
@@ -285,13 +301,25 @@ Item {
                             ]
                             delegate: Rectangle {
                                 required property var modelData
+                                property bool isActive: (modelData.lbl === "IN_READY" && robotController.inReady) || (modelData.lbl === "OUT_READY" && robotController.outReady)
                                 Layout.fillWidth: true; height: 56; radius: 5
-                                color: ma.pressed ? Qt.darker(modelData.bg, 1.3) : modelData.bg
-                                border.color: ma.pressed ? Qt.lighter(modelData.bc, 1.2) : modelData.bc; border.width: ma.pressed ? 3 : 2
+                                color: isActive ? Qt.lighter(modelData.bg, 1.8) : (ma.pressed ? Qt.darker(modelData.bg, 1.3) : modelData.bg)
+                                border.color: isActive ? "#00ff00" : (ma.pressed ? Qt.lighter(modelData.bc, 1.2) : modelData.bc)
+                                border.width: isActive || ma.pressed ? 3 : 2
                                 scale: ma.pressed ? 0.95 : 1.0
-                                Behavior on color { ColorAnimation { duration: 100 } }
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                Behavior on border.color { ColorAnimation { duration: 150 } }
                                 Behavior on scale { NumberAnimation { duration: 100 } }
                                 Row { anchors.centerIn: parent; spacing: 6
+                                    Rectangle {
+                                        width: 14; height: 14; radius: 7
+                                        color: parent.parent.isActive ? "#00ff00" : "#444"
+                                        border.color: parent.parent.isActive ? "#fff" : "#222"
+                                        border.width: 1
+                                        visible: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        Behavior on color { ColorAnimation { duration: 200 } }
+                                    }
                                     Text { text: modelData.icon; color: modelData.bc; font.pixelSize: 21; anchors.verticalCenter: parent.verticalCenter }
                                     Text { text: modelData.lbl; color: modelData.bc; font.pixelSize: 19; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
                                 }
@@ -372,10 +400,8 @@ Item {
         // ── Footer ─────────────────────────────────────────────
         Item {
             height: 40; Layout.fillWidth: true
-
             Rectangle {
                 anchors.fill: parent; color: "#0d2538"; border.color: "#134357"
-
                 RowLayout {
                     anchors.fill: parent; anchors.margins: 10
                     Text { text: "© 2025 RYNAN TECHNOLOGIES"; color: "#6cf"; font.pixelSize: 16; Layout.alignment: Qt.AlignVCenter }
@@ -389,6 +415,55 @@ Item {
                         Image { source: "qrc:/icons/qml/icons/schedule.svg"; fillMode: Image.PreserveAspectFit; smooth: true; Layout.preferredWidth: 24; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
                         Text { text: currentTime; font.pixelSize: 16; color: "#6cf"; Layout.alignment: Qt.AlignVCenter }
                     }
+                }
+            }
+        }
+    }
+
+    // ─── S16 Warning Dialog ───────────────────────────────────────
+    Connections {
+        target: cartridgeController
+        function onS16WarningRequested() { s16Dialog.open() }
+    }
+
+    Popup {
+        id: s16Dialog
+        anchors.centerIn: parent
+        width: 440; height: 240
+        modal: true
+        focus: true
+        closePolicy: Popup.NoAutoClose
+        background: Rectangle {
+            color: "#0f1923"; radius: 14
+            border.color: "#f59e0b"; border.width: 2
+        }
+        contentItem: Column {
+            spacing: 18; padding: 24
+            Text {
+                text: "⚠️  Còn khay tại vị trí Extract (S16)"
+                color: "#f59e0b"; font.pixelSize: 19; font.bold: true
+                wrapMode: Text.WordWrap; width: 390
+            }
+            Text {
+                text: "Lấy khay ra (State2) rồi cấp khay mới (State1)?"
+                color: "#cbd5e1"; font.pixelSize: 16
+                wrapMode: Text.WordWrap; width: 390
+            }
+            Row {
+                spacing: 20; anchors.horizontalCenter: parent.horizontalCenter
+                Rectangle {
+                    width: 140; height: 46; radius: 8
+                    color: noMA.pressed ? "#7f1d1d" : "#450a0a"
+                    border.color: "#ef4444"; border.width: 1.5
+                    Text { anchors.centerIn: parent; text: "❌  NO — Dừng"; color: "#ef4444"; font.pixelSize: 16; font.bold: true }
+                    MouseArea { id: noMA; anchors.fill: parent; onClicked: { s16Dialog.close(); cartridgeController.s16Respond(false) } }
+                }
+                Rectangle {
+                    width: 140; height: 46; radius: 8
+                    color: okMA.pressed ? "#14532d" : "#052e16"
+                    border.color: "#22c55e"; border.width: 1.5
+                    Text { anchors.centerIn: parent; text: "✅  OK — Thay"; color: "#22c55e"; font.pixelSize: 16; font.bold: true }
+                    MouseArea { id: okMA; anchors.fill: parent; onClicked: { s16Dialog.close(); cartridgeController.s16Respond(true) } }
                 }
             }
         }

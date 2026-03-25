@@ -147,6 +147,76 @@
         }
 
         // ════════════════════════════════════════════════════════════
+        // OUTPUT TRAY TIMEOUT WARNING
+        // ════════════════════════════════════════════════════════════
+        Timer {
+            id: outputTrayWarningTimer
+            interval: 40000 // 40s timeout
+            running: !robotController.outReady && robotController.systemStatus !== "IDLE"
+            repeat: false
+            onTriggered: {
+                outputWarningPopup.open();
+            }
+        }
+
+        Popup {
+            id: outputWarningPopup
+            width: 320; height: 160
+            anchors.centerIn: parent
+            modal: true; focus: true
+            closePolicy: Popup.NoAutoClose
+            background: Rectangle {
+                color: "#1a0f05"
+                border.color: root.cOrange
+                border.width: 2
+                radius: 10
+            }
+            contentItem: ColumnLayout {
+                spacing: 15
+                Text {
+                    text: "⚠️ CẢNH BÁO"
+                    color: root.cOrange
+                    font.pixelSize: 18; font.bold: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Text {
+                    text: "Hệ thống đang chờ khay Output.\nBạn đã cấp khay mới chưa?"
+                    color: "white"
+                    font.pixelSize: 14
+                    horizontalAlignment: Text.AlignHCenter
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Item { Layout.fillHeight: true }
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    spacing: 20
+                    Button {
+                        text: "ĐÃ CẤP KHAY"
+                        font.bold: true; font.pixelSize: 12
+                        Layout.preferredWidth: 120; Layout.preferredHeight: 35
+                        background: Rectangle { color: root.cOrange; radius: 5 }
+                        contentItem: Text { text: parent.text; font: parent.font; color: "#000"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        onClicked: {
+                            robotController.simulateOutputTrayReady();
+                            outputWarningPopup.close();
+                        }
+                    }
+                    Button {
+                        text: "CHỜ THÊM"
+                        font.bold: true; font.pixelSize: 12
+                        Layout.preferredWidth: 100; Layout.preferredHeight: 35
+                        background: Rectangle { color: "#333"; radius: 5; border.color: "#666"; border.width: 1 }
+                        contentItem: Text { text: parent.text; font: parent.font; color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        onClicked: {
+                            outputWarningPopup.close();
+                            outputTrayWarningTimer.restart();
+                        }
+                    }
+                }
+            }
+        }
+
+        // ════════════════════════════════════════════════════════════
         // NOTIFICATION BANNER — gui_notify từ node (watchdog, cylinder timeout, errors)
         // ════════════════════════════════════════════════════════════
         Rectangle {
@@ -740,7 +810,10 @@
                             }
 
                             // ── Nút All ON / OFF / Clear ──
-                            Row { spacing: 3
+                            Row {
+                                spacing: 3
+                                enabled: cartridgeController.currentMode === "manual"
+                                opacity: enabled ? 1.0 : 0.3
                                 CBtn { lbl:"All ON";  padV:3; padH:8; fontSize:10; bg:"#0a332e"; bc:root.cGreen;  tc:root.cGreen;  onClicked: cartridgeController.simAll(1) }
                                 CBtn { lbl:"All OFF"; padV:3; padH:8; fontSize:10; bg:"#4d1a1a"; bc:root.cRed;    tc:root.cRed;    onClicked: cartridgeController.simAll(0) }
                                 CBtn { lbl:"Clear";   padV:3; padH:6; fontSize:10; bg:root.cCard; bc:root.cBorder; tc:root.cText;  onClicked: cartridgeController.simSensor("clear") }
@@ -748,7 +821,10 @@
 
                             // ── Quick Preset ──
                             Text { text: "QUICK PRESET"; color: root.cDim; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.8 }
-                            Row { spacing: 3
+                            Row {
+                                spacing: 3
+                                enabled: cartridgeController.currentMode === "manual"
+                                opacity: enabled ? 1.0 : 0.3
                                 // S1 Entry: điều kiện vào State 1
                                 CBtn {
                                     lbl: "S1 Entry"
@@ -829,7 +905,13 @@
                                     }
                                     delegate: Rectangle {
                                         id: sBtn
-                                        property bool on_: false
+                                        property bool on_: {
+                                            var st = cartridgeController.sensorState;
+                                            if (model.sid > 0 && model.sid <= st.length) {
+                                                return st.charAt(model.sid - 1) === '1';
+                                            }
+                                            return false;
+                                        }
 
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true          // ← mỗi nút chiếm đều phần chiều cao
@@ -844,8 +926,8 @@
                                         MouseArea {
                                             anchors.fill: parent
                                             onClicked: {
-                                                sBtn.on_ = !sBtn.on_
-                                                cartridgeController.simSensor(model.sid + ":" + (sBtn.on_ ? "1" : "0"))
+                                                if (cartridgeController.currentMode === "auto") return;
+                                                cartridgeController.simSensor(model.sid + ":" + (sBtn.on_ ? "0" : "1"))
                                             }
                                         }
                                         Column {
@@ -1601,8 +1683,8 @@
                                         // TRAY INPUT READY
                                         Rectangle {
                                             width: 160; height: 50; radius: 8
-                                            color: tiMA.pressed ? "#5a3a1a" : "#351a0a"
-                                            border.color: tiMA.pressed ? Qt.lighter("#ffaa4f", 1.2) : "#ffaa4f"
+                                            color: robotController.inReady ? "#1a5a3a" : (tiMA.pressed ? "#5a3a1a" : "#351a0a")
+                                            border.color: robotController.inReady ? "#00ff00" : (tiMA.pressed ? Qt.lighter("#ffaa4f", 1.2) : "#ffaa4f")
                                             border.width: tiMA.pressed ? 3 : 2
                                             scale: tiMA.pressed ? 0.95 : 1.0
                                             Behavior on color { ColorAnimation { duration: 100 } }
@@ -1611,7 +1693,7 @@
                                             Column {
                                                 anchors.centerIn: parent; spacing: 2
                                                 Text { text: "📥 TRAY INPUT READY"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: "(/new_tray_loaded)"; color: "#d29252"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: robotController.inReady ? "(ON)" : "(OFF)"; color: robotController.inReady ? "#00ff00" : "#d29252"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
                                             }
                                             MouseArea {
                                                 id: tiMA; anchors.fill: parent
@@ -1622,8 +1704,8 @@
                                         // TRAY OUTPUT READY
                                         Rectangle {
                                             width: 160; height: 50; radius: 8
-                                            color: toMA.pressed ? "#5a3a1a" : "#351a0a"
-                                            border.color: toMA.pressed ? Qt.lighter("#ffaa4f", 1.2) : "#ffaa4f"
+                                            color: robotController.outReady ? "#1a5a3a" : (toMA.pressed ? "#5a3a1a" : "#351a0a")
+                                            border.color: robotController.outReady ? "#00ff00" : (toMA.pressed ? Qt.lighter("#ffaa4f", 1.2) : "#ffaa4f")
                                             border.width: toMA.pressed ? 3 : 2
                                             scale: toMA.pressed ? 0.95 : 1.0
                                             Behavior on color { ColorAnimation { duration: 100 } }
@@ -1632,7 +1714,7 @@
                                             Column {
                                                 anchors.centerIn: parent; spacing: 2
                                                 Text { text: "📤 TRAY OUTPUT READY"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: "(tray_output_ready)"; color: "#d29252"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: robotController.outReady ? "(ON)" : "(OFF)"; color: robotController.outReady ? "#00ff00" : "#d29252"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
                                             }
                                             MouseArea {
                                                 id: toMA; anchors.fill: parent
@@ -1933,4 +2015,66 @@
                 }
             }
         }
+
+    Timer {
+        id: outTrayTimer
+        interval: 40000
+        repeat: false
+        onTriggered: outTrayPopup.open()
+    }
+
+    Connections {
+        target: robotController
+        function onOutReadyChanged() {
+            if (!robotController.outReady && robotController.systemStatus !== "IDLE" && robotController.systemStatus !== "ERROR" && robotController.systemStatus !== "UNKNOWN") {
+                outTrayTimer.restart();
+            } else {
+                outTrayTimer.stop();
+                outTrayPopup.close();
+            }
+        }
+        function onSystemStatusChanged() {
+            if (robotController.systemStatus === "IDLE" || robotController.systemStatus === "ERROR" || robotController.systemStatus === "UNKNOWN") {
+                outTrayTimer.stop();
+                outTrayPopup.close();
+            } else if (!robotController.outReady) {
+                outTrayTimer.restart();
+            }
+        }
+    }
+
+    Popup {
+        id: outTrayPopup
+        width: 440; height: 220
+        anchors.centerIn: parent
+        modal: true; focus: true
+        closePolicy: Popup.NoAutoClose
+        background: Rectangle { color: "#1a0a0a"; radius: 10; border.color: "#ffaa00"; border.width: 3 }
+        Column {
+            anchors.centerIn: parent; spacing: 30
+            Text {
+                text: "⚠️ CẢNH BÁO TỐC ĐỘ"
+                color: "#ffaa00"; font.pixelSize: 22; font.bold: true
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+            Text {
+                text: "Hệ thống đang chờ khay Output lâu hơn 40s.\nĐã cấp khay chưa?"
+                color: "#ffffff"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+            Row {
+                spacing: 40; anchors.horizontalCenter: parent.horizontalCenter
+                Rectangle {
+                    width: 130; height: 46; radius: 6; color: "#aa0000"
+                    Text { anchors.centerIn: parent; text: "NO"; color: "white"; font.bold: true; font.pixelSize: 16 }
+                    MouseArea { anchors.fill: parent; onClicked: { outTrayPopup.close(); outTrayTimer.restart(); } }
+                }
+                Rectangle {
+                    width: 130; height: 46; radius: 6; color: "#00aa00"
+                    Text { anchors.centerIn: parent; text: "YES"; color: "white"; font.bold: true; font.pixelSize: 16 }
+                    MouseArea { anchors.fill: parent; onClicked: { robotController.simulateOutputTrayReady(); outTrayPopup.close(); } }
+                }
+            }
+        }
+    }
     }
