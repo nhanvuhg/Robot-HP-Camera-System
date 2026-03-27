@@ -109,6 +109,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   scale_result_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   start_button_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   new_tray_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   input_trays_empty_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  selected_row_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  command_row_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  selected_slot_sub_;
@@ -202,9 +203,10 @@ private:
     //                          reset to false when done_tray_output published
     // waiting_for_new_input_ : true  = đã pub done_tray_input, đang chờ new_tray_loaded
     //                          false = tray input sẵn sàng
+    std::atomic<bool> new_tray_loaded_{false};
+    std::atomic<bool> input_trays_empty_{true}; // True if physical feeder conveyor is empty (S1/S2/S3=0) = tray input sẵn sàng
     // waiting_for_new_output_: true  = đã pub done_tray_output, đang chờ new_trayoutput_loaded
     //                          false = tray output sẵn sàng
-    std::atomic<bool> new_tray_loaded_{false};
     std::atomic<bool> new_trayoutput_loaded_{false};
     std::atomic<bool> waiting_for_new_input_{true};   // start = chờ tray đầu tiên
     std::atomic<bool> waiting_for_new_output_{false};
@@ -222,6 +224,8 @@ private:
     std::atomic<bool> stored_scale_result_{false};
     std::atomic<bool> dual_camera_mode_{true};
     std::atomic<bool> stop_after_single_motion_{false};
+    bool              last_row_picked_{false};  // true when last row motion is in-flight
+    bool              operator_explicitly_set_row_{false}; // Tracks explicit human overrides
 
     // ========================================================================
     // ROW TRACKING
@@ -577,6 +581,12 @@ void RobotLogicNode::initSubscriptions()
         "/cartridge_providesystem/new_tray_loaded", 10,
         std::bind(&RobotLogicNode::newTrayCallback, this, std::placeholders::_1));
 
+    input_trays_empty_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/cartridge/input_trays_empty", rclcpp::QoS(10).reliable(),
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            input_trays_empty_ = msg->data;
+        });
+
     // new_trayoutput_loaded: output tray ready after cartridge system change
     new_trayoutput_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/cartridge_providesystem/new_trayoutput_loaded", 10,
@@ -745,27 +755,25 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
     bool was_waiting = waiting_for_new_input_.load();
     waiting_for_new_input_ = false;
 
-    bool should_reset_to_1 = false;
-    if (was_waiting) {
-        if (current_state_ != SystemState::IDLE && current_state_ != SystemState::INIT_CHECK) {
-            // Automatic tray swap mid-run -> always start from row 1
-            should_reset_to_1 = true;
-            RCLCPP_INFO(get_logger(), "[TRAY_IN] ✅ New input tray (Auto Mode) — row preset to 1");
-        } else {
-            // Machine is IDLE. Only default to 1 if operator hasn't explicitly chosen a row yet.
-            if (current_auto_row_ == ROW_UNSET || selected_input_row_ == ROW_UNSET) {
-                should_reset_to_1 = true;
-                RCLCPP_INFO(get_logger(), "[TRAY_IN] ✅ New input tray (IDLE) — default row to 1");
-            } else {
-                RCLCPP_INFO(get_logger(), "[TRAY_IN] ✅ New input tray (IDLE) — keeping operator's choice: Row %d", current_auto_row_);
-            }
-        }
+    bool should_reset_to_1 = true;
+    
+    // Always default a new tray to Row 1, UNLESS the human operator explicitly overrode it
+    if (operator_explicitly_set_row_) {
+        should_reset_to_1 = false;
+        operator_explicitly_set_row_ = false; // Consume the explicit override for this tray only
+        RCLCPP_INFO(get_logger(), "[TRAY_IN] ✅ New input tray — honoring operator explicit choice: Row %d", current_auto_row_);
     } else {
-        RCLCPP_INFO(get_logger(), "[TRAY_IN] ℹ️ New input tray but wasn't waiting. Keeping row: %d", current_auto_row_);
+        RCLCPP_INFO(get_logger(), "[TRAY_IN] ✅ New input tray — auto-resetting to Row 1");
     }
 
     if (should_reset_to_1) {
         current_auto_row_ = 1;
+        // Broadcast the reset to the GUI so it snaps visual highlight back to R1
+        if (selected_row_pub_) {
+            auto r_msg = std_msgs::msg::Int32();
+            r_msg.data = current_auto_row_;
+            selected_row_pub_->publish(r_msg);
+        }
     }
 
     // Mark all rows as full (assume full tray; camera/AI will correct if needed)
@@ -952,7 +960,7 @@ void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr ms
     if (emergency_stop_) emergency_stop_ = false;
     system_enabled_ = true;
     system_running_ = true;
-    waiting_for_new_input_ = false;  // operator pressed start → assume tray is loaded
+    // REMOVED: waiting_for_new_input_ = false; (operator pressed start -> we must still wait for tray to be strictly loaded)
     system_start_time_ = this->now();
 
     auto clear_req = std::make_shared<ClearError::Request>();
@@ -996,8 +1004,19 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
     std::string sn = msg->data;
 
     if (system_running_ && !manual_mode_ && current_state_ != SystemState::IDLE) {
-        // Allow PLACE_TO_OUTPUT and PLACE_TO_FAIL even during auto pipeline
-        if (sn != "PLACE_TO_OUTPUT" && sn != "PLACE_TO_FAIL") {
+        // PLACE_TO_OUTPUT / PLACE_TO_FAIL are only valid after PROCESSING_SCALE
+        bool is_place_cmd = (sn == "PLACE_TO_OUTPUT" || sn == "PLACE_TO_FAIL");
+        bool in_scale_state = (current_state_ == SystemState::PROCESSING_SCALE ||
+                               current_state_ == SystemState::ERROR_SCALE_TIMEOUT);
+
+        if (is_place_cmd && !in_scale_state) {
+            RCLCPP_WARN(get_logger(),
+                "[GOTO] '%s' ignored — only valid from PROCESSING_SCALE, current: %s",
+                sn.c_str(), stateToString(current_state_).c_str());
+            return;
+        }
+
+        if (!is_place_cmd) {
             RCLCPP_WARN(get_logger(), "[GOTO] Ignored '%s' — auto pipeline active", sn.c_str());
             return;
         }
@@ -1034,6 +1053,24 @@ void RobotLogicNode::commandRowCallback(const std_msgs::msg::Int32::SharedPtr ms
 {
     int row = msg->data;
     if (row < 1 || row > TOTAL_ROWS) return;
+
+    // Prevent changing row while actively running a batch
+    if (system_running_ &&
+        current_state_ != SystemState::IDLE &&
+        current_state_ != SystemState::INIT_CHECK &&
+        current_state_ != SystemState::INIT_LOAD_CHAMBER_DIRECT) {
+        RCLCPP_WARN(get_logger(),
+            "[CMD_ROW] Ignored row %d — system already executing batch", row);
+            
+        // Force GUI back to current row
+        if (selected_row_pub_) {
+            auto r_msg = std_msgs::msg::Int32();
+            r_msg.data = current_auto_row_;
+            selected_row_pub_->publish(r_msg);
+        }
+        return;
+    }
+
     {
         std::lock_guard<std::mutex> lock(row_selection_mutex_);
         selected_input_row_ = row;
@@ -1042,6 +1079,7 @@ void RobotLogicNode::commandRowCallback(const std_msgs::msg::Int32::SharedPtr ms
     if (!use_ai_for_control_ && !manual_mode_) {
         current_auto_row_ = row;
     }
+    operator_explicitly_set_row_ = true;
     notifyStateChange();
 }
 
@@ -1103,8 +1141,7 @@ void RobotLogicNode::startSystemCallback(
         stop_after_single_motion_ = false;
         system_start_time_ = this->now();
 
-        // Operator pressed START — assume input tray is present
-        waiting_for_new_input_ = false;
+        // REMOVED: waiting_for_new_input_ = false; (must wait for actual tray)
 
         sendMotionAction("HOME");
 
@@ -1129,6 +1166,11 @@ void RobotLogicNode::emergencyStopCallback(
         emergency_stop_ = true;
         system_enabled_ = false;
         system_paused_  = false;
+        system_running_ = false;
+        system_started_ = false;
+        current_state_  = SystemState::IDLE;
+        is_first_batch_ = true;
+        motion_fail_count_ = 0;
 
         auto resetReq = std::make_shared<ResetRobot::Request>();
         reset_robot_client_->async_send_request(resetReq,
@@ -1165,28 +1207,12 @@ void RobotLogicNode::resetStateCallback(
     current_state_  = SystemState::IDLE;
     is_first_batch_ = true;
 
-    // Row tracking
-    current_auto_row_ = ROW_UNSET;
-    {
-        std::lock_guard<std::mutex> lock(row_selection_mutex_);
-        for (size_t i=0; i<row_full_.size(); ++i) row_full_[i] = false;
-        input_tray_empty_ = false;
-        selected_input_row_ = ROW_UNSET;
-    }
+    // Row tracking and Tray flags are INTENTIONALLY PRESERVED during a soft reset.
+    // This allows the operator to STOP and START without losing the current row
+    // and without the robot falsely assuming the hardware trays were removed.
+    // If the operator wishes to change rows, they can do so via the GUI while stopped.
 
-    // Tray flags — must wait for both trays after reset
-    new_tray_loaded_       = false;
-    new_trayoutput_loaded_ = false;
-    waiting_for_new_input_  = true;
-    waiting_for_new_output_ = false;
-
-    // Output slot
-    {
-        std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-        selected_output_slot_ = SLOT_UNSET;
-    }
-    current_auto_slot_ = 1;
-    current_fail_slot_ = 1;
+    // Output slot tracking is also preserved so it doesn't overwrite completed slots.
 
     // Robot state
     buffer_is_empty_       = true;
@@ -1437,9 +1463,9 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         return;
     }
 
-    if (waiting_for_new_input_.load()) {
+    if (waiting_for_new_input_.load() || !new_tray_loaded_.load()) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
-            "[INIT_LOAD] Waiting for new input tray...");
+            "[INIT_LOAD] Waiting for new input tray (new_tray_loaded=false)...");
         return;
     }
 
@@ -1469,6 +1495,27 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         motion_fail_count_ = 0;
         chamber_has_cartridge_ = true;
         chamber_is_empty_ = false;
+
+        // If this was the last row, NOW publish done_tray_input (pick is complete)
+        if (!use_ai_for_control_ && last_row_picked_) {
+            last_row_picked_ = false;
+            RCLCPP_WARN(get_logger(), "[TRAY_IN] Last row pick DONE → pub done_tray_input");
+            auto doneMsg = std_msgs::msg::Bool();
+            doneMsg.data = true;
+            done_input_tray_pub_->publish(doneMsg);
+            new_tray_loaded_      = false;
+            new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
+            waiting_for_new_input_ = true;
+            wait_tray_start_time_  = this->now();
+            
+            // Instant visual reset of GUI row tracker
+            current_auto_row_ = 1;
+            if (selected_row_pub_) {
+                auto r_msg = std_msgs::msg::Int32();
+                r_msg.data = current_auto_row_;
+                selected_row_pub_->publish(r_msg);
+            }
+        }
 
         if (stop_after_single_motion_) {
             stop_after_single_motion_ = false;
@@ -1513,19 +1560,19 @@ void RobotLogicNode::stateInitLoadChamberDirect()
     // Advance row counter AFTER sending motion (row is committed)
     if (!use_ai_for_control_) {
         if (current_auto_row_ == TOTAL_ROWS) {
-            // Just committed last row — publish done_tray_input
+            // Last row committed — set flag; done_tray_input will pub after pick completes
             RCLCPP_WARN(get_logger(),
-                "[TRAY_IN] Row %d (last) committed → pub done_tray_input", current_auto_row_);
-            auto msg = std_msgs::msg::Bool();
-            msg.data = true;
-            done_input_tray_pub_->publish(msg);
-            new_tray_loaded_      = false;
-            new_tray_loaded_pub_->publish(std_msgs::msg::Bool());  // publish false to GUI
-            waiting_for_new_input_ = true;
-            wait_tray_start_time_  = this->now();
-            // current_auto_row_ will be reset to 1 when new_tray_loaded arrives
+                "[TRAY_IN] Row %d (last) motion started — will pub done_tray_input on completion",
+                current_auto_row_);
+            last_row_picked_ = true;
+            // DON'T publish done_tray_input here — motion hasn't finished yet
         } else {
             current_auto_row_++;
+            if (selected_row_pub_) {
+                auto r_msg = std_msgs::msg::Int32();
+                r_msg.data = current_auto_row_;
+                selected_row_pub_->publish(r_msg);
+            }
         }
     }
 }
@@ -1563,6 +1610,27 @@ void RobotLogicNode::stateInitRefillBuffer()
         buffer_is_empty_ = false;
         is_first_batch_ = false;
 
+        // If this was the last row, NOW publish done_tray_input (pick is complete)
+        if (!use_ai_for_control_ && last_row_picked_) {
+            last_row_picked_ = false;
+            RCLCPP_WARN(get_logger(), "[TRAY_IN] Last row (BUFFER) pick DONE → pub done_tray_input");
+            auto doneMsg = std_msgs::msg::Bool();
+            doneMsg.data = true;
+            done_input_tray_pub_->publish(doneMsg);
+            new_tray_loaded_      = false;
+            new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
+            waiting_for_new_input_ = true;
+            wait_tray_start_time_  = this->now();
+            
+            // Instant visual reset of GUI row tracker
+            current_auto_row_ = 1;
+            if (selected_row_pub_) {
+                auto r_msg = std_msgs::msg::Int32();
+                r_msg.data = current_auto_row_;
+                selected_row_pub_->publish(r_msg);
+            }
+        }
+
         if (stop_after_single_motion_) {
             stop_after_single_motion_ = false;
             transitionTo(SystemState::IDLE);
@@ -1578,7 +1646,7 @@ void RobotLogicNode::stateInitRefillBuffer()
 
     // If currently waiting for tray and no row available — skip buffer init
     // and go straight to WAIT_FILLING (chamber already loaded)
-    if (waiting_for_new_input_.load()) {
+    if (waiting_for_new_input_.load() || !new_tray_loaded_.load()) {
         RCLCPP_WARN(get_logger(),
             "[INIT_REFILL] No input tray for buffer — skip, go WAIT_FILLING");
         buffer_is_empty_ = true;
@@ -1619,17 +1687,18 @@ void RobotLogicNode::stateInitRefillBuffer()
     // Advance row counter
     if (!use_ai_for_control_) {
         if (current_auto_row_ == TOTAL_ROWS) {
+            // Last row committed — flag it; done_tray_input will pub after pick completes
             RCLCPP_WARN(get_logger(),
-                "[TRAY_IN] Row %d (last) committed → pub done_tray_input", current_auto_row_);
-            auto msg = std_msgs::msg::Bool();
-            msg.data = true;
-            done_input_tray_pub_->publish(msg);
-            new_tray_loaded_      = false;
-            new_tray_loaded_pub_->publish(std_msgs::msg::Bool());  // publish false to GUI
-            waiting_for_new_input_ = true;
-            wait_tray_start_time_  = this->now();
+                "[TRAY_IN] Row %d (last) BUFFER motion started — will pub done_tray_input on completion",
+                current_auto_row_);
+            last_row_picked_ = true;
         } else {
             current_auto_row_++;
+            if (selected_row_pub_) {
+                auto r_msg = std_msgs::msg::Int32();
+                r_msg.data = current_auto_row_;
+                selected_row_pub_->publish(r_msg);
+            }
         }
     }
 }
@@ -1651,19 +1720,25 @@ void RobotLogicNode::stateWaitFilling()
         return;
     }
 
-    // Pipeline fully drained AND waiting for trays → IDLE (with 30s tolerance for feeder to catch up)
+    // Pipeline fully drained AND waiting for trays → IDLE (with 40s tolerance for feeder to catch up)
     bool pipeline_empty = !chamber_has_cartridge_ && buffer_is_empty_ && !scale_has_cartridge_;
     if (pipeline_empty && waiting_for_new_input_.load()) {
-        auto elapsed = (this->now() - wait_tray_start_time_).seconds();
-        if (elapsed > 40.0) {
-            RCLCPP_INFO(get_logger(),
-                "[WAIT_FILLING] Pipeline drained, no input tray for 40s → IDLE");
-            transitionTo(SystemState::IDLE);
-            return;
+        if (input_trays_empty_.load()) {
+            auto elapsed = (this->now() - wait_tray_start_time_).seconds();
+            if (elapsed > 40.0) {
+                RCLCPP_INFO(get_logger(),
+                    "[WAIT_FILLING] Pipeline drained, Conveyor EMPTY for 40s → IDLE");
+                transitionTo(SystemState::IDLE);
+                return;
+            } else {
+                RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
+                    "[WAIT_FILLING] Pipeline empty, Conveyor EMPTY, waiting up to 40s... (%.1fs/40s)", elapsed);
+                // DO NOT return here, let it check fill_done (though chamber is empty so it will bounce anyway)
+            }
         } else {
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
-                "[WAIT_FILLING] Pipeline empty, waiting up to 40s for new tray... (%.1fs/40s)", elapsed);
-            // DO NOT return here, let it check fill_done (though chamber is empty so it will bounce anyway)
+                "[WAIT_FILLING] Pipeline empty but Conveyor has queued trays — waiting infinitely...");
+            // DO NOT return here
         }
     }
 
@@ -1826,6 +1901,27 @@ void RobotLogicNode::stateRefillBuffer()
         } else {
             buffer_is_empty_ = false;
             RCLCPP_INFO(get_logger(), "[BUFFER] ✅ Buffer refilled");
+
+            // If this was the last row, NOW publish done_tray_input (pick is complete)
+            if (!use_ai_for_control_ && last_row_picked_) {
+                last_row_picked_ = false;
+                RCLCPP_WARN(get_logger(), "[TRAY_IN] Last row (REFILL_BUFFER) pick DONE → pub done_tray_input");
+                auto doneMsg = std_msgs::msg::Bool();
+                doneMsg.data = true;
+                done_input_tray_pub_->publish(doneMsg);
+                new_tray_loaded_      = false;
+                new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
+                waiting_for_new_input_ = true;
+                wait_tray_start_time_  = this->now();
+                
+                // Instant visual reset of GUI row tracker
+                current_auto_row_ = 1;
+                if (selected_row_pub_) {
+                    auto r_msg = std_msgs::msg::Int32();
+                    r_msg.data = current_auto_row_;
+                    selected_row_pub_->publish(r_msg);
+                }
+            }
         }
 
         if (stop_after_single_motion_) {
@@ -1841,12 +1937,18 @@ void RobotLogicNode::stateRefillBuffer()
     }
 
     // ── Check if we still have rows ──
-    if (waiting_for_new_input_.load()) {
-        // No tray — can't refill; skip to PROCESSING_SCALE (drain continues)
-        RCLCPP_WARN(get_logger(),
-            "[REFILL] No input tray — skip refill → PROCESSING_SCALE");
-        transitionTo(SystemState::PROCESSING_SCALE);
-        return;
+    if (waiting_for_new_input_.load() || !new_tray_loaded_.load()) {
+        if (input_trays_empty_.load()) {
+            // No tray & Conveyor EMPTY — skip refill -> drain
+            RCLCPP_WARN(get_logger(),
+                "[REFILL] No input tray & Conveyor EMPTY — skip refill → PROCESSING_SCALE");
+            transitionTo(SystemState::PROCESSING_SCALE);
+            return;
+        } else {
+            RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
+                "[REFILL] Conveyor has queued trays (S1/S2/S3 = ON) — waiting for load...");
+            return;
+        }
     }
 
     // ── Get next row ──
@@ -1875,17 +1977,18 @@ void RobotLogicNode::stateRefillBuffer()
     // Advance row counter
     if (!use_ai_for_control_) {
         if (current_auto_row_ == TOTAL_ROWS) {
+            // Last row committed — flag it; done_tray_input will pub after pick completes
             RCLCPP_WARN(get_logger(),
-                "[TRAY_IN] Row %d (last) committed → pub done_tray_input", current_auto_row_);
-            auto msg = std_msgs::msg::Bool();
-            msg.data = true;
-            done_input_tray_pub_->publish(msg);
-            new_tray_loaded_      = false;
-            new_tray_loaded_pub_->publish(std_msgs::msg::Bool());  // publish false to GUI
-            waiting_for_new_input_ = true;
-            wait_tray_start_time_  = this->now();
+                "[TRAY_IN] Row %d (last) REFILL_BUFFER motion started — will pub done_tray_input on completion",
+                current_auto_row_);
+            last_row_picked_ = true;
         } else {
             current_auto_row_++;
+            if (selected_row_pub_) {
+                auto r_msg = std_msgs::msg::Int32();
+                r_msg.data = current_auto_row_;
+                selected_row_pub_->publish(r_msg);
+            }
         }
     }
 }
@@ -2041,14 +2144,22 @@ void RobotLogicNode::statePlaceToOutput()
 
         // Check pipeline drain condition
         bool pipeline_empty = !chamber_has_cartridge_ && buffer_is_empty_;
-        if (pipeline_empty && waiting_for_new_input_.load()) {
-            RCLCPP_WARN(get_logger(),
-                "[PIPELINE] 📦 Pipeline drained + no new input tray");
-            // Publish done_tray_output if not already done for full tray
-            if (!waiting_for_new_output_.load()) {
-                publishDoneTrayOutput();
+        if (pipeline_empty) {
+            if (waiting_for_new_input_.load()) {
+                if (input_trays_empty_.load()) {
+                    RCLCPP_WARN(get_logger(),
+                        "[PIPELINE] 📦 Pipeline drained + Conveyor EMPTY -> Waiting in IDLE for new tray to auto-restart");
+                    transitionTo(SystemState::IDLE);
+                } else {
+                    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
+                        "[PIPELINE] 📦 Pipeline drained but Conveyor has queued trays → Waiting in WAIT_FILLING");
+                    transitionTo(SystemState::WAIT_FILLING);
+                }
+            } else {
+                RCLCPP_INFO(get_logger(),
+                    "[PIPELINE] 📦 Pipeline drained + NEW tray available → Restarting pipeline cycle (INIT_LOAD_CHAMBER_DIRECT)");
+                transitionTo(SystemState::INIT_LOAD_CHAMBER_DIRECT);
             }
-            transitionTo(SystemState::IDLE);
             return;
         }
 
@@ -2091,13 +2202,22 @@ void RobotLogicNode::statePlaceToFail()
         bool pipeline_empty = !chamber_has_cartridge_ && buffer_is_empty_;
         if (manual_mode_) {
             transitionTo(SystemState::IDLE);
-        } else if (pipeline_empty && waiting_for_new_input_.load()) {
-            RCLCPP_WARN(get_logger(),
-                "[PIPELINE] 📦 Pipeline drained (fail) + no new input tray");
-            if (!waiting_for_new_output_.load()) {
-                publishDoneTrayOutput();
+        } else if (pipeline_empty) {
+            if (waiting_for_new_input_.load()) {
+                if (input_trays_empty_.load()) {
+                    RCLCPP_WARN(get_logger(),
+                        "[PIPELINE] 📦 Pipeline drained (fail) + Conveyor EMPTY -> Waiting in IDLE for new tray to auto-restart");
+                    transitionTo(SystemState::IDLE);
+                } else {
+                    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
+                        "[PIPELINE] 📦 Pipeline drained (fail) but Conveyor has queued trays → Waiting in WAIT_FILLING");
+                    transitionTo(SystemState::WAIT_FILLING);
+                }
+            } else {
+                RCLCPP_INFO(get_logger(),
+                    "[PIPELINE] 📦 Pipeline drained (fail) + NEW tray available → Restarting pipeline cycle (INIT_LOAD_CHAMBER_DIRECT)");
+                transitionTo(SystemState::INIT_LOAD_CHAMBER_DIRECT);
             }
-            transitionTo(SystemState::IDLE);
         } else {
             transitionTo(SystemState::WAIT_FILLING);
         }

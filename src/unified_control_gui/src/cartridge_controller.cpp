@@ -54,9 +54,9 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
                 QString logMsg = detail.isEmpty() ? title : title + " — " + detail;
                 QString type = (level == "error") ? "err" : (level == "warn") ? "err" : "info";
                 addLog(logMsg, type);
-                // Detect S16 warning → trigger QML dialog
-                if (title.startsWith("S16")) {
-                    emit s16WarningRequested();
+                // Detect S11 warning → trigger QML dialog
+                if (title.startsWith("S11")) {
+                    emit s11WarningRequested();
                 }
             } else {
                 addLog(last_notification_, "info");
@@ -190,12 +190,12 @@ void CartridgeController::confirmOutput()
     addLog("Confirm: đã cấp khạy", "ok");
 }
 
-void CartridgeController::s16Respond(bool ok)
+void CartridgeController::s11Respond(bool ok)
 {
     auto msg = std_msgs::msg::String();
-    msg.data = ok ? "S16_OK" : "S16_NO";
+    msg.data = ok ? "S11_OK" : "S11_NO";
     gui_confirm_pub_->publish(msg);
-    addLog(ok ? "S16: OK — thực hiện State2 rồi State1" : "S16: NO — chờ restart", ok ? "ok" : "err");
+    addLog(ok ? "S11: OK — thực hiện State2 rồi State1" : "S11: NO — chờ restart", ok ? "ok" : "err");
 }
 
 // === Sensor Simulation ===

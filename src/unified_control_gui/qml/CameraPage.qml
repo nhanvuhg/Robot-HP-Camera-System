@@ -7,7 +7,7 @@ Item {
     id: cameraPageRoot
 
     property string currentTime: Qt.formatDateTime(new Date(), "yyyy-MM-dd hh:mm:ss")
-    property bool rowLocked: false
+    property bool rowLocked: (robotController.systemStatus || "").toUpperCase() === "INIT_LOAD_CHAMBER_DIRECT"
     property bool modeLocked: false
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
 
@@ -23,7 +23,6 @@ Item {
         function onSystemStatusChanged() {
             var s = (robotController.systemStatus || "").toLowerCase()
             if (s === "idle" || s === "ready" || s === "") {
-                cameraPageRoot.rowLocked = false
                 cameraPageRoot.modeLocked = false
             }
         }
@@ -256,7 +255,7 @@ Item {
                         Layout.fillHeight: false
                         Text { text: "INPUT ROW"; color: "#5cf4f1"; font.pixelSize: 17; font.bold: true }
                         Text {
-                            text: cameraPageRoot.rowLocked ? "🔒 Đang thực hiện" : (cameraPageRoot.ctrlMode === "camera_ai" ? "(AI auto)" : "Chọn rồi nhấn PICK_INPUT")
+                            text: cameraPageRoot.rowLocked ? "🔒 Chờ lấy khay..." : (cameraPageRoot.ctrlMode === "camera_ai" ? "(AI auto)" : "Chọn rồi nhấn PICK_INPUT")
                             color: cameraPageRoot.rowLocked ? "#ef4444" : "#6b7280"
                             font.pixelSize: 17
                         }
@@ -326,7 +325,7 @@ Item {
                                 MouseArea { id: ma; anchors.fill: parent; onClicked: {
                                     if (modelData.lbl === "IN_READY") robotController.simulateInputTrayReady()
                                     else if (modelData.lbl === "OUT_READY") robotController.simulateOutputTrayReady()
-                                    else if (modelData.lbl === "PICK_INPUT") { cameraPageRoot.rowLocked = true; robotController.simulateFeedChamber() }
+                                    else if (modelData.lbl === "PICK_INPUT") robotController.simulateFeedChamber()
                                     else if (modelData.lbl === "PICK_CHAMBER") robotController.simulateFillDone()
                                     else if (modelData.lbl === "PLACE_OUTPUT") robotController.gotoState("PLACE_TO_OUTPUT")
                                     else if (modelData.lbl === "PLACE_FAIL") robotController.gotoState("PLACE_TO_FAIL")
@@ -420,14 +419,14 @@ Item {
         }
     }
 
-    // ─── S16 Warning Dialog ───────────────────────────────────────
+    // ─── S11 Warning Dialog ───────────────────────────────────────
     Connections {
         target: cartridgeController
-        function onS16WarningRequested() { s16Dialog.open() }
+        function onS11WarningRequested() { s11Dialog.open() }
     }
 
     Popup {
-        id: s16Dialog
+        id: s11Dialog
         anchors.centerIn: parent
         width: 440; height: 240
         modal: true
@@ -440,7 +439,7 @@ Item {
         contentItem: Column {
             spacing: 18; padding: 24
             Text {
-                text: "⚠️  Còn khay tại vị trí Extract (S16)"
+                text: "⚠️  Còn khay tại vị trí Extract (S11)"
                 color: "#f59e0b"; font.pixelSize: 19; font.bold: true
                 wrapMode: Text.WordWrap; width: 390
             }
@@ -456,14 +455,14 @@ Item {
                     color: noMA.pressed ? "#7f1d1d" : "#450a0a"
                     border.color: "#ef4444"; border.width: 1.5
                     Text { anchors.centerIn: parent; text: "❌  NO — Dừng"; color: "#ef4444"; font.pixelSize: 16; font.bold: true }
-                    MouseArea { id: noMA; anchors.fill: parent; onClicked: { s16Dialog.close(); cartridgeController.s16Respond(false) } }
+                    MouseArea { id: noMA; anchors.fill: parent; onClicked: { s11Dialog.close(); cartridgeController.s11Respond(false) } }
                 }
                 Rectangle {
                     width: 140; height: 46; radius: 8
                     color: okMA.pressed ? "#14532d" : "#052e16"
                     border.color: "#22c55e"; border.width: 1.5
                     Text { anchors.centerIn: parent; text: "✅  OK — Thay"; color: "#22c55e"; font.pixelSize: 16; font.bold: true }
-                    MouseArea { id: okMA; anchors.fill: parent; onClicked: { s16Dialog.close(); cartridgeController.s16Respond(true) } }
+                    MouseArea { id: okMA; anchors.fill: parent; onClicked: { s11Dialog.close(); cartridgeController.s11Respond(true) } }
                 }
             }
         }

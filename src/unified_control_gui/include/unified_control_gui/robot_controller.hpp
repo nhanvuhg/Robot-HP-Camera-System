@@ -68,6 +68,7 @@ public slots:
     void emergencyStop(bool stop);
     void setManualMode(bool enable);
     void setAiMode(bool enable);
+    void setAutoMode(bool enable);
     void switchCamera(int cameraId);
     void selectRow(int row);
     void selectSlot(int slot);

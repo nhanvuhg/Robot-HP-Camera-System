@@ -214,14 +214,32 @@ void RobotController::emergencyStop(bool stop)
 
 void RobotController::setManualMode(bool enable)
 {
-    qDebug() << "Manual mode:" << enable;
-    callServiceAsync(manual_mode_client_, enable);
+    qDebug() << "Set Manual mode";
+    if (enable) {
+        auto msg = std_msgs::msg::Int32();
+        msg.data = 3; // 3 = MANUAL
+        set_mode_pub_->publish(msg);
+    }
 }
 
 void RobotController::setAiMode(bool enable)
 {
-    qDebug() << "AI mode:" << enable;
-    callServiceAsync(ai_mode_client_, enable);
+    qDebug() << "Set AI mode";
+    if (enable) {
+        auto msg = std_msgs::msg::Int32();
+        msg.data = 2; // 2 = AI
+        set_mode_pub_->publish(msg);
+    }
+}
+
+void RobotController::setAutoMode(bool enable)
+{
+    qDebug() << "Set Auto mode";
+    if (enable) {
+        auto msg = std_msgs::msg::Int32();
+        msg.data = 1; // 1 = AUTO
+        set_mode_pub_->publish(msg);
+    }
 }
 
 void RobotController::switchCamera(int cameraId)

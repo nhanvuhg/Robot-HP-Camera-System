@@ -583,11 +583,11 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
     <div class="sgrid" id="sg"></div>
 
     <div style="font-size:8px;color:var(--dim);line-height:1.5;margin-top:6px">
-      <b>S1-S3</b> Băng tải · <b>S4</b> Row detect · <b>S5</b> Tray exist<br>
-      <b>S6</b> Row1 output · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Output<br>
-      <b>S10</b> Cyl1 Ret · <b>S11</b> Cyl1 Ext<br>
-      <b>S12</b> Cyl2 Ret (trống) · <b>S13</b> Cyl2 Ext (giữ khay)<br>
-      <b>S14</b> Cyl3 Ret · <b>S15</b> Cyl3 Ext
+      <b>S1-S3</b> Băng tải · <b>S4</b> Stack In · <b>S5</b> Output Det<br>
+      <b>S6</b> In Stack · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Out Finish<br>
+      <b>S10</b> Stack Out · <b>S11</b> Tray@Robot<br>
+      <b>S15/16</b> Cyl1 Ret/Ext<br>
+      <b>S19/20</b> Cyl2 Ret/Ext
     </div>
 
     <!-- Feature compare table -->
@@ -640,7 +640,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 
 <script>
 // ─── State ──────────────────────────────────────────────
-const SS={};for(let i=1;i<=15;i++)SS[i]=false;
+const SS={};for(let i=1;i<=20;i++)SS[i]=false;
 let mode='auto', sysState='unknown';
 
 const SERVOS=[
@@ -651,10 +651,11 @@ const SERVOS=[
   {id:5,name:'OutY',d:'Trục Y đầu ra'}
 ];
 const SLB={
-  1:'Belt',2:'Belt',3:'Belt',4:'Row detect',5:'Tray exist',
-  6:'Row1 output',7:'Platform tray',8:'Feed OK',9:'Output finished',
-  10:'Cyl1 Ret',11:'Cyl1 Ext',12:'Cyl2 Ret',13:'Cyl2 Ext',
-  14:'Cyl3 Ret',15:'Cyl3 Ext'
+  1:'Belt start',2:'Belt mid',3:'Belt end',4:'Stack In',5:'Output det.',
+  6:'In stack tray',7:'Platform tray',8:'Feed OK',9:'Out finish',
+  10:'Stack Out',11:'Tray@Robot',12:'[reserved]',13:'[reserved]',
+  14:'[reserved]',15:'Cyl1 Ret',16:'Cyl1 Ext',17:'Dự phòng',
+  18:'Dự phòng',19:'Cyl2 Ret',20:'Cyl2 Ext'
 };
 
 // ─── Mode ───────────────────────────────────────────────
@@ -744,18 +745,18 @@ function tog(id) {
 }
 function sAll(v) {
   if(mode!=='manual'){ toast('🔒 MANUAL only','wn'); return; }
-  for(let i=1;i<=15;i++){ SS[i]=!!v; rfs(i); }
+  for(let i=1;i<=20;i++){ SS[i]=!!v; rfs(i); }
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'all:'+v})});
 }
 function sClear() {
   if(mode!=='manual'){ toast('🔒 MANUAL only','wn'); return; }
-  for(let i=1;i<=15;i++){ SS[i]=false; rfs(i); }
+  for(let i=1;i<=20;i++){ SS[i]=false; rfs(i); }
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'clear'})});
 }
 function simPreset(ids) {
   if(mode!=='manual'){ toast('🔒 MANUAL only','wn'); return; }
   // Clear all first
-  for(let i=1;i<=15;i++){ SS[i]=false; rfs(i); }
+  for(let i=1;i<=20;i++){ SS[i]=false; rfs(i); }
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'clear'})});
   // Set preset sensors ON
   ids.forEach(id=>{ SS[id]=true; rfs(id); });
@@ -854,7 +855,7 @@ function buildRows() {
 }
 function buildSensors() {
   const g=document.getElementById('sg');
-  for(let i=1;i<=15;i++) {
+  for(let i=1;i<=20;i++) {
     const d=document.createElement('div');
     d.className='sb';d.id='s'+i;d.onclick=()=>tog(i);
     const lb=SLB[i]||'';

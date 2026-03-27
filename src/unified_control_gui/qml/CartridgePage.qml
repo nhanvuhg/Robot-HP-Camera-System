@@ -149,15 +149,6 @@
         // ════════════════════════════════════════════════════════════
         // OUTPUT TRAY TIMEOUT WARNING
         // ════════════════════════════════════════════════════════════
-        Timer {
-            id: outputTrayWarningTimer
-            interval: 40000 // 40s timeout
-            running: !robotController.outReady && robotController.systemStatus !== "IDLE"
-            repeat: false
-            onTriggered: {
-                outputWarningPopup.open();
-            }
-        }
 
         Popup {
             id: outputWarningPopup
@@ -197,7 +188,7 @@
                         background: Rectangle { color: root.cOrange; radius: 5 }
                         contentItem: Text { text: parent.text; font: parent.font; color: "#000"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: {
-                            robotController.simulateOutputTrayReady();
+                            cartridgeController.confirmOutput();
                             outputWarningPopup.close();
                         }
                     }
@@ -209,7 +200,6 @@
                         contentItem: Text { text: parent.text; font: parent.font; color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: {
                             outputWarningPopup.close();
-                            outputTrayWarningTimer.restart();
                         }
                     }
                 }
@@ -254,6 +244,10 @@
                         notifyBanner.dtl = obj.detail || ""
                         notifyBanner.visible = true
                         bannerTimer.restart()
+
+                        if (obj.title === "Da phat hien khay") {
+                            outputWarningPopup.open()
+                        }
                     } catch(e) {}
                 }
             }
@@ -550,7 +544,7 @@
                                 RowLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "START";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.startSystem() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    onClicked: { robotController.emergencyStop(true); cartridgeController.stopSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
                                 }
 
@@ -561,12 +555,7 @@
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Resume";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
                                 }
 
-                                // Hàng 3: PLACE OUTPUT / PLACE FAIL
-                                RowLayout {
-                                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "📦 Place Output"; bg: "#0a2a33"; bc: "#00bcd4"; tc: "#00bcd4"; onClicked: robotController.gotoState("PLACE_TO_OUTPUT") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "⛔ Place Fail";   bg: "#33200a"; bc: "#ff9800"; tc: "#ff9800"; onClicked: robotController.gotoState("PLACE_TO_FAIL") }
-                                }
+
                             }
                         }
 
@@ -596,7 +585,7 @@
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   onClicked: cartridgeController.gotoState("HOMING") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "IDLE";    bg: root.cCard;   bc: root.cBorder; tc: root.cText;   onClicked: cartridgeController.gotoState("IDLE") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "IDLE";    bg: root.cCard;   bc: root.cBorder; tc: root.cText;   onClicked: { robotController.stopAndResetRobot(); cartridgeController.gotoState("IDLE"); } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nNạp khay In"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE1") }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE2") }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nCấp khay Out"; bg: "#0a2a1a"; bc: root.cGreen; tc: root.cGreen; onClicked: cartridgeController.gotoState("STATE3") }
@@ -624,7 +613,7 @@
                                 spacing: 4
                                     Text { text: "TARGET ROW"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
                                     Row { spacing: 4
-                                        Repeater { model: [1,2,3,4,5,6,7,8]
+                                        Repeater { model: [10,9,8,7,6,5,4,3,2,1]
                                             delegate: CBtn { lbl: "R"+modelData; padV: 4; padH: 10; fontSize: 11; bg: root.cCard; bc: root.cBorder; tc: root.cText; onClicked: cartridgeController.setTargetRow(modelData) }
                                         }
                                     }
@@ -832,8 +821,8 @@
                                     bg: "#0a1a4d"; bc: root.cAccent; tc: root.cAccent
                                     onClicked: {
                                         cartridgeController.simSensor("clear")
-                                        // S1+S3+S17 ON (băng tải có khay + Cyl2 retracted)
-                                        var ids = [1,3,17]
+                                        // S1+S3 ON (băng tải có khay)
+                                        var ids = [1,3]
                                         ids.forEach(function(id) {
                                             cartridgeController.simSensor(id + ":1")
                                         })
@@ -846,8 +835,8 @@
                                     bg: "#1a0a4d"; bc: "#bb86fc"; tc: "#bb86fc"
                                     onClicked: {
                                         cartridgeController.simSensor("clear")
-                                        // S1+S3+S4+S15+S17 ON (S6 bỏ — chỉ cần cho State 2 jog)
-                                        var ids = [1,3,4,15,17]
+                                        // S1+S3+S4+S15 ON (S6 bỏ — chỉ cần cho State 2 jog)
+                                        var ids = [1,3,4,15]
                                         ids.forEach(function(id) {
                                             cartridgeController.simSensor(id + ":1")
                                         })
@@ -891,17 +880,17 @@
                                         ListElement { sid:9;  slabel:"S9";  sdesc:"Out finish" }
                                         ListElement { sid:10; slabel:"S10"; sdesc:"Stack Out" }
                                         // S11-S14: Dự phòng
-                                        ListElement { sid:11; slabel:"S11"; sdesc:"[reserved]" }
+                                        ListElement { sid:11; slabel:"S11"; sdesc:"Sensor bắt khay" }
                                         ListElement { sid:12; slabel:"S12"; sdesc:"[reserved]" }
                                         ListElement { sid:13; slabel:"S13"; sdesc:"[reserved]" }
                                         ListElement { sid:14; slabel:"S14"; sdesc:"[reserved]" }
                                         // S15-S20: Cylinder sensors
                                         ListElement { sid:15; slabel:"S15"; sdesc:"Cyl1 Ret"}
                                         ListElement { sid:16; slabel:"S16"; sdesc:"Cyl1 Ext" }
-                                        ListElement { sid:17; slabel:"S17"; sdesc:"Cyl2 Ret"}
-                                        ListElement { sid:18; slabel:"S18"; sdesc:"Cyl2 Ext" }
-                                        ListElement { sid:19; slabel:"S19"; sdesc:"Cyl3 Ret"}
-                                        ListElement { sid:20; slabel:"S20"; sdesc:"Cyl3 Ext" }
+                                        ListElement { sid:17; slabel:"S17"; sdesc:"Dự phòng"}
+                                        ListElement { sid:18; slabel:"S18"; sdesc:"Dự phòng"}
+                                        ListElement { sid:19; slabel:"S19"; sdesc:"Cyl2 Ret"}
+                                        ListElement { sid:20; slabel:"S20"; sdesc:"Cyl2 Ext" }
                                     }
                                     delegate: Rectangle {
                                         id: sBtn
@@ -957,7 +946,7 @@
 
                             // ── Chú thích ──
                             Text {
-                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Stack In · <b>S5</b> Out Det\n<b>S6</b> In tray · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Out fin · <b>S10</b> Stack Out\n<b>S15</b> Cyl1↩ · <b>S16</b> Cyl1↪ · <b>S17</b> Cyl2↩(gate S1) · <b>S18</b> Cyl2↪(gate S4)\n<b>S19</b> Cyl3↩ · <b>S20</b> Cyl3↪   |   S11-S14 dự phòng"
+                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Stack In · <b>S5</b> Out Det\n<b>S6</b> In tray · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Out fin · <b>S10</b> Stack Out\n<b>S11</b> Khay tại Robot · <b>S15</b> Cyl1↩ · <b>S16</b> Cyl1↪\n<b>S19</b> Cyl2↩ · <b>S20</b> Cyl2↪   |   S12-S14, S17-S18 định vị"
                                 textFormat: Text.RichText; color: root.cDim; font.pixelSize: 8
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                             }
@@ -1007,25 +996,25 @@
                     Layout.fillHeight: true
                     spacing: 10
 
-                    ConfigCard {
+                    ConfigZoneCard {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        title: "Pos 1: Input Stack (InY)"
-                        configKey: "iny_input_stack"
+                        title: "Pos 1: Input Zones (InY)"
+                        configKey: "iny_input_zones"
                         configSource: page2Root.parsedConfig
                     }
-                    ConfigCard {
+                    ConfigZoneCard {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        title: "Pos 1: Output Stack (InY)"
-                        configKey: "iny_output_stack"
+                        title: "Pos 1: Output Zones (InY)"
+                        configKey: "iny_output_zones"
                         configSource: page2Root.parsedConfig
                     }
-                    ConfigCard {
+                    ConfigZoneCard {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        title: "Pos 1: Output Stack (InY)"
-                        configKey: "iny_output_stack"
+                        title: "Pos 2: Output Zones (OutY)"
+                        configKey: "outy_output_zones"
                         configSource: page2Root.parsedConfig
                     }
 
@@ -1048,8 +1037,7 @@
                             { key:"outx_target2",    label:"OutX Target2",  desc:"Lấy khay output" },
                             { key:"outx_target3",    label:"OutX Target3",  desc:"Đặt khay robot" },
                             { key:"outy_target1",    label:"OutY Target1",  desc:"Nâng khay (safe)" },
-                            { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Hạ gắp khay" },
-                            { key:"outy_row1_pos",   label:"OutY Row1",     desc:"Row1 scan limit" }
+                            { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Hạ gắp khay" }
                         ]
 
                         Column {
@@ -1589,7 +1577,7 @@
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
                                         // Stop & Reset → IDLE
-                                        CBtn { lbl: "⏹ STOP"; width: parent.width; bg: "#4a1a00"; bc: "#FF6600"; tc: "#FF6600"; padV: 10; onClicked: robotController.stopAndResetRobot() }
+                                        CBtn { lbl: "⏹ STOP"; width: parent.width; bg: "#4a1a00"; bc: "#FF6600"; tc: "#FF6600"; padV: 10; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
 
                                         // Enable
                                         CBtn { lbl: "ENABLE"; width: parent.width; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; padV: 8; onClicked: robotController.enableSystem(true) }
@@ -1637,7 +1625,7 @@
                                             Behavior on scale { NumberAnimation { duration: 50 } }
                                             Behavior on border.color { ColorAnimation { duration: 60 } }
                                             Text { anchors.centerIn: parent; text: "EMERGENCY\nSTOP"; color: esMA.pressed ? "#ff6666" : root.cRed; font.pixelSize: 14; font.bold: true; horizontalAlignment: Text.AlignHCenter }
-                                            MouseArea { id: esMA; anchors.fill: parent; onClicked: robotController.emergencyStop(true) }
+                                            MouseArea { id: esMA; anchors.fill: parent; onClicked: { robotController.emergencyStop(true); cartridgeController.stopSystem() } }
                                         }
                                     }
                                 }
@@ -1773,52 +1761,7 @@
                                         }
                                     }
 
-                                    // ── ROW 3: PLACE ACTIONS ──
-                                    Row {
-                                        spacing: 15; anchors.horizontalCenter: parent.horizontalCenter
 
-                                        // PLACE OUTPUT
-                                        Rectangle {
-                                            width: 160; height: 50; radius: 8
-                                            color: poMA.pressed ? "#0a3a3a" : "#051a1a"
-                                            border.color: poMA.pressed ? Qt.lighter("#00bcd4", 1.2) : "#00bcd4"
-                                            border.width: poMA.pressed ? 3 : 2
-                                            scale: poMA.pressed ? 0.95 : 1.0
-                                            Behavior on color { ColorAnimation { duration: 100 } }
-                                            Behavior on scale { NumberAnimation { duration: 100 } }
-
-                                            Column {
-                                                anchors.centerIn: parent; spacing: 2
-                                                Text { text: "📦 PLACE OUTPUT"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: "(Scale → Output Tray)"; color: "#888"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
-                                            }
-                                            MouseArea {
-                                                id: poMA; anchors.fill: parent
-                                                onClicked: robotController.gotoState("PLACE_TO_OUTPUT")
-                                            }
-                                        }
-
-                                        // PLACE FAIL
-                                        Rectangle {
-                                            width: 160; height: 50; radius: 8
-                                            color: pfMA.pressed ? "#3a2a0a" : "#1a1505"
-                                            border.color: pfMA.pressed ? Qt.lighter("#ff9800", 1.2) : "#ff9800"
-                                            border.width: pfMA.pressed ? 3 : 2
-                                            scale: pfMA.pressed ? 0.95 : 1.0
-                                            Behavior on color { ColorAnimation { duration: 100 } }
-                                            Behavior on scale { NumberAnimation { duration: 100 } }
-
-                                            Column {
-                                                anchors.centerIn: parent; spacing: 2
-                                                Text { text: "⛔ PLACE FAIL"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: "(Scale → Fail Tray)"; color: "#888"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
-                                            }
-                                            MouseArea {
-                                                id: pfMA; anchors.fill: parent
-                                                onClicked: robotController.gotoState("PLACE_TO_FAIL")
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -1959,7 +1902,7 @@
 
                 Repeater {
                     id: cfgRepeater
-                    model: [8,7,6,5,4,3,2,1]
+                    model: [10,9,8,7,6,5,4,3,2,1]
                     delegate: Rectangle {
                         required property int modelData
                         required property int index
@@ -1990,7 +1933,7 @@
                             }
                             Item { width: 4 }
                             Text {
-                                text: modelData===8?"Top":modelData===1?"Bot":""
+                                text: modelData===10?"Top":modelData===1?"Bot":""
                                 color: root.cDim; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter
                             }
                         }
@@ -2016,6 +1959,90 @@
             }
         }
 
+        // ════════════════════════════════════════════════════════════
+        // REUSABLE: ConfigZoneCard — compact min/max/target table
+        // ════════════════════════════════════════════════════════════
+        component ConfigZoneCard: Rectangle {
+            id: cfgZoneCard
+            property string title: ""
+            property string configKey: ""
+            property var configSource: ({})
+
+            color: root.cBg2; border.color: root.cBorder; radius: 6
+            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+            Column {
+                id: cfgZoneCol
+                anchors { fill: parent; margins: 8 }
+                spacing: 2
+
+                Text { text: cfgZoneCard.title; color: root.cAccent; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1.5 }
+
+                Row { width: parent.width; spacing: 0
+                    Text { text: "Row"; color: root.cDim; font.pixelSize: 10; font.bold: true; width: 36; font.capitalization: Font.AllUppercase }
+                    Text { text: "Min"; color: root.cDim; font.pixelSize: 10; font.bold: true; width: 50; font.capitalization: Font.AllUppercase }
+                    Text { text: "Max"; color: root.cDim; font.pixelSize: 10; font.bold: true; width: 50; font.capitalization: Font.AllUppercase }
+                    Text { text: "Target"; color: root.cDim; font.pixelSize: 10; font.bold: true; width: 62; font.capitalization: Font.AllUppercase }
+                }
+                Rectangle { width: parent.width; height: 1; color: root.cBorder }
+
+                Repeater {
+                    id: cfgZoneRepeater
+                    model: [10,9,8,7,6,5,4,3,2,1]
+                    delegate: Rectangle {
+                        required property int modelData
+                        required property int index
+                        width: cfgZoneCol.width; height: 38
+                        color: index % 2 === 0 ? "transparent" : "#0d0d22"
+                        property alias minText: minInp.text
+                        property alias maxText: maxInp.text
+                        property alias tgtText: tgtInp.text
+                        property int rowNum: modelData
+
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter; spacing: 2
+                            Text { text: "R"+modelData; color: root.cCyan; font.pixelSize: 12; font.bold: true; width: 34; anchors.verticalCenter: parent.verticalCenter }
+
+                            Rectangle { width: 48; height: 30; radius: 4; color: root.cBg; border.color: root.cBorder
+                                TextInput { id: minInp; anchors { fill: parent; margins: 2 } text: "0.0"; font.pixelSize: 12; font.family: "monospace"; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                    Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) minInp.text = String(tbl[String(modelData)][0]) } } } }
+                            Rectangle { width: 48; height: 30; radius: 4; color: root.cBg; border.color: root.cBorder
+                                TextInput { id: maxInp; anchors { fill: parent; margins: 2 } text: "0.0"; font.pixelSize: 12; font.family: "monospace"; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                    Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) maxInp.text = String(tbl[String(modelData)][1]) } } } }
+                            Rectangle { width: 48; height: 30; radius: 4; color: root.cBg; border.color: root.cBorder
+                                TextInput { id: tgtInp; anchors { fill: parent; margins: 2 } text: "0.0"; font.pixelSize: 12; font.family: "monospace"; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                    Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) tgtInp.text = String(tbl[String(modelData)][2]) } } } }
+
+                            Item { width: 2 }
+                            Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: "#1e1e3a"; anchors.bottom: parent.bottom }
+                    }
+                }
+
+                Row { spacing: 6; topPadding: 8
+                    CBtn { lbl:"Save"; padV:8; padH:18; fontSize:13; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                        onClicked: {
+                            var positions = {}
+                            for (var i = 0; i < cfgZoneRepeater.count; i++) {
+                                var item = cfgZoneRepeater.itemAt(i)
+                                if (item) {
+                                  var min = parseFloat(item.minText); if(isNaN(min)) min = 0.0;
+                                  var max = parseFloat(item.maxText); if(isNaN(max)) max = 0.0;
+                                  var tgt = parseFloat(item.tgtText); if(isNaN(tgt)) tgt = 0.0;
+                                  positions[String(item.rowNum)] = [min, max, tgt]
+                                }
+                            }
+                            cartridgeController.saveConfig(cfgZoneCard.configKey, JSON.stringify(positions))
+                        }
+                    }
+                    CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize:13; bg:root.cCard; bc:root.cBorder; tc:root.cText
+                        onClicked: page2Root.reloadConfig()
+                    }
+                }
+            }
+        }
+
     Timer {
         id: outTrayTimer
         interval: 40000
@@ -2026,7 +2053,7 @@
     Connections {
         target: robotController
         function onOutReadyChanged() {
-            if (!robotController.outReady && robotController.systemStatus !== "IDLE" && robotController.systemStatus !== "ERROR" && robotController.systemStatus !== "UNKNOWN") {
+            if (!robotController.outReady && robotController.systemStatus !== "IDLE" && robotController.systemStatus !== "ERROR" && robotController.systemStatus !== "UNKNOWN" && robotController.systemStatus !== "EMERGENCY_STOP") {
                 outTrayTimer.restart();
             } else {
                 outTrayTimer.stop();
@@ -2034,7 +2061,7 @@
             }
         }
         function onSystemStatusChanged() {
-            if (robotController.systemStatus === "IDLE" || robotController.systemStatus === "ERROR" || robotController.systemStatus === "UNKNOWN") {
+            if (robotController.systemStatus === "IDLE" || robotController.systemStatus === "ERROR" || robotController.systemStatus === "UNKNOWN" || robotController.systemStatus === "EMERGENCY_STOP") {
                 outTrayTimer.stop();
                 outTrayPopup.close();
             } else if (!robotController.outReady) {

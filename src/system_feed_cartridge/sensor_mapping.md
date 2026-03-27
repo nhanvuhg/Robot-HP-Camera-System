@@ -4,7 +4,7 @@ Hệ thống sử dụng **15 digital sensor** kết nối qua Festo CPX-AP IO m
 
 ---
 
-## Sensor Quang & Logic (S1–S9)
+## Sensor Quang & Logic (S1–S11)
 
 | ID | Tên (Code) | Vị trí | Chức năng |
 |----|------------|---------|-----------|
@@ -18,10 +18,11 @@ Hệ thống sử dụng **15 digital sensor** kết nối qua Festo CPX-AP IO m
 | **S8** | S8_FEED_SUCCESS | Pos 2 | Cấp khay thành công — xác nhận khay đã được đưa vào đúng vị trí |
 | **S9** | S9_OUTPUT_FINISHED | Pos 2 | Phát hiện khay thành phẩm ở vị trí output — xác nhận khay đã ra |
 | **S10** | S10_OUTPUT_STACK_TRAY | Pos 2 | Cảm biến phát hiện stack khay nhựa tương tự s4 |
+| **S11** | S11_TRAY_AT_ROBOT | Pos 1/2 | Cảm biến có khay ở vị trí robot thực thi (thay thế chức năng của S18 cũ) |
 
 ---
 
-## S11–S14 ← **DỰ PHÒNG** (chưa đấu nối)
+## S12–S14 ← **DỰ PHÒNG** (chưa đấu nối)
 
 ---
 
@@ -33,10 +34,8 @@ Hệ thống sử dụng **15 digital sensor** kết nối qua Festo CPX-AP IO m
 |----|------------|---------|-----------|-----------|
 | **S15** | S15_CYL1_RETRACTED | Pos 1 | Cylinder 1 đã co lại hoàn toàn | Chặn INX nếu OFF (State 2) |
 | **S16** | S16_CYL1_EXTENDED | Pos 1 | Cylinder 1 đã đẩy ra hoàn toàn | Chặn INY đi xuống nếu ON |
-| **S17** | S17_CYL2_RETRACTED | Pos 1 | Cylinder 2 (Hold Tray) đã co lại — đã nhả khay | Chặn INY nếu OFF |
-| **S18** | S18_CYL2_EXTENDED | Pos 1 | Cylinder 2 (Hold Tray) đã đẩy ra — đang giữ khay | Gate để vào State 2 |
-| **S19** | S19_CYL3_RETRACTED | Pos 2 | Cylinder 3 (đầu ra) đã co lại hoàn toàn | — |
-| **S20** | S20_CYL3_EXTENDED | Pos 2 | Cylinder 3 (đầu ra) đã đẩy ra hoàn toàn | — |
+| **S19** | S19_CYL2_RETRACTED | Pos 2 | Cylinder 2 (đầu ra) đã co lại hoàn toàn | — |
+| **S20** | S20_CYL2_EXTENDED | Pos 2 | Cylinder 2 (đầu ra) đã đẩy ra hoàn toàn | — |
 
 ---
 
@@ -45,5 +44,4 @@ Hệ thống sử dụng **15 digital sensor** kết nối qua Festo CPX-AP IO m
 | Cylinder | Extend DO | Retract DO | Vị trí |
 |----------|-----------|------------|--------|
 | Cylinder 1 | 5 | 4 | Pos 1 — Input Pickup |
-| Cylinder 2 | 9 | 8 | Pos 1 — Hold Tray |
-| Cylinder 3 | 7 | 6 | Pos 2 — Output Pickup |
+| Cylinder 2 | 7 | 6 | Pos 2 — Output Pickup |
