@@ -52,6 +52,9 @@ public slots:
     void pauseSystem();
     void hmiResume();
     void resetFaults();
+    void abortToJog();
+    Q_INVOKABLE void simulateDoneTrayInput();
+    Q_INVOKABLE void simulateDoneTrayOutput();
     void confirmOutput();
     Q_INVOKABLE void s11Respond(bool ok);  // OK=true → S2A→S1, NO=false → IDLE
 
@@ -96,6 +99,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   stop_button_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   pause_button_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   confirm_button_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   done_tray_input_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   done_tray_output_pub_;
 
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_state_sub_;
@@ -103,9 +108,12 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr gui_notify_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr servo_pos_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sensors_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr current_mode_sub_;
 
     // State
     QString system_state_{"UNKNOWN"};
+    QString state_in_;
+    QString state_out_;
     QString current_mode_{"idle"};
     QString servo_positions_{"{}"};
     QString config_data_{"{}"};
@@ -114,6 +122,7 @@ private:
     QString sensor_state_{"000000000000000000"};
 
     void publishString(rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub, const QString &data);
+    void publishBool(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub, bool value);
     void addLog(const QString &msg, const QString &type = "info");
 };
 

@@ -4,20 +4,30 @@ servo_ips:
   3: 192.168.27.250
   4: 192.168.27.251
   5: 192.168.27.252
+# Hardware Mapping & IO
 io_ip: 192.168.27.254
 cylinder1_extend_channel: 5
 cylinder1_retract_channel: 4
 cylinder2_retract_channel: 8
 cylinder2_extend_channel: 9
-inx_home: 20.0
-inx_target2: 500.0
-inx_output_stack: 100.0
-iny_home: 10.0
-iny_safe_zone: 50.0
-target_scaninp1: 500.0
+
+# Axis Coordinate Mapping (mm)
+inx_home: 20.0             # Home position for INX (used in S1_INX_10)
+inx_target2: 500.0         # Position 2 for S1 loading
+inx_output_stack: 100.0    # Tray stacking position for robot pickup
+iny_home: 10.0             # Home/Neutral position for INY
+iny_safe_zone: 50.0        # Limit for "Safe" INY position before INX moves
+
+# S1 INY Scanning Logic
+target_scaninp1: 850.0       # Scan endpoint target (mm)
 target_scanoutp1: 500.0
-iny_scan_vel: 30
-iny_row_vel: 20
+iny_scan_vel: 30             # Scanning speed (mm/s)
+iny_row_vel: 20              # Docking speed (mm/s)
+iny_scan_valid_min_mm: 200.0 # Ignore triggers below this X coordinate (Noise filter)
+iny_scan_valid_max_mm: 850.0 # Valid scan range upper limit
+s1_scan_noise_retry_limit: 1 # Max automatic retries if noise is detected
+inx_noise_recovery_mm: 10.0  # Safe INX recovery pos during noise failure
+
 iny_input_zones:
   1:
   - 451.0
@@ -162,7 +172,7 @@ outy_output_zones:
   - 500.0
 servo_limits:
   1: 700.0
-  2: 700.0
+  2: 900.0
   3: 400.0
   4: 600.0
   5: 600.0

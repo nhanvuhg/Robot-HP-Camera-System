@@ -157,6 +157,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr command_row_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr command_slot_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr goto_state_pub_;
+    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr set_mode_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr feed_chamber_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr fill_done_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr input_tray_ready_pub_;

@@ -1,0 +1,33 @@
+# Industrial 24/7 Deployment Architecture
+Cập nhật lần cuối: 2026-03-31
+
+Tài liệu này ghi lại kiến trúc vận hành công nghiệp song song đã được thiết lập để chống treo (Anti-deadlock) và chia sẻ kinh nghiệm xử lý các `Lỗi đã qua` (Past Errors) trong quá trình nâng cấp hệ thống Cấp/Nhả khay Festo CMMT-AS Modbus.
+
+## 1. Parallel State Machine (S3 & S4 Xử lý Song Song)
+**Lý do tái thiết kế:**
+Ban đầu, ROS 2 Python Node sử dụng chung 1 biến trạng thái `state_out` cho vòng lặp phía đầu ra (Output Pipeline). Điều này gây tắc hẹp (bottleneck): Nếu tay gắp khay (State 4) đang đi lấy khay đầy dời đi, cụm đùn khay dự phòng (State 3) phải đợi S4 báo cáo `IDLE` mới được phép đùn khay tiếp theo tới.
+
+**Kiến trúc mới:**
+Đã tách cấu trúc `state_out` thành hai cỗ máy trạng thái (State machines) vận hành độc lập trong hàm ngắt `timer_cb` của `cartridge_providesystem_py_node.py`:
+- `self.state_s3` kiểm soát mâm đùn Servo 3.
+- `self.state_s4` kiểm soát mâm nâng hạ, tay gắp khay Servo 4, Servo 5 và Relay Kẹp khí nén (Cyl 2).
+
+### Logic Đùn Tự Động Đầu Ra (S8 Timer Delay)
+Để hệ thống không bị xung đột vật lý giữa Servo 3 đẩy khay và Servo 4 nhấc khay: 
+1. Hệ thống giám sát cảm biến `S8` (Khay tại vị trí hứng robot).
+2. Ngay khi S8 từ `ON` chuyển sang `OFF` (Do gầm máy gắp S4 khênh lấy khay đi), bộ dò thời gian nội bộ `self._s8_off_time` tự động tính giây.
+3. Chờ chính xác an toàn **5.0 giây**, cờ `_can_start_s3()` nhảy `True` tự động phát lệnh nhả `State 3` đùn khay rỗng xuống.
+
+## 2. Loại bỏ Deadlocks & Lỗi Timeout Cũ
+Các lỗi cũ đã trải qua (Past Errors) và cách chặn đứng:
+- **Treo Giao Diện (GUI Freeze)**: Việc sử dụng `while(rclcpp::ok() && pending)` bên Backend C++ để đợi node Python xử lý các vòng Check Cảm Biến/Timeout (`JOG`, `ABORT`, `TRIGGER`) sẽ gây nghẽn Thread GUI nếu Modbus TCP mất kết nối quá lâu. Giải pháp là ứng dụng cơ chế `Non-blocking Jog` và chuyển Trigger Mode bằng tín hiệu ROS `Bool` bất đồng bộ `/robot/done_tray_input`.
+- **Modbus Timeout Limit**: Nếu dây cáp hở, `ModbusTcpClient` kẹt timeout, ROS timer ngắt mạch, dẫn đến vòng lặp Homing bị fail vĩnh viễn ở `_step_timeout_in`. Giải pháp: Máy luôn giữ quyền năng `ABORT_TO_JOG` mọi lúc. Lệnh "START" có quyền khơi lại kết nối `tcp_retry` nội bộ nếu `_can_start_sX()` bị hụt.
+- **State Navigation Phức Tạp**: Dọn sạch các nút 'Simulation Done Input / Output'. Các nút `STATE 2` và `STATE 4` trong QML giờ gắn thẳng vào Signal `simulateDoneTrayInput/Output()`. An toàn tuyệt đối 100% không làm bể chu trình Sensor.
+
+## 3. Launch System & Systemd 24/7 Profile
+Để hệ thống hoạt động liên hoàn (Crash-recovery), file launch chính là: `launch/cartridge_production.launch.py`.
+- **Cơ chế Respawn**: Node GUI và Node Điều khiển Python đều chạy cờ `respawn=True`, nếu tràn RAM hoặc kẹt Modbus Fatal, ROS tự hồi sinh lại PID trong vòng vài giây.
+- **Systemd**: `scripts/cartridge_robot.service` (nằm ngoài /etc/) làm nhiệm vụ nạp `DISPLAY=:0`, `.bashrc` và khởi động Launch ROS ngay sau khi RPi5 boot xong màn hình Wayland/X11.
+
+## 4. Test Scripts
+Lợi thế phát triển: Gói `test_s1_full.py`, `test_s2_full.py`, `test_s3_s4_full.py` đã chứng minh tính rạch ròi của Pipeline. Các script chọc thẳng sensor ảo `sim_sensor` và quan sát `[STATE]` transition. Khi chuyển qua kho phần cứng thật, chỉ việc tắt script và không cần vá lỗi. Mọi luồng logic (Homing, Timeout Sensor 15/16/19/20) được bảo tồn trọn vẹn.

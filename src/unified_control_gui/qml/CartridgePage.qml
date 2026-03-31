@@ -103,6 +103,31 @@
                             anchors.verticalCenter: parent.verticalCenter }
                     }
                 }
+                Item { width: 10 }
+                Rectangle {
+                    height: 28; radius: 6
+                    width: hmRow.implicitWidth + 16
+                    color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? "#2a1a00"
+                         : (cartridgeController.systemState === "idle" && cartridgeController.currentMode !== "") ? "#0a2a0a"
+                         : "#1a1a1a"
+                    border.color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? root.cOrange
+                                : (cartridgeController.systemState === "idle" && cartridgeController.currentMode !== "") ? root.cGreen
+                                : root.cBorder
+                    border.width: 1
+                    Row {
+                        id: hmRow
+                        anchors.centerIn: parent; spacing: 6
+                        Text {
+                            text: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? "⟳ HOMING..."
+                                : (cartridgeController.currentMode !== "" && cartridgeController.systemState === "idle") ? "✓ HOMED"
+                                : "○ NOT HOMED"
+                            color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? root.cOrange
+                                 : (cartridgeController.currentMode !== "" && cartridgeController.systemState === "idle") ? root.cGreen
+                                 : root.cDim
+                            font.pixelSize: 11; font.bold: true
+                        }
+                    }
+                }
                 Item { Layout.fillWidth: true }
                 Rectangle {
                     id: modePill; height: 28; radius: 20
@@ -189,7 +214,7 @@
                         contentItem: Text { text: parent.text; font: parent.font; color: "#000"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: {
                             cartridgeController.confirmOutput();
-                            outputWarningPopup.close();
+                            // outputWarningPopup.close();
                         }
                     }
                     Button {
@@ -199,7 +224,7 @@
                         background: Rectangle { color: "#333"; radius: 5; border.color: "#666"; border.width: 1 }
                         contentItem: Text { text: parent.text; font: parent.font; color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: {
-                            outputWarningPopup.close();
+                            // outputWarningPopup.close();
                         }
                     }
                 }
@@ -246,7 +271,7 @@
                         bannerTimer.restart()
 
                         if (obj.title === "Da phat hien khay") {
-                            outputWarningPopup.open()
+                            // outputWarningPopup.open()
                         }
                     } catch(e) {}
                 }
@@ -543,15 +568,19 @@
                                 // Hàng 1: START / STOP / PAUSE
                                 RowLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "START";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.startSystem() }
+                                    CBtn {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        lbl: "START\n(+HOMING)"
+                                        bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
+                                        onClicked: cartridgeController.startSystem()
+                                    }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
                                 }
 
-                                // Hàng 2: CONFIRM / RESUME
+                                // Hàng 2: RESUME
                                 RowLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Confirm"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.confirmOutput() }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Resume";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
                                 }
 
@@ -585,11 +614,24 @@
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   onClicked: cartridgeController.gotoState("HOMING") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "IDLE";    bg: root.cCard;   bc: root.cBorder; tc: root.cText;   onClicked: { robotController.stopAndResetRobot(); cartridgeController.gotoState("IDLE"); } }
+                                    CBtn {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        lbl: cartridgeController.currentMode === "jog" ? "JOG MODE" : "STOP STATE"
+                                        bg: cartridgeController.currentMode === "jog" ? "#0a332e" : "#4d1a1a"
+                                        bc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
+                                        tc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
+                                        onClicked: {
+                                            if (cartridgeController.currentMode === "jog") {
+                                                console.log("JOG mode verified")
+                                            } else {
+                                                cartridgeController.gotoState("ABORT_TO_JOG")
+                                            }
+                                        }
+                                    }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nNạp khay In"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE2") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.simulateDoneTrayInput() }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nCấp khay Out"; bg: "#0a2a1a"; bc: root.cGreen; tc: root.cGreen; onClicked: cartridgeController.gotoState("STATE3") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nThay khay Out"; bg: "#0a2a1a"; bc: root.cGreen; tc: root.cGreen; onClicked: cartridgeController.gotoState("STATE4") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nThay khay Out"; bg: "#0a2a1a"; bc: root.cGreen; tc: root.cGreen; onClicked: cartridgeController.simulateDoneTrayOutput() }
                                     CBtn { Layout.columnSpan: 2; Layout.fillWidth: true; Layout.fillHeight: true; lbl: "ERROR"; bg: "#4d1a1a"; bc: root.cRed; tc: root.cRed; onClicked: cartridgeController.gotoState("ERROR") }
                                 }
                             }
@@ -647,12 +689,7 @@
                                         width: parent.width
                                         height: parent.height - 20 - 4
                                         spacing: root.gap
-                                        property bool isJog: cartridgeController.currentMode === "jog" || cartridgeController.currentMode === "manual"
-                                        property bool jogAllowed: {
-                                            if (!isJog) return false
-                                            var s = cartridgeController.systemState.toLowerCase()
-                                            return s === "idle" || s === "unknown" || s === "" || s.indexOf("error") !== -1
-                                        }
+                                        property bool jogAllowed: cartridgeController.currentMode === "jog"
 
                                         Repeater {
                                             model: ListModel {
@@ -801,7 +838,7 @@
                             // ── Nút All ON / OFF / Clear ──
                             Row {
                                 spacing: 3
-                                enabled: cartridgeController.currentMode === "manual"
+                                enabled: cartridgeController.currentMode === "jog" || cartridgeController.currentMode === "manual"
                                 opacity: enabled ? 1.0 : 0.3
                                 CBtn { lbl:"All ON";  padV:3; padH:8; fontSize:10; bg:"#0a332e"; bc:root.cGreen;  tc:root.cGreen;  onClicked: cartridgeController.simAll(1) }
                                 CBtn { lbl:"All OFF"; padV:3; padH:8; fontSize:10; bg:"#4d1a1a"; bc:root.cRed;    tc:root.cRed;    onClicked: cartridgeController.simAll(0) }
@@ -812,7 +849,7 @@
                             Text { text: "QUICK PRESET"; color: root.cDim; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.8 }
                             Row {
                                 spacing: 3
-                                enabled: cartridgeController.currentMode === "manual"
+                                enabled: cartridgeController.currentMode === "jog" || cartridgeController.currentMode === "manual"
                                 opacity: enabled ? 1.0 : 0.3
                                 // S1 Entry: điều kiện vào State 1
                                 CBtn {
@@ -821,8 +858,8 @@
                                     bg: "#0a1a4d"; bc: root.cAccent; tc: root.cAccent
                                     onClicked: {
                                         cartridgeController.simSensor("clear")
-                                        // S1+S3 ON (băng tải có khay)
-                                        var ids = [1,3]
+                                        // S1+S3+S15 ON (băng tải có khay)
+                                        var ids = [1,3,15]
                                         ids.forEach(function(id) {
                                             cartridgeController.simSensor(id + ":1")
                                         })
@@ -1027,10 +1064,10 @@
 
                         property var servoParams: [
                             { key:"inx_home",        label:"InX Home",      desc:"S1 home" },
-                            { key:"inx_target",      label:"InX Target",    desc:"S1 lấy khay (500mm)" },
-                            { key:"inx_output_pos",  label:"InX OutPos",    desc:"Đặt khay output" },
+                            { key:"inx_target2",     label:"InX Target",    desc:"S1 lấy khay (500mm)" },
+                            { key:"inx_output_stack",label:"InX OutPos",    desc:"Đặt khay output" },
                             { key:"iny_home",        label:"InY Home",      desc:"S2 home" },
-                            { key:"iny_place",       label:"InY Place",     desc:"Robot place (200mm)" },
+                            { key:"iny_target2",     label:"InY Place",     desc:"Robot place (200mm)" },
                             { key:"iny_safe_zone",   label:"InY SafeZone",  desc:"Safe zone" },
                             { key:"servo3_target2",  label:"S3 Feed",       desc:"Feed pos (400mm)" },
                             { key:"outx_home",       label:"OutX Home",     desc:"S4 home" },
