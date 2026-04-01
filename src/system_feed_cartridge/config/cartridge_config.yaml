@@ -19,12 +19,12 @@ iny_home: 10.0             # Home/Neutral position for INY
 iny_safe_zone: 50.0        # Limit for "Safe" INY position before INX moves
 
 # S1 INY Scanning Logic
-target_scaninp1: 850.0       # Scan endpoint target (mm)
+target_scaninp1: 550.0       # Scan endpoint target (mm)
 target_scanoutp1: 500.0
 iny_scan_vel: 30             # Scanning speed (mm/s)
 iny_row_vel: 20              # Docking speed (mm/s)
 iny_scan_valid_min_mm: 200.0 # Ignore triggers below this X coordinate (Noise filter)
-iny_scan_valid_max_mm: 850.0 # Valid scan range upper limit
+iny_scan_valid_max_mm: 550.0 # Valid scan range upper limit
 s1_scan_noise_retry_limit: 1 # Max automatic retries if noise is detected
 inx_noise_recovery_mm: 10.0  # Safe INX recovery pos during noise failure
 
@@ -110,25 +110,27 @@ iny_output_zones:
   - 0.0
   - 49.0
   - 140.0
-iny_target2: 200.0
-servo3_home: 0.0
-servo3_target1: 10.0
-servo3_target2: 400.0
-servo3_push_position: 300.0
-servo3_jog_velocity: 50.0
-servo3_feed_velocity: 50.0
-outx_home: 0.0
-outx_target1: 100.0
-outx_target2: 400.0
-outx_target3: 20.0
-outy_home: 0.0
-outy_target1: 10.0
-outy_target2: 300.0
-outy_pick_pos: 100.0
-outy_safe_zone: 10.0
-outy_search_velocity: 40.0
+iny_target2: 200.0         # Tọa độ INY nơi Robot tiến vào để thả khay thành phẩm (2A)
+servo3_home: 0.0           # Điểm lùi sâu nhất của trục Servo 3
+servo3_target1: 10.0       # Điểm chờ của Servo 3 (Bãi đỗ khi dẹp đường)
+servo3_target2: 400.0      # Tọa độ đẩy băng nhám / băng đạn ra của Servo 3
+servo3_push_position: 300.0 # Tọa độ ép khay trước trong quá trình nhồi phụ
+servo3_jog_velocity: 50.0  # Tốc độ lùi/tốc độ rà của Servo 3
+servo3_feed_velocity: 50.0 # Tốc độ bơm khay của Servo 3
+outx_home: 0.0             # Home position cho trục OutX (S4 kéo ngang)
+outx_target1: 100.0        # Điểm chờ chờ bốc khay (ngay trước Pos 2)
+outx_target2: 400.0        # Tọa độ OUTX để ra lấy khay từ Pos 1 (sau S2A)
+outx_target3: 20.0         # Tọa độ OUTX lùi về để thả khay ra khỏi hệ thống
+outy_home: 0.0             # Home position cho trục OutY (S5 bốc dọc)
+outy_target1: 10.0         # Tốc độ nâng/hạ an toàn của khay (Clearance)
+outy_target2: 300.0        # Tọa độ hạ khay chờ xuống dàn
+outy_pick_pos: 100.0       # Tọa độ chính xác để ngoạm khay tại InX stack
+outy_safe_zone: 10.0       # Vùng an toàn của OUTY (phải nâng cao hơn mức này thì OUTX mới được dịch chuyển)
+outy_search_velocity: 40.0 # Tốc độ quét tìm hàng của OUTY (quét qua S10)
 outy_row_limit: 680.0
 outy_slow_vel: 10.0
+target_scanoutp2: 500.0
+outy_scan_arm_mm: 50.0
 outy_output_zones:
   10:
   - 0.0

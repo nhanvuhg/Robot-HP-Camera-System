@@ -196,7 +196,7 @@
                     Layout.alignment: Qt.AlignHCenter
                 }
                 Text {
-                    text: "Hệ thống đang chờ khay Output.\nBạn đã cấp khay mới chưa?"
+                    text: "Hệ thống đang chờ khay cấp khay thành phẩm.\ Bạn đã cấp khay mới chưa?"
                     color: "white"
                     font.pixelSize: 14
                     horizontalAlignment: Text.AlignHCenter
@@ -427,6 +427,7 @@
                                             var m = cartridgeController.currentMode
                                             if (m === "auto")   return root.cGreen
                                             if (m === "manual") return "#bb86fc"
+                                            if (m === "jog")    return root.cOrange
                                             return root.cBorder
                                         }
                                         border.width: modeSelCol.modeIsIdle ? 1 : 2
@@ -440,13 +441,14 @@
                                                 text: {
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return "●"
-                                                    if (m === "manual") return "●"
+                                                    if (m === "manual" || m === "jog") return "●"
                                                     return "○"
                                                 }
                                                 color: {
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return root.cGreen
                                                     if (m === "manual") return "#bb86fc"
+                                                    if (m === "jog")    return root.cOrange
                                                     return root.cDim
                                                 }
                                                 font.pixelSize: 12
@@ -457,12 +459,14 @@
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return "AUTO"
                                                     if (m === "manual") return "MANUAL"
+                                                    if (m === "jog")    return "MANUAL (JOG)"
                                                     return "Chọn chế độ..."
                                                 }
                                                 color: {
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return root.cGreen
                                                     if (m === "manual") return "#bb86fc"
+                                                    if (m === "jog")    return root.cOrange
                                                     return root.cDim
                                                 }
                                                 font.pixelSize: 12; font.bold: !modeSelCol.modeIsIdle
@@ -570,7 +574,7 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true
-                                        lbl: "START\n(+HOMING)"
+                                        lbl: "START"
                                         bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
                                         onClicked: cartridgeController.startSystem()
                                     }
@@ -628,10 +632,10 @@
                                             }
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nNạp khay In"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.simulateDoneTrayInput() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nCấp khay Out"; bg: "#0a2a1a"; bc: root.cGreen; tc: root.cGreen; onClicked: cartridgeController.gotoState("STATE3") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nThay khay Out"; bg: "#0a2a1a"; bc: root.cGreen; tc: root.cGreen; onClicked: cartridgeController.simulateDoneTrayOutput() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nNạp khay In"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S1_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE1") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S2A_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cAccent; onClicked: cartridgeController.simulateDoneTrayInput() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nCấp khay Out"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S3_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cGreen; onClicked: cartridgeController.gotoState("STATE3") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nThay khay Out"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S4_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cGreen; onClicked: cartridgeController.simulateDoneTrayOutput() }
                                     CBtn { Layout.columnSpan: 2; Layout.fillWidth: true; Layout.fillHeight: true; lbl: "ERROR"; bg: "#4d1a1a"; bc: root.cRed; tc: root.cRed; onClicked: cartridgeController.gotoState("ERROR") }
                                 }
                             }
@@ -909,13 +913,13 @@
                                         ListElement { sid:1;  slabel:"S1";  sdesc:"Belt start" }
                                         ListElement { sid:2;  slabel:"S2";  sdesc:"Belt mid" }
                                         ListElement { sid:3;  slabel:"S3";  sdesc:"Belt end"}
-                                        ListElement { sid:4;  slabel:"S4";  sdesc:"Stack In" }
+                                        ListElement { sid:4;  slabel:"S4";  sdesc:"Scan Stack Pos1" }
                                         ListElement { sid:5;  slabel:"S5";  sdesc:"Output det." }
-                                        ListElement { sid:6;  slabel:"S6";  sdesc:"In stack tray" }
+                                        ListElement { sid:6;  slabel:"S6";  sdesc:"Check Tray OutP1" }
                                         ListElement { sid:7;  slabel:"S7";  sdesc:"Platform" }
                                         ListElement { sid:8;  slabel:"S8";  sdesc:"Feed OK" }
-                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Out finish" }
-                                        ListElement { sid:10; slabel:"S10"; sdesc:"Stack Out" }
+                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Check Tray OutP2" }
+                                        ListElement { sid:10; slabel:"S10"; sdesc:"Scan Stack Pos2" }
                                         // S11-S14: Dự phòng
                                         ListElement { sid:11; slabel:"S11"; sdesc:"Sensor bắt khay" }
                                         ListElement { sid:12; slabel:"S12"; sdesc:"[reserved]" }
@@ -983,7 +987,7 @@
 
                             // ── Chú thích ──
                             Text {
-                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Stack In · <b>S5</b> Out Det\n<b>S6</b> In tray · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Out fin · <b>S10</b> Stack Out\n<b>S11</b> Khay tại Robot · <b>S15</b> Cyl1↩ · <b>S16</b> Cyl1↪\n<b>S19</b> Cyl2↩ · <b>S20</b> Cyl2↪   |   S12-S14, S17-S18 định vị"
+                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Scan P1 · <b>S5</b> Out Det\n<b>S6</b> Check P1 · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Check P2 · <b>S10</b> Scan P2\n<b>S11</b> Khay tại Robot · <b>S15</b> Cyl1↩ · <b>S16</b> Cyl1↪\n<b>S19</b> Cyl2↩ · <b>S20</b> Cyl2↪   |   S12-S14, S17-S18 định vị"
                                 textFormat: Text.RichText; color: root.cDim; font.pixelSize: 8
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                             }
@@ -1074,7 +1078,9 @@
                             { key:"outx_target2",    label:"OutX Target2",  desc:"Lấy khay output" },
                             { key:"outx_target3",    label:"OutX Target3",  desc:"Đặt khay robot" },
                             { key:"outy_target1",    label:"OutY Target1",  desc:"Nâng khay (safe)" },
-                            { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Hạ gắp khay" }
+                            { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Hạ gắp khay" },
+                            { key:"target_scanoutp2",label:"OUTY TgtScan",  desc:"Điểm dừng quét S10" },
+                            { key:"outy_scan_arm_mm",label:"OUTY Arm S10",  desc:"Giới hạn kích hoạt S10" }
                         ]
 
                         Column {
@@ -2082,29 +2088,36 @@
 
     Timer {
         id: outTrayTimer
-        interval: 40000
+        interval: 200000
         repeat: false
         onTriggered: outTrayPopup.open()
     }
 
+    function checkOutTrayTimer() {
+        var robotActive = robotController.systemStatus !== "IDLE" && robotController.systemStatus !== "ERROR" && robotController.systemStatus !== "UNKNOWN" && robotController.systemStatus !== "EMERGENCY_STOP";
+        var isAuto = cartridgeController.currentMode === "auto";
+        var isManualS3 = cartridgeController.currentMode === "manual" && cartridgeController.stateOut.indexOf("S3") !== -1;
+        
+        if (!robotController.outReady && robotActive && (isAuto || isManualS3)) {
+            if (!outTrayTimer.running) {
+                outTrayTimer.restart();
+            }
+        } else {
+            outTrayTimer.stop();
+            outTrayPopup.close();
+        }
+    }
+
     Connections {
         target: robotController
-        function onOutReadyChanged() {
-            if (!robotController.outReady && robotController.systemStatus !== "IDLE" && robotController.systemStatus !== "ERROR" && robotController.systemStatus !== "UNKNOWN" && robotController.systemStatus !== "EMERGENCY_STOP") {
-                outTrayTimer.restart();
-            } else {
-                outTrayTimer.stop();
-                outTrayPopup.close();
-            }
-        }
-        function onSystemStatusChanged() {
-            if (robotController.systemStatus === "IDLE" || robotController.systemStatus === "ERROR" || robotController.systemStatus === "UNKNOWN" || robotController.systemStatus === "EMERGENCY_STOP") {
-                outTrayTimer.stop();
-                outTrayPopup.close();
-            } else if (!robotController.outReady) {
-                outTrayTimer.restart();
-            }
-        }
+        function onOutReadyChanged() { checkOutTrayTimer(); }
+        function onSystemStatusChanged() { checkOutTrayTimer(); }
+    }
+
+    Connections {
+        target: cartridgeController
+        function onCurrentModeChanged() { checkOutTrayTimer(); }
+        function onSystemStateChanged() { checkOutTrayTimer(); }
     }
 
     Popup {
@@ -2117,12 +2130,12 @@
         Column {
             anchors.centerIn: parent; spacing: 30
             Text {
-                text: "⚠️ CẢNH BÁO TỐC ĐỘ"
+                text: "⚠️ CẢNH BÁO CHƯA CÓ KHAY THÀNH PHẨM"
                 color: "#ffaa00"; font.pixelSize: 22; font.bold: true
                 anchors.horizontalCenter: parent.horizontalCenter
             }
             Text {
-                text: "Hệ thống đang chờ khay Output lâu hơn 40s.\nĐã cấp khay chưa?"
+                text: "Hệ thống đang chờ khay Output lâu hơn 200s.\nĐã cấp khay chưa?"
                 color: "#ffffff"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter
                 anchors.horizontalCenter: parent.horizontalCenter
             }

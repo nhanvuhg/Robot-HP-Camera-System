@@ -152,8 +152,12 @@ void CartridgeController::moveServo(int id, double position)
 void CartridgeController::setMode(const QString &mode)
 {
     publishString(set_mode_pub_, mode);
+    // Optimistic update: hiển thị mode ngay trên GUI không cần chờ Python round-trip
+    if (current_mode_ != mode) {
+        current_mode_ = mode;
+        emit currentModeChanged();
+    }
     addLog(QString("Mode: %1").arg(mode.toUpper()), "ok");
-    // current_mode_ sẽ được cập nhật qua subscriber /providesystem/current_mode
 }
 
 void CartridgeController::gotoState(const QString &state)
@@ -171,7 +175,7 @@ void CartridgeController::setTargetRow(int row)
 void CartridgeController::startSystem()
 {
     publishBool(start_button_pub_, true);
-    addLog("System START → Homing...", "ok");
+    addLog("System START", "ok");
 }
 
 void CartridgeController::stopSystem()

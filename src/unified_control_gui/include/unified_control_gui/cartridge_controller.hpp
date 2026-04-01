@@ -23,6 +23,7 @@ class CartridgeController : public QObject
     Q_PROPERTY(QString lastNotification READ lastNotification NOTIFY notificationReceived)
     Q_PROPERTY(QVariantList logEntries  READ logEntries       NOTIFY logEntriesChanged)
     Q_PROPERTY(QString sensorState      READ sensorState      NOTIFY sensorStateChanged)
+    Q_PROPERTY(QString stateOut         READ stateOut         NOTIFY systemStateChanged)
 
 public:
     explicit CartridgeController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -34,6 +35,7 @@ public:
     QString lastNotification() const { return last_notification_; }
     QVariantList logEntries()  const { return log_entries_; }
     QString sensorState()      const { return sensor_state_; }
+    QString stateOut()         const { return state_out_; }
 
 public slots:
     // Servo control
