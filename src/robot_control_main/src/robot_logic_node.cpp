@@ -224,7 +224,6 @@ private:
     std::atomic<bool> stored_scale_result_{false};
     std::atomic<bool> dual_camera_mode_{true};
     std::atomic<bool> stop_after_single_motion_{false};
-    bool              last_row_picked_{false};  // true when last row motion is in-flight
     bool              operator_explicitly_set_row_{false}; // Tracks explicit human overrides
 
     // ========================================================================
@@ -413,6 +412,9 @@ private:
     // Returns row number (1-5). If row==5 → publishes done_tray_input + sets waiting flags.
     // Returns -1 if waiting for tray.
     int getNextAutoRow();
+
+    // Helper: advance row AFTER successful pick
+    void advanceAutoRow();
 
     // Helper: publish done_tray_output + set waiting flag
     void publishDoneTrayOutput();
@@ -721,8 +723,35 @@ int RobotLogicNode::getNextAutoRow()
     return row;
 }
 
-// Called after successfully picking a row, to advance counter and handle row5 logic
-void advanceAutoRow(RobotLogicNode* /*node*/) {} // forward decl placeholder — logic inline below
+// ============================================================================
+// HELPER: advanceAutoRow
+// Called after successfully picking a row
+// ============================================================================
+void RobotLogicNode::advanceAutoRow()
+{
+    if (use_ai_for_control_) return;
+
+    if (current_auto_row_ >= TOTAL_ROWS) {
+        RCLCPP_WARN(get_logger(), "[TRAY_IN] Last row pick DONE → pub done_tray_input");
+        auto doneMsg = std_msgs::msg::Bool();
+        doneMsg.data = true;
+        done_input_tray_pub_->publish(doneMsg);
+        new_tray_loaded_      = false;
+        new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
+        waiting_for_new_input_ = true;
+        wait_tray_start_time_  = this->now();
+        
+        current_auto_row_ = 1;
+    } else {
+        current_auto_row_++;
+    }
+
+    if (selected_row_pub_) {
+        auto r_msg = std_msgs::msg::Int32();
+        r_msg.data = current_auto_row_;
+        selected_row_pub_->publish(r_msg);
+    }
+}
 
 // ============================================================================
 // HELPER: publishDoneTrayOutput
@@ -1496,26 +1525,7 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         chamber_has_cartridge_ = true;
         chamber_is_empty_ = false;
 
-        // If this was the last row, NOW publish done_tray_input (pick is complete)
-        if (!use_ai_for_control_ && last_row_picked_) {
-            last_row_picked_ = false;
-            RCLCPP_WARN(get_logger(), "[TRAY_IN] Last row pick DONE → pub done_tray_input");
-            auto doneMsg = std_msgs::msg::Bool();
-            doneMsg.data = true;
-            done_input_tray_pub_->publish(doneMsg);
-            new_tray_loaded_      = false;
-            new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
-            waiting_for_new_input_ = true;
-            wait_tray_start_time_  = this->now();
-            
-            // Instant visual reset of GUI row tracker
-            current_auto_row_ = 1;
-            if (selected_row_pub_) {
-                auto r_msg = std_msgs::msg::Int32();
-                r_msg.data = current_auto_row_;
-                selected_row_pub_->publish(r_msg);
-            }
-        }
+        advanceAutoRow();
 
         if (stop_after_single_motion_) {
             stop_after_single_motion_ = false;
@@ -1557,24 +1567,7 @@ void RobotLogicNode::stateInitLoadChamberDirect()
     RCLCPP_INFO(get_logger(), "[INIT_LOAD] 🤖 Pick Row %d → CHAMBER [ASYNC]", row);
     sendMotionActionAsync("INPUT_TRAY_CHAMBER", row);
 
-    // Advance row counter AFTER sending motion (row is committed)
-    if (!use_ai_for_control_) {
-        if (current_auto_row_ == TOTAL_ROWS) {
-            // Last row committed — set flag; done_tray_input will pub after pick completes
-            RCLCPP_WARN(get_logger(),
-                "[TRAY_IN] Row %d (last) motion started — will pub done_tray_input on completion",
-                current_auto_row_);
-            last_row_picked_ = true;
-            // DON'T publish done_tray_input here — motion hasn't finished yet
-        } else {
-            current_auto_row_++;
-            if (selected_row_pub_) {
-                auto r_msg = std_msgs::msg::Int32();
-                r_msg.data = current_auto_row_;
-                selected_row_pub_->publish(r_msg);
-            }
-        }
-    }
+    // Row counter is advanced ONLY after motion succeeds (in the motion_result_ handler block above)
 }
 
 // ============================================================================
@@ -1610,26 +1603,7 @@ void RobotLogicNode::stateInitRefillBuffer()
         buffer_is_empty_ = false;
         is_first_batch_ = false;
 
-        // If this was the last row, NOW publish done_tray_input (pick is complete)
-        if (!use_ai_for_control_ && last_row_picked_) {
-            last_row_picked_ = false;
-            RCLCPP_WARN(get_logger(), "[TRAY_IN] Last row (BUFFER) pick DONE → pub done_tray_input");
-            auto doneMsg = std_msgs::msg::Bool();
-            doneMsg.data = true;
-            done_input_tray_pub_->publish(doneMsg);
-            new_tray_loaded_      = false;
-            new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
-            waiting_for_new_input_ = true;
-            wait_tray_start_time_  = this->now();
-            
-            // Instant visual reset of GUI row tracker
-            current_auto_row_ = 1;
-            if (selected_row_pub_) {
-                auto r_msg = std_msgs::msg::Int32();
-                r_msg.data = current_auto_row_;
-                selected_row_pub_->publish(r_msg);
-            }
-        }
+        advanceAutoRow();
 
         if (stop_after_single_motion_) {
             stop_after_single_motion_ = false;
@@ -1683,24 +1657,6 @@ void RobotLogicNode::stateInitRefillBuffer()
 
     RCLCPP_INFO(get_logger(), "[INIT_REFILL] 🤖 Pick Row %d → BUFFER [ASYNC]", row);
     sendMotionActionAsync("INPUT_TRAY_BUFFER", row);
-
-    // Advance row counter
-    if (!use_ai_for_control_) {
-        if (current_auto_row_ == TOTAL_ROWS) {
-            // Last row committed — flag it; done_tray_input will pub after pick completes
-            RCLCPP_WARN(get_logger(),
-                "[TRAY_IN] Row %d (last) BUFFER motion started — will pub done_tray_input on completion",
-                current_auto_row_);
-            last_row_picked_ = true;
-        } else {
-            current_auto_row_++;
-            if (selected_row_pub_) {
-                auto r_msg = std_msgs::msg::Int32();
-                r_msg.data = current_auto_row_;
-                selected_row_pub_->publish(r_msg);
-            }
-        }
-    }
 }
 
 // ============================================================================
@@ -1902,26 +1858,7 @@ void RobotLogicNode::stateRefillBuffer()
             buffer_is_empty_ = false;
             RCLCPP_INFO(get_logger(), "[BUFFER] ✅ Buffer refilled");
 
-            // If this was the last row, NOW publish done_tray_input (pick is complete)
-            if (!use_ai_for_control_ && last_row_picked_) {
-                last_row_picked_ = false;
-                RCLCPP_WARN(get_logger(), "[TRAY_IN] Last row (REFILL_BUFFER) pick DONE → pub done_tray_input");
-                auto doneMsg = std_msgs::msg::Bool();
-                doneMsg.data = true;
-                done_input_tray_pub_->publish(doneMsg);
-                new_tray_loaded_      = false;
-                new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
-                waiting_for_new_input_ = true;
-                wait_tray_start_time_  = this->now();
-                
-                // Instant visual reset of GUI row tracker
-                current_auto_row_ = 1;
-                if (selected_row_pub_) {
-                    auto r_msg = std_msgs::msg::Int32();
-                    r_msg.data = current_auto_row_;
-                    selected_row_pub_->publish(r_msg);
-                }
-            }
+            advanceAutoRow();
         }
 
         if (stop_after_single_motion_) {
@@ -1974,23 +1911,7 @@ void RobotLogicNode::stateRefillBuffer()
     RCLCPP_INFO(get_logger(), "[REFILL] 🤖 Pick Row %d → BUFFER [ASYNC]", row);
     sendMotionActionAsync("INPUT_TRAY_BUFFER", row);
 
-    // Advance row counter
-    if (!use_ai_for_control_) {
-        if (current_auto_row_ == TOTAL_ROWS) {
-            // Last row committed — flag it; done_tray_input will pub after pick completes
-            RCLCPP_WARN(get_logger(),
-                "[TRAY_IN] Row %d (last) REFILL_BUFFER motion started — will pub done_tray_input on completion",
-                current_auto_row_);
-            last_row_picked_ = true;
-        } else {
-            current_auto_row_++;
-            if (selected_row_pub_) {
-                auto r_msg = std_msgs::msg::Int32();
-                r_msg.data = current_auto_row_;
-                selected_row_pub_->publish(r_msg);
-            }
-        }
-    }
+    // Row counter is advanced ONLY after motion succeeds
 }
 
 // ============================================================================
