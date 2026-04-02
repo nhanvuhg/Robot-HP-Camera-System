@@ -34,6 +34,8 @@ echo "🖥️  Display: DISPLAY=$DISPLAY  XAUTHORITY=${XAUTHORITY:-<not set>}"
 set +u
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 export FASTRTPS_DEFAULT_PROFILES_FILE="$WS/fastdds_no_shm.xml"
+export ROS_DOMAIN_ID=22
+
 [ -f /opt/ros/jazzy/setup.bash ] && source /opt/ros/jazzy/setup.bash || echo "⚠️  /opt/ros/jazzy/setup.bash not found"
 [ -f "$WS/install/setup.bash" ]  && source "$WS/install/setup.bash"  || echo "⚠️  $WS/install/setup.bash not found — run: colcon build"
 set -u

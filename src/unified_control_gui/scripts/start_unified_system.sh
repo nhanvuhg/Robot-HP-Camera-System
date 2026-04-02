@@ -15,6 +15,7 @@ if [ -f "/opt/ros/jazzy/setup.bash" ]; then
   set +u
   export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
   export FASTRTPS_DEFAULT_PROFILES_FILE="$WS/fastdds_no_shm.xml"
+  export ROS_DOMAIN_ID=22
   source /opt/ros/jazzy/setup.bash || true
   set -u
 fi
