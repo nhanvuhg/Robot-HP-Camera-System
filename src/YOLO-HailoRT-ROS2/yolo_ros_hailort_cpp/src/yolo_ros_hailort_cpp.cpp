@@ -75,7 +75,10 @@ namespace yolo_ros_hailort_cpp
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - now);
         RCLCPP_INFO(this->get_logger(), "Inference time: %5ld ms", elapsed.count());
 
-        yolo_cpp::utils::draw_objects(frame, objects, this->class_names_);
+        if (this->params_.imshow_isshow || this->params_.publish_resized_image) {
+            yolo_cpp::utils::draw_objects(frame, objects, this->class_names_);
+        }
+
         if (this->params_.imshow_isshow)
         {
             cv::imshow("yolo", frame);
