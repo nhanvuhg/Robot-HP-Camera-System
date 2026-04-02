@@ -973,7 +973,8 @@ class CartridgeSystem(Node):
         self._cyl2_retract()
         self._enter(SystemState.IDLE)
         self._enter_in(SystemState.IDLE)
-        self._enter_out(SystemState.IDLE)
+        self._enter_s3(SystemState.IDLE)
+        self._enter_s4(SystemState.IDLE)
         self._system_paused  = False
         self._system_running = False
         self._input_tray_done = False
@@ -1109,7 +1110,8 @@ class CartridgeSystem(Node):
                 self._stop(sid)
             self._enter(SystemState.IDLE)
             self._enter_in(SystemState.IDLE)
-            self._enter_out(SystemState.IDLE)
+            self._enter_s3(SystemState.IDLE)
+            self._enter_s4(SystemState.IDLE)
             self._system_running = False
             self.get_logger().info("Got IDLE command, fully reset system states.")
             return
@@ -1230,7 +1232,8 @@ class CartridgeSystem(Node):
         self._input_tray_done = False
         self._s4_trigger = False
         self._enter_in(SystemState.IDLE)
-        self._enter_out(SystemState.IDLE)
+        self._enter_s3(SystemState.IDLE)
+        self._enter_s4(SystemState.IDLE)
         self._enter(SystemState.IDLE)
         self._sync_mode_jog()
 
