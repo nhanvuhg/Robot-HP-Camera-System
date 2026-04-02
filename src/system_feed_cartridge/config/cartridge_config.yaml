@@ -187,3 +187,13 @@ max_slots_per_output_tray: 9
 homing_timeout: 30.0
 move_timeout: 60.0
 cylinder_timeout: 15.0
+# --------------------------------------------------------------------------
+# LƯU Ý QUAN TRỌNG VỀ NETWORK TIMEOUT (Anti-Deadlock Modbus)
+# - modbus_timeout_ms (mặc định: 3000ms): 
+#   => Thời gian chờ tối đa cho 1 lệnh Modbus TCP (đọc position/phát lệnh).
+#   => GIẢM quá thấp (<1500ms): Dễ tuột cáp (Modbus giả lỗi) qua Switch LAN do ping spike.
+#   => TĂNG quá cao (>10000ms): Nếu mạng rớt thật, Thread sẽ bị Treo Cứng ôm trọn Node gây đơ GUI.
+# *Giải pháp an toàn hiện tại: Đã tách Thread _publish_positions ở Python Node, 
+#  timeout = 3000ms là đủ nhanh để văng lỗi mà luồng ROS không bị freeze.
+# --------------------------------------------------------------------------
+modbus_timeout_ms: 3000

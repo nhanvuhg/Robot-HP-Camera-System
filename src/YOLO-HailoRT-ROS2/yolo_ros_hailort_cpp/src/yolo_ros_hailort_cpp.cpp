@@ -1,3 +1,10 @@
+/*
+ * ⚠️ WARNING: DO NOT FABRICATE OR GUESS VARIABLES/FLOWS.
+ * Before editing this file, you MUST read the .md documentation in the workspace.
+ * Do not infer or hallucinate code without fully understanding the underlying
+ * data structures, parameters, and operational flow.
+ */
+
 #include "yolo_ros_hailort_cpp/yolo_ros_hailort_cpp.hpp"
 
 namespace yolo_ros_hailort_cpp

@@ -77,8 +77,8 @@
                 Item { Layout.fillWidth: true }
                 Rectangle {
                     id: stateBadge
-                    Layout.preferredHeight: 28; radius: 8
-                    Layout.preferredWidth: sbRow.implicitWidth + 22
+                    height: 28; radius: 8
+                    width: sbRow.implicitWidth + 22
                     color: root.cBg
                     border.color: {
                         var s = cartridgeController.systemState.toUpperCase()
@@ -98,42 +98,17 @@
                                 NumberAnimation { to: 0.35; duration: 900 }
                                 NumberAnimation { to: 1.0;  duration: 900 } }
                         }
-                        Text { text: cartridgeController.systemState.replace(/\|/g, "    •    "); color: root.cText
+                        Text { text: cartridgeController.systemState; color: root.cText
                             font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
                             anchors.verticalCenter: parent.verticalCenter }
                     }
                 }
-                Item { width: 10 }
-                Rectangle {
-                    Layout.preferredHeight: 28; radius: 6
-                    Layout.preferredWidth: hmRow.implicitWidth + 16
-                    color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? "#2a1a00"
-                         : (cartridgeController.systemState === "idle" && cartridgeController.currentMode !== "") ? "#0a2a0a"
-                         : "#1a1a1a"
-                    border.color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? root.cOrange
-                                : (cartridgeController.systemState === "idle" && cartridgeController.currentMode !== "") ? root.cGreen
-                                : root.cBorder
-                    border.width: 1
-                    Row {
-                        id: hmRow
-                        anchors.centerIn: parent; spacing: 6
-                        Text {
-                            text: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? "⟳ HOMING..."
-                                : (cartridgeController.currentMode !== "" && cartridgeController.systemState === "idle") ? "✓ HOMED"
-                                : "○ NOT HOMED"
-                            color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? root.cOrange
-                                 : (cartridgeController.currentMode !== "" && cartridgeController.systemState === "idle") ? root.cGreen
-                                 : root.cDim
-                            font.pixelSize: 11; font.bold: true
-                        }
-                    }
-                }
                 Item { Layout.fillWidth: true }
                 Rectangle {
-                    id: modePill; Layout.preferredHeight: 28; radius: 20
+                    id: modePill; height: 28; radius: 20
                     property string m: cartridgeController.currentMode
                     property bool isIdle: m === "idle" || m === ""
-                    Layout.preferredWidth: mpLbl.implicitWidth + 26
+                    width: mpLbl.implicitWidth + 26
                     color: isIdle ? "#2a1a00" : m === "auto" ? "#0a332e" : m === "jog" ? "#332e0a" : "#1a0a33"
                     border.color: isIdle ? "#ffd740" : m === "auto" ? root.cGreen : m === "jog" ? root.cOrange : "#bb86fc"
                     border.width: isIdle ? 2 : 1
@@ -172,64 +147,8 @@
         }
 
         // ════════════════════════════════════════════════════════════
-        // OUTPUT TRAY TIMEOUT WARNING
+        // OUTPUT TRAY TIMEOUT WARNING (REMOVED to prevent blocking UI)
         // ════════════════════════════════════════════════════════════
-
-        Popup {
-            id: outputWarningPopup
-            width: 320; height: 160
-            anchors.centerIn: parent
-            modal: true; focus: true
-            closePolicy: Popup.NoAutoClose
-            background: Rectangle {
-                color: "#1a0f05"
-                border.color: root.cOrange
-                border.width: 2
-                radius: 10
-            }
-            contentItem: ColumnLayout {
-                spacing: 15
-                Text {
-                    text: "⚠️ CẢNH BÁO"
-                    color: root.cOrange
-                    font.pixelSize: 18; font.bold: true
-                    Layout.alignment: Qt.AlignHCenter
-                }
-                Text {
-                    text: "Hệ thống đang chờ khay cấp khay thành phẩm.\ Bạn đã cấp khay mới chưa?"
-                    color: "white"
-                    font.pixelSize: 14
-                    horizontalAlignment: Text.AlignHCenter
-                    Layout.alignment: Qt.AlignHCenter
-                }
-                Item { Layout.fillHeight: true }
-                RowLayout {
-                    Layout.alignment: Qt.AlignHCenter
-                    spacing: 20
-                    Button {
-                        text: "ĐÃ CẤP KHAY"
-                        font.bold: true; font.pixelSize: 12
-                        Layout.preferredWidth: 120; Layout.preferredHeight: 35
-                        background: Rectangle { color: root.cOrange; radius: 5 }
-                        contentItem: Text { text: parent.text; font: parent.font; color: "#000"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        onClicked: {
-                            cartridgeController.confirmOutput();
-                            // outputWarningPopup.close();
-                        }
-                    }
-                    Button {
-                        text: "CHỜ THÊM"
-                        font.bold: true; font.pixelSize: 12
-                        Layout.preferredWidth: 100; Layout.preferredHeight: 35
-                        background: Rectangle { color: "#333"; radius: 5; border.color: "#666"; border.width: 1 }
-                        contentItem: Text { text: parent.text; font: parent.font; color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                        onClicked: {
-                            // outputWarningPopup.close();
-                        }
-                    }
-                }
-            }
-        }
 
         // ════════════════════════════════════════════════════════════
         // NOTIFICATION BANNER — gui_notify từ node (watchdog, cylinder timeout, errors)
@@ -270,9 +189,6 @@
                         notifyBanner.visible = true
                         bannerTimer.restart()
 
-                        if (obj.title === "Da phat hien khay") {
-                            // outputWarningPopup.open()
-                        }
                     } catch(e) {}
                 }
             }
@@ -427,7 +343,6 @@
                                             var m = cartridgeController.currentMode
                                             if (m === "auto")   return root.cGreen
                                             if (m === "manual") return "#bb86fc"
-                                            if (m === "jog")    return root.cOrange
                                             return root.cBorder
                                         }
                                         border.width: modeSelCol.modeIsIdle ? 1 : 2
@@ -441,14 +356,13 @@
                                                 text: {
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return "●"
-                                                    if (m === "manual" || m === "jog") return "●"
+                                                    if (m === "manual") return "●"
                                                     return "○"
                                                 }
                                                 color: {
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return root.cGreen
                                                     if (m === "manual") return "#bb86fc"
-                                                    if (m === "jog")    return root.cOrange
                                                     return root.cDim
                                                 }
                                                 font.pixelSize: 12
@@ -459,14 +373,12 @@
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return "AUTO"
                                                     if (m === "manual") return "MANUAL"
-                                                    if (m === "jog")    return "MANUAL (JOG)"
                                                     return "Chọn chế độ..."
                                                 }
                                                 color: {
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return root.cGreen
                                                     if (m === "manual") return "#bb86fc"
-                                                    if (m === "jog")    return root.cOrange
                                                     return root.cDim
                                                 }
                                                 font.pixelSize: 12; font.bold: !modeSelCol.modeIsIdle
@@ -559,9 +471,10 @@
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
-                                // Không cho chạy khi chưa chọn mode
-                                enabled: !parent.parent.parent.modeIsIdle
-                                opacity: parent.parent.parent.modeIsIdle ? 0.35 : 1.0
+                                // Disable system control when: mode not selected OR in JOG mode
+                                property bool isJogMode: cartridgeController.currentMode === "jog"
+                                enabled: !parent.parent.parent.modeIsIdle && !isJogMode
+                                opacity: (parent.parent.parent.modeIsIdle || isJogMode) ? 0.35 : 1.0
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
@@ -572,19 +485,15 @@
                                 // Hàng 1: START / STOP / PAUSE
                                 RowLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
-                                    CBtn {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        lbl: "START"
-                                        bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
-                                        onClicked: cartridgeController.startSystem()
-                                    }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "START";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.startSystem() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem(); cartridgeController.setMode("idle") } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
                                 }
 
-                                // Hàng 2: RESUME
+                                // Hàng 2: CONFIRM / RESUME
                                 RowLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Confirm"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.confirmOutput() }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Resume";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
                                 }
 
@@ -602,8 +511,8 @@
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
-                                // Không cho chạy khi chưa chọn mode
-                                enabled: !parent.parent.parent.modeIsIdle
+                                // Unlocked: Always allow navigation regardless of mode, but keep opacity hint
+                                // enabled: !parent.parent.parent.modeIsIdle
                                 opacity: parent.parent.parent.modeIsIdle ? 0.35 : 1.0
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
@@ -618,24 +527,9 @@
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   onClicked: cartridgeController.gotoState("HOMING") }
-                                    CBtn {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        lbl: cartridgeController.currentMode === "jog" ? "JOG MODE" : "STOP STATE"
-                                        bg: cartridgeController.currentMode === "jog" ? "#0a332e" : "#4d1a1a"
-                                        bc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
-                                        tc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
-                                        onClicked: {
-                                            if (cartridgeController.currentMode === "jog") {
-                                                console.log("JOG mode verified")
-                                            } else {
-                                                cartridgeController.gotoState("ABORT_TO_JOG")
-                                            }
-                                        }
-                                    }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nNạp khay In"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S1_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S2A_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cAccent; onClicked: cartridgeController.simulateDoneTrayInput() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nCấp khay Out"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S3_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cGreen; onClicked: cartridgeController.gotoState("STATE3") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nThay khay Out"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S4_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cGreen; onClicked: cartridgeController.simulateDoneTrayOutput() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "JOG";     bg: "#332e0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.setMode("jog") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; onClicked: cartridgeController.triggerState2() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nThay khay Out"; bg: "#0a2a1a"; bc: root.cGreen; tc: root.cGreen; onClicked: cartridgeController.triggerState4() }
                                     CBtn { Layout.columnSpan: 2; Layout.fillWidth: true; Layout.fillHeight: true; lbl: "ERROR"; bg: "#4d1a1a"; bc: root.cRed; tc: root.cRed; onClicked: cartridgeController.gotoState("ERROR") }
                                 }
                             }
@@ -693,7 +587,12 @@
                                         width: parent.width
                                         height: parent.height - 20 - 4
                                         spacing: root.gap
-                                        property bool jogAllowed: cartridgeController.currentMode === "jog"
+                                        property bool isJog: cartridgeController.currentMode === "jog" || cartridgeController.currentMode === "manual"
+                                        property bool jogAllowed: {
+                                            if (!isJog) return false
+                                            var s = cartridgeController.systemState.toLowerCase()
+                                            return s === "idle" || s === "unknown" || s === "" || s.indexOf("error") !== -1
+                                        }
 
                                         Repeater {
                                             model: ListModel {
@@ -842,8 +741,8 @@
                             // ── Nút All ON / OFF / Clear ──
                             Row {
                                 spacing: 3
-                                enabled: cartridgeController.currentMode === "jog" || cartridgeController.currentMode === "manual"
-                                opacity: enabled ? 1.0 : 0.3
+                                // enabled: true - allow clicking in non-auto modes (e.g., "", "homing", etc)
+                                opacity: cartridgeController.currentMode === "manual" ? 1.0 : 0.3
                                 CBtn { lbl:"All ON";  padV:3; padH:8; fontSize:10; bg:"#0a332e"; bc:root.cGreen;  tc:root.cGreen;  onClicked: cartridgeController.simAll(1) }
                                 CBtn { lbl:"All OFF"; padV:3; padH:8; fontSize:10; bg:"#4d1a1a"; bc:root.cRed;    tc:root.cRed;    onClicked: cartridgeController.simAll(0) }
                                 CBtn { lbl:"Clear";   padV:3; padH:6; fontSize:10; bg:root.cCard; bc:root.cBorder; tc:root.cText;  onClicked: cartridgeController.simSensor("clear") }
@@ -853,8 +752,8 @@
                             Text { text: "QUICK PRESET"; color: root.cDim; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.8 }
                             Row {
                                 spacing: 3
-                                enabled: cartridgeController.currentMode === "jog" || cartridgeController.currentMode === "manual"
-                                opacity: enabled ? 1.0 : 0.3
+                                // enabled: true
+                                opacity: cartridgeController.currentMode === "manual" ? 1.0 : 0.3
                                 // S1 Entry: điều kiện vào State 1
                                 CBtn {
                                     lbl: "S1 Entry"
@@ -862,7 +761,7 @@
                                     bg: "#0a1a4d"; bc: root.cAccent; tc: root.cAccent
                                     onClicked: {
                                         cartridgeController.simSensor("clear")
-                                        // S1+S3+S15 ON (băng tải có khay)
+                                        // S1+S3+S15 ON (băng tải có khay + Cyl1 retracted)
                                         var ids = [1,3,15]
                                         ids.forEach(function(id) {
                                             cartridgeController.simSensor(id + ":1")
@@ -913,13 +812,13 @@
                                         ListElement { sid:1;  slabel:"S1";  sdesc:"Belt start" }
                                         ListElement { sid:2;  slabel:"S2";  sdesc:"Belt mid" }
                                         ListElement { sid:3;  slabel:"S3";  sdesc:"Belt end"}
-                                        ListElement { sid:4;  slabel:"S4";  sdesc:"Scan Stack Pos1" }
+                                        ListElement { sid:4;  slabel:"S4";  sdesc:"Stack In" }
                                         ListElement { sid:5;  slabel:"S5";  sdesc:"Output det." }
-                                        ListElement { sid:6;  slabel:"S6";  sdesc:"Check Tray OutP1" }
+                                        ListElement { sid:6;  slabel:"S6";  sdesc:"In stack tray" }
                                         ListElement { sid:7;  slabel:"S7";  sdesc:"Platform" }
                                         ListElement { sid:8;  slabel:"S8";  sdesc:"Feed OK" }
-                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Check Tray OutP2" }
-                                        ListElement { sid:10; slabel:"S10"; sdesc:"Scan Stack Pos2" }
+                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Out finish" }
+                                        ListElement { sid:10; slabel:"S10"; sdesc:"Stack Out" }
                                         // S11-S14: Dự phòng
                                         ListElement { sid:11; slabel:"S11"; sdesc:"Sensor bắt khay" }
                                         ListElement { sid:12; slabel:"S12"; sdesc:"[reserved]" }
@@ -937,7 +836,8 @@
                                         id: sBtn
                                         property bool on_: {
                                             var st = cartridgeController.sensorState;
-                                            if (model.sid > 0 && model.sid <= st.length) {
+                                            // Python publishes 18-char string: S1=index0, S2=index1...
+                                            if (model.sid > 0 && (model.sid - 1) < st.length) {
                                                 return st.charAt(model.sid - 1) === '1';
                                             }
                                             return false;
@@ -987,7 +887,7 @@
 
                             // ── Chú thích ──
                             Text {
-                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Scan P1 · <b>S5</b> Out Det\n<b>S6</b> Check P1 · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Check P2 · <b>S10</b> Scan P2\n<b>S11</b> Khay tại Robot · <b>S15</b> Cyl1↩ · <b>S16</b> Cyl1↪\n<b>S19</b> Cyl2↩ · <b>S20</b> Cyl2↪   |   S12-S14, S17-S18 định vị"
+                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Stack In · <b>S5</b> Out Det\n<b>S6</b> In tray · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Out fin · <b>S10</b> Stack Out\n<b>S11</b> Khay tại Robot · <b>S15</b> Cyl1↩ · <b>S16</b> Cyl1↪\n<b>S19</b> Cyl2↩ · <b>S20</b> Cyl2↪   |   S12-S14, S17-S18 định vị"
                                 textFormat: Text.RichText; color: root.cDim; font.pixelSize: 8
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                             }
@@ -1068,19 +968,17 @@
 
                         property var servoParams: [
                             { key:"inx_home",        label:"InX Home",      desc:"S1 home" },
-                            { key:"inx_target2",     label:"InX Target",    desc:"S1 lấy khay (500mm)" },
-                            { key:"inx_output_stack",label:"InX OutPos",    desc:"Đặt khay output" },
+                            { key:"inx_target",      label:"InX Target",    desc:"S1 lấy khay (500mm)" },
+                            { key:"inx_output_pos",  label:"InX OutPos",    desc:"Đặt khay output" },
                             { key:"iny_home",        label:"InY Home",      desc:"S2 home" },
-                            { key:"iny_target2",     label:"InY Place",     desc:"Robot place (200mm)" },
+                            { key:"iny_place",       label:"InY Place",     desc:"Robot place (200mm)" },
                             { key:"iny_safe_zone",   label:"InY SafeZone",  desc:"Safe zone" },
                             { key:"servo3_target2",  label:"S3 Feed",       desc:"Feed pos (400mm)" },
                             { key:"outx_home",       label:"OutX Home",     desc:"S4 home" },
                             { key:"outx_target2",    label:"OutX Target2",  desc:"Lấy khay output" },
                             { key:"outx_target3",    label:"OutX Target3",  desc:"Đặt khay robot" },
                             { key:"outy_target1",    label:"OutY Target1",  desc:"Nâng khay (safe)" },
-                            { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Hạ gắp khay" },
-                            { key:"target_scanoutp2",label:"OUTY TgtScan",  desc:"Điểm dừng quét S10" },
-                            { key:"outy_scan_arm_mm",label:"OUTY Arm S10",  desc:"Giới hạn kích hoạt S10" }
+                            { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Hạ gắp khay" }
                         ]
 
                         Column {
@@ -2086,56 +1984,22 @@
             }
         }
 
-    Timer {
-        id: outTrayTimer
-        interval: 200000
-        repeat: false
-        onTriggered: outTrayPopup.open()
-    }
-
-    function checkOutTrayTimer() {
-        var robotActive = robotController.systemStatus !== "IDLE" && robotController.systemStatus !== "ERROR" && robotController.systemStatus !== "UNKNOWN" && robotController.systemStatus !== "EMERGENCY_STOP";
-        var isAuto = cartridgeController.currentMode === "auto";
-        var isManualS3 = cartridgeController.currentMode === "manual" && cartridgeController.stateOut.indexOf("S3") !== -1;
-        
-        if (!robotController.outReady && robotActive && (isAuto || isManualS3)) {
-            if (!outTrayTimer.running) {
-                outTrayTimer.restart();
-            }
-        } else {
-            outTrayTimer.stop();
-            outTrayPopup.close();
-        }
-    }
-
-    Connections {
-        target: robotController
-        function onOutReadyChanged() { checkOutTrayTimer(); }
-        function onSystemStatusChanged() { checkOutTrayTimer(); }
-    }
-
-    Connections {
-        target: cartridgeController
-        function onCurrentModeChanged() { checkOutTrayTimer(); }
-        function onSystemStateChanged() { checkOutTrayTimer(); }
-    }
-
     Popup {
         id: outTrayPopup
         width: 440; height: 220
         anchors.centerIn: parent
-        modal: true; focus: true
-        closePolicy: Popup.NoAutoClose
+        modal: false; focus: false
+        closePolicy: Popup.CloseOnEscape
         background: Rectangle { color: "#1a0a0a"; radius: 10; border.color: "#ffaa00"; border.width: 3 }
         Column {
             anchors.centerIn: parent; spacing: 30
             Text {
-                text: "⚠️ CẢNH BÁO CHƯA CÓ KHAY THÀNH PHẨM"
+                text: "⚠️ CẢNH BÁO TỐC ĐỘ"
                 color: "#ffaa00"; font.pixelSize: 22; font.bold: true
                 anchors.horizontalCenter: parent.horizontalCenter
             }
             Text {
-                text: "Hệ thống đang chờ khay Output lâu hơn 200s.\nĐã cấp khay chưa?"
+                text: "Hệ thống đang chờ khay Output lâu hơn 40s.\nĐã cấp khay chưa?"
                 color: "#ffffff"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter
                 anchors.horizontalCenter: parent.horizontalCenter
             }
@@ -2154,4 +2018,45 @@
             }
         }
     }
+
+    Popup {
+        id: s7TrayPopup
+        width: 480; height: 240
+        anchors.centerIn: parent
+        modal: false; focus: false
+        closePolicy: Popup.CloseOnEscape
+        background: Rectangle { color: "#0a0a1a"; radius: 12; border.color: "#ff6600"; border.width: 3 }
+        Column {
+            anchors.centerIn: parent; spacing: 24
+            Text {
+                text: "⚠️ CẤP KHAY OUTPUT"
+                color: "#ff6600"; font.pixelSize: 24; font.bold: true; font.letterSpacing: 2
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+            Text {
+                text: "S7 OFF quá 2 phút — Chưa có khay trên Platform.\nVui lòng cấp khay thành phẩm lên Platform."
+                color: "#ffffff"; font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap; width: 400
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+            Rectangle {
+                width: 220; height: 50; radius: 8; color: "#0a4a2a"
+                border.color: "#00ff88"; border.width: 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                Text {
+                    anchors.centerIn: parent
+                    text: "✅ ĐÃ CẤP KHAY"
+                    color: "#00ff88"; font.pixelSize: 16; font.bold: true
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        cartridgeController.s7Acknowledge()
+                        s7TrayPopup.close()
+                    }
+                }
+            }
+        }
     }
+    }
+

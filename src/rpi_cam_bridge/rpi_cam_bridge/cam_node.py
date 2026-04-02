@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""
+⚠️ WARNING: DO NOT FABRICATE OR GUESS VARIABLES/FLOWS.
+Before editing this file, you MUST read the .md documentation in the workspace.
+Do not infer or hallucinate code without fully understanding the required logic.
+"""
+
 import rclpy
 from rclpy.node import Node
 import subprocess

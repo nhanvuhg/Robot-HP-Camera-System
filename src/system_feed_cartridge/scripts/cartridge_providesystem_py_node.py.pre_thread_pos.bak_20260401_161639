@@ -204,7 +204,6 @@ class CartridgeConfig:
                 'cylinder1_retract_channel': 4,
                 'cylinder1_extend_channel': 5,
                 'homing_timeout': 30.0,
-                'modbus_timeout_ms': 3000,
                 'servo_limits': {1: 1000.0, 2: 1000.0, 3: 1000.0, 4: 1000.0, 5: 1000.0},
                 'target_scaninp1': 850.0,
                 'iny_scan_valid_min_mm': 200.0,
@@ -369,16 +368,7 @@ class CartridgeSystem(Node):
         self._connect_hardware()
 
         self.create_timer(0.05, self._safe_control_loop)
-        
-        # Positions publisher chạy trong thread riêng
-        # để Modbus timeout KHÔNG block ROS control loop
-        self._pos_thread_stop = False
-        threading.Thread(
-            target=self._positions_bg_loop,
-            daemon=True,
-            name="pos_publisher"
-        ).start()
-
+        self.create_timer(0.5,  self._publish_positions)
         self.create_timer(5.0,  self._watchdog)
 
         self.get_logger().info("CartridgeSystem node started")
@@ -425,8 +415,7 @@ class CartridgeSystem(Node):
     def _connect_servo(self, sid: int, ip: str, attempts: int = 5) -> bool:
         for attempt in range(1, attempts + 1):
             try:
-                t_ms = int(getattr(self.config, 'modbus_timeout_ms', 3000))
-                com = ComModbus(ip_address=ip, cycle_time=60, timeout_ms=t_ms)
+                com = ComModbus(ip_address=ip, cycle_time=60, timeout_ms=15000)
                 with self._servo_lock:
                     tg = com.read_pnu(3490, 0)
                     if tg != 111:
@@ -472,7 +461,6 @@ class CartridgeSystem(Node):
                             self._notify('info', f'S{sid} ket noi lai', f'S{sid} OK')
 
     def destroy_node(self):
-        self._pos_thread_stop = True
         for sid, mot in list(self.servos.items()):
             if self._servo_lock.acquire(timeout=2.0):
                 try:
@@ -1328,14 +1316,6 @@ class CartridgeSystem(Node):
         s_out = self.state_s4.value if self.state_s4 != SystemState.IDLE else self.state_s3.value
         combined = f"{self.state.value}|{self.state_in.value}|{s_out}"
         msg = String(); msg.data = combined; self.pub_state.publish(msg)
-
-    def _positions_bg_loop(self):
-        while rclpy.ok() and not getattr(self, '_pos_thread_stop', False):
-            try:
-                self._publish_positions()
-            except Exception as e:
-                self.get_logger().warn(f"[pos_bg] {e}")
-            time.sleep(0.5)
 
     def _publish_positions(self):
         try:
