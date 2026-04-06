@@ -27,13 +27,15 @@ def generate_launch_description():
     
     dual_camera_node = Node(
         package='csi_camera',
-        executable='picamera2_dual_node.py',
-        name='picamera2_dual_node',
+        executable='dual_csi_camera_node',
+        name='dual_csi_camera_node',
         output='screen',
         parameters=[{
             'width': 640,
             'height': 480,
-            'fps': 10,  # Increased to 10 (from 8) for higher framerate
+            'fps': 10,  # Set to required FPS based on processing requirements
+            'cam0_topic': '/cam0HP/image_raw',
+            'cam1_topic': '/cam1HP/image_raw',
         }],
         respawn=True,
         respawn_delay=5.0,

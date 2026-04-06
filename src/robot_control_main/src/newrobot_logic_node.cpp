@@ -607,15 +607,6 @@ void RobotLogicNode::initSubscriptions()
 
 
     
-    // Camera active ID confirmation from CSI node
-    camera_active_id_sub_ = create_subscription<std_msgs::msg::Int32>(
-        "/camera/active_id", 10,
-        std::bind(&RobotLogicNode::cameraActiveIdCallback, this, std::placeholders::_1));
-
-    // Manual camera command
-    command_camera_sub_ = create_subscription<std_msgs::msg::Int32>(
-        "/robot/command_camera", 10,
-        std::bind(&RobotLogicNode::commandCameraCallback, this, std::placeholders::_1));
     
     // ========================================================================
     // SUBSCRIPTIONS: Default QoS (no custom callback group)
@@ -705,8 +696,7 @@ void RobotLogicNode::initPublishers()
     gripper_cmd_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
     picker_cmd_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
     
-    // Camera control publishers
-    camera_select_pub_ = create_publisher<std_msgs::msg::Int32>("/robot/camera_select", 10);
+    // Camera status publisher (HP only)
     camera_status_pub_ = create_publisher<std_msgs::msg::String>("/camera/status", 10);
     
     // System monitor publishers

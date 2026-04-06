@@ -632,11 +632,10 @@
                                             }
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nNạp khay In"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S1_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cAccent; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S2A_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cAccent; onClicked: cartridgeController.simulateDoneTrayInput() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nCấp khay Out"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S3_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cGreen; onClicked: cartridgeController.gotoState("STATE3") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nThay khay Out"; bg: "#1a2050"; bc: cartridgeController.systemState.indexOf("S4_") !== -1 ? "#00ffff" : root.cBorder; tc: root.cGreen; onClicked: cartridgeController.simulateDoneTrayOutput() }
-                                    CBtn { Layout.columnSpan: 2; Layout.fillWidth: true; Layout.fillHeight: true; lbl: "ERROR"; bg: "#4d1a1a"; bc: root.cRed; tc: root.cRed; onClicked: cartridgeController.gotoState("ERROR") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nNạp khay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.simulateDoneTrayInput() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nCấp khay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nThay khay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.simulateDoneTrayOutput() }
                                 }
                             }
                         }
@@ -1865,6 +1864,7 @@
             property int   w: 0
             property bool  _pressed: false
             property bool  _hovered: false
+            property bool  isSelected: false
 
             signal clicked(); signal pressed(); signal released()
 
@@ -1874,17 +1874,19 @@
             color: {
                 if (!active) return bg
                 if (_pressed) return Qt.lighter(bg, 1.6)
+                if (isSelected) return bc
                 if (_hovered) return Qt.lighter(bg, 1.2)
                 return bg
             }
             border.color: {
                 if (_pressed) return Qt.lighter(bc, 1.5)
+                if (isSelected) return Qt.lighter(bc, 1.2)
                 if (_hovered) return (bc === root.cBorder ? root.cAccent : Qt.lighter(bc, 1.3))
                 return bc
             }
             border.width: _pressed ? 2 : 1
             opacity: active ? 1.0 : 0.4
-            scale: _pressed ? 0.93 : 1.0
+            scale: isSelected ? 0.96 : (_pressed ? 0.93 : 1.0)
 
             Behavior on color        { ColorAnimation { duration: 100 } }
             Behavior on border.color { ColorAnimation { duration: 100 } }
@@ -1900,8 +1902,20 @@
                 Behavior on border.color { ColorAnimation { duration: 100 } }
             }
 
-            Text { id: cbrT; anchors.centerIn: parent; text: cbr.lbl; color: cbr._pressed ? Qt.lighter(cbr.tc, 1.4) : cbr.tc
+            // Inner shadow to simulate physically sunken pressed state
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: "transparent"
+                border.color: "black"
+                border.width: cbr.isSelected ? 4 : 0
+                opacity: 0.6
+                visible: cbr.isSelected
+            }
+
+            Text { id: cbrT; anchors.centerIn: parent; text: cbr.lbl; color: cbr.isSelected ? "#0c0c1d" : (cbr._pressed ? Qt.lighter(cbr.tc, 1.4) : cbr.tc)
                 font.pixelSize: cbr.fontSize; font.bold: true; font.capitalization: Font.AllUppercase
+                anchors.verticalCenterOffset: (cbr.isSelected || cbr._pressed) ? 2 : 0
                 Behavior on color { ColorAnimation { duration: 80 } }
             }
 

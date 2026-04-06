@@ -1031,6 +1031,24 @@ class CartridgeSystem(Node):
             self._notify('info', f'Mode: {requested.upper()}', 'Hệ thống tự động chạy theo tín hiệu cảm biến.')
 
     def _cb_jog(self, msg: String):
+        parts = msg.data.strip().split()
+        if not parts: return
+        cmd0 = parts[0].lower()
+
+        # Cho phép CLEAR lỗi (acknowledge faults giống FAS) bất kỳ lúc nào / mode nào
+        if cmd0 == 'clear':
+            if len(parts) >= 2:
+                try:
+                    sid = int(parts[1])
+                    mot = self.servos.get(sid)
+                    if mot:
+                        with self._servo_lock:
+                            mot.acknowledge_faults()
+                            self.get_logger().info(f"Acknowledge faults cho Servo {sid} (như FAS)")
+                except Exception as e:
+                    self.get_logger().warn(f"Lỗi khi clear servo: {e}")
+            return
+
         if self.operation_mode != 'manual':
             self._notify('warn', 'JOG bi khoa', 'Chuyen MANUAL mode de JOG')
             return
@@ -1040,11 +1058,10 @@ class CartridgeSystem(Node):
                 or self.state_s4 != SystemState.IDLE):
             self._notify('warn', 'JOG bi khoa', 'Dang chay — nhan STOP truoc')
             return
-        parts = msg.data.strip().split()
+        
         if len(parts) < 2:
             return
         try:
-            cmd0 = parts[0].lower()
             if cmd0 == 'home':
                 sid = int(parts[1])
                 mot = self.servos.get(sid)
@@ -1057,13 +1074,6 @@ class CartridgeSystem(Node):
                             with self._servo_lock:
                                 self.zero_offset[sid] = mot.current_position()
                     threading.Thread(target=_do, daemon=True).start()
-                return
-            if cmd0 == 'clear':
-                sid = int(parts[1])
-                mot = self.servos.get(sid)
-                if mot:
-                    with self._servo_lock:
-                        mot.acknowledge_faults()
                 return
             sid = int(parts[0])
             d   = parts[1]

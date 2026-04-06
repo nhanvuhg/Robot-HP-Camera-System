@@ -8,7 +8,7 @@
 #include <sys/stat.h>
 
 CamNode::CamNode(QQmlApplicationEngine &engine)
-    : QObject(), rclcpp::Node("qml_cam_node"), engine_(&engine) {
+    : QObject(), rclcpp::Node("qml_cam_node_hp"), engine_(&engine) {
     // Set config file path
     const char* home = std::getenv("HOME");
     if (home) {

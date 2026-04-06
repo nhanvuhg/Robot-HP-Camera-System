@@ -102,8 +102,6 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   vision_empty_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  vision_slot_sub_;
 
-    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  camera_active_id_sub_;
-    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  command_camera_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   feed_chamber_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   fill_done_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   scale_result_sub_;
@@ -135,7 +133,6 @@ private:
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr  selected_row_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   gripper_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   picker_cmd_pub_;
-    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr  camera_select_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_status_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr system_uptime_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr  tray_count_pub_;
@@ -222,7 +219,6 @@ private:
     std::atomic<bool> system_paused_{false};
     std::atomic<bool> use_ai_for_control_{false};
     std::atomic<bool> stored_scale_result_{false};
-    std::atomic<bool> dual_camera_mode_{true};
     std::atomic<bool> stop_after_single_motion_{false};
     bool              operator_explicitly_set_row_{false}; // Tracks explicit human overrides
 
@@ -268,8 +264,6 @@ private:
     rclcpp::Time      motion_started_at_{0, 0, RCL_ROS_TIME};
 
     // Camera state
-    std::atomic<int>  current_active_camera_{-1};
-    std::mutex        camera_mutex_;
 
     // ========================================================================
     // SCALE QUEUE
@@ -311,8 +305,6 @@ private:
     // ========================================================================
     // CALLBACKS
     // ========================================================================
-    void cameraActiveIdCallback(const std_msgs::msg::Int32::SharedPtr msg);
-    void commandCameraCallback(const std_msgs::msg::Int32::SharedPtr msg);
     void feedChamberCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void fillDoneCallback(const std_msgs::msg::Bool::SharedPtr msg);
     void scaleResultCallback(const std_msgs::msg::Bool::SharedPtr msg);
@@ -326,10 +318,6 @@ private:
     void commandSlotCallback(const std_msgs::msg::Int32::SharedPtr msg);
     void setModeCallback(const std_msgs::msg::Int32::SharedPtr msg);
 
-    void requestCameraSwitch(int camera_id);
-    bool waitForCameraActive(int target_camera, double timeout_sec = 5.0);
-    bool switchAndWaitForCamera(int camera_id);
-    bool switchAndWaitForCameraWithRetry(int camera_id, int max_retries = 3);
     void publishCameraStatus(const std::string& status);
 
     // ========================================================================
@@ -463,10 +451,6 @@ RobotLogicNode::RobotLogicNode()
 
     state_machine_thread_ = std::thread(&RobotLogicNode::stateMachineLoop, this);
 
-    if (dual_camera_mode_) {
-        RCLCPP_INFO(this->get_logger(),
-            "📷 DUAL CAMERA MODE — both cameras run in parallel");
-    }
 
     // Uptime timer
     uptime_timer_ = this->create_wall_timer(
@@ -554,14 +538,6 @@ void RobotLogicNode::initSubscriptions()
             selected_output_slot_ = msg->data;
         });
 
-    camera_active_id_sub_ = create_subscription<std_msgs::msg::Int32>(
-        "/camera/active_id", 10,
-        std::bind(&RobotLogicNode::cameraActiveIdCallback, this, std::placeholders::_1));
-
-    command_camera_sub_ = create_subscription<std_msgs::msg::Int32>(
-        "/robot/command_camera", 10,
-        std::bind(&RobotLogicNode::commandCameraCallback, this, std::placeholders::_1));
-
     feed_chamber_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/revpi/feed_chamber", 10,
         std::bind(&RobotLogicNode::feedChamberCallback, this, std::placeholders::_1));
@@ -646,7 +622,6 @@ void RobotLogicNode::initPublishers()
     selected_row_pub_   = create_publisher<std_msgs::msg::Int32> ("/robot/selected_input_row", 10);
     gripper_cmd_pub_    = create_publisher<std_msgs::msg::Bool>  ("/robot/gripper_cmd", 10);
     picker_cmd_pub_     = create_publisher<std_msgs::msg::Bool>  ("/robot/picker_cmd", 10);
-    camera_select_pub_  = create_publisher<std_msgs::msg::Int32> ("/robot/camera_select", 10);
     camera_status_pub_  = create_publisher<std_msgs::msg::String>("/camera/status", 10);
     system_uptime_pub_  = create_publisher<std_msgs::msg::String>("/robot/system_uptime", 10);
     tray_count_pub_     = create_publisher<std_msgs::msg::Int32> ("/robot/tray_count", 10);
@@ -836,78 +811,11 @@ void RobotLogicNode::newTrayOutputCallback(const std_msgs::msg::Bool::SharedPtr 
     notifyStateChange();
 }
 
-void RobotLogicNode::cameraActiveIdCallback(const std_msgs::msg::Int32::SharedPtr msg)
-{
-    {
-        std::lock_guard<std::mutex> lock(camera_mutex_);
-        current_active_camera_ = msg->data;
-    }
-    RCLCPP_INFO(get_logger(), "[CAMERA] ✅ Active camera: %d", msg->data);
-    publishCameraStatus("CAMERA_" + std::to_string(msg->data) + "_ACTIVE");
-    notifyStateChange();
-}
 
-void RobotLogicNode::commandCameraCallback(const std_msgs::msg::Int32::SharedPtr msg)
-{
-    int id = msg->data;
-    if (id < 1 || id > 2) {
-        publishError("INVALID_CAMERA_ID");
-        return;
-    }
-    if (switchAndWaitForCameraWithRetry(id, 3))
-        publishCameraStatus("MANUAL_SWITCH_SUCCESS_CAM_" + std::to_string(id));
-    else
-        publishError("MANUAL_CAMERA_SWITCH_FAILED");
-}
 
-void RobotLogicNode::requestCameraSwitch(int camera_id)
-{
-    if (camera_id < 1 || camera_id > 2) return;
-    {
-        std::lock_guard<std::mutex> lock(camera_mutex_);
-        if (current_active_camera_ == camera_id) return;
-    }
-    auto msg = std_msgs::msg::Int32();
-    msg.data = camera_id;
-    camera_select_pub_->publish(msg);
-    publishCameraStatus("SWITCHING_TO_CAMERA_" + std::to_string(camera_id));
-}
 
-bool RobotLogicNode::waitForCameraActive(int target_camera, double timeout_sec)
-{
-    auto start = this->now();
-    while (rclcpp::ok()) {
-        {
-            std::lock_guard<std::mutex> lock(camera_mutex_);
-            if (current_active_camera_ == target_camera) return true;
-        }
-        if ((this->now() - start).seconds() > timeout_sec) return false;
-        rclcpp::sleep_for(std::chrono::milliseconds(100));
-    }
-    return false;
-}
 
-bool RobotLogicNode::switchAndWaitForCamera(int camera_id)
-{
-    requestCameraSwitch(camera_id);
-    if (!waitForCameraActive(camera_id, 5.0)) return false;
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    publishCameraStatus("CAMERA_" + std::to_string(camera_id) + "_READY");
-    last_motion_hb_ = this->now();
-    return true;
-}
 
-bool RobotLogicNode::switchAndWaitForCameraWithRetry(int camera_id, int max_retries)
-{
-    if (dual_camera_mode_) return true;
-    for (int i = 1; i <= max_retries; ++i) {
-        if (switchAndWaitForCamera(camera_id)) return true;
-        if (i < max_retries)
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-    }
-    last_motion_hb_ = this->now();
-    return false;
-}
 
 void RobotLogicNode::publishCameraStatus(const std::string& status)
 {
