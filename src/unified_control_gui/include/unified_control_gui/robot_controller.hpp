@@ -41,6 +41,7 @@ class RobotController : public QObject
     Q_PROPERTY(double jogStepSize READ jogStepSize WRITE setJogStepSize NOTIFY jogStepSizeChanged)
     Q_PROPERTY(bool inReady READ inReady NOTIFY inReadyChanged)
     Q_PROPERTY(bool outReady READ outReady NOTIFY outReadyChanged)
+    Q_PROPERTY(bool ignoreScale READ ignoreScale WRITE setIgnoreScale NOTIFY ignoreScaleChanged)
 
 public:
     explicit RobotController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -59,6 +60,7 @@ public:
     double jogStepSize() const { return jog_step_size_; }
     bool inReady() const { return in_ready_; }
     bool outReady() const { return out_ready_; }
+    bool ignoreScale() const { return ignore_scale_; }
 
 public slots:
     // System control
@@ -104,6 +106,7 @@ public slots:
     void simulateFillDone();
     void simulateInputTrayReady();
     void simulateOutputTrayReady();
+    void setIgnoreScale(bool ignore);
 
     // Scale result
     void publishScaleResult(bool pass);
@@ -124,6 +127,7 @@ signals:
     void jogStepSizeChanged();
     void inReadyChanged();
     void outReadyChanged();
+    void ignoreScaleChanged();
     void jointPoseSaved(bool success, QString message);
 
 private:
@@ -165,6 +169,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr scale_result_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr speed_ratio_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr system_start_pub_;  // /system/start_button — shared with cartridge
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ignore_scale_pub_;
     
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_status_sub_;
@@ -195,6 +200,7 @@ private:
     
     bool in_ready_{false};
     bool out_ready_{false};
+    bool ignore_scale_{false};
     
     QTimer *jog_timer_{nullptr};
     QString jog_axis_;

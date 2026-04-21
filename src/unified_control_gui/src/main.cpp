@@ -6,6 +6,7 @@
 #include "unified_control_gui/cam_node.hpp"
 #include "unified_control_gui/robot_controller.hpp"
 #include "unified_control_gui/cartridge_controller.hpp"
+#include "unified_control_gui/scale_controller.hpp"
 #include <thread>
 
 int main(int argc, char *argv[])
@@ -30,6 +31,9 @@ int main(int argc, char *argv[])
 
     auto cartridgeController = new CartridgeController(camNode);
     engine.rootContext()->setContextProperty("cartridgeController", cartridgeController);
+
+    auto scaleController = new ScaleController(camNode);
+    engine.rootContext()->setContextProperty("scaleController", scaleController);
 
     // Load QML from filesystem (fast iteration) → fallback to qrc
     QString qmlPath = "/home/pi/ros2_ws/src/unified_control_gui/qml/Main.qml";

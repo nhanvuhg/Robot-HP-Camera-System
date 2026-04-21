@@ -36,5 +36,9 @@ ApplicationWindow {
             id: cartridgePage
             CartridgePage {}
         }
+        Component {
+            id: inkPage
+            InkPage {}
+        }
     }
 }

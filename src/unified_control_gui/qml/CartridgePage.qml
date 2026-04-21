@@ -35,9 +35,9 @@
         property int logH:    outerH - topH - gap
 
         readonly property color cBg:     "#0c0c1d"
-        readonly property color cBg2:    "#1a1a35"
-        readonly property color cCard:   "#141428"
-        readonly property color cBorder: "#2a2a50"
+        readonly property color cBg2:    "#081e29"
+        readonly property color cCard:   "#051a1a"
+        readonly property color cBorder: "#134357"
         readonly property color cAccent: "#4f6cff"
         readonly property color cGreen:  "#00e676"
         readonly property color cRed:    "#ff5252"
@@ -109,7 +109,7 @@
                     Layout.preferredWidth: hmRow.implicitWidth + 16
                     color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? "#2a1a00"
                          : (cartridgeController.systemState === "idle" && cartridgeController.currentMode !== "") ? "#0a2a0a"
-                         : "#1a1a1a"
+                         : "#081e29"
                     border.color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? root.cOrange
                                 : (cartridgeController.systemState === "idle" && cartridgeController.currentMode !== "") ? root.cGreen
                                 : root.cBorder
@@ -134,8 +134,8 @@
                     property string m: cartridgeController.currentMode
                     property bool isIdle: m === "idle" || m === ""
                     Layout.preferredWidth: mpLbl.implicitWidth + 26
-                    color: isIdle ? "#2a1a00" : m === "auto" ? "#0a332e" : m === "jog" ? "#332e0a" : "#1a0a33"
-                    border.color: isIdle ? "#ffd740" : m === "auto" ? root.cGreen : m === "jog" ? root.cOrange : "#bb86fc"
+                    color: isIdle ? "#2a1a00" : m === "auto" ? "#0a332e" : m === "jog" ? "#332e0a" : "#051a25"
+                    border.color: isIdle ? "#ffd740" : m === "auto" ? root.cGreen : m === "jog" ? root.cOrange : "#5cf4f1"
                     border.width: isIdle ? 2 : 1
 
                     // Nhấp nháy khi chưa chọn mode
@@ -221,7 +221,7 @@
                         text: "CHỜ THÊM"
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 100; Layout.preferredHeight: 35
-                        background: Rectangle { color: "#333"; radius: 5; border.color: "#666"; border.width: 1 }
+                        background: Rectangle { color: "#134357"; radius: 5; border.color: "#2a3a4a"; border.width: 1 }
                         contentItem: Text { text: parent.text; font: parent.font; color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: {
                             // outputWarningPopup.close();
@@ -264,11 +264,12 @@
                 function onNotificationReceived() {
                     try {
                         var obj = JSON.parse(cartridgeController.lastNotification)
-                        notifyBanner.lvl = obj.level  || "info"
-                        notifyBanner.ttl = obj.title  || ""
-                        notifyBanner.dtl = obj.detail || ""
-                        notifyBanner.visible = true
-                        bannerTimer.restart()
+                        if (obj.level && obj.level.indexOf("silent") === 0) return;
+                        // notifyBanner.lvl = obj.level  || "info"
+                        // notifyBanner.ttl = obj.title  || ""
+                        // notifyBanner.dtl = obj.detail || ""
+                        // notifyBanner.visible = true
+                        // bannerTimer.restart()
 
                         if (obj.title === "Da phat hien khay") {
                             // outputWarningPopup.open()
@@ -426,7 +427,7 @@
                                         border.color: {
                                             var m = cartridgeController.currentMode
                                             if (m === "auto")   return root.cGreen
-                                            if (m === "manual") return "#bb86fc"
+                                            if (m === "manual") return "#5cf4f1"
                                             if (m === "jog")    return root.cOrange
                                             return root.cBorder
                                         }
@@ -447,7 +448,7 @@
                                                 color: {
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return root.cGreen
-                                                    if (m === "manual") return "#bb86fc"
+                                                    if (m === "manual") return "#5cf4f1"
                                                     if (m === "jog")    return root.cOrange
                                                     return root.cDim
                                                 }
@@ -465,7 +466,7 @@
                                                 color: {
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return root.cGreen
-                                                    if (m === "manual") return "#bb86fc"
+                                                    if (m === "manual") return "#5cf4f1"
                                                     if (m === "jog")    return root.cOrange
                                                     return root.cDim
                                                 }
@@ -523,7 +524,7 @@
                                         // MANUAL
                                         Rectangle {
                                             width: parent.width; height: 32; radius: 5
-                                            color: "#1e0d3d"; border.color: "#bb86fc"; border.width: 1
+                                            color: "#051a1a"; border.color: "#5cf4f1"; border.width: 1
                                             HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.85 : 1.0 }
                                             MouseArea {
                                                 anchors.fill: parent
@@ -535,10 +536,10 @@
                                             Row {
                                                 anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
                                                 spacing: 8
-                                                Text { text: "●"; color: "#bb86fc"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                                Text { text: "●"; color: "#5cf4f1"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
                                                 Column {
                                                     anchors.verticalCenter: parent.verticalCenter
-                                                    Text { text: "MANUAL"; color: "#bb86fc"; font.pixelSize: 11; font.bold: true }
+                                                    Text { text: "MANUAL"; color: "#5cf4f1"; font.pixelSize: 11; font.bold: true }
                                                     Text { text: "Điều khiển tay trực tiếp"; color: root.cDim; font.pixelSize: 8 }
                                                 }
                                             }
@@ -810,7 +811,7 @@
                                         sourceComponent: Text {
                                             width: parent ? parent.width : 100
                                             text: "[" + entry.time + "] " + entry.msg
-                                            font.pixelSize: 12; font.family: "monospace"
+                                            font.pixelSize: 18; font.family: "monospace"
                                             color: entry.type==="err" ? root.cRed : entry.type==="ok" ? root.cGreen : root.cCyan
                                             wrapMode: Text.WordWrap
                                         }
@@ -861,8 +862,8 @@
                                     bg: "#0a1a4d"; bc: root.cAccent; tc: root.cAccent
                                     onClicked: {
                                         cartridgeController.simSensor("clear")
-                                        // S1+S3+S15 ON (băng tải có khay)
-                                        var ids = [1,3,15]
+                                        // S1+S3+S13 ON (băng tải có khay, Cyl 1 rút)
+                                        var ids = [1,3,13]
                                         ids.forEach(function(id) {
                                             cartridgeController.simSensor(id + ":1")
                                         })
@@ -872,11 +873,11 @@
                                 CBtn {
                                     lbl: "S1 Full"
                                     padV: 3; padH: 6; fontSize: 10
-                                    bg: "#1a0a4d"; bc: "#bb86fc"; tc: "#bb86fc"
+                                    bg: "#051a1a"; bc: "#5cf4f1"; tc: "#5cf4f1"
                                     onClicked: {
                                         cartridgeController.simSensor("clear")
-                                        // S1+S3+S4+S15 ON (S6 bỏ — chỉ cần cho State 2 jog)
-                                        var ids = [1,3,4,15]
+                                        // S1+S3+S4+S13 ON (Cyl 1 rút)
+                                        var ids = [1,3,4,13]
                                         ids.forEach(function(id) {
                                             cartridgeController.simSensor(id + ":1")
                                         })
@@ -908,29 +909,24 @@
 
                                 Repeater {
                                     model: ListModel {
-                                        // S1-S10: Sensor quang & logic
+                                        // S1-S8: Module 1
                                         ListElement { sid:1;  slabel:"S1";  sdesc:"Belt start" }
                                         ListElement { sid:2;  slabel:"S2";  sdesc:"Belt mid" }
                                         ListElement { sid:3;  slabel:"S3";  sdesc:"Belt end"}
                                         ListElement { sid:4;  slabel:"S4";  sdesc:"Scan Stack Pos1" }
                                         ListElement { sid:5;  slabel:"S5";  sdesc:"Output det." }
                                         ListElement { sid:6;  slabel:"S6";  sdesc:"Check Tray OutP1" }
-                                        ListElement { sid:7;  slabel:"S7";  sdesc:"Platform" }
-                                        ListElement { sid:8;  slabel:"S8";  sdesc:"Feed OK" }
-                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Check Tray OutP2" }
-                                        ListElement { sid:10; slabel:"S10"; sdesc:"Scan Stack Pos2" }
-                                        // S11-S14: Dự phòng
-                                        ListElement { sid:11; slabel:"S11"; sdesc:"Sensor bắt khay" }
-                                        ListElement { sid:12; slabel:"S12"; sdesc:"[reserved]" }
-                                        ListElement { sid:13; slabel:"S13"; sdesc:"[reserved]" }
-                                        ListElement { sid:14; slabel:"S14"; sdesc:"[reserved]" }
-                                        // S15-S20: Cylinder sensors
-                                        ListElement { sid:15; slabel:"S15"; sdesc:"Cyl1 Ret"}
-                                        ListElement { sid:16; slabel:"S16"; sdesc:"Cyl1 Ext" }
-                                        ListElement { sid:17; slabel:"S17"; sdesc:"Dự phòng"}
-                                        ListElement { sid:18; slabel:"S18"; sdesc:"Dự phòng"}
-                                        ListElement { sid:19; slabel:"S19"; sdesc:"Cyl2 Ret"}
-                                        ListElement { sid:20; slabel:"S20"; sdesc:"Cyl2 Ext" }
+                                        ListElement { sid:7;  slabel:"S7";  sdesc:"Khay tại Robot" }
+                                        ListElement { sid:8;  slabel:"S8";  sdesc:"[Reserved]" }
+                                        // S9-S16: Module 2
+                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Platform" }
+                                        ListElement { sid:10; slabel:"S10"; sdesc:"Feed OK" }
+                                        ListElement { sid:11; slabel:"S11"; sdesc:"Check Tray OutP2" }
+                                        ListElement { sid:12; slabel:"S12"; sdesc:"Scan Stack Pos2" }
+                                        ListElement { sid:13; slabel:"S13"; sdesc:"Cyl1 Ret"}
+                                        ListElement { sid:14; slabel:"S14"; sdesc:"Cyl1 Ext" }
+                                        ListElement { sid:15; slabel:"S15"; sdesc:"Cyl2 Ret"}
+                                        ListElement { sid:16; slabel:"S16"; sdesc:"Cyl2 Ext" }
                                     }
                                     delegate: Rectangle {
                                         id: sBtn
@@ -976,7 +972,7 @@
                                             }
                                             Rectangle {
                                                 width: 6; height: 6; radius: 3
-                                                color: sBtn.on_ ? root.cGreen : "#333333"
+                                                color: sBtn.on_ ? root.cGreen : "#134357"
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
                                         }
@@ -986,7 +982,7 @@
 
                             // ── Chú thích ──
                             Text {
-                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Scan P1 · <b>S5</b> Out Det\n<b>S6</b> Check P1 · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Check P2 · <b>S10</b> Scan P2\n<b>S11</b> Khay tại Robot · <b>S15</b> Cyl1↩ · <b>S16</b> Cyl1↪\n<b>S19</b> Cyl2↩ · <b>S20</b> Cyl2↪   |   S12-S14, S17-S18 định vị"
+                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Scan P1 · <b>S5</b> Out Det · <b>S6</b> Check P1 · <b>S7</b> Robot P1/2 · <b>S8</b> RSV\n<b>S9</b> Platform · <b>S10</b> Feed OK · <b>S11</b> Check P2 · <b>S12</b> Scan P2\n<b>S13</b> Cyl1↩ · <b>S14</b> Cyl1↪ · <b>S15</b> Cyl2↩ · <b>S16</b> Cyl2↪"
                                 textFormat: Text.RichText; color: root.cDim; font.pixelSize: 8
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                             }
@@ -1204,8 +1200,8 @@
                         id: modeToggle
                         anchors { top: parent.top; left: parent.left; right: parent.right }
                         height: 32; radius: 5
-                        color: page3Root.manualEnabled ? "#2a0a4a" : "#1a1a1a"
-                        border.color: page3Root.manualEnabled ? "#bb86fc" : "#666"; border.width: 2
+                        color: page3Root.manualEnabled ? "#0a1a35" : "#081e29"
+                        border.color: page3Root.manualEnabled ? "#5cf4f1" : "#2a3a4a"; border.width: 2
                         Behavior on color { ColorAnimation { duration: 200 } }
                         Behavior on border.color { ColorAnimation { duration: 200 } }
                         Row {
@@ -1216,7 +1212,7 @@
                             }
                             Text {
                                 text: page3Root.manualEnabled ? "MANUAL MODE" : "LOCKED — " + page3Root.currentMode.toUpperCase() + " MODE"
-                                color: page3Root.manualEnabled ? "#bb86fc" : "#888"
+                                color: page3Root.manualEnabled ? "#5cf4f1" : "#888"
                                 font.pixelSize: 12; font.bold: true; font.letterSpacing: 1
                                 anchors.verticalCenter: parent.verticalCenter
                             }
@@ -1284,7 +1280,7 @@
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 96; height: 40; radius: 5; color: "#0d1117"; border.width: 2; border.color: root.cBorder
-                                                    Text { anchors.centerIn: parent; text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0.0000"; color: "#FFD700"; font.pixelSize: 16; font.family: "monospace"; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0.0000"; color: "#f59e0b"; font.pixelSize: 16; font.family: "monospace"; font.bold: true }
                                                 }
                                                 Rectangle {
                                                     id: posBtn
@@ -1362,8 +1358,8 @@
                                         anchors { fill: parent; margins: 6 }
                                         spacing: 3
                                         Row { spacing: 5
-                                            Rectangle { width: 3; height: 11; radius: 1; color: "#bb86fc"; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "JOINT (deg)"; color: "#bb86fc"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1 }
+                                            Rectangle { width: 3; height: 11; radius: 1; color: "#5cf4f1"; anchors.verticalCenter: parent.verticalCenter }
+                                            Text { text: "JOINT (deg)"; color: "#5cf4f1"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1 }
                                         }
                                         Repeater {
                                             id: jointRep
@@ -1384,7 +1380,7 @@
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 96; height: 40; radius: 5; color: "#0d1117"; border.width: 2; border.color: root.cBorder
-                                                    Text { anchors.centerIn: parent; text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0.0000"; color: "#FFD700"; font.pixelSize: 16; font.family: "monospace"; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0.0000"; color: "#f59e0b"; font.pixelSize: 16; font.family: "monospace"; font.bold: true }
                                                 }
                                                 Rectangle {
                                                     width: 46; height: 40; radius: 5
@@ -1407,7 +1403,7 @@
                                                 delegate: Column { spacing: 1; width: (jointCol.width - 15) / 6
                                                     Text { text: modelData; color: root.cDim; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
                                                     Rectangle {
-                                                        width: parent.width; height: 36; radius: 4; color: "#0d1117"; border.color: "#bb86fc"; border.width: 2
+                                                        width: parent.width; height: 36; radius: 4; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2
                                                         TextInput {
                                                             anchors { fill: parent; margins: 2 }
                                                             color: root.cText; font.pixelSize: 14; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true
@@ -1436,11 +1432,11 @@
                                             }
                                             Rectangle {
                                                 width: parent.width / 2 - 2; height: 34; radius: 5
-                                                color: mjMA.pressed ? "#3a1a63" : "#1a0a33"; border.color: mjMA.pressed ? Qt.lighter("#bb86fc", 1.3) : "#bb86fc"
+                                                color: mjMA.pressed ? "#082f3a" : "#051a25"; border.color: mjMA.pressed ? Qt.lighter("#5cf4f1", 1.3) : "#5cf4f1"
                                                 border.width: mjMA.pressed ? 2 : 1; scale: mjMA.pressed ? 0.95 : 1.0
                                                 Behavior on color { ColorAnimation { duration: 80 } }
                                                 Behavior on scale { NumberAnimation { duration: 60 } }
-                                                Text { anchors.centerIn: parent; text: "SEND MovJ"; color: mjMA.pressed ? Qt.lighter("#bb86fc", 1.3) : "#bb86fc"; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "SEND MovJ"; color: mjMA.pressed ? Qt.lighter("#5cf4f1", 1.3) : "#5cf4f1"; font.pixelSize: 12; font.bold: true }
                                                 MouseArea { id: mjMA; anchors.fill: parent; onClicked: {
                                                     var vals = []
                                                     for (var i = 0; i < 6; i++) vals.push(parseFloat(jointInputs.itemAt(i).children[1].children[0].text) || 0)
@@ -1458,7 +1454,7 @@
                                             Rectangle {
                                                 id: poseNameRect
                                                 width: parent.width - 70 - 4; height: 32; radius: 4
-                                                color: "#0d1117"; border.color: "#bb86fc"; border.width: 1
+                                                color: "#0d1117"; border.color: "#5cf4f1"; border.width: 1
                                                 // Placeholder hint
                                                 Text {
                                                     anchors { fill: parent; leftMargin: 6; verticalCenter: parent.verticalCenter }
@@ -1565,12 +1561,12 @@
                                                 onMoved: { page3Root.speedVal = Math.round(value) }
                                                 onPressedChanged: { if (!pressed) robotController.setSpeedRatio(Math.round(value)) }
                                                 background: Rectangle { x: speedSlider.leftPadding; y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 4; width: speedSlider.availableWidth; height: 8; radius: 4; color: root.cCard; border.color: root.cBorder
-                                                    Rectangle { width: speedSlider.visualPosition * parent.width; height: parent.height; radius: 4; color: "#bb86fc" }
+                                                    Rectangle { width: speedSlider.visualPosition * parent.width; height: parent.height; radius: 4; color: "#5cf4f1" }
                                                 }
-                                                handle: Rectangle { x: speedSlider.leftPadding + speedSlider.visualPosition * (speedSlider.availableWidth - width); y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 8; width: 16; height: 16; radius: 8; color: "#bb86fc"; border.color: "#fff" }
+                                                handle: Rectangle { x: speedSlider.leftPadding + speedSlider.visualPosition * (speedSlider.availableWidth - width); y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 8; width: 16; height: 16; radius: 8; color: "#5cf4f1"; border.color: "#fff" }
                                             }
                                             Rectangle {
-                                                width: 44; height: 28; radius: 4; color: "#0d1117"; border.color: "#bb86fc"; border.width: 2
+                                                width: 44; height: 28; radius: 4; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2
                                                 TextInput { anchors.centerIn: parent; width: 38; color: root.cText; font.pixelSize: 12; font.family: "monospace"; font.bold: true; horizontalAlignment: Text.AlignHCenter
                                                     text: page3Root.speedVal
                                                     validator: IntValidator { bottom: 1; top: 100 }
@@ -1699,7 +1695,7 @@
 
                                 Text {
                                     text: "AUTO MODE ACTIONS"
-                                    color: "#bb86fc"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 2
+                                    color: "#5cf4f1"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 2
                                     anchors.horizontalCenter: parent.horizontalCenter
                                 }
 

@@ -82,6 +82,42 @@ Item {
                     }
 
                     Button {
+                        text: "INK SYSTEM  ▸"
+                        Layout.preferredHeight: 50
+                        font.pixelSize: 16; font.bold: true
+                        onClicked: stackView.push(inkPage)
+                        background: Rectangle {
+                            radius: 6
+                            gradient: Gradient {
+                                GradientStop { position: 0.0; color: "#00bcd4" }
+                                GradientStop { position: 1.0; color: "#006064" }
+                            }
+                        }
+                        contentItem: Text {
+                            text: parent.text; font: parent.font
+                            color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: 5
+                        Text {
+                            text: "IGNORE SCALE"
+                            font.pixelSize: 14; font.bold: true
+                            color: ignoreScaleToggle.checked ? "#ef4444" : "#94a3b8"
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        Switch {
+                            id: ignoreScaleToggle
+                            checked: robotController.ignoreScale
+                            onCheckedChanged: {
+                                if (robotController.ignoreScale !== checked)
+                                    robotController.ignoreScale = checked;
+                            }
+                        }
+                    }
+
+                    Button {
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: {
                             var comp = Qt.createComponent("frm_settings.qml")
@@ -168,44 +204,55 @@ Item {
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#134357" }
 
-                    // Top: Status left | Control Mode right
+                    // ── 3-Column Layout: Trái (Trạng thái Robot), Giữa (Thông tin Mực), Phải (Chế độ Điều khiển) ──
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: false
-                        spacing: 8
+                        spacing: 20
 
-                        // Left: Status Info
+                        // CỘT 1: Trạng thái Robot
                         GridLayout {
                             Layout.fillWidth: true
-                            columns: 2; rowSpacing: 4; columnSpacing: 6
+                            Layout.alignment: Qt.AlignTop
+                            columns: 2; rowSpacing: 8; columnSpacing: 10
 
-                            Text { text: "Status:";  color: "#94a3b8"; font.pixelSize: 20 }
-                            Text { text: robotController.systemStatus; color: "#10b981"; font.bold: true; font.pixelSize: 20; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: "Mode:"; color: "#94a3b8"; font.pixelSize: 18 }
+                            Text { text: cameraPageRoot.ctrlMode.toUpperCase(); color: cameraPageRoot.ctrlMode === "camera_ai" ? "#5cf4f1" : "#4f6cff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
 
-                            Text { text: "Mode:";    color: "#94a3b8"; font.pixelSize: 20 }
-                            Text { text: cameraPageRoot.ctrlMode.toUpperCase(); color: cameraPageRoot.ctrlMode === "camera_ai" ? "#5cf4f1" : "#4f6cff"; font.bold: true; font.pixelSize: 20; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: "Uptime:"; color: "#94a3b8"; font.pixelSize: 18 }
+                            Text { text: robotController.systemUptime; color: "#f59e0b"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
 
-                            Text { text: "Uptime:";  color: "#94a3b8"; font.pixelSize: 20 }
-                            Text { text: robotController.systemUptime; color: "#f59e0b"; font.bold: true; font.pixelSize: 20; elide: Text.ElideRight; Layout.fillWidth: true }
-
-                            Text { text: "Tray:";    color: "#94a3b8"; font.pixelSize: 20 }
-                            Text { text: robotController.trayCount; color: "#8b5cf6"; font.bold: true; font.pixelSize: 20; elide: Text.ElideRight; Layout.fillWidth: true }
-
-                            Text { text: "State:";   color: "#94a3b8"; font.pixelSize: 19 }
-                            Text { text: cartridgeController.systemState; color: "#4f6cff"; font.bold: true; font.pixelSize: 19; elide: Text.ElideRight; Layout.fillWidth: true }
-
-                            Text { text: "C.Mode:";  color: "#94a3b8"; font.pixelSize: 19 }
-                            Text { text: cartridgeController.currentMode.toUpperCase(); color: "#6c5ce7"; font.bold: true; font.pixelSize: 19; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: "State Robot:"; color: "#94a3b8"; font.pixelSize: 18 }
+                            Text { text: robotController.systemStatus; color: "#10b981"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
                         }
 
                         Rectangle { width: 1; Layout.fillHeight: true; color: "#134357" }
 
-                        // Right: Control Mode buttons — AUTO above CAMERA AI
+                        // CỘT 2: Thông tin mực & cân
+                        GridLayout {
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignTop
+                            columns: 2; rowSpacing: 8; columnSpacing: 10
+
+                            Text { text: "Ink Name:"; color: "#94a3b8"; font.pixelSize: 18 }
+                            Text { text: scaleController.activeInkName; color: "#5cf4f1"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
+
+                            Text { text: "Cartridge Type:"; color: "#94a3b8"; font.pixelSize: 18 }
+                            Text { text: scaleController.activeCartName; color: "#f59e0b"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
+
+                            Text { text: "Weight Batch:"; color: "#94a3b8"; font.pixelSize: 18 }
+                            Text { text: scaleController.totalBatchWeight > 0 ? scaleController.totalBatchWeight.toFixed(2) + " g" : "0.00 g"; color: "#10b981"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
+                        }
+
+                        Rectangle { width: 1; Layout.fillHeight: true; color: "#134357" }
+
+                        // CỘT 3: Control Mode
                         ColumnLayout {
                             Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignTop
                             spacing: 6
 
-                            Text { text: "CONTROL MODE"; color: "#5cf4f1"; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1 }
+                            Text { text: "CONTROL MODE "; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
                             Repeater {
                                 model: [
                                     { key: "auto",      lbl: "AUTO",      bc: "#4f6cff" },
@@ -214,21 +261,19 @@ Item {
                                 delegate: Rectangle {
                                     required property var modelData
                                     property bool isSelected: cameraPageRoot.ctrlMode === modelData.key
-                                    // Bị chặn nếu modeLocked (user nhấn START) HOẶC robot đang chạy
                                     property bool isLocked: cameraPageRoot.modeLocked || cameraPageRoot.robotBusy
-                                    Layout.fillWidth: true; height: 44; radius: 5
+                                    Layout.fillWidth: true; height: 35; radius: 5
                                     color: isSelected ? modelData.bc + "33" : "#0d2538"
                                     border.color: isSelected ? modelData.bc : (isLocked ? "#2a3a4a" : "#134357"); border.width: 2
                                     opacity: (!isSelected && isLocked) ? 0.35 : 1.0
-                                    Text { anchors.centerIn: parent; text: (isLocked && !isSelected ? "🔒 " : "") + modelData.lbl; color: isSelected ? modelData.bc : "#94a3b8"; font.pixelSize: 19; font.bold: true }
+                                    Text { anchors.centerIn: parent; text: (isLocked && !isSelected ? "🔒 " : "") + modelData.lbl; color: isSelected ? modelData.bc : "#94a3b8"; font.pixelSize: 16; font.bold: true }
                                     MouseArea {
                                         anchors.fill: parent
                                         enabled: !parent.isLocked
-                                        onClicked: cameraPageRoot.ctrlMode = modelData.key
-                                        ToolTip.visible: parent.isLocked && containsMouse
-                                        ToolTip.text: "⚠ Robot đang chạy — không thể đổi mode"
-                                        ToolTip.delay: 300
-                                        hoverEnabled: true
+                                        onClicked: {
+                                            cameraPageRoot.ctrlMode = modelData.key
+                                            if (modelData.key === "camera_ai") robotController.selectRow(0)
+                                        }
                                     }
                                 }
                             }
@@ -240,8 +285,8 @@ Item {
                     // Error indicator
                     Rectangle {
                         Layout.fillWidth: true; Layout.fillHeight: false
-                        height: robotController.errorLog.length > 0 ? 24 : 0; radius: 4
-                        visible: robotController.errorLog.length > 0
+                        height: (robotController.errorLog || "").length > 0 ? 24 : 0; radius: 4
+                        visible: (robotController.errorLog || "").length > 0
                         color: "#1a0a0a"; border.color: "#ef4444"
                         Row { anchors.fill: parent; anchors.leftMargin: 6; spacing: 4
                             Text { text: "⚠"; color: "#ef4444"; font.pixelSize: 17; anchors.verticalCenter: parent.verticalCenter }
@@ -294,9 +339,7 @@ Item {
                                 { lbl: "PICK_INPUT",   icon: "↓",  bg: "#0a1a35", bc: "#4f6cff" },
                                 { lbl: "PICK_CHAMBER", icon: "⟳", bg: "#0a1a35", bc: "#4f6cff" },
                                 { lbl: "PLACE_OUTPUT", icon: "",   bg: "#051a1a", bc: "#00bcd4" },
-                                { lbl: "PLACE_FAIL",   icon: "",   bg: "#1a1505", bc: "#ff9800" },
-                                { lbl: "HOME",         icon: "⌂",  bg: "#0d2538", bc: "#334155" },
-                                { lbl: "IDLE",         icon: "◌",  bg: "#0d2538", bc: "#334155" }
+                                { lbl: "PLACE_FAIL",   icon: "",   bg: "#1a1505", bc: "#ff9800" }
                             ]
                             delegate: Rectangle {
                                 required property var modelData

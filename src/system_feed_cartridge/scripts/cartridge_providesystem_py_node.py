@@ -54,7 +54,7 @@ except ImportError:
 # ─── Constants ───────────────────────────────────────────────────
 COUNTS_PER_MM        = 1000
 CYLINDER_TIMEOUT_S   = 15.0
-S5_WAIT_S            = 5.0
+S5_WAIT_S            = 60.0
 INY_JOG_VEL          = 40
 OUTY_ROW1_LIMIT_MM   = 590.0
 S13_CHECK_TIMEOUT_S  = 3.0
@@ -78,6 +78,7 @@ class SystemState(Enum):
     S1_INY_TO_ROW       = "s1_iny_to_row"
     S1_CHECK_S5         = "s1_check_s5"
     S1_FALLBACK_RETRACT = "s1_fallback_retract"
+    S1_FALLBACK_WAIT_INY = "s1_fallback_wait_iny"
     S1_WAIT_GUI_CONFIRM = "s1_wait_gui_confirm"
     S1_RETRY_INX_500    = "s1_retry_inx_500"
     S1_RETRY_JOG        = "s1_retry_jog"
@@ -85,7 +86,7 @@ class SystemState(Enum):
     S1_INY_50           = "s1_iny_50"
     S1_INY_200          = "s1_iny_200"
     S1_WAIT_RELEASE     = "s1_wait_release"
-    S1_WAIT_S11         = "s1_wait_s11"
+    S1_WAIT_S7         = "s1_wait_s7"
     S1_INY_10_FINAL     = "s1_iny_10_final"
     S1_INX_10           = "s1_inx_10"
     S1_COMPLETE         = "s1_complete"
@@ -95,12 +96,12 @@ class SystemState(Enum):
     S2A_CHECK_INTERLOCK   = "s2a_check_interlock"
     S2A_INX_500           = "s2a_inx_500"
     S2A_INY_200_CYL1      = "s2a_iny_200_cyl1"
-    S2A_WAIT_S11          = "s2a_wait_s11"
+    S2A_WAIT_S7          = "s2a_wait_s7"
     S2A_INY_10            = "s2a_iny_10"
     S2A_INX_10            = "s2a_inx_10"
     S2A_INY_JOG_OUTPUT    = "s2a_iny_jog_output"
     S2A_INY_OUTPUT_ROW    = "s2a_iny_output_row"
-    S2A_WAIT_S15          = "s2a_wait_s15"
+    S2A_WAIT_S13          = "s2a_wait_s13"
     S2A_INY_10_FINAL      = "s2a_iny_10_final"
     S2A_INX_20            = "s2a_inx_20"
     S2A_RETRY_SCAN_HOME   = "s2a_retry_scan_home"
@@ -109,11 +110,11 @@ class SystemState(Enum):
     # STATE 3
     S3_CHECK_OUTXY_SAFE  = "s3_check_outxy_safe"
     S3_SERVO3_TARGET1    = "s3_servo3_target1"
-    S3_CHECK_S7          = "s3_check_s7"
-    S3_WAIT_S7           = "s3_wait_s7"
-    S3_WAIT_GUI_CONFIRM  = "s3_wait_gui_s7"
+    S3_CHECK_S9          = "s3_check_s9"
+    S3_WAIT_S9           = "s3_wait_s9"
+    S3_WAIT_GUI_CONFIRM  = "s3_wait_gui_s9"
     S3_SERVO3_FEED       = "s3_servo3_feed"
-    S3_WAIT_S8           = "s3_wait_s8"
+    S3_WAIT_S10           = "s3_wait_s10"
     S3_COMPLETE          = "s3_complete"
 
     # STATE 4
@@ -123,9 +124,9 @@ class SystemState(Enum):
     S4_CYL2_EXTEND       = "s4_cyl2_extend"
     S4_OUTY_TARGET1      = "s4_outy_target1"
     S4_OUTX_TARGET3      = "s4_outx_target3"
-    S4_CHECK_S9          = "s4_check_s9"
+    S4_CHECK_S11          = "s4_check_s11"
     S4_OUTY_ROW1         = "s4_outy_row1"
-    S4_OUTY_SCAN_S10     = "s4_outy_scan_s10"
+    S4_OUTY_SCAN_S12     = "s4_outy_scan_s12"
     S4_OUTY_DROP         = "s4_outy_drop"
     S4_CYL2_RETRACT      = "s4_cyl2_retract"
     S4_OUTY_OUTX_HOME    = "s4_outy_outx_home"
@@ -314,8 +315,10 @@ class CartridgeSystem(Node):
         
         # ── Shared / Other ───────────────────────────────────────────
         self._motion_busy       = False
-        self._s8_off_time       = 0.0
-        self._s8_prev           = False
+        self._robot_last_seen   = 0.0   # timestamp of last /robot/motion_busy msg
+        self._robot_connected   = False # True when robot node is actively publishing
+        self._s10_off_time       = 0.0
+        self._s10_prev           = False
 
         # Tray tracking
         self.stack_row_index  = 0
@@ -346,6 +349,9 @@ class CartridgeSystem(Node):
         self.pub_busy_cartridge = self.create_publisher(Bool, '/cartridge/busy', qos)
         self.pub_input_trays_empty = self.create_publisher(Bool, '/cartridge/input_trays_empty', qos)
         self.pub_current_mode   = self.create_publisher(String, '/providesystem/current_mode', qos)        
+        self.pub_vfd_run        = self.create_publisher(Bool,   '/vfd/cmd_run', qos)
+        self._vfd_current_cmd   = False
+
         qos_latching = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_config_data    = self.create_publisher(String, '/providesystem/config_data', qos_latching)
 
@@ -639,7 +645,6 @@ class CartridgeSystem(Node):
             if self.operation_mode != 'manual':
                 self.get_logger().error(f"S{servo_id} JOG blocked — chua home (AUTO)")
                 return
-            self.get_logger().warn(f"S{servo_id} JOG chua home")
         mot = self.servos.get(servo_id)
         if not mot:
             return
@@ -808,37 +813,43 @@ class CartridgeSystem(Node):
         if self.operation_mode != 'auto' or not self.zero_offset or self._motion_busy:
             return False
         has_tray  = self.sensor(1) or self.sensor(2) or self.sensor(3)
-        place_ok  = not self.sensor(11)
-        s15_clear = self.sensor(15)
-        s16_clear = not self.sensor(16)
+        place_ok  = not self.sensor(7)
+        s15_clear = self.sensor(13)
+        s16_clear = not self.sensor(14)
         return has_tray and place_ok and s15_clear and s16_clear
 
     def _can_start_s2a(self) -> bool:
         return (bool(self.zero_offset) and getattr(self, '_input_tray_done', False)
-                and self.sensor(11) and not self._motion_busy)
+                and self.sensor(7) and not self._motion_busy)
 
     def _can_start_s3(self) -> bool:
         if self.operation_mode != 'auto' or self._motion_busy:
             return False
             
-        # Neu S8 dang OFF va da duoc ghi nhan thoi gian
-        s8_off_duration = 0.0
-        if not self.sensor(8) and self._s8_off_time > 0:
-            s8_off_duration = time.time() - self._s8_off_time
-            
+        # Neu S10 dang OFF (tuc la chua co khay o vi tri cap Output)
+        s10_off_duration = 0.0
+        if not self.sensor(10):
+            if self._s10_off_time > 0:
+                s10_off_duration = time.time() - self._s10_off_time
+            else:
+                s10_off_duration = 5.0  # Lúc mới boot máy, nếu không có khay thì được phép cấp luôn
+                
         return (bool(self.zero_offset)
-                and self.sensor(7)
-                and not self.sensor(8)
-                and s8_off_duration >= 5.0)
+                and not self.sensor(10)
+                and s10_off_duration >= 5.0)
 
     def _can_start_s4(self) -> bool:
-        return bool(self.zero_offset) and self._s4_trigger and self.sensor(8) and not self._motion_busy
+        return bool(self.zero_offset) and self._s4_trigger and self.sensor(10) and not self._motion_busy
 
     def _pub_cartridge_busy(self, busy: bool):
         self.pub_busy_cartridge.publish(Bool(data=busy))
 
     def _cb_motion_busy(self, msg: Bool):
         self._motion_busy = msg.data
+        self._robot_last_seen = time.time()
+        if not self._robot_connected:
+            self._robot_connected = True
+            self.get_logger().info("[ROBOT] Robot node connected — interlock ACTIVE")
 
     def _cb_done_tray_output(self, msg: Bool):
         """Robot báo khay output đã đầy → trigger State4 thay khay."""
@@ -950,19 +961,22 @@ class CartridgeSystem(Node):
         self._system_paused = False
         self._system_running = True
         self._inx_moving = self._iny_moving = False
-        self._state1_enabled = False
+        self._state1_enabled = (self.operation_mode == 'auto')
         self._motion_busy = False
         
         if self.operation_mode == 'manual':
             self._jog_mode = True
-            self._notify('info', 'START (MANUAL)', 'JOG ready. Chờ HOMING để chạy State.')
         else:
             self._jog_mode = False
-            self._notify('info', 'START (AUTO)', 'Chờ HOMING để bắt đầu.')
             
         self.get_logger().info(f"[START] System running. Mode: {self.operation_mode}")
         self._sync_mode_jog()
-        self._enter(SystemState.IDLE)
+        
+        if not self.zero_offset:
+            self.get_logger().info("[START] System not homed. Auto-triggering HOMING.")
+            self._enter(SystemState.HOMING)
+        else:
+            self._enter(SystemState.IDLE)
 
     def _cb_stop(self, msg: Bool):
         if not msg.data:
@@ -996,16 +1010,16 @@ class CartridgeSystem(Node):
     def _cb_gui_confirm(self, msg: String):
         data = msg.data.strip()
         if data == 'S11_OK':
-            self.get_logger().info('[S11] OK → chạy S2A (lấy khay ra)')
-            self._notify('info', 'S11: Thực hiện State2', 'Lấy khay ra')
+            self.get_logger().info('[S7] OK → chạy S2A (lấy khay ra)')
+            self._notify('info', 'S7: Thực hiện State2', 'Lấy khay ra')
             self._input_tray_done = False
             # [V7-5] MANUAL: KHÔNG set _state1_enabled — S1 cần nhấn tay sau S2 xong
             if self.operation_mode == 'auto':
                 self._state1_enabled = True
             self._enter_in(SystemState.S2A_CHECK_INTERLOCK)
         elif data == 'S11_NO':
-            self.get_logger().info('[S11] NO → IDLE')
-            self._notify('warn', 'S11: Dừng', 'Nhấn START lại khi sẵn sàng')
+            self.get_logger().info('[S7] NO → IDLE')
+            self._notify('warn', 'S7: Dừng', 'Nhấn START lại khi sẵn sàng')
             self._state1_enabled = False
             self._enter_in(SystemState.IDLE)
         else:
@@ -1028,7 +1042,6 @@ class CartridgeSystem(Node):
             self._guide_logged.clear()
             self._sim_sensors.clear()  # Reset sim khi đổi mode
             self._sync_mode_jog()  # Publish mode ngay cho GUI hiển thị
-            self._notify('info', f'Mode: {requested.upper()}', 'Hệ thống tự động chạy theo tín hiệu cảm biến.')
 
     def _cb_jog(self, msg: String):
         parts = msg.data.strip().split()
@@ -1073,6 +1086,7 @@ class CartridgeSystem(Node):
                         if sid not in self.zero_offset:
                             with self._servo_lock:
                                 self.zero_offset[sid] = mot.current_position()
+                        self._notify('silent_ok', f'Homing complete ...', f'Servo {sid}')
                     threading.Thread(target=_do, daemon=True).start()
                 return
             sid = int(parts[0])
@@ -1148,20 +1162,20 @@ class CartridgeSystem(Node):
                 self._notify('info', 'Robot busy', 'Đang bỏ qua khóa an toàn trong MANUAL mode...')
             # Kiểm tra điều kiện cảm biến sim
             has_tray  = self.sensor(1) or self.sensor(2) or self.sensor(3)
-            place_ok  = not self.sensor(11)
-            s15_clear = self.sensor(15)
-            s16_clear = not self.sensor(16)
+            place_ok  = not self.sensor(7)
+            s15_clear = self.sensor(13)
+            s16_clear = not self.sensor(14)
             
             if not (has_tray and place_ok and s15_clear and s16_clear):
                 reasons = []
                 if not has_tray:
                     reasons.append('S1/S2/S3 OFF (sim chưa set)')
                 if not place_ok:
-                    reasons.append('S11 ON (vị trí cấp có khay)')
+                    reasons.append('S7 ON (vị trí cấp có khay)')
                 if not s15_clear:
-                    reasons.append('S15 OFF (Cyl1 chưa retract)')
+                    reasons.append('S13 OFF (Cyl1 chưa retract)')
                 if not s16_clear:
-                    reasons.append('S16 ON (Cyl1 đang thò ra)')
+                    reasons.append('S14 ON (Cyl1 đang thò ra)')
                 self._notify('warn', 'STATE1: Điều kiện chưa đủ',
                              ' | '.join(reasons))
                 return
@@ -1185,12 +1199,12 @@ class CartridgeSystem(Node):
             if not self.zero_offset:
                 self._notify('warn', 'Chua home', '')
                 return
-            if not self.sensor(11):
-                self._notify('warn', 'S11 OFF (sim)',
-                             'Sim S11=1 trước khi vào State2')
+            if not self.sensor(7):
+                self._notify('warn', 'S7 OFF (sim)',
+                             'Sim S7=1 trước khi vào State2')
                 return
             self._input_tray_done = False
-            self._notify('info', 'STATE 2A (manual)', 'S11 ON (sim)')
+            self._notify('info', 'STATE 2A (manual)', 'S7 ON (sim)')
             self._enter_in(SystemState.S2A_CHECK_INTERLOCK)
             return
 
@@ -1203,8 +1217,8 @@ class CartridgeSystem(Node):
             if not self.zero_offset:
                 self._notify('warn', 'Chua home', '')
                 return
-            if self.sensor(8):
-                self._notify('warn', 'S8 ON', 'Vị trí cấp (S8) đang có khay')
+            if self.sensor(10):
+                self._notify('warn', 'S10 ON', 'Vị trí cấp (S10) đang có khay')
                 return
             self._notify('info', 'STATE 3', 'Kích hoạt Manual S3')
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
@@ -1300,13 +1314,24 @@ class CartridgeSystem(Node):
             if self._system_paused:
                 return
                 
-            # S8 tracking logic for S3 auto-feed delay
-            curr_s8 = self.sensor(8)
+            # S10 tracking logic for S3 auto-feed delay
+            curr_s8 = self.sensor(10)
             if not curr_s8 and getattr(self, '_s8_prev', False):
-                self._s8_off_time = time.time()
-                self.get_logger().info("[S8] Bị lấy đi -> bắt đầu đếm ngược 5s để cấp tiếp")
-            self._s8_prev = curr_s8
-            
+                self._s10_off_time = time.time()
+                self.get_logger().info("[S10] Bị lấy đi -> bắt đầu đếm ngược 5s để cấp tiếp")
+            self._s10_prev = curr_s8
+
+            # ── Robot heartbeat timeout ──
+            # Nếu robot node chưa bao giờ publish hoặc đã ngắt > 5s → tự xả khóa
+            if self._robot_connected and self._robot_last_seen > 0:
+                if time.time() - self._robot_last_seen > 5.0:
+                    self._robot_connected = False
+                    self._motion_busy = False
+                    self.get_logger().warn("[ROBOT] Robot node timeout (>5s) — interlock RELEASED, cartridge runs standalone")
+            elif not self._robot_connected and self._motion_busy:
+                self._motion_busy = False
+
+
             self._process_state()
             self._publish_state()
             self._publish_sensors()
@@ -1398,7 +1423,7 @@ class CartridgeSystem(Node):
         elif s == SystemState.S1_INY_50:           self._s1_iny_50()
         elif s == SystemState.S1_INY_200:          self._s1_iny_200()
         elif s == SystemState.S1_WAIT_RELEASE:     self._s1_wait_release()
-        elif s == SystemState.S1_WAIT_S11:         self._s1_wait_s11()
+        elif s == SystemState.S1_WAIT_S7:         self._s1_wait_s7()
         elif s == SystemState.S1_INY_10_FINAL:     self._s1_iny_10_final()
         elif s == SystemState.S1_INX_10:           self._s1_inx_10()
         elif s == SystemState.S1_COMPLETE:         self._s1_complete()
@@ -1406,12 +1431,12 @@ class CartridgeSystem(Node):
         elif s == SystemState.S2A_CHECK_INTERLOCK:   self._s2a_check_interlock()
         elif s == SystemState.S2A_INX_500:           self._s2a_inx_500()
         elif s == SystemState.S2A_INY_200_CYL1:      self._s2a_iny_200_cyl1()
-        elif s == SystemState.S2A_WAIT_S11:          self._s2a_wait_s11()
+        elif s == SystemState.S2A_WAIT_S7:          self._s2a_wait_s7()
         elif s == SystemState.S2A_INY_10:            self._s2a_iny_10()
         elif s == SystemState.S2A_INX_10:            self._s2a_inx_10()
         elif s == SystemState.S2A_INY_JOG_OUTPUT:    self._s2a_iny_jog_output()
         elif s == SystemState.S2A_INY_OUTPUT_ROW:    self._s2a_iny_output_row()
-        elif s == SystemState.S2A_WAIT_S15:          self._s2a_wait_s15()
+        elif s == SystemState.S2A_WAIT_S13:          self._s2a_wait_s13()
         elif s == SystemState.S2A_INY_10_FINAL:      self._s2a_iny_10_final()
         elif s == SystemState.S2A_INX_20:            self._s2a_inx_20()
         elif s == SystemState.S2A_RETRY_SCAN_HOME:   self._s2a_retry_scan_home()
@@ -1422,11 +1447,11 @@ class CartridgeSystem(Node):
         if   s == SystemState.IDLE:                self._do_idle_s3()
         elif s == SystemState.S3_CHECK_OUTXY_SAFE: self._s3_check_outxy_safe()
         elif s == SystemState.S3_SERVO3_TARGET1:   self._s3_servo3_target1()
-        elif s == SystemState.S3_CHECK_S7:         self._s3_check_s7()
-        elif s == SystemState.S3_WAIT_S7:          self._s3_wait_s7()
+        elif s == SystemState.S3_CHECK_S9:         self._s3_check_s9()
+        elif s == SystemState.S3_WAIT_S9:          self._s3_wait_s9()
         elif s == SystemState.S3_WAIT_GUI_CONFIRM: self._s3_wait_gui_confirm()
         elif s == SystemState.S3_SERVO3_FEED:      self._s3_servo3_feed()
-        elif s == SystemState.S3_WAIT_S8:          self._s3_wait_s8()
+        elif s == SystemState.S3_WAIT_S10:          self._s3_wait_s10()
         elif s == SystemState.S3_COMPLETE:         self._s3_complete()
 
     def _dispatch_s4(self):
@@ -1438,9 +1463,9 @@ class CartridgeSystem(Node):
         elif s == SystemState.S4_CYL2_EXTEND:      self._s4_cyl2_extend()
         elif s == SystemState.S4_OUTY_TARGET1:     self._s4_outy_target1()
         elif s == SystemState.S4_OUTX_TARGET3:     self._s4_outx_target3()
-        elif s == SystemState.S4_CHECK_S9:         self._s4_check_s9()
+        elif s == SystemState.S4_CHECK_S11:         self._s4_check_s11()
         elif s == SystemState.S4_OUTY_ROW1:        self._s4_outy_row1()
-        elif s == SystemState.S4_OUTY_SCAN_S10:    self._s4_outy_scan_s10()
+        elif s == SystemState.S4_OUTY_SCAN_S12:    self._s4_outy_scan_s12()
         elif s == SystemState.S4_OUTY_DROP:        self._s4_outy_drop()
         elif s == SystemState.S4_CYL2_RETRACT:     self._s4_cyl2_retract_state()
         elif s == SystemState.S4_OUTY_OUTX_HOME:   self._s4_outy_outx_home()
@@ -1466,15 +1491,15 @@ class CartridgeSystem(Node):
         # ── AUTO/MANUAL: auto-trigger S1 ───────────────
         if self._state1_enabled and self._can_start_s1():
             self.get_logger().info(f"[IN-IDLE] Đủ điều kiện → STATE 1 ({self.operation_mode.upper()})")
-            self._guide_logged.discard("IDLE_IN_S11")
+            self._guide_logged.discard("IDLE_IN_S7")
             self._enter_in(SystemState.S1_CONFIRM_SAFE)
             return
         
         # Log lý do chờ
         if not (self.sensor(1) or self.sensor(2) or self.sensor(3)):
             self._log_once("IDLE_IN_NO_TRAY", "[IN-IDLE] S1/S2/S3 OFF — hết khay input")
-        elif self.sensor(11):
-            self._log_once("IDLE_IN_NO_PLACE", "[IN-IDLE] S11 ON — vị trí cấp đang có khay (chờ xử lý xong để chạy State 2)")
+        elif self.sensor(7):
+            self._log_once("IDLE_IN_NO_PLACE", "[IN-IDLE] S7 ON — vị trí cấp đang có khay (chờ xử lý xong để chạy State 2)")
         elif self._motion_busy:
             self._log_once("IDLE_IN_BUSY", f"[IN-IDLE] Robot đang báo BẬN (/robot/motion_busy={self._motion_busy}) — chờ")
 
@@ -1482,7 +1507,7 @@ class CartridgeSystem(Node):
         if not self.zero_offset or not getattr(self, '_system_running', False):
             return
         if self._can_start_s3():
-            self.get_logger().info("[S3-IDLE] S7 ON + S8 OFF >= 5s → STATE 3")
+            self.get_logger().info("[S3-IDLE] S9 ON + S10 OFF >= 5s → STATE 3")
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
 
     def _do_idle_s4(self):
@@ -1560,7 +1585,7 @@ class CartridgeSystem(Node):
             self._cmd_sent_in    = True
             self._inx_arrived = False
             self._30s_timeout = 0.0
-            self._s15_warn_t  = 0.0
+            self._s13_warn_t  = 0.0
             self.get_logger().info(f"Step2: INX -> {self.config.inx_target2}mm")
             self._enter_in(SystemState.S1_WAIT_ARRIVE)
 
@@ -1571,12 +1596,12 @@ class CartridgeSystem(Node):
                 self._log_once("S1_INX_MOVING", "INX dang di chuyen")
                 return
             self._30s_timeout = time.time() + 50.0
-            self.get_logger().info("INX dung tai 500mm — check S3+S15 (50s)")
+            self.get_logger().info("INX dung tai 500mm — check S3+S13 (50s)")
 
-        s3, s15 = self._snap(3, 15)
+        s3, s13 = self._snap(3, 13)
 
-        if s3 and s15:
-            self.get_logger().info("S3+S15 ON -> scan INY")
+        if s3 and s13:
+            self.get_logger().info("S3+S13 ON -> scan INY")
             self._s4_armed = False
             self._enter_in(SystemState.S1_INY_SCAN)
             return
@@ -1592,12 +1617,12 @@ class CartridgeSystem(Node):
             remain = self._30s_timeout - time.time()
             self._log_once("S1_WAIT_S3", f"Cho S3 ON (con {remain:.0f}s)")
         else:
-            if self._s15_warn_t == 0:
-                self._s15_warn_t = time.time()
-            elif time.time() - self._s15_warn_t >= 5.0:
-                self._notify('warn', 'S3 ON nhưng S15 OFF', 'Cyl1 chưa retract')
-                self._s15_warn_t = time.time()
-            self._log_once("S1_WAIT_S15", "S3 ON, chờ S15 ON")
+            if self._s13_warn_t == 0:
+                self._s13_warn_t = time.time()
+            elif time.time() - self._s13_warn_t >= 5.0:
+                self._notify('warn', 'S3 ON nhưng S13 OFF', 'Cyl1 chưa retract')
+                self._s13_warn_t = time.time()
+            self._log_once("S1_WAIT_S13", "S3 ON, chờ S13 ON")
 
     def _s1_iny_scan(self):
         iny = self._pos(2)
@@ -1797,24 +1822,35 @@ class CartridgeSystem(Node):
                 self._enter_in(SystemState.S1_FALLBACK_RETRACT)
 
     def _s1_fallback_retract(self):
-        s15, s16 = self._snap(15, 16)
+        s13, s14 = self._snap(13, 14)
         if not self._cmd_sent_in:
             self._cyl1_retract()
             self._cyl_retry_t = time.time() + 3.0
             self._cmd_sent_in = True
 
-        if s15 and not s16:
-            self.get_logger().info("Fallback: S15 ON + S16 OFF -> INY ve home")
+        if s13 and not s14:
+            self.get_logger().info("Fallback: S13 ON + S14 OFF -> INY ve home")
             self._nb_move(2, self.config.iny_home)
-            self._nb_move(1, self.config.inx_home)
-            self._enter_in(SystemState.S1_CONFIRM_SAFE)
+            self._cmd_sent_in = True
+            self._step_timeout_in = time.time() + self.config.move_timeout
+            self._enter_in(SystemState.S1_FALLBACK_WAIT_INY)
             return
 
         if time.time() > self._cyl_retry_t:
             self.get_logger().info("Fallback: Retry Cyl1 retract")
             self._cyl1_retract()
             self._cyl_retry_t = time.time() + 3.0
-        self._log_once("S1_FB_RETRACT", "Fallback: cho S15 ON, S16 OFF")
+        self._log_once("S1_FB_RETRACT", "Fallback: cho S13 ON, S14 OFF")
+
+    def _s1_fallback_wait_iny(self):
+        if time.time() > self._step_timeout_in:
+            self.get_logger().error("Timeout iny ve home")
+            self._error("Fallback INY timeout")
+            return
+        if self._arrived(2) or self._pos(2) <= self.config.iny_home + 2.0:
+            self.get_logger().info("INY ve home safe -> INX ve home/20mm")
+            self._nb_move(1, self.config.inx_home)
+            self._enter_in(SystemState.S1_CONFIRM_SAFE)
 
     def _go_gui_confirm(self):
         self._nb_move(2, self.config.iny_home)
@@ -1869,26 +1905,21 @@ class CartridgeSystem(Node):
                 self._enter_in(SystemState.S1_INY_SCAN)
 
     def _s1_cyl1_extend(self):
-        s16, s5 = self._snap(16, 5)
-        if not s5:
-            self.get_logger().warn("S5 OFF bat ngo -> huy extend")
-            self._notify('warn', 'S5 OFF', 'Khay bi roi -> Reset')
-            self._enter_in(SystemState.S1_FALLBACK_RETRACT)
-            return
-
+        s14, = self._snap(14)
+        # BO CHECK S5 o day vi qua trinh day rulo co the lam rung S5
         if not self._cmd_sent_in:
             self._cyl1_extend()
             self._cyl_retry_t = time.time() + 3.0
             self._cmd_sent_in    = True
-        if s16:
-            self.get_logger().info("S16 ON — gap khay OK -> INY ve 50mm")
+        if s14:
+            self.get_logger().info("S14 ON — gap khay OK -> INY ve 50mm")
             self._enter_in(SystemState.S1_INY_50)
             return
         if time.time() > self._cyl_retry_t:
             self.get_logger().info("Retry Cyl1 extend")
             self._cyl1_extend()
             self._cyl_retry_t = time.time() + 3.0
-        self._log_once("S1_WAIT_S16", "Cho S16 ON (Cyl1 extend)")
+        self._log_once("S1_WAIT_S14", "Cho S14 ON (Cyl1 extend)")
 
     def _s1_iny_50(self):
         if not self._cmd_sent_in:
@@ -1919,32 +1950,32 @@ class CartridgeSystem(Node):
                 self._enter_in(SystemState.S1_WAIT_RELEASE)
 
     def _s1_wait_release(self):
-        s15, s16 = self._snap(15, 16)
+        s13, s14 = self._snap(13, 14)
         if not self._cmd_sent_in:
             self._cyl1_retract()
             self._cyl_retry_t = time.time() + 3.0
             self._cmd_sent_in    = True
-        if s15 and not s16:
-            self.get_logger().info("S15 ON + S16 OFF — Cyl1 nha xong -> cho S11")
-            self._enter_in(SystemState.S1_WAIT_S11)
+        if s13 and not s14:
+            self.get_logger().info("S13 ON + S14 OFF — Cyl1 nha xong -> cho S7")
+            self._enter_in(SystemState.S1_WAIT_S7)
             return
         if time.time() > self._cyl_retry_t:
             self.get_logger().info("Retry Cyl1 retract")
             self._cyl1_retract()
             self._cyl_retry_t = time.time() + 3.0
-        self._log_once("S1_WAIT_REL", f"Cho S15 ON + S16 OFF | S15={s15} S16={s16}")
+        self._log_once("S1_WAIT_REL", f"Cho S13 ON + S14 OFF | S13={s13} S14={s14}")
 
-    def _s1_wait_s11(self):
-        s11, = self._snap(11)
-        if s11:
-            self.get_logger().info("S11 ON — Khay o vi tri robot -> INY ve 10mm")
+    def _s1_wait_s7(self):
+        s7, = self._snap(7)
+        if s7:
+            self.get_logger().info("S7 ON — Khay o vi tri robot -> INY ve 10mm")
             self._enter_in(SystemState.S1_INY_10_FINAL)
             return
-        self._log_once("S1_WAIT_S11", "Cho S11 ON")
+        self._log_once("S1_WAIT_S7", "Cho S7 ON")
 
     def _s1_iny_10_final(self):
-        s15, s16 = self._snap(15, 16)
-        if s16 or not s15:
+        s13, s14 = self._snap(13, 14)
+        if s14 or not s13:
             if not getattr(self, '_cmd_sent_in_cyl', False):
                 self._cyl1_retract()
                 self._cmd_sent_in_cyl = True
@@ -1952,7 +1983,7 @@ class CartridgeSystem(Node):
             if time.time() > self._cyl_retry_t:
                 self._cyl1_retract()
                 self._cyl_retry_t = time.time() + 3.0
-            self._log_once("S1_ILK_10", "Interlock: Cho S15 ON, S16 OFF truoc khi ve 10mm")
+            self._log_once("S1_ILK_10", "Interlock: Cho S13 ON, S14 OFF truoc khi ve 10mm")
             return
         self._cmd_sent_in_cyl = False
 
@@ -1988,7 +2019,7 @@ class CartridgeSystem(Node):
 
     def _s1_complete(self):
         """
-        Publish new_tray_loaded. Check S11 với timeout 3s.
+        Publish new_tray_loaded. Check S7 với timeout 3s.
         Xong thì về IDLE. IDLE sẽ chờ robot done_tray_input rồi kích S2A.
         """
         self._s1_scan_noise_retry = 0
@@ -1998,10 +2029,10 @@ class CartridgeSystem(Node):
             self._cmd_sent_in     = True
             self._s13_check_start = 0.0
 
-        if self.sensor(11):
+        if self.sensor(7):
             if self._s13_check_start >= 0.0:
                 self.pub_new_tray.publish(Bool(data=True))
-                self.get_logger().info("Published: new_tray_loaded = True (S11 ON)")
+                self.get_logger().info("Published: new_tray_loaded = True (S7 ON)")
                 self._notify('info', 'STATE 1 COMPLETE', 'Khay đã ở robot')
                 self._s13_check_start = -1.0
 
@@ -2009,16 +2040,16 @@ class CartridgeSystem(Node):
         else:
             if self._s13_check_start == 0.0:
                 self._s13_check_start = time.time()
-                self.get_logger().warn("S11 chua ON — cho 3s")
+                self.get_logger().warn("S7 chua ON — cho 3s")
             elapsed = time.time() - self._s13_check_start
             if elapsed >= S13_CHECK_TIMEOUT_S:
-                self.get_logger().error(f"S11 OFF sau {S13_CHECK_TIMEOUT_S:.0f}s — caution")
-                self._notify('warn', 'S11 OFF sau timeout', 'Kiem tra lai S11.')
+                self.get_logger().error(f"S7 OFF sau {S13_CHECK_TIMEOUT_S:.0f}s — caution")
+                self._notify('warn', 'S7 OFF sau timeout', 'Kiem tra lai S7.')
                 self.pub_new_tray.publish(Bool(data=True))
                 self._enter_in(SystemState.IDLE)
             else:
                 self._log_once("S1C_S18_WAIT",
-                               f"Cho S11 ON (con {S13_CHECK_TIMEOUT_S - elapsed:.1f}s)")
+                               f"Cho S7 ON (con {S13_CHECK_TIMEOUT_S - elapsed:.1f}s)")
 
     # ══════════════════════════════════════════════════════════════
     # STATE 2: Thay khay Input  (giữ nguyên logic gốc)
@@ -2050,9 +2081,9 @@ class CartridgeSystem(Node):
         if not self._iny_safe():
             self._log_once("S2A_INY2", "A2: INY chua safe")
             return
-        if not self.sensor(15):
-            self._log_once("S2A_S15_ILK", "INTERLOCK S2: S15=OFF -> INX bi khoa")
-            self._notify('warn', 'S15 chua ON', 'Cyl1 chua retract')
+        if not self.sensor(13):
+            self._log_once("S2A_S13_ILK", "INTERLOCK S2: S13=OFF -> INX bi khoa")
+            self._notify('warn', 'S13 chua ON', 'Cyl1 chua retract')
             return
         if not self._cmd_sent_in:
             ok = self._nb_move(1, self.config.inx_target2)
@@ -2081,23 +2112,23 @@ class CartridgeSystem(Node):
             elif self._arrived(2):
                 self.get_logger().info("A3: INY tai 200mm -> Cyl1 EXTEND")
                 self._cyl1_extend()
-                self._enter_in(SystemState.S2A_WAIT_S11)
+                self._enter_in(SystemState.S2A_WAIT_S7)
 
-    def _s2a_wait_s11(self):
-        s16, = self._snap(16)
+    def _s2a_wait_s7(self):
+        s14, = self._snap(14)
         if not self._cmd_sent_in:
             self._cyl1_extend()
             self._cyl_retry_t = time.time() + 3.0
             self._cmd_sent_in    = True
         if s16:
-            self.get_logger().info("A4: S16 ON — gap khay cu OK")
+            self.get_logger().info("A4: S14 ON — gap khay cu OK")
             self._enter_in(SystemState.S2A_INY_10)
             return
         if time.time() > self._cyl_retry_t:
             self.get_logger().info("Retry Cyl1 extend")
             self._cyl1_extend()
             self._cyl_retry_t = time.time() + 3.0
-        self._log_once("S2A_S16", "A4: Cho S16 ON")
+        self._log_once("S2A_S14", "A4: Cho S14 ON")
 
     def _s2a_iny_10(self):
         if not self._cmd_sent_in:
@@ -2233,7 +2264,7 @@ class CartridgeSystem(Node):
             target = self._output_target_pos
             if target <= 0:
                 self.get_logger().error("output_target_pos chưa set → skip")
-                self._enter_in(SystemState.S2A_WAIT_S15)
+                self._enter_in(SystemState.S2A_WAIT_S13)
                 return
             ok = self._nb_move(2, target, vel=self.config.iny_row_vel)
             if not ok:
@@ -2250,23 +2281,23 @@ class CartridgeSystem(Node):
                 f"({self._output_target_pos:.0f}mm) → Cyl1 RETRACT"
             )
             self._cyl1_retract()
-            self._enter_in(SystemState.S2A_WAIT_S15)
+            self._enter_in(SystemState.S2A_WAIT_S13)
 
-    def _s2a_wait_s15(self):
-        s15, = self._snap(15)
+    def _s2a_wait_s13(self):
+        s13, = self._snap(13)
         if not self._cmd_sent_in:
             self._cyl1_retract()
             self._cyl_retry_t = time.time() + 3.0
             self._cmd_sent_in    = True
-        if s15:
-            self.get_logger().info("A9: S15 ON — da tha khay")
+        if s13:
+            self.get_logger().info("A9: S13 ON — da tha khay")
             self._enter_in(SystemState.S2A_INY_10_FINAL)
             return
         if time.time() > self._cyl_retry_t:
             self.get_logger().info("Retry Cyl1 retract")
             self._cyl1_retract()
             self._cyl_retry_t = time.time() + 3.0
-        self._log_once("S2A_S15", "A9: Cho S15 ON")
+        self._log_once("S2A_S13", "A9: Cho S13 ON")
 
     def _s2a_iny_10_final(self):
         if not self._cmd_sent_in:
@@ -2326,7 +2357,7 @@ class CartridgeSystem(Node):
         ox_safe = ox is None or ox <= cfg.outx_home + 5.0
         oy_safe = oy is None or oy <= cfg.outy_target1 + 5.0
         if ox_safe and oy_safe:
-            self._enter_s3(SystemState.S3_SERVO3_TARGET1)
+            self._enter_s3(SystemState.S3_CHECK_S9)
         else:
             if not self._cmd_sent_s3:
                 if not ox_safe:
@@ -2337,9 +2368,9 @@ class CartridgeSystem(Node):
                 self._step_timeout_s3 = time.time() + self.config.move_timeout
             else:
                 if time.time() > self._step_timeout_s3:
-                    self._enter_s3(SystemState.S3_SERVO3_TARGET1)
+                    self._enter_s3(SystemState.S3_CHECK_S9)
                 elif self._arrived(4) and self._arrived(5):
-                    self._enter_s3(SystemState.S3_SERVO3_TARGET1)
+                    self._enter_s3(SystemState.S3_CHECK_S9)
                 else:
                     self._log_once("S3_SAFE", "Cho OutX/OutY ve home")
 
@@ -2356,21 +2387,27 @@ class CartridgeSystem(Node):
             if time.time() > self._step_timeout_s3:
                 self._error(f"S3_SERVO3_TARGET1 timeout")
             elif self._arrived(3):
-                self._enter_s3(SystemState.S3_CHECK_S7)
+                self._enter_s3(SystemState.S3_CHECK_S9)
 
-    def _s3_check_s7(self):
-        if self.sensor(7):
-            self._enter_s3(SystemState.S3_SERVO3_FEED)
-        else:
-            self._notify('warn', 'Chờ khay Platform', 'Chưa có khay, bắt đầu chờ (200s)...')
-            self._enter_s3(SystemState.S3_WAIT_S7)
+    def _s3_check_s9(self):
+        if not self.sensor(9):
+            self._enter_s3(SystemState.S3_SERVO3_TARGET1)
+            return
 
-    def _s3_wait_s7(self):
-        if self.sensor(7):
-            self._notify('info', 'Da phat hien khay', 'S7 ON — cap khay thanh pham')
+        if not getattr(self, '_step_start_s3', 0.0):
+            self._step_start_s3 = time.time()
+            self._log_once("S3_CHECK_S9", "S9 ON -> Confirming 3s...")
+            
+        if time.time() - self._step_start_s3 >= 3.0:
+            self.get_logger().info("[S3] S9 confirmed for 3s -> Start Feed")
             self._enter_s3(SystemState.S3_SERVO3_FEED)
+
+    def _s3_wait_s9(self):
+        if self.sensor(9):
+            self._notify('info', 'Da phat hien khay', 'S9 ON — confirm 3s')
+            self._enter_s3(SystemState.S3_CHECK_S9)
         else:
-            self._log_once("S3_WAIT_S7", "Cho S7 ON — cap khay len Platform")
+            self._log_once("S3_WAIT_S9", "Cho S9 ON — cap khay len Platform")
 
     def _s3_wait_gui_confirm(self):
         self._enter_s3(SystemState.S3_SERVO3_FEED)
@@ -2383,35 +2420,37 @@ class CartridgeSystem(Node):
                 self._log_once("S3_FEED_FAIL", "S3 feed fail")
                 return
             self._cmd_sent_s3     = True
+            self._step_start_s3   = time.time()
             self._step_timeout_s3 = time.time() + self.config.move_timeout
-            self.get_logger().info(f"[S3] Servo3 pushing to {cfg.servo3_target2}mm max until S8 ON")
+            self.get_logger().info(f"[S3] Servo3 pushing to {cfg.servo3_target2}mm max until S10 ON")
         else:
-            if self.sensor(8):
+            if self.sensor(10):
                 self._stop(3)
-                self.get_logger().info("[S3] S8 ON -> Dung Servo 3 som")
-                self._enter_s3(SystemState.S3_WAIT_S8)
+                self.get_logger().info("[S3] S10 ON -> Dung Servo 3 som")
+                self._enter_s3(SystemState.S3_WAIT_S10)
                 return
 
             if time.time() > self._step_timeout_s3:
                 self._error("S3_SERVO3_FEED timeout")
-            elif self._arrived(3):
-                self.get_logger().warn("[S3] Servo 3 tới giới hạn (target2) chưa có S8 -> Quay về 10mm thử lại!")
-                self._notify('warn', 'Lỗi cấp khay', 'Đã tới 400mm nhưng chưa thấy S8, thu về cấp lại')
+            elif self._arrived(3) and time.time() - self._step_start_s3 > 0.5:
+                self.get_logger().warn("[S3] Servo 3 tới giới hạn (target2) chưa có S10 -> Quay về 10mm thử lại!")
+                self._notify('warn', 'Lỗi cấp khay', 'Đã tới 400mm nhưng chưa thấy S10, thu về cấp lại')
                 self._enter_s3(SystemState.S3_SERVO3_TARGET1)
 
-    def _s3_wait_s8(self):
-        if self.sensor(8):
+    def _s3_wait_s10(self):
+        if not self.sensor(10):
+            self.get_logger().warn("[S3] S10 OFF during confirm -> Resume FEED")
+            self._enter_s3(SystemState.S3_SERVO3_FEED)
+            return
+
+        if not getattr(self, '_step_start_s3', 0.0):
+            self._step_start_s3 = time.time()
+            self._log_once("S3_WAIT_S10", "S10 ON -> Confirming 5s...")
+
+        if time.time() - self._step_start_s3 >= 5.0:
+            self.get_logger().info("[S3] S10 confirmed 5s -> Feed Success")
             self._enter_s3(SystemState.S3_COMPLETE)
             return
-        if not self._step_start_s3:
-            self._step_start_s3 = time.time()
-        if self.sensor(7) and not self.sensor(8):
-            if time.time() - self._step_start_s3 > CYLINDER_TIMEOUT_S:
-                self._notify('warn', 'S8 khong ON', 'Khay ket — Servo3 quay ve target1')
-                self._cmd_sent_s3 = False
-                self._enter_s3(SystemState.S3_SERVO3_TARGET1)
-                return
-        self._log_once("S3_WAIT_S8", "Cho S8 ON")
 
     def _s3_complete(self):
         self._pub_cartridge_busy(False)
@@ -2481,10 +2520,10 @@ class CartridgeSystem(Node):
             self._cyl2_extend()
             self._cmd_sent_s4 = True
             self._step_start_s4 = time.time()
-        if self.sensor(20):
+        if self.sensor(16):
             self._enter_s4(SystemState.S4_OUTY_TARGET1)
         elif time.time() - self._step_start_s4 > CYLINDER_TIMEOUT_S:
-            self._error("[S4] Timeout: Cyl2 extend — S20 khong ON")
+            self._error("[S4] Timeout: Cyl2 extend — S16 khong ON")
 
     def _s4_outy_target1(self):
         cfg = self.config
@@ -2511,22 +2550,22 @@ class CartridgeSystem(Node):
             self._cmd_sent_s4     = True
             self._step_timeout_s4 = time.time() + self.config.move_timeout
         else:
-            if self.sensor(7) and not self._s3_pending:
+            if self.sensor(9) and not self._s3_pending:
                 self._s3_pending = True
             if time.time() > self._step_timeout_s4:
                 self._error("S4_OUTX_TARGET3 timeout")
             elif self._arrived(4):
-                self._enter_s4(SystemState.S4_CHECK_S9)
+                self._enter_s4(SystemState.S4_CHECK_S11)
 
-    def _s4_check_s9(self):
+    def _s4_check_s11(self):
         # S9 OFF -> Stack đang rỗng -> Bỏ qua scan, xuống thẳng Row 1
-        if not self.sensor(9):
-            self.get_logger().info(f"[S4] S9 OFF -> Bỏ qua scan S10, xuống thẳng Row 1")
+        if not self.sensor(11):
+            self.get_logger().info(f"[S4] S11 OFF -> Bỏ qua scan S12, xuống thẳng Row 1")
             self._enter_s4(SystemState.S4_OUTY_ROW1)
         else:
-            self._s10_armed = False
+            self._s12_armed = False
             self._outy_jog_start = time.time()
-            self._enter_s4(SystemState.S4_OUTY_SCAN_S10)
+            self._enter_s4(SystemState.S4_OUTY_SCAN_S12)
 
     def _s4_outy_row1(self):
         cfg = self.config
@@ -2545,13 +2584,13 @@ class CartridgeSystem(Node):
             elif self._arrived(5):
                 self._enter_s4(SystemState.S4_CYL2_RETRACT)
 
-    def _s4_outy_scan_s10(self):
+    def _s4_outy_scan_s12(self):
         cfg = self.config
         oy = self._pos(5)
         if oy is None:
             return
             
-        scan_target = cfg.outy_output_zones[2][1] if self.sensor(9) else getattr(cfg, 'target_scanoutp2', 500.0)
+        scan_target = cfg.outy_output_zones[2][1] if self.sensor(11) else getattr(cfg, 'target_scanoutp2', 500.0)
 
         if not self._cmd_sent_s4:
             ok = self._nb_move(5, scan_target, vel=cfg.outy_search_velocity)
@@ -2561,27 +2600,27 @@ class CartridgeSystem(Node):
             self._cmd_sent_s4 = True
             self._step_timeout_s4 = time.time() + cfg.move_timeout
             self.get_logger().info(
-                f"[S4] S9={'ON' if self.sensor(9) else 'OFF'} → scan xuống {scan_target:.0f}mm "
+                f"[S4] S11={'ON' if self.sensor(11) else 'OFF'} → scan xuống {scan_target:.0f}mm "
                 f"vel={cfg.outy_search_velocity}"
             )
             
         arm_mm = getattr(cfg, 'outy_scan_arm_mm', getattr(cfg, 'outy_safe_zone', 50.0))
         
-        if self.sensor(10):
+        if self.sensor(12):
             trigger_pos = self._pos(5) or oy
             if trigger_pos < arm_mm:
-                # S10 nhiễu sớm
-                self.get_logger().warn(f"[S4 Output] S10 nhiễu sớm @ {trigger_pos:.1f}mm (dưới {arm_mm:.0f}mm)")
+                # S12 nhiễu sớm
+                self.get_logger().warn(f"[S4 Output] S12 nhiễu sớm @ {trigger_pos:.1f}mm (dưới {arm_mm:.0f}mm)")
                 self._stop(5)
                 
                 if getattr(self, '_s4_scan_noise_retry', 0) < self._conf('s1_scan_noise_retry_limit', 1):
                     self._s4_scan_noise_retry = getattr(self, '_s4_scan_noise_retry', 0) + 1
-                    self._notify('warn', 'S10 bị nhiễu (Pos2 OUT)', f'S10 ON sớm ({trigger_pos:.0f}mm), retry lần {self._s4_scan_noise_retry}')
+                    self._notify('warn', 'S12 bị nhiễu (Pos2 OUT)', f'S12 ON sớm ({trigger_pos:.0f}mm), retry lần {self._s4_scan_noise_retry}')
                     self._enter_s4(SystemState.S4_RETRY_SCAN_HOME)
                     return
                 else:
                     self._s4_scan_noise_retry = 0
-                    self._notify('error', 'S10 nhiễu 2 lần (Pos2 OUT)', f'OUTY rút về {cfg.outy_target1:.0f}mm')
+                    self._notify('error', 'S12 nhiễu 2 lần (Pos2 OUT)', f'OUTY rút về {cfg.outy_target1:.0f}mm')
                     self._nb_move(5, cfg.outy_target1)
                     self._jog_mode = True
                     self._sync_mode_jog()
@@ -2594,7 +2633,7 @@ class CartridgeSystem(Node):
                     target_mm = cfg.outy_output_zones[row][2]
                     self._outy_jog_pos = target_mm
                     self._s4_scan_noise_retry = 0
-                    self.get_logger().info(f"[S4] S10 EDGE @ {trigger_pos:.1f}mm → chot ROW{row} Target={target_mm:.0f}mm")
+                    self.get_logger().info(f"[S4] S12 EDGE @ {trigger_pos:.1f}mm → chot ROW{row} Target={target_mm:.0f}mm")
                     self._nb_move(5, target_mm, vel=cfg.outy_slow_vel)
                     self._cmd_sent_s4 = True
                     self._step_timeout_s4 = time.time() + cfg.move_timeout
@@ -2605,7 +2644,7 @@ class CartridgeSystem(Node):
         at_target = self._arrived(5) or oy >= scan_target - 2.0
         if timed_out or at_target:
             self._stop(5)
-            self.get_logger().warn(f"[S4] S10 không trigger → fallback row1")
+            self.get_logger().warn(f"[S4] S12 không trigger → fallback row1")
             tgt = cfg.outy_output_zones[1][2]
             self._outy_jog_pos = tgt
             self._nb_move(5, tgt, vel=cfg.outy_slow_vel)
@@ -2615,7 +2654,7 @@ class CartridgeSystem(Node):
             return
 
         self._log_once("S4_SCAN",
-                       f"[S4] OUTY {oy:.0f}mm S10={'ON' if self.sensor(10) else 'OFF'}")
+                       f"[S4] OUTY {oy:.0f}mm S12={'ON' if self.sensor(12) else 'OFF'}")
 
     def _s4_retry_scan_home(self):
         cfg = self.config
@@ -2630,7 +2669,7 @@ class CartridgeSystem(Node):
                 self._error("Homing OUTY sau lỗi timeout")
             elif self._arrived(5) or (self._pos(5) <= cfg.outy_target1 + 2.0):
                 self._cmd_sent_s4 = False
-                self._enter_s4(SystemState.S4_OUTY_SCAN_S10)
+                self._enter_s4(SystemState.S4_OUTY_SCAN_S12)
 
     def _s4_outy_drop(self):
         if not self._cmd_sent_s4:
@@ -2655,7 +2694,7 @@ class CartridgeSystem(Node):
             self._cyl2_retract()
             self._cmd_sent_s4 = True
             self._step_start_s4 = time.time()
-        if self.sensor(19) and not self.sensor(20):
+        if self.sensor(15) and not self.sensor(16):
             self._enter_s4(SystemState.S4_OUTY_OUTX_HOME)
         elif time.time() - self._step_start_s4 > CYLINDER_TIMEOUT_S:
             self._error("[S4] Timeout: Cyl2 retract")
@@ -2682,7 +2721,7 @@ class CartridgeSystem(Node):
         self.get_logger().info("[S4] COMPLETE")
         self._s4_trigger = False
         if self._can_start_s3():
-            self.get_logger().info("[S4→S3] S7 ON + S8 OFF → cấp khay output mới")
+            self.get_logger().info("[S4→S3] S9 ON + S10 OFF → cấp khay output mới")
             self._enter_s4(SystemState.S3_CHECK_OUTXY_SAFE)
         else:
             self._enter_s4(SystemState.IDLE)

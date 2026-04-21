@@ -92,9 +92,10 @@ fi
 
 # Fallback pkill — also kill any scripts holding Dobot ports
 # Kill any Python scripts holding Dobot dashboard/motion ports
-pkill -9 -f "192.168.27" 2>/dev/null || true
+pkill -9 -f "dobot_api" 2>/dev/null || true
 fuser -k 29999/tcp 2>/dev/null || true
 pkill -9 -f "cartridge_providesystem_py" 2>/dev/null || true
+pkill -9 -f "vfd_logic_node.py" 2>/dev/null || true
 pkill -9 -f "cartridge_gui.py" 2>/dev/null || true
 pkill -9 -f "unified_control_gui/unified_control_gui" 2>/dev/null || true
 pkill -9 -f "robot_logic_node" 2>/dev/null || true
@@ -168,6 +169,8 @@ cleanup() {
     pkill -9 -f "dual_csi_camera" 2>/dev/null || true
     pkill -9 -f "yolo_ros_hailort" 2>/dev/null || true
     pkill -9 -f "component_container" 2>/dev/null || true
+    # Kill remote RevPi A nodes
+    ssh -o ConnectTimeout=2 -o BatchMode=yes "pi@192.168.27.193" "pkill -9 -f rs485_bus_node 2>/dev/null || true" &>/dev/null || true
     echo "✅ All processes stopped."
 }
 trap cleanup EXIT INT TERM HUP QUIT
@@ -184,7 +187,56 @@ echo "  [1/7] 🔧 Cartridge Provide System Node..."
 PID_PROVIDE=$!
 echo "        PID=$PID_PROVIDE  Log: $LOG_PROVIDE"
 echo "$PID_PROVIDE" > "$PIDFILE"
+
+# ── [1.2/7] VFD Logic Node (Independent VFD logic) ──
+LOG_VFD="$LOG_DIR/vfd_logic.log"
+echo "  [1.2/7] ⚙️  VFD Independent Logic Node..."
+nohup python3 "$WS/src/unified_control_gui/scripts/vfd_logic_node.py" > "$LOG_VFD" 2>&1 &
+PID_VFD=$!
+echo "        PID=$PID_VFD  Log: $LOG_VFD"
+echo "$PID_VFD" >> "$PIDFILE"
+
 sleep 3
+
+# ══════════════════════════════════════════
+# REVPI A — LOADCELL NODE & FILL MACHINE (Remote via SSH)
+# ══════════════════════════════════════════
+
+REVPI_A_IP="192.168.27.193"
+REVPI_A_USER="pi"
+LOG_REVPI="$LOG_DIR/revpi_a_nodes.log"
+
+echo "  [1.5/7] ⚖️  RevPi A — Loadcell & Fill Machine (SSH → $REVPI_A_IP)..."
+
+if ssh -o ConnectTimeout=3 -o BatchMode=yes "${REVPI_A_USER}@${REVPI_A_IP}" "echo ok" &>/dev/null; then
+    ssh -o BatchMode=yes "${REVPI_A_USER}@${REVPI_A_IP}" "pkill -9 -f rs485_bus_node 2>/dev/null || true; pkill -9 -f cpx_festo_node 2>/dev/null || true" &>/dev/null
+
+    ssh -o BatchMode=yes "${REVPI_A_USER}@${REVPI_A_IP}" "
+        source /opt/ros/jazzy/setup.bash 2>/dev/null || source /opt/ros/humble/setup.bash 2>/dev/null
+        source ~/ros_ws/install/setup.bash 2>/dev/null || true
+        export ROS_DOMAIN_ID=22
+        export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+        nohup ros2 run com_rs485 rs485_bus_node --ros-args \
+            -p slave_id:=2 \
+            -p loadcell_slave_id:=3 \
+            -p port:=/dev/ttyRS485 \
+            -p baudrate:=9600 \
+            -p stopbits:=1 \
+            -p loadcell_period_ms:=500 \
+            > ~/loadcell_node.log 2>&1 &
+        
+        nohup ros2 run main_pkg cpx_festo_node.py --ros-args \
+            -p slave_id:=254 \
+            > ~/cpx_festo_node.log 2>&1 &
+            
+        echo \$!
+    " > /tmp/revpi_a_pid.txt 2>"$LOG_REVPI" &
+    PID_REVPI_SSH=$!
+    echo "$PID_REVPI_SSH" >> "$PIDFILE"
+    sleep 2
+else
+    echo "        ❌ Cannot SSH to RevPi A ($REVPI_A_IP) — nodes NOT started"
+fi
 
 # ══════════════════════════════════════════
 # ROBOT SYSTEM

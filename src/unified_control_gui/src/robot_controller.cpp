@@ -47,12 +47,13 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     goto_state_pub_ = node_->create_publisher<std_msgs::msg::String>("/robot/goto_state", 10);
     set_mode_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/set_operation_mode", 10);
     feed_chamber_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/revpi/feed_chamber", 10);
-    fill_done_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/fill_machine/fill_done", 10);
+    fill_done_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/revpi/fill_done", 10);
     input_tray_ready_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_tray_loaded", 10);
     output_tray_ready_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_trayoutput_loaded", 10);
     scale_result_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/scale/result", 10);
     speed_ratio_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/speed_ratio", rclcpp::QoS(10).reliable().transient_local());
     system_start_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/start_button", 10);  // shared with cartridge
+    ignore_scale_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/ignore_scale", 10);
     
     // Create subscribers
     system_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
@@ -293,6 +294,19 @@ void RobotController::pollRobotState()
 // ═══════════════════════════════════════════════════════════════
 // JOG CONTROL
 // ═══════════════════════════════════════════════════════════════
+
+void RobotController::setIgnoreScale(bool ignore)
+{
+    if (ignore_scale_ != ignore) {
+        ignore_scale_ = ignore;
+        emit ignoreScaleChanged();
+        
+        auto msg = std_msgs::msg::Bool();
+        msg.data = ignore;
+        if (ignore_scale_pub_) ignore_scale_pub_->publish(msg);
+        qDebug() << "Ignore Scale set to:" << ignore;
+    }
+}
 
 // Helper: parse "{v1,v2,...}" into vector<double>
 static std::vector<double> parseDobot(const std::string& raw) {
@@ -699,7 +713,7 @@ void RobotController::simulateFeedChamber()
 
 void RobotController::simulateFillDone()
 {
-    qDebug() << "SimulateFillDone -> /fill_machine/fill_done = true";
+    qDebug() << "SimulateFillDone -> /revpi/fill_done = true";
     auto msg = std_msgs::msg::Bool();
     msg.data = true;
     fill_done_pub_->publish(msg);

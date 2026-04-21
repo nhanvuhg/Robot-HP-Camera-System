@@ -69,12 +69,15 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
                 QString title   = obj.value("title").toString();
                 QString detail  = obj.value("detail").toString();
                 QString logMsg  = detail.isEmpty() ? title : title + " — " + detail;
-                QString type    = (level == "error" || level == "warn") ? "err" : "info";
+                QString type    = (level == "error" || level == "warn") ? "err" : (level == "ok" || level == "silent_ok") ? "ok" : "info";
                 addLog(logMsg, type);
+                if (!level.startsWith("silent")) {
+                    emit notificationReceived();
+                }
             } else {
                 addLog(last_notification_, "info");
+                emit notificationReceived();
             }
-            emit notificationReceived();
         });
 
     servo_pos_sub_ = node_->create_subscription<std_msgs::msg::String>(
@@ -132,7 +135,7 @@ void CartridgeController::jogStop(int id)
 void CartridgeController::homeServo(int id)
 {
     publishString(jog_pub_, QString("home %1").arg(id));
-    addLog(QString("Home servo %1").arg(id), "info");
+    addLog(QString("Homing servo %1").arg(id), "info");
 }
 
 void CartridgeController::clearServo(int id)
