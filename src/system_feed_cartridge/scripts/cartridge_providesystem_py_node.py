@@ -814,9 +814,9 @@ class CartridgeSystem(Node):
             return False
         has_tray  = self.sensor(1) or self.sensor(2) or self.sensor(3)
         place_ok  = not self.sensor(7)
-        s15_clear = self.sensor(13)
-        s16_clear = not self.sensor(14)
-        return has_tray and place_ok and s15_clear and s16_clear
+        s13_clear = self.sensor(13)
+        s14_clear = not self.sensor(14)
+        return has_tray and place_ok and s13_clear and s14_clear
 
     def _can_start_s2a(self) -> bool:
         return (bool(self.zero_offset) and getattr(self, '_input_tray_done', False)
@@ -997,6 +997,7 @@ class CartridgeSystem(Node):
         self._s4_trigger = False
         self._jog_mode = True
         self.operation_mode = 'manual'
+        self.zero_offset.clear()
         self._sync_mode_jog()
         self.get_logger().info('[STOP] STOP — JOG sẵn sàng')
         self._notify('warn', 'STOP', 'Dừng hệ thống — JOG sẵn sàng')
@@ -1163,18 +1164,18 @@ class CartridgeSystem(Node):
             # Kiểm tra điều kiện cảm biến sim
             has_tray  = self.sensor(1) or self.sensor(2) or self.sensor(3)
             place_ok  = not self.sensor(7)
-            s15_clear = self.sensor(13)
-            s16_clear = not self.sensor(14)
+            s13_clear = self.sensor(13)
+            s14_clear = not self.sensor(14)
             
-            if not (has_tray and place_ok and s15_clear and s16_clear):
+            if not (has_tray and place_ok and s13_clear and s14_clear):
                 reasons = []
                 if not has_tray:
                     reasons.append('S1/S2/S3 OFF (sim chưa set)')
                 if not place_ok:
                     reasons.append('S7 ON (vị trí cấp có khay)')
-                if not s15_clear:
+                if not s13_clear:
                     reasons.append('S13 OFF (Cyl1 chưa retract)')
-                if not s16_clear:
+                if not s14_clear:
                     reasons.append('S14 ON (Cyl1 đang thò ra)')
                 self._notify('warn', 'STATE1: Điều kiện chưa đủ',
                              ' | '.join(reasons))
@@ -2120,7 +2121,7 @@ class CartridgeSystem(Node):
             self._cyl1_extend()
             self._cyl_retry_t = time.time() + 3.0
             self._cmd_sent_in    = True
-        if s16:
+        if s14:
             self.get_logger().info("A4: S14 ON — gap khay cu OK")
             self._enter_in(SystemState.S2A_INY_10)
             return

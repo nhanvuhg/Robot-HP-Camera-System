@@ -101,6 +101,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  vision_row_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   vision_empty_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  vision_slot_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   ignore_scale_sub_;
 
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   feed_chamber_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   fill_done_sub_;
@@ -114,6 +115,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  command_slot_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr goto_state_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   new_trayoutput_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   output_tray_present_sub_;
     rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr motion_hb_sub_;
     rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr vision_hb_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   motion_busy_sub_;
@@ -207,6 +209,7 @@ private:
     std::atomic<bool> new_trayoutput_loaded_{false};
     std::atomic<bool> waiting_for_new_input_{true};   // start = chờ tray đầu tiên
     std::atomic<bool> waiting_for_new_output_{false};
+    std::atomic<bool> output_tray_present_{false};
     rclcpp::Time wait_tray_start_time_;
 
     std::atomic<bool> feed_chamber_signal_{false};
@@ -293,6 +296,7 @@ private:
     // ========================================================================
     bool simulate_scale_{false};
     bool force_pass_{false};
+    bool ignore_scale_{false};
 
     // ========================================================================
     // INIT
@@ -435,7 +439,8 @@ RobotLogicNode::RobotLogicNode()
       chamber_has_cartridge_(false),
       scale_has_cartridge_(false),
       simulate_scale_(false),
-      force_pass_(false)
+      force_pass_(false),
+      ignore_scale_(false)
 {
     RCLCPP_INFO(this->get_logger(), "=== Robot Logic Node Starting ===");
 
@@ -543,11 +548,11 @@ void RobotLogicNode::initSubscriptions()
         std::bind(&RobotLogicNode::feedChamberCallback, this, std::placeholders::_1));
 
     fill_done_sub_ = create_subscription<std_msgs::msg::Bool>(
-        "/fill_machine/fill_done", 10,
+        "/revpi/fill_done", 10,
         std::bind(&RobotLogicNode::fillDoneCallback, this, std::placeholders::_1));
 
     scale_result_sub_ = create_subscription<std_msgs::msg::Bool>(
-        "/scale/result", 10,
+        "/loadcell/signal_process", 10,
         std::bind(&RobotLogicNode::scaleResultCallback, this, std::placeholders::_1));
 
     start_button_sub_ = create_subscription<std_msgs::msg::Bool>(
@@ -559,6 +564,13 @@ void RobotLogicNode::initSubscriptions()
         "/cartridge_providesystem/new_tray_loaded", 10,
         std::bind(&RobotLogicNode::newTrayCallback, this, std::placeholders::_1));
 
+    ignore_scale_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/robot/ignore_scale", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            ignore_scale_ = msg->data;
+            RCLCPP_INFO(get_logger(), "[SCALE] Ignore Scale mode toggled: %s", ignore_scale_ ? "ON" : "OFF");
+        });
+
     input_trays_empty_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/cartridge/input_trays_empty", rclcpp::QoS(10).reliable(),
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
@@ -569,6 +581,12 @@ void RobotLogicNode::initSubscriptions()
     new_trayoutput_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/cartridge_providesystem/new_trayoutput_loaded", 10,
         std::bind(&RobotLogicNode::newTrayOutputCallback, this, std::placeholders::_1));
+
+    output_tray_present_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/cartridge_providesystem/output_tray_present", rclcpp::QoS(10).reliable(),
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            output_tray_present_ = msg->data;
+        });
 
     selected_row_sub_ = create_subscription<std_msgs::msg::Int32>(
         "/camera/ai/selected_row", 10,
@@ -944,7 +962,9 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
         // PLACE_TO_OUTPUT / PLACE_TO_FAIL are only valid after PROCESSING_SCALE
         bool is_place_cmd = (sn == "PLACE_TO_OUTPUT" || sn == "PLACE_TO_FAIL");
         bool in_scale_state = (current_state_ == SystemState::PROCESSING_SCALE ||
-                               current_state_ == SystemState::ERROR_SCALE_TIMEOUT);
+                               current_state_ == SystemState::ERROR_SCALE_TIMEOUT ||
+                               current_state_ == SystemState::PLACE_TO_OUTPUT ||
+                               current_state_ == SystemState::PLACE_TO_FAIL);
 
         if (is_place_cmd && !in_scale_state) {
             RCLCPP_WARN(get_logger(),
@@ -981,6 +1001,30 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
     if (current_state_ == SystemState::IDLE && target != SystemState::IDLE) {
         system_running_ = true;
         system_enabled_ = true;
+    }
+
+    // Unblock stalled auto sequence without dropping to manual mode
+    if (target == SystemState::PLACE_TO_OUTPUT ||
+        target == SystemState::PLACE_TO_FAIL)
+    {
+        system_enabled_ = true;
+        // Removed: manual_mode_ = true and stop_after_single_motion_ = true
+        // so the system continues in the current AUTO sequence naturally!
+        RCLCPP_INFO(get_logger(),
+            "[GOTO] Emergency Override %s: Auto sequence resumed.",
+            sn.c_str());
+        
+        // Auto-select slot if none selected (for PLACE_TO_OUTPUT)
+        if (target == SystemState::PLACE_TO_OUTPUT)
+        {
+            std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+            if (selected_output_slot_ == -1) // Unset or unassigned
+            {
+                selected_output_slot_ = current_auto_slot_;
+                RCLCPP_INFO(get_logger(),
+                    "[GOTO] Auto-selected slot %d for PLACE_TO_OUTPUT", selected_output_slot_);
+            }
+        }
     }
 
     transitionTo(target);
@@ -1108,6 +1152,9 @@ void RobotLogicNode::emergencyStopCallback(
         current_state_  = SystemState::IDLE;
         is_first_batch_ = true;
         motion_fail_count_ = 0;
+        tray_count_ = 0;
+        cartridge_counter_ = 0;
+        selected_output_slot_ = 1;
 
         auto resetReq = std::make_shared<ResetRobot::Request>();
         reset_robot_client_->async_send_request(resetReq,
@@ -1175,6 +1222,9 @@ void RobotLogicNode::resetStateCallback(
     manual_mode_             = false;
     stop_after_single_motion_ = false;
     motion_fail_count_       = 0;
+    tray_count_              = 0;
+    cartridge_counter_       = 0;
+    selected_output_slot_    = 1;
 
     RCLCPP_INFO(get_logger(), "[RESET] ✅ Reset complete");
 
@@ -1443,6 +1493,7 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         if (manual_mode_) {
             transitionTo(SystemState::IDLE);
         } else {
+            feed_chamber_signal_ = false;  // consumed — require new signal on next cycle
             transitionTo(SystemState::INIT_REFILL_BUFFER);
         }
         return;
@@ -1838,6 +1889,13 @@ void RobotLogicNode::stateProcessingScale()
         return;
     }
 
+    if (ignore_scale_) {
+        double elapsed = (this->now() - scale_wait_start_).seconds();
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
+            "[SCALE] IGNORE MODE: Waiting indefinitely for manual PLACE_OUTPUT or PLACE_FAIL command... (%.1fs)", elapsed);
+        return;
+    }
+
     // Bypass for simulation
     if (simulate_scale_ || force_pass_) {
         RCLCPP_INFO(get_logger(), "[SCALE] Bypass → Force PASS");
@@ -1938,6 +1996,12 @@ void RobotLogicNode::statePlaceToOutput()
     if (waiting_for_new_output_.load()) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
             "[OUTPUT] Waiting for new output tray...");
+        return;
+    }
+
+    if (!output_tray_present_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
+            "[OUTPUT] S10 is OFF (Tray not present). Waiting for output tray to be placed back...");
         return;
     }
 
