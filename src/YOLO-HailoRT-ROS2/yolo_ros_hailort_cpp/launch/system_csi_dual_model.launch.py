@@ -61,7 +61,7 @@ def generate_launch_description():
         name='yolo_container',
         namespace='',
         package='rclcpp_components',
-        executable='component_container',
+        executable='component_container_mt',  # multi-threaded: allows cam0/cam1 inference overlap
         composable_node_descriptions=[
             # CAM 0 NODE (Input Tray)
             ComposableNode(

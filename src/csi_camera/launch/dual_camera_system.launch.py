@@ -50,7 +50,7 @@ def generate_launch_description():
         name='yolo_container',
         namespace='',
         package='rclcpp_components',
-        executable='component_container',
+        executable='component_container_mt',  # multi-threaded: allows cam0/cam1 inference overlap
         composable_node_descriptions=[
             # YOLO for Camera 0 (Input Tray Detection)
             ComposableNode(

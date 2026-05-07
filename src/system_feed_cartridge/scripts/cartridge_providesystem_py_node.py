@@ -338,6 +338,10 @@ class CartridgeSystem(Node):
         self._s10_off_time       = 0.0
         self._s10_prev           = False
 
+        # Homing completion flag (set by bg thread, consumed by main loop)
+        self._homing_done_event  = threading.Event()
+        self._homing_result      = False
+
         # Tray tracking
         self.stack_row_index  = 0
         self._tray_loaded_ack = False
@@ -473,7 +477,7 @@ class CartridgeSystem(Node):
                 mot = MotionHandler(com)
                 with self._servo_lock:
                     mot.acknowledge_faults()
-                self.servos[sid] = mot
+                    self.servos[sid] = mot  # assign inside lock to avoid race with reconnect_loop pop()
                 self.get_logger().info(f"S{sid} ({ip}) OK (attempt {attempt})")
                 return True
             except Exception as e:
@@ -769,7 +773,8 @@ class CartridgeSystem(Node):
 
     def _cyl1_extend(self) -> bool:
         self.get_logger().info("Cyl1 EXTEND (ch5)")
-        if self.io_module:
+        io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
+        if io:
             try:
                 self._set_do(self._conf('cylinder1_retract_channel', 4), False)
                 self._set_do(self._conf('cylinder1_extend_channel', 5), True)
@@ -781,7 +786,8 @@ class CartridgeSystem(Node):
 
     def _cyl1_retract(self) -> bool:
         self.get_logger().info("Cyl1 RETRACT (ch4)")
-        if self.io_module:
+        io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
+        if io:
             try:
                 self._set_do(self._conf('cylinder1_extend_channel', 5), False)
                 self._set_do(self._conf('cylinder1_retract_channel', 4), True)
@@ -792,7 +798,8 @@ class CartridgeSystem(Node):
         return False
 
     def _cyl2_extend(self) -> bool:
-        if self._io_ready and self.io_module:
+        io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
+        if self._io_ready and io:
             try:
                 self._set_do(self._conf('cylinder2_retract_channel', 8), False)
                 self._set_do(self._conf('cylinder2_extend_channel', 9), True)
@@ -803,7 +810,8 @@ class CartridgeSystem(Node):
         return False
 
     def _cyl2_retract(self) -> bool:
-        if self._io_ready and self.io_module:
+        io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
+        if self._io_ready and io:
             try:
                 self._set_do(self._conf('cylinder2_extend_channel', 9), False)
                 self._set_do(self._conf('cylinder2_retract_channel', 8), True)
@@ -1147,13 +1155,32 @@ class CartridgeSystem(Node):
                 sid = int(parts[1])
                 mot = self.servos.get(sid)
                 if mot:
-                    def _do():
+                    def _do(mot=mot, sid=sid):
                         self._ensure_ready(mot, sid, timeout=5.0)
                         with self._servo_lock:
-                            mot.referencing_task(nonblocking=False)
-                        if sid not in self.zero_offset:
+                            mot.referencing_task(nonblocking=True)
+                        # Poll referenced() with short lock holds (matches _home_all pattern)
+                        start = time.time()
+                        timeout = self.config.homing_timeout
+                        while time.time() - start < timeout:
+                            if self._servo_lock.acquire(timeout=1.0):
+                                try:
+                                    done = mot.referenced()
+                                finally:
+                                    self._servo_lock.release()
+                                if done:
+                                    break
+                            time.sleep(0.1)
+                        else:
+                            self.get_logger().warn(f"S{sid} JOG home timeout after {timeout}s")
                             with self._servo_lock:
-                                self.zero_offset[sid] = mot.current_position()
+                                mot.stop_motion_task()
+                        if sid not in self.zero_offset:
+                            if self._servo_lock.acquire(timeout=1.0):
+                                try:
+                                    self.zero_offset[sid] = mot.current_position()
+                                finally:
+                                    self._servo_lock.release()
                         self._notify('silent_ok', f'Homing complete ...', f'Servo {sid}')
                     threading.Thread(target=_do, daemon=True).start()
                 return
@@ -1482,7 +1509,26 @@ class CartridgeSystem(Node):
     def _process_state(self):
         s = self.state
         if s == SystemState.HOMING:           self._do_homing(); return
-        if s == SystemState.HOMING_RUNNING:   return
+        if s == SystemState.HOMING_RUNNING:
+            # Check if bg homing thread finished (Bug #6 fix: state transition on main thread)
+            if self._homing_done_event.is_set():
+                self._homing_done_event.clear()
+                if self._homing_result:
+                    self.get_logger().info("Homing complete (main thread transition)")
+                    if self.operation_mode == 'manual':
+                        self._jog_mode = True
+                        self._sync_mode_jog()
+                        self._notify('info', 'Homing xong', 'Homing xong — JOG sẵn sàng')
+                    else:
+                        self._notify('info', 'Homing xong', '')
+                    self.state_in  = SystemState.IDLE
+                    self.state_s3  = SystemState.IDLE
+                    self.state_s4  = SystemState.IDLE
+                    self._system_running = True
+                    self._enter(SystemState.IDLE)
+                else:
+                    self._error("Homing that bai")
+            return
         if s == SystemState.ERROR:            self._do_error(); return
         self._dispatch_input()
         self._dispatch_s3()
@@ -1603,23 +1649,12 @@ class CartridgeSystem(Node):
 
     def _do_homing(self):
         self._enter(SystemState.HOMING_RUNNING)
+        self._homing_done_event.clear()
         def _bg():
             ok = self._home_all()
-            if ok:
-                self.get_logger().info("Homing complete")
-                if self.operation_mode == 'manual':
-                    self._jog_mode = True
-                    self._sync_mode_jog()
-                    self._notify('info', 'Homing xong', 'Homing xong — JOG sẵn sàng')
-                else:
-                    self._notify('info', 'Homing xong', '')
-                self.state_in  = SystemState.IDLE
-                self.state_s3  = SystemState.IDLE
-                self.state_s4  = SystemState.IDLE
-                self._system_running = True
-                self._enter(SystemState.IDLE)
-            else:
-                self._error("Homing that bai")
+            # Signal result to main thread — do NOT mutate state_in/s3/s4 here
+            self._homing_result = ok
+            self._homing_done_event.set()
         threading.Thread(target=_bg, daemon=True).start()
 
     def _do_error(self):
