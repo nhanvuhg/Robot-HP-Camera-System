@@ -862,8 +862,8 @@
                                     bg: "#0a1a4d"; bc: root.cAccent; tc: root.cAccent
                                     onClicked: {
                                         cartridgeController.simSensor("clear")
-                                        // S1+S3+S13 ON (băng tải có khay, Cyl 1 rút)
-                                        var ids = [1,3,13]
+                                        // S1+S3+S9 ON (băng tải có khay, Cyl 1 rút)
+                                        var ids = [1,3,9]
                                         ids.forEach(function(id) {
                                             cartridgeController.simSensor(id + ":1")
                                         })
@@ -876,8 +876,8 @@
                                     bg: "#051a1a"; bc: "#5cf4f1"; tc: "#5cf4f1"
                                     onClicked: {
                                         cartridgeController.simSensor("clear")
-                                        // S1+S3+S4+S13 ON (Cyl 1 rút)
-                                        var ids = [1,3,4,13]
+                                        // S1+S3+S4+S9 ON (Cyl 1 rút)
+                                        var ids = [1,3,4,9]
                                         ids.forEach(function(id) {
                                             cartridgeController.simSensor(id + ":1")
                                         })
@@ -909,24 +909,25 @@
 
                                 Repeater {
                                     model: ListModel {
-                                        // S1-S8: Module 1
+                                        // [CPX 253] Module 2: I1.0–I1.7
                                         ListElement { sid:1;  slabel:"S1";  sdesc:"Belt start" }
                                         ListElement { sid:2;  slabel:"S2";  sdesc:"Belt mid" }
-                                        ListElement { sid:3;  slabel:"S3";  sdesc:"Belt end"}
+                                        ListElement { sid:3;  slabel:"S3";  sdesc:"Belt end" }
                                         ListElement { sid:4;  slabel:"S4";  sdesc:"Scan Stack Pos1" }
                                         ListElement { sid:5;  slabel:"S5";  sdesc:"Output det." }
                                         ListElement { sid:6;  slabel:"S6";  sdesc:"Check Tray OutP1" }
                                         ListElement { sid:7;  slabel:"S7";  sdesc:"Khay tại Robot" }
                                         ListElement { sid:8;  slabel:"S8";  sdesc:"[Reserved]" }
-                                        // S9-S16: Module 2
-                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Platform" }
-                                        ListElement { sid:10; slabel:"S10"; sdesc:"Feed OK" }
-                                        ListElement { sid:11; slabel:"S11"; sdesc:"Check Tray OutP2" }
-                                        ListElement { sid:12; slabel:"S12"; sdesc:"Scan Stack Pos2" }
-                                        ListElement { sid:13; slabel:"S13"; sdesc:"Cyl1 Ret"}
-                                        ListElement { sid:14; slabel:"S14"; sdesc:"Cyl1 Ext" }
-                                        ListElement { sid:15; slabel:"S15"; sdesc:"Cyl2 Ret"}
-                                        ListElement { sid:16; slabel:"S16"; sdesc:"Cyl2 Ext" }
+                                        // [CPX 253] Module 3: I2.0–I2.1
+                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Cyl1 Ret" }
+                                        ListElement { sid:10; slabel:"S10"; sdesc:"Cyl1 Ext" }
+                                        // [CPX 254] Module 2: I3.0–I3.5
+                                        ListElement { sid:17; slabel:"S17"; sdesc:"Platform" }
+                                        ListElement { sid:18; slabel:"S18"; sdesc:"Feed OK" }
+                                        ListElement { sid:19; slabel:"S19"; sdesc:"Check Tray OutP2" }
+                                        ListElement { sid:20; slabel:"S20"; sdesc:"Scan Stack Pos2" }
+                                        ListElement { sid:21; slabel:"S21"; sdesc:"Cyl2 Ret" }
+                                        ListElement { sid:22; slabel:"S22"; sdesc:"Cyl2 Ext" }
                                     }
                                     delegate: Rectangle {
                                         id: sBtn
@@ -982,7 +983,7 @@
 
                             // ── Chú thích ──
                             Text {
-                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Scan P1 · <b>S5</b> Out Det · <b>S6</b> Check P1 · <b>S7</b> Robot P1/2 · <b>S8</b> RSV\n<b>S9</b> Platform · <b>S10</b> Feed OK · <b>S11</b> Check P2 · <b>S12</b> Scan P2\n<b>S13</b> Cyl1↩ · <b>S14</b> Cyl1↪ · <b>S15</b> Cyl2↩ · <b>S16</b> Cyl2↪"
+                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Scan P1 · <b>S5</b> Out Det · <b>S6</b> Check P1 · <b>S7</b> Robot · <b>S8</b> RSV\n<b>S9</b> Cyl1↩ · <b>S10</b> Cyl1↪ · <b>S17</b> Platform · <b>S18</b> Feed OK · <b>S19</b> Check P2 · <b>S20</b> Scan P2\n<b>S21</b> Cyl2↩ · <b>S22</b> Cyl2↪"
                                 textFormat: Text.RichText; color: root.cDim; font.pixelSize: 8
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                             }
@@ -1074,8 +1075,8 @@
                             { key:"outx_target3",    label:"OutX Target3",  desc:"Đặt khay robot" },
                             { key:"outy_target1",    label:"OutY Target1",  desc:"Nâng khay (safe)" },
                             { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Hạ gắp khay" },
-                            { key:"target_scanoutp2",label:"OUTY TgtScan",  desc:"Điểm dừng quét S10" },
-                            { key:"outy_scan_arm_mm",label:"OUTY Arm S10",  desc:"Giới hạn kích hoạt S10" }
+                            { key:"target_scanoutp2",label:"OUTY TgtScan",  desc:"Điểm dừng quét S20" },
+                            { key:"outy_scan_arm_mm",label:"OUTY Arm S20",  desc:"Giới hạn kích hoạt S20" }
                         ]
 
                         Column {

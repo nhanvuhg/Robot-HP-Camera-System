@@ -57,6 +57,7 @@ backup_*/
 *.onnx
 *.pt
 *.engine
+*.tar.gz
 src/YOLO-HailoRT-ROS2/weights/
 
 # ROS 1 backup files

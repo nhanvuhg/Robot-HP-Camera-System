@@ -45,7 +45,7 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     command_row_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/command_row", 10);
     command_slot_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/command_slot", 10);
     goto_state_pub_ = node_->create_publisher<std_msgs::msg::String>("/robot/goto_state", 10);
-    set_mode_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/set_operation_mode", 10);
+    set_mode_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/set_mode", 10);
     feed_chamber_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/revpi/feed_chamber", 10);
     fill_done_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/revpi/fill_done", 10);
     input_tray_ready_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_tray_loaded", 10);

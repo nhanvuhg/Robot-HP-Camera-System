@@ -153,6 +153,7 @@ public:
     pub_monitor_status_  = create_publisher<std_msgs::msg::String> ("/weight/monitor_status",       10);
     pub_freq_            = create_publisher<std_msgs::msg::Float32>("/vfd/freq_fb",                 10);
     pub_vfd_state_       = create_publisher<std_msgs::msg::Int32>  ("/vfd/state",                   10);
+    pub_ink_cap_ack_     = create_publisher<std_msgs::msg::Float32>("/Fill_HP1/ink_capacity_ack",   10);
 
     // ── Subscribers ──────────────────────────────────────
 
@@ -250,6 +251,12 @@ public:
           RCLCPP_INFO(get_logger(),
             "[CAL] Updated cal_known_weight=%.2f g from GUI", cal_known_weight_g_);
         }
+      });
+
+    sub_ink_cap_ = create_subscription<std_msgs::msg::Float32>(
+      "/Fill_HP1/ink_capacity", 10,
+      [this](const std_msgs::msg::Float32::SharedPtr msg) {
+        pub_float(pub_ink_cap_ack_, msg->data);
       });
 
     // ── VFD Subscriptions ────────────────────────────────
@@ -773,6 +780,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr  pub_monitor_status_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_freq_;
   rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr   pub_vfd_state_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_ink_cap_ack_;
 
   // Subscribers
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr    sub_tare_cmd_;
@@ -784,6 +792,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_target_min_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_target_max_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_cal_weight_;
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_ink_cap_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr    sub_vfd_run_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_vfd_freq_;
 

@@ -58,7 +58,6 @@ public slots:
     Q_INVOKABLE void simulateDoneTrayInput();
     Q_INVOKABLE void simulateDoneTrayOutput();
     void confirmOutput();
-    Q_INVOKABLE void s11Respond(bool ok);  // OK=true → S2A→S1, NO=false → IDLE
 
     // Sensor simulation
     void simSensor(const QString &cmd);
@@ -79,7 +78,6 @@ signals:
     void configDataChanged();
     void notificationReceived();
     void logEntriesChanged();
-    void s11WarningRequested();  // emitted when S11 ON warning received from cartridge
     void sensorStateChanged();
 
 private:

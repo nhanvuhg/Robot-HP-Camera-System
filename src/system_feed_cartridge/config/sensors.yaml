@@ -1,209 +1,267 @@
 # =============================================================================
 # SENSOR CONFIGURATION — Cartridge Feeding System
 # =============================================================================
-# File này định nghĩa toàn bộ cảm biến và kênh IO của hệ thống.
-# Chỉnh sửa file này để:
-#   - Thêm / xóa cảm biến (thay đổi num_sensors)
-#   - Đổi chức năng từng cảm biến (thay đổi role)
-#   - Đổi kênh IO module cho cylinder (thay đổi channel)
-#   - Map sensor ID ↔ trạng thái logic cần kiểm tra trong state machine
-#
-# Phần code đọc file này: CartridgeSystemConfig.load_sensors()
+# Phân chia:
+# - CPX 253: Module 2 (I1.0-I1.7) và Module 3 (I2.0-I2.7)
+# - CPX 254: Module 2 (I3.0-I3.7)
 # =============================================================================
 
-# ── TỔNG SỐ CẢNH BIẾN (thay đổi khi thêm/bớt phần cứng) ─────────────────────
-num_sensors: 20    # Tổng số digital sensors từ IO module (1-indexed, hiện tại S1-S9 + S15-S20, S10-S14 dự phòng)
+num_sensors: 22
 
-# ── LOẠI LOGIC CHUNG ──────────────────────────────────────────────────────────
-sensor_type: PNP   # PNP hoặc NPN
-sensor_logic: NO   # NO (Normally Open) hoặc NC (Normally Closed)
-# Lưu ý: PNP/NO → sensor ON = 24V = True (đang dùng)
-#         NPN/NC → logic đảo ngược, cần sửa update_sensor() trong node
-
-# =============================================================================
-# DANH SÁCH SENSOR (S1 – S9, S15 – S20)
-# =============================================================================
-# Mỗi sensor có các trường:
-#   id     : ID số (phải khớp với thứ tự channel trên IO module)
-#   name   : Tên ngắn gọn
-#   desc   : Mô tả chức năng
-#   pos    : Vị trí vật lý (pos1=Trạm Input, pos2=Trạm Output)
-#   role   : Vai trò trong logic (xem bảng ROLES bên dưới)
-#   used_in: State machine states nào dùng sensor này
-#   active : true = bật, false = vô hiệu hóa sensor (code sẽ bỏ qua)
-#
-# ROLES:
-#   tray_detect    → Phát hiện khay (nhựa hoặc kim loại)
-#   stack_detect   → Phát hiện stack khay
-#   conveyor       → Vị trí trên băng tải
-#   cyl_retracted  → Cylinder đã co lại (giới hạn hành trình thu)
-#   cyl_extended   → Cylinder đã đẩy ra (giới hạn hành trình đẩy)
-#   platform       → Phát hiện vị trí nền tảng (Servo 3)
-#   unused         → Cảm biến hiện chưa dùng (bỏ qua trong logic)
-# =============================================================================
+sensor_type: PNP
+sensor_logic: NO
 
 sensors:
+  # [CPX 253] MODULE 2: I1.0 -> I1.7
   - id: 1
-    name: S1_CONVEYOR_START
-    desc: "Đầu băng tải đầu vào — phát hiện khay ở điểm bắt đầu"
+    name: S1_BELT_START
+    gui_label: "Belt start"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I1.0"
+    desc: "phát hiện khay ở đầu băng tải đầu vào"
     pos: pos1
     role: conveyor
-    used_in: [S1_INY_SEARCH_TRAY]
+    used_in: ['IDLE']
     active: true
 
   - id: 2
-    name: S2_CONVEYOR_MID
-    desc: "Giữa băng tải đầu vào — phát hiện khay đang di chuyển"
+    name: S2_BELT_MID
+    gui_label: "Belt mid"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I1.1"
+    desc: "phát hiện khay đang di chuyển"
     pos: pos1
     role: conveyor
-    used_in: [S1_INY_SEARCH_TRAY]
+    used_in: ['IDLE']
     active: true
 
   - id: 3
-    name: S3_CONVEYOR_END
-    desc: "Cuối băng tải đầu vào — xác nhận khay đến đúng vị trí nhận"
+    name: S3_BELT_END
+    gui_label: "Belt end"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I1.2"
+    desc: "xác nhận khay đã tới cuối băng tải"
     pos: pos1
     role: conveyor
-    used_in: [S1_INY_SEARCH_TRAY]
+    used_in: ['IDLE']
     active: true
 
   - id: 4
-    name: S4_STACK_INPUT
-    desc: "Phát hiện stack khay kim loại (Pos 1) — khi InY đi xuống tìm khay"
+    name: S4_SCAN_STACK_POS1
+    gui_label: "Scan Stack Pos1"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I1.3"
+    desc: "phát hiện chồng khay kim loại"
     pos: pos1
     role: stack_detect
-    used_in: [S1_INY_SEARCH_TRAY, S2_INY_SEARCH_STACK]
+    used_in: ['S1_INY_SCAN']
     active: true
 
   - id: 5
     name: S5_OUTPUT_DETECT
-    desc: "Phát hiện khay ở khu vực đặt đầu ra — robot đã đặt khay xong"
+    gui_label: "Output det."
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I1.4"
+    desc: "xác nhận khay vào vị trí nạp"
     pos: pos1
     role: tray_detect
-    used_in: [S1_INY_TO_TARGET1, S1_INY_TO_TARGET2]
+    used_in: ['S1_CHECK_S5']
     active: true
-  
+
   - id: 6
-    name: S6_INPUT_STACK_TRAY
-    desc: "Xác nhận có khay ở input stack (Pos 1) — InY chạm khay khi tìm kiếm xuống"
+    name: S6_CHECK_TRAY_P1
+    gui_label: "Check Tray OutP1"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I1.5"
+    desc: "snapshot có khay"
     pos: pos1
     role: stack_detect
-    used_in: [S1_INY_SEARCH_TRAY, S2_INY_SEARCH_STACK]
+    used_in: ['S2A_CHECK_INTERLOCK']
     active: true
 
   - id: 7
-    name: S7_PLATFORM_TRAY
-    desc: "Phát hiện có khay trên Platform (Servo 3) — xác nhận khay đang ở vị trí nạp"
-    pos: pos2
+    name: S7_TRAY_AT_ROBOT
+    gui_label: "Khay tại Robot"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I1.6"
+    desc: "xác nhận khay đã lên vị trí robot"
+    pos: pos1
     role: tray_detect
-    used_in: [S3_PLATFORM, S4_PLATFORM]
+    used_in: ['IDLE']
     active: true
 
   - id: 8
-    name: S8_FEED_SUCCESS
-    desc: "Cấp khay thành công — xác nhận khay đã được đưa vào vị trí đúng"
-    pos: pos2
-    role: tray_detect
-    used_in: [S3_FEED_CONFIRM]
-    active: true
+    name: S8_RESERVED
+    gui_label: "[Reserved]"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I1.7"
+    desc: "chưa sử dụng"
+    pos: pos1
+    role: unused
+    used_in: []
+    active: false
 
+  # [CPX 253] MODULE 3: I2.0 -> I2.7
   - id: 9
-    name: S9_OUTPUT_FINISHED
-    desc: "Phát hiện có khay ở vị trí output khầy thành phẩm — xác nhận khay thành phẩm đã ra"
-    pos: pos2
-    role: tray_detect
-    used_in: [S4_OUTPUT_CHECK]
+    name: S9_CYL1_RETRACTED
+    gui_label: "Cyl1 Ret"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I2.0"
+    desc: "Cylinder 1 đã co lại hoàn toàn"
+    pos: pos1
+    role: cyl_retracted
+    used_in: []
     active: true
 
   - id: 10
-    name: S10_OUTPUT_STACK_TRAY
-    desc: "Xác nhận có khay nhựa ở output stack (Pos 2) — tương tự S6 ở Pos 1, dùng để biết stack output còn khay"
-    pos: pos2
-    role: stack_detect
-    used_in: [S2A_INY_JOG_OUTPUT]
-    active: true
-
-  # S11 – S14: DỰ PHÒNG — dành cho sensor mới sẽ thêm
-
-  - id: 15
-    name: S15_CYL1_RETRACTED
-    desc: "Cylinder 1 đã co lại hoàn toàn — giới hạn hành trình thu Pos 1"
-    pos: pos1
-    role: cyl_retracted
-    used_in: [S1_CYLINDER1_RETRACT, S2_CYLINDER1_RETRACT]
-    active: true
-
-  - id: 16
-    name: S16_CYL1_EXTENDED
-    desc: "Cylinder 1 đã đẩy ra hoàn toàn — giới hạn hành trình đẩy Pos 1 (INTERLOCK InY)"
+    name: S10_CYL1_EXTENDED
+    gui_label: "Cyl1 Ext"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I2.1"
+    desc: "Cylinder 1 đã đẩy ra hoàn toàn"
     pos: pos1
     role: cyl_extended
-    used_in: [S1_CYLINDER1_EXTEND, S2_CYLINDER1_EXTEND]
+    used_in: []
     active: true
 
-  - id: 17
-    name: S17_CYL2_RETRACTED
-    desc: "Cylinder 2 (Hold Tray) đã co lại hoàn toàn — xác nhận đã nhả khay"
+  - id: 11
+    name: S11_ATV_RUN
+    gui_label: "ATV Run"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I2.2"
+    desc: "Đọc trạng thái ATV Run"
+    pos: vfd
+    role: vfd_monitor
+    used_in: []
+    active: true
+
+  - id: 12
+    name: S12_ATV_FAULT
+    gui_label: "ATV Fault"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I2.3"
+    desc: "Đọc trạng thái ATV Fault"
+    pos: vfd
+    role: vfd_monitor
+    used_in: []
+    active: true
+
+  - id: 13
+    name: S13_RESERVED
+    gui_label: "[Reserved]"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I2.4"
+    desc: "chưa sử dụng"
     pos: pos1
-    role: cyl_retracted
-    used_in: [S1_CYLINDER2_RETRACT]
+    role: unused
+    used_in: []
+    active: false
+
+  - id: 14
+    name: S14_RESERVED
+    gui_label: "[Reserved]"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I2.5"
+    desc: "chưa sử dụng"
+    pos: pos1
+    role: unused
+    used_in: []
+    active: false
+
+  - id: 15
+    name: S15_RESERVED
+    gui_label: "[Reserved]"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I2.6"
+    desc: "chưa sử dụng"
+    pos: pos1
+    role: unused
+    used_in: []
+    active: false
+
+  - id: 16
+    name: S16_RESERVED
+    gui_label: "[Reserved]"
+    cpx_ip: "192.168.27.253"
+    cpx_channel: "I2.7"
+    desc: "chưa sử dụng"
+    pos: pos1
+    role: unused
+    used_in: []
+    active: false
+
+  # [CPX 254] MODULE 2: I3.0 -> I3.7
+  - id: 17
+    name: S17_PLATFORM
+    gui_label: "Platform"
+    cpx_ip: "192.168.27.254"
+    cpx_channel: "I3.0"
+    desc: "khay đã lên Platform"
+    pos: pos2
+    role: tray_detect
+    used_in: []
     active: true
 
   - id: 18
-    name: S18_CYL2_EXTENDED
-    desc: "Cylinder 2 (Hold Tray) đã đẩy ra — xác nhận đang giữ khay chặt"
-    pos: pos1
-    role: cyl_extended
-    used_in: [S1_CYLINDER2_EXTEND]
+    name: S18_FEED_OK
+    gui_label: "Feed OK"
+    cpx_ip: "192.168.27.254"
+    cpx_channel: "I3.1"
+    desc: "xác nhận cấp khay"
+    pos: pos2
+    role: tray_detect
+    used_in: []
     active: true
 
   - id: 19
-    name: S19_CYL3_RETRACTED
-    desc: "Cylinder 3 (Pos 2 — đầu ra) đã co lại hoàn toàn — giới hạn hành trình thu"
+    name: S19_CHECK_TRAY_P2
+    gui_label: "Check Tray OutP2"
+    cpx_ip: "192.168.27.254"
+    cpx_channel: "I3.2"
+    desc: "xác nhận có khay"
     pos: pos2
-    role: cyl_retracted
-    used_in: [S3_CYL3_RETRACT, S4_CYL3_RETRACT]
+    role: stack_detect
+    used_in: []
     active: true
 
   - id: 20
-    name: S20_CYL3_EXTENDED
-    desc: "Cylinder 3 (Pos 2 — đầu ra) đã đẩy ra hoàn toàn — giới hạn hành trình đẩy"
+    name: S20_SCAN_STACK_POS2
+    gui_label: "Scan Stack Pos2"
+    cpx_ip: "192.168.27.254"
+    cpx_channel: "I3.3"
+    desc: "OutY phát hiện cạnh"
+    pos: pos2
+    role: stack_detect
+    used_in: []
+    active: true
+
+  - id: 21
+    name: S21_CYL2_RETRACTED
+    gui_label: "Cyl2 Ret"
+    cpx_ip: "192.168.27.254"
+    cpx_channel: "I3.4"
+    desc: "Cylinder 2 co lại"
+    pos: pos2
+    role: cyl_retracted
+    used_in: []
+    active: true
+
+  - id: 22
+    name: S22_CYL2_EXTENDED
+    gui_label: "Cyl2 Ext"
+    cpx_ip: "192.168.27.254"
+    cpx_channel: "I3.5"
+    desc: "Cylinder 2 đẩy ra"
     pos: pos2
     role: cyl_extended
-    used_in: [S3_CYL3_EXTEND, S4_CYL3_EXTEND]
+    used_in: []
     active: true
 
 # =============================================================================
-# KÊNH IO MODULE — CYLINDER OUTPUT (Digital Output)
+# KÊNH DO — CYLINDER OUTPUT (Digital Output)
 # =============================================================================
-# IO Module: Festo CPX-AP (IP: 192.168.27.253)
-# Kênh Output (DO) điều khiển van khí nén cho cylinder.
-# Đánh số từ 0; thay đổi nếu đấu nối vật lý khác nhau.
-#
-# Cylinder 1 → Pos 1 (Input Station) — nhặt khay từ stack đầu vào
-# Cylinder 2 → Pos 2 (Output Station) — nhặt khay từ stack đầu ra
-# =============================================================================
-
 cylinder_outputs:
-  cylinder1_extend_channel:  5   # DO channel bật = Cylinder 1 ĐẨY RA (Input pickup)
-  cylinder1_retract_channel: 4   # DO channel bật = Cylinder 1 CO LẠI
-  cylinder2_extend_channel:  9   # DO channel bật = Cylinder 2 ĐẨY RA (Hold Tray — kẹp khay)
-  cylinder2_retract_channel: 8   # DO channel bật = Cylinder 2 CO LẠI (Hold Tray — nhả khay)
-  cylinder3_extend_channel:  7   # DO channel bật = Cylinder 3 ĐẨY RA (Output pickup)
-  cylinder3_retract_channel: 6   # DO channel bật = Cylinder 3 CO LẠI
-
-# =============================================================================
-# INTERLOCK RULES (mô tả logic an toàn — code đọc từ đây trong tương lai)
-# =============================================================================
-# Hiện tại được hardcode trong node, ghi ở đây để tham khảo và kế hoạch refactor
-#
-# INTERLOCK-1: InY không được đi xuống (hướng dương) khi S16 = ON (Cylinder 1 đang EXTEND)
-#   Sensor: S16 (id: 16)
-#   Servo bị chặn: InY (servo_id: 2), hướng dương
-#   State bị chặn: JOG, S1_CYLINDER1_EXTEND
-#
-# INTERLOCK-2: InX không được di chuyển khi InY ra ngoài safe_zone
-#   Điều kiện: iny_position > iny_safe_zone (config: 50mm)
-#   Servo bị chặn: InX (servo_id: 1)
-#   Áp dụng: toàn bộ state machine ngoài HOMING
-# =============================================================================
+  cylinder1_retract_channel: 4
+  cylinder1_extend_channel:  5
+  cylinder2_retract_channel: 8
+  cylinder2_extend_channel:  9

@@ -115,7 +115,6 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  command_slot_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr goto_state_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   new_trayoutput_sub_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   output_tray_present_sub_;
     rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr motion_hb_sub_;
     rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr vision_hb_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   motion_busy_sub_;
@@ -158,6 +157,8 @@ private:
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr emergency_stop_service_;
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr reset_state_service_;
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr pause_system_service_;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_manual_mode_service_;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_ai_mode_service_;
 
     // ========================================================================
     // CLIENTS (dobot driver)
@@ -209,7 +210,6 @@ private:
     std::atomic<bool> new_trayoutput_loaded_{false};
     std::atomic<bool> waiting_for_new_input_{true};   // start = chờ tray đầu tiên
     std::atomic<bool> waiting_for_new_output_{false};
-    std::atomic<bool> output_tray_present_{false};
     rclcpp::Time wait_tray_start_time_;
 
     std::atomic<bool> feed_chamber_signal_{false};
@@ -533,7 +533,26 @@ void RobotLogicNode::initSubscriptions()
     vision_empty_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/vision/input_tray/empty", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            bool was_empty = input_tray_empty_;
             input_tray_empty_ = msg->data;
+
+            // AI mode: rising edge of "all rows empty" → publish done_tray_input
+            // This mirrors advanceAutoRow() last-row logic, gated by vision instead of row counter.
+            // The cartridge Python node then checks S7 ON before starting S2A (take back empty tray).
+            if (use_ai_for_control_ && msg->data && !was_empty
+                && !waiting_for_new_input_.load() && system_running_.load())
+            {
+                RCLCPP_WARN(get_logger(),
+                    "[AI] Vision: all rows empty → publishing done_tray_input");
+                auto done_msg = std_msgs::msg::Bool();
+                done_msg.data = true;
+                done_input_tray_pub_->publish(done_msg);
+                new_tray_loaded_ = false;
+                new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
+                waiting_for_new_input_ = true;
+                wait_tray_start_time_  = this->now();
+                notifyStateChange();
+            }
         });
 
     vision_slot_sub_ = create_subscription<std_msgs::msg::Int32>(
@@ -582,12 +601,6 @@ void RobotLogicNode::initSubscriptions()
         "/cartridge_providesystem/new_trayoutput_loaded", 10,
         std::bind(&RobotLogicNode::newTrayOutputCallback, this, std::placeholders::_1));
 
-    output_tray_present_sub_ = create_subscription<std_msgs::msg::Bool>(
-        "/cartridge_providesystem/output_tray_present", rclcpp::QoS(10).reliable(),
-        [this](const std_msgs::msg::Bool::SharedPtr msg) {
-            output_tray_present_ = msg->data;
-        });
-
     selected_row_sub_ = create_subscription<std_msgs::msg::Int32>(
         "/camera/ai/selected_row", 10,
         std::bind(&RobotLogicNode::selectedRowCallback, this, std::placeholders::_1));
@@ -629,6 +642,23 @@ void RobotLogicNode::initSubscriptions()
                 RCLCPP_WARN(get_logger(), "[INTERLOCK] 🔒 Cartridge BUSY");
             else
                 RCLCPP_INFO(get_logger(), "[INTERLOCK] 🔓 Cartridge FREE");
+        });
+
+    // AI mode: Camera báo output tray full → set waiting flag
+    create_subscription<std_msgs::msg::Bool>(
+        "/vision/output_tray/full", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (msg->data && use_ai_for_control_) {
+                RCLCPP_WARN(get_logger(),
+                    "[VISION_SYNC] 📦 Camera báo OUTPUT TRAY FULL → set waiting_for_new_output_");
+                waiting_for_new_output_ = true;
+                // Reset slot counter for when new tray arrives
+                {
+                    std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+                    selected_output_slot_ = SLOT_UNSET;
+                }
+                current_auto_slot_ = 1;
+            }
         });
 }
 
@@ -679,6 +709,46 @@ void RobotLogicNode::initServices()
         "/robot/pause_system",
         std::bind(&RobotLogicNode::pauseSystemCallback, this,
             std::placeholders::_1, std::placeholders::_2),
+        rmw_qos_profile_services_default, callback_group_reentrant_);
+
+    set_manual_mode_service_ = create_service<std_srvs::srv::SetBool>(
+        "/robot/set_manual_mode",
+        [this](const std_srvs::srv::SetBool::Request::SharedPtr req,
+               std_srvs::srv::SetBool::Response::SharedPtr res) {
+            if (req->data) {
+                manual_mode_ = true;
+                use_ai_for_control_ = false;
+                std::lock_guard<std::mutex> lock(row_selection_mutex_);
+                for (size_t i = 0; i < row_full_.size(); ++i) row_full_[i] = true;
+                input_tray_empty_ = false;
+                selected_input_row_ = ROW_UNSET;
+                buffer_is_empty_ = true;
+                selected_output_slot_ = 1;
+                RCLCPP_INFO(get_logger(), "[MODE] MANUAL (via service)");
+            } else {
+                manual_mode_ = false;
+                RCLCPP_INFO(get_logger(), "[MODE] MANUAL OFF (via service)");
+            }
+            res->success = true;
+            res->message = req->data ? "Manual mode ON" : "Manual mode OFF";
+        },
+        rmw_qos_profile_services_default, callback_group_reentrant_);
+
+    set_ai_mode_service_ = create_service<std_srvs::srv::SetBool>(
+        "/robot/set_ai_mode",
+        [this](const std_srvs::srv::SetBool::Request::SharedPtr req,
+               std_srvs::srv::SetBool::Response::SharedPtr res) {
+            if (req->data) {
+                use_ai_for_control_ = true;
+                manual_mode_ = false;
+                RCLCPP_INFO(get_logger(), "[MODE] AI (via service)");
+            } else {
+                use_ai_for_control_ = false;
+                RCLCPP_INFO(get_logger(), "[MODE] AI OFF (via service)");
+            }
+            res->success = true;
+            res->message = req->data ? "AI mode ON" : "AI mode OFF";
+        },
         rmw_qos_profile_services_default, callback_group_reentrant_);
 
     auto sub_options = rclcpp::SubscriptionOptions();
@@ -1332,6 +1402,12 @@ void RobotLogicNode::handleCurrentState()
         return;
     }
 
+    // MANUAL mode: chỉ dùng JOG và lấy vị trí, không chạy state process
+    if (manual_mode_) {
+        publishSystemStatus("MANUAL");
+        return;
+    }
+
     // Motion watchdog
     if (motion_in_progress_) {
         double stuck = (this->now() - motion_started_at_).seconds();
@@ -1965,8 +2041,8 @@ void RobotLogicNode::statePlaceToOutput()
         return;
     }
 
-    if (!use_ai_for_control_ || manual_mode_) {
-        // Camera not needed for auto/manual slot selection
+    if (!use_ai_for_control_) {
+        // AUTO: Camera not needed for slot selection
     }
 
     // ── Slot selection ──
@@ -1999,12 +2075,6 @@ void RobotLogicNode::statePlaceToOutput()
         return;
     }
 
-    if (!output_tray_present_.load()) {
-        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
-            "[OUTPUT] S10 is OFF (Tray not present). Waiting for output tray to be placed back...");
-        return;
-    }
-
     // ── Motion result handling ──
     if (getMotionCmd() == "SCALE_OUTPUT") {
         if (motion_in_progress_) return;
@@ -2030,9 +2100,13 @@ void RobotLogicNode::statePlaceToOutput()
 
         // Slot 9 reached → output tray full
         if (placed_slot >= 9) {
-            RCLCPP_WARN(get_logger(), "[OUTPUT] Slot 9 reached — output tray full");
-            publishDoneTrayOutput();
             current_auto_slot_ = 1;
+            if (!use_ai_for_control_) {
+                // AUTO/MANUAL: Robot tự quyết định thay khay
+                RCLCPP_WARN(get_logger(), "[OUTPUT] Slot 9 reached — output tray full (AUTO mode)");
+                publishDoneTrayOutput();
+            }
+            // AI mode: Camera toàn quyền — không can thiệp
         }
 
         // Check pipeline drain condition
@@ -2042,6 +2116,13 @@ void RobotLogicNode::statePlaceToOutput()
                 if (input_trays_empty_.load()) {
                     RCLCPP_WARN(get_logger(),
                         "[PIPELINE] 📦 Pipeline drained + Conveyor EMPTY -> Waiting in IDLE for new tray to auto-restart");
+
+                    // BATCH CUỐI XỬ LÝ DRAIN: Robot tự quyết định thay khay ra
+                    if (!waiting_for_new_output_.load()) {
+                        RCLCPP_WARN(get_logger(), "[DRAIN] BATCH CUỐI — Tự động đẩy khay ra (Ejecting output tray)");
+                        publishDoneTrayOutput();
+                    }
+
                     transitionTo(SystemState::IDLE);
                 } else {
                     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,

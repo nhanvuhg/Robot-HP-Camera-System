@@ -232,12 +232,6 @@ void CartridgeController::confirmOutput()
     simulateDoneTrayOutput();
 }
 
-void CartridgeController::s11Respond(bool ok)
-{
-    publishString(gui_confirm_pub_, ok ? "s11_confirm" : "s11_cancel");
-    addLog(QString("S11 Response: %1").arg(ok ? "CONFIRM" : "CANCEL"), "info");
-}
-
 // ── Sensor Simulation ─────────────────────────────────────────────
 
 void CartridgeController::simSensor(const QString &cmd)

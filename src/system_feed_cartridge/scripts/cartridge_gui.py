@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Cartridge System GUI — Web Dashboard v4
-Mode redesign:
-  AUTO   — Đọc sensor thực tế, tự động chạy workflow. JOG/Sim bị khóa.
-  MANUAL — Cùng workflow/điều kiện như auto, thêm: JOG + sim sensor.
-           Operator chọn STATE 1/2 để kích hoạt workflow.
+Cartridge System GUI — Web Dashboard v5
+Modes:
+  AUTO   — Sensor thực tế, tự động trigger workflow. JOG bị khóa.
+  MANUAL — Sim sensor + chọn STATE 1-4 trực tiếp. JOG bị khóa.
+  JOG    — Điều khiển tự do các servo. Workflow bị khóa.
 """
 
 import http.server
@@ -90,18 +90,21 @@ class GuiRosNode(Node):
             '/system/confirm_button':            self.create_publisher(Bool,   '/system/confirm_button', qos),
         }
 
-        self._config_data = None
-        self._system_state = 'UNKNOWN'
-        self._notifications = []
+        self._config_data    = None
+        self._system_state   = 'UNKNOWN'
+        self._current_mode   = ''
+        self._notifications  = []
         self._servo_positions = {}
 
-        self.create_subscription(String, '/providesystem/config_data',  self._on_config,    qos)
-        self.create_subscription(String, '/system_state',               self._on_state,     qos)
-        self.create_subscription(String, '/providesystem/gui_notify',   self._on_notify,    qos)
+        self.create_subscription(String, '/providesystem/config_data',    self._on_config, qos)
+        self.create_subscription(String, '/system_state',                  self._on_state,  qos)
+        self.create_subscription(String, '/providesystem/gui_notify',      self._on_notify, qos)
         self.create_subscription(String, '/providesystem/servo_positions', self._on_pos,    qos)
+        self.create_subscription(String, '/providesystem/current_mode',    self._on_mode,   qos)
 
     def _on_config(self, msg):  self._config_data = msg.data
     def _on_state(self, msg):   self._system_state = msg.data
+    def _on_mode(self, msg):    self._current_mode = msg.data.strip().lower()
     def _on_pos(self, msg):
         try: self._servo_positions = json.loads(msg.data)
         except: pass
@@ -238,7 +241,9 @@ class GUIHandler(http.server.BaseHTTPRequestHandler):
 
     def _get_status(self):
         node = get_ros_node()
-        return {"state": node._system_state} if node else {"state": "UNKNOWN"}
+        if node:
+            return {"state": node._system_state, "mode": node._current_mode}
+        return {"state": "UNKNOWN", "mode": ""}
 
     def _get_config(self):
         node = get_ros_node()
@@ -269,12 +274,12 @@ HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cartridge System v4</title>
+<title>Cartridge System v5</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0c0c1d;--bg2:#1a1a35;--card:#141428;--border:#2a2a50;--accent:#4f6cff;
+:root{--bg:#0c0c1d;--bg2:#081e29;--card:#051a1a;--border:#134357;--accent:#4f6cff;
   --green:#00e676;--red:#ff5252;--orange:#ffa726;--yellow:#ffd740;
-  --cyan:#26c6da;--text:#e8e8f0;--dim:#8888aa;--purple:#bb86fc;}
+  --cyan:#26c6da;--teal:#5cf4f1;--text:#e8e8f0;--dim:#8888aa;--purple:#bb86fc;}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text);
   height:100vh;overflow:hidden;font-size:12px;}
@@ -282,45 +287,57 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 ::-webkit-scrollbar-thumb{background:var(--accent);border-radius:3px;}
 
 /* ── Header ── */
-.hdr{background:var(--card);border-bottom:1px solid var(--border);padding:0 14px;
-  height:46px;display:flex;align-items:center;justify-content:space-between;}
-.hdr h1{font-size:17px;font-weight:700;letter-spacing:.5px;}
+.hdr{background:#141428;border-bottom:1px solid var(--border);padding:0 12px;
+  height:44px;display:flex;align-items:center;gap:8px;z-index:10;}
+.hdr h1{font-size:17px;font-weight:700;letter-spacing:.5px;white-space:nowrap;}
 .hdr h1 span{color:var(--accent);}
-.hdr-r{display:flex;align-items:center;gap:10px;}
-.state-badge{background:var(--bg);border:1px solid var(--border);border-radius:8px;
-  padding:4px 14px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;}
+.hdr-fill{flex:1;}
+.badge{height:26px;border-radius:8px;padding:0 12px;font-size:12px;font-weight:700;
+  display:flex;align-items:center;gap:7px;border:1px solid;white-space:nowrap;}
+.badge-state{background:var(--bg);border-color:var(--border);}
+.badge-homed{background:#051a1a;border-color:var(--border);font-size:11px;}
+.badge-homed.homing{background:#2a1a00;border-color:var(--orange);color:var(--orange);}
+.badge-homed.homed{background:#0a2e22;border-color:var(--green);color:var(--green);}
+.badge-homed.not-homed{color:var(--dim);}
 .sdot{width:9px;height:9px;border-radius:50%;background:#555;animation:pulse 2s infinite;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-/* mode pill */
-.mpill{padding:3px 14px;border-radius:20px;font-size:12px;font-weight:700;
-  text-transform:uppercase;letter-spacing:1px;border:1px solid;
-  display:flex;align-items:center;gap:6px;}
-.m-auto{background:#0a2e22;border-color:var(--green);color:var(--green);}
-.m-manual{background:#1a0a33;border-color:var(--purple);color:var(--purple);}
+.mpill{height:26px;border-radius:20px;padding:0 14px;font-size:12px;font-weight:700;
+  text-transform:uppercase;letter-spacing:1px;border:2px solid;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.mp-none{background:#2a1a00;border-color:var(--yellow);color:var(--yellow);
+  animation:blink .7s infinite alternate;}
+@keyframes blink{from{opacity:.5}to{opacity:1}}
+.mp-auto  {background:#0a332e;border-color:var(--green);color:var(--green);animation:none;}
+.mp-manual{background:#051a1a;border-color:var(--teal); color:var(--teal); animation:none;}
+.mp-jog   {background:#332e0a;border-color:var(--orange);color:var(--orange);animation:none;}
+.hdr-fault{height:26px;padding:0 10px;font-size:11px;font-weight:700;border-radius:4px;
+  background:#3a1a0a;border:1px solid var(--orange);color:var(--orange);
+  cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:5px;}
+.hdr-fault:hover{background:#4a2a10;}
 
 /* ── Notify bar ── */
-.nbar{display:none;padding:6px 16px;font-size:11px;font-weight:500;
+.nbar{display:none;padding:5px 14px;font-size:11px;font-weight:500;
   align-items:center;gap:10px;border-bottom:1px solid;}
 .nbar.show{display:flex;}
 .nbar.error{background:#2a0808;border-color:var(--red);color:var(--red);}
-.nbar.warn{background:#2a1e08;border-color:var(--orange);color:var(--orange);}
-.nbar.info{background:#081e28;border-color:var(--cyan);color:var(--cyan);}
+.nbar.warn {background:#2a1e08;border-color:var(--orange);color:var(--orange);}
+.nbar.info {background:#081e28;border-color:var(--cyan);color:var(--cyan);}
 .nbar .ntit{font-weight:700;white-space:nowrap;}
 .nbar .ndet{flex:1;color:var(--text);opacity:.85;}
-.nbar .ntm{font-size:10px;color:var(--dim);}
+.nbar .ntm{font-size:10px;color:var(--dim);white-space:nowrap;}
 .nbar .nact{display:flex;gap:5px;flex-shrink:0;}
 
 /* ── Tabs ── */
-.tabs{display:flex;gap:2px;background:var(--card);border-bottom:1px solid var(--border);
-  padding:3px 16px 0;height:31px;}
-.tab{padding:3px 18px;font-size:13px;font-weight:600;border-radius:5px 5px 0 0;
+.tabs{display:flex;gap:2px;background:#141428;border-bottom:1px solid var(--border);
+  padding:3px 14px 0;height:30px;}
+.tab{padding:3px 16px;font-size:13px;font-weight:600;border-radius:5px 5px 0 0;
   cursor:pointer;border:1px solid transparent;border-bottom:none;color:var(--dim);}
-.tab.active{color:var(--accent);background:var(--card);border-color:var(--border);}
-.page{display:none;height:calc(100vh - 77px);}
+.tab.active{color:var(--accent);background:#141428;border-color:var(--border);}
+.page{display:none;height:calc(100vh - 74px);}
 .page.active{display:block;}
 
 /* ── Grid ── */
-.grid{display:grid;grid-template-columns:215px 1fr 252px;
+.grid{display:grid;grid-template-columns:215px 1fr 248px;
   grid-template-rows:3fr 2.2fr;
   grid-template-areas:"lc cc sc" "log log sc";
   gap:4px;padding:5px;height:100%;overflow:hidden;}
@@ -331,6 +348,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 
 /* ── Card ── */
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px;}
+.card:hover{border-color:var(--accent);}
 .ct{font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;
   letter-spacing:1.5px;margin-bottom:5px;}
 
@@ -338,27 +356,53 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 .btn{padding:5px 10px;border:1px solid var(--border);border-radius:4px;background:var(--card);
   color:var(--text);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;
   transition:all .12s;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}
-.btn:hover{border-color:var(--accent);background:#222248;}
+.btn:hover{border-color:var(--accent);background:#0a1e2e;}
 .btn:active{transform:scale(.95);}
-.g{background:#0a2e22;border-color:var(--green);color:var(--green);}
-.r{background:#3a1010;border-color:var(--red);color:var(--red);}
-.o{background:#3a2a08;border-color:var(--orange);color:var(--orange);}
-.pu{background:#1a0a33;border-color:var(--purple);color:var(--purple);}
+.g {background:#0a2e22;border-color:var(--green); color:var(--green);}
+.r {background:#3a1010;border-color:var(--red);   color:var(--red);}
+.o {background:#3a2a08;border-color:var(--orange);color:var(--orange);}
+.t {background:#051a1a;border-color:var(--teal);  color:var(--teal);}
 .ac{background:var(--accent);border-color:var(--accent);color:#fff;}
-.bl{background:#141e44;border-color:var(--accent);color:var(--accent);}
+.bl{background:#0a1a3a;border-color:var(--accent);color:var(--accent);}
 .gr2{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px;}
 .gr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px;}
 .gr2 .btn,.gr3 .btn{width:100%;padding:8px 4px;}
-.sel{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.18);}
-/* locked state for auto mode */
-.lk{opacity:.32;cursor:not-allowed !important;filter:grayscale(50%);}
-.lk:hover{border-color:var(--border) !important;background:var(--card) !important;}
-.lk:active{transform:none !important;}
-/* lock notice */
-.lkn{display:none;align-items:center;gap:6px;padding:4px 7px;
-  background:var(--card);border:1px solid #333;border-radius:4px;
-  font-size:10px;color:var(--dim);margin-top:3px;}
-.lkn.show{display:flex;}
+/* disabled state */
+.dim-section{opacity:.32;pointer-events:none;}
+
+/* ── Mode dropdown ── */
+.mdrop{position:relative;}
+.mdrop-header{width:100%;padding:7px 10px;background:var(--card);border:1px solid var(--border);
+  border-radius:5px;cursor:pointer;display:flex;align-items:center;gap:8px;
+  font-family:inherit;font-size:12px;font-weight:700;transition:border-color .15s;}
+.mdrop-header:hover{border-color:var(--accent);}
+.mdrop-header .mh-dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex-shrink:0;}
+.mdrop-header .mh-txt{flex:1;text-align:left;}
+.mdrop-header .mh-arr{color:var(--dim);font-size:10px;flex-shrink:0;}
+.mdrop-opts{display:none;position:absolute;left:0;right:0;top:calc(100% + 4px);
+  background:#141428;border:1px solid var(--border);border-radius:6px;z-index:50;
+  padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.5);}
+.mdrop-opts.open{display:block;}
+.mopt{padding:7px 10px;border-radius:4px;cursor:pointer;display:flex;align-items:center;
+  gap:8px;border:1px solid transparent;transition:all .1s;margin-bottom:3px;}
+.mopt:last-child{margin-bottom:0;}
+.mopt:hover{border-color:currentColor;opacity:.9;}
+.mopt-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.mopt-name{font-size:12px;font-weight:700;}
+.mopt-desc{font-size:9px;color:var(--dim);margin-top:1px;}
+.mopt-auto  {color:var(--green); background:#0d3d2e;border-color:var(--green);}
+.mopt-manual{color:var(--teal);  background:#051a1a;border-color:var(--teal);}
+.mopt-jog   {color:var(--orange);background:#332e0a;border-color:var(--orange);}
+
+/* ── State nav buttons ── */
+.state-btn{width:100%;padding:6px 4px;border-radius:4px;border:1px solid #00ffff;
+  background:#0a1a3a;color:var(--accent);font-family:inherit;font-size:11px;
+  font-weight:700;cursor:pointer;text-align:center;line-height:1.4;transition:all .12s;}
+.state-btn:hover{background:#1a2a4a;border-color:#5cf4f1;}
+.state-btn:active{transform:scale(.97);}
+.state-btn.active-state{background:#0d3d2e;border-color:var(--green);color:var(--green);}
+.state-btn.lk{opacity:.32;cursor:not-allowed;}
+.state-btn.lk:hover{background:#0a1a3a;border-color:#00ffff;}
 
 /* ── Servo cards ── */
 .vel{background:var(--bg);border:1px solid var(--border);border-radius:5px;
@@ -368,12 +412,13 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 .svc{flex:1;background:var(--card);border:1px solid var(--border);border-radius:4px;
   padding:6px;display:flex;flex-direction:column;align-items:center;gap:5px;
   overflow:hidden;min-width:0;}
-.svn{font-size:14px;font-weight:700;color:var(--cyan);}
-.svd{font-size:10px;color:var(--dim);}
+.svc:hover{border-color:var(--accent);}
+.svn{font-size:13px;font-weight:700;color:var(--cyan);}
+.svd{font-size:9px;color:var(--dim);}
 .svp{font-size:20px;font-weight:700;color:var(--yellow);}
 .jr{display:flex;gap:3px;width:100%;}
 .jr .btn{flex:1;font-size:17px;font-weight:700;padding:9px 2px;}
-.sfw{width:100%;}.sfw .btn{width:100%;font-size:15px;padding:10px 4px;}
+.sfw{width:100%;}.sfw .btn{width:100%;font-size:14px;padding:9px 4px;}
 .pr{display:flex;gap:3px;width:100%;align-items:center;}
 .pi{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:5px;
   padding:5px 3px;color:var(--text);font-size:14px;font-family:inherit;text-align:center;
@@ -392,11 +437,8 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 .slb{font-size:8px;color:var(--dim);}
 .sdt{width:6px;height:6px;border-radius:50%;background:#2a2a2a;margin-top:2px;}
 .sb.on .sdt{background:var(--green);box-shadow:0 0 5px var(--green);}
-/* auto mode: sensor shows read-only badge */
-.rs-badge{display:none;align-items:center;gap:5px;padding:4px 7px;
-  background:#0a1f0a;border:1px solid var(--green);border-radius:4px;
-  font-size:10px;color:var(--green);font-weight:700;margin-bottom:4px;}
-.rs-badge.show{display:flex;}
+.sb.lk{opacity:.32;cursor:not-allowed;}
+.sb.lk:hover{border-color:var(--border);}
 
 /* ── Log ── */
 .lh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
@@ -419,43 +461,58 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 .ct2{width:100%;border-collapse:collapse;}
 .ct2 th{font-size:10px;text-transform:uppercase;color:var(--dim);
   padding:4px 7px;border-bottom:1px solid var(--border);}
-.ct2 td{padding:3px 7px;border-bottom:1px solid #1a1a30;}
+.ct2 td{padding:3px 7px;border-bottom:1px solid #0a1a2a;}
 .ct2 input{background:var(--bg);border:1px solid var(--border);border-radius:3px;
   padding:2px 4px;width:85px;color:var(--yellow);font-size:11px;
   font-family:monospace;text-align:right;}
 .ct2 input:focus{outline:none;border-color:var(--accent);}
 .rl{font-size:11px;font-weight:600;color:var(--cyan);}
 
-/* mode feature table */
-.mft{width:100%;border-collapse:collapse;font-size:10px;margin-top:6px;}
-.mft th{padding:4px 6px;border-bottom:1px solid var(--border);color:var(--accent);}
-.mft td{padding:3px 6px;border-bottom:1px solid #151525;}
-.yes{color:var(--green);font-weight:700;}.no{color:var(--red);}.ok{color:var(--yellow);}
+/* ── Robot tab ── */
+.rgrid{display:grid;grid-template-columns:280px 1fr;gap:12px;padding:12px;height:100%;overflow:hidden;}
+.rcol{display:flex;flex-direction:column;gap:8px;overflow-y:auto;}
+.robot-state-row{display:flex;align-items:center;gap:8px;padding:6px 8px;
+  background:var(--card);border:1px solid var(--border);border-radius:4px;margin-bottom:3px;}
+.robot-label{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.8px;width:80px;flex-shrink:0;}
+.robot-value{font-size:12px;font-weight:700;}
 </style>
 </head>
 <body>
 
+<!-- ════════════════ HEADER ════════════════ -->
 <div class="hdr">
   <h1><span>Cartridge</span> System</h1>
-  <div class="hdr-r">
-    <div class="state-badge"><div class="sdot" id="sdot"></div><span id="stTxt">UNKNOWN</span></div>
-    <div class="mpill m-auto" id="mpill"><span id="micon">🤖</span><span id="mtxt">AUTO</span></div>
+  <div class="hdr-fill"></div>
+  <!-- State badge -->
+  <div class="badge badge-state">
+    <div class="sdot" id="sdot"></div>
+    <span id="stTxt">UNKNOWN</span>
   </div>
+  <!-- Homing badge -->
+  <div class="badge badge-homed not-homed" id="homedBadge">○ NOT HOMED</div>
+  <div class="hdr-fill"></div>
+  <!-- Mode pill -->
+  <div class="mpill mp-none" id="mpill">⚠ SELECT MODE</div>
+  <!-- Reset Faults -->
+  <button class="hdr-fault" onclick="resetFaults()">🔄 Faults</button>
 </div>
 
+<!-- Notify bar -->
 <div class="nbar" id="nb">
   <span class="ntit" id="ntit"></span>
   <span class="ndet" id="ndet"></span>
-  <span class="ntm" id="ntm"></span>
+  <span class="ntm"  id="ntm"></span>
   <div class="nact">
     <button class="btn o" style="padding:2px 7px;font-size:10px" onclick="resetFaults()">Reset</button>
-    <button class="btn" style="padding:2px 7px;font-size:10px" onclick="dnb()">✕</button>
+    <button class="btn"   style="padding:2px 7px;font-size:10px" onclick="dnb()">✕</button>
   </div>
 </div>
 
+<!-- ════════════════ TABS ════════════════ -->
 <div class="tabs">
-  <div class="tab active" onclick="tab('ctrl',this)">Control</div>
-  <div class="tab" onclick="tab('cfg',this)">Config</div>
+  <div class="tab active" onclick="tab('ctrl',this)">Control Dashboard</div>
+  <div class="tab"        onclick="tab('cfg', this)">Technical System</div>
+  <div class="tab"        onclick="tab('robot',this)">Robot Control</div>
 </div>
 
 <!-- ════════════════ CONTROL PAGE ════════════════ -->
@@ -465,71 +522,89 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
   <!-- Left col -->
   <div class="lc">
 
-    <!-- Mode: only AUTO / MANUAL -->
+    <!-- Mode Selection (dropdown) -->
     <div class="card">
-      <div class="ct">Operation Mode</div>
-      <div class="gr2">
-        <button class="btn g sel" id="bAuto" onclick="setMode('auto')"
-          title="Đọc sensor thực, tự động chạy. JOG + Sim bị khóa.">🤖 AUTO</button>
-        <button class="btn pu" id="bMan" onclick="setMode('manual')"
-          title="JOG + Sim sensor. Chọn STATE 1/2 để chạy.">🖐 MANUAL</button>
-      </div>
-      <div id="dAuto" style="font-size:9px;color:var(--dim);line-height:1.6;padding:2px">
-        ✅ Sensor thực tế &nbsp;·&nbsp; ✅ Tự động trigger<br>🔒 JOG &nbsp;·&nbsp; 🔒 Sim sensor
-      </div>
-      <div id="dMan" style="display:none;font-size:9px;color:var(--purple);line-height:1.6;padding:2px">
-        ✅ JOG tự do &nbsp;·&nbsp; ✅ Sim sensor<br>✅ Chọn STATE 1/2 từ nút bên dưới
+      <div class="ct">Mode Selection</div>
+      <div class="mdrop" id="mdropWrap">
+        <button class="mdrop-header" id="mdropHdr" onclick="toggleMdrop()">
+          <span class="mh-dot" id="mhDot"></span>
+          <span class="mh-txt" id="mhTxt">Chọn chế độ...</span>
+          <span class="mh-arr" id="mhArr">▼</span>
+        </button>
+        <div class="mdrop-opts" id="mdropOpts">
+          <div class="mopt mopt-auto" onclick="setMode('auto')">
+            <span class="mopt-dot" style="background:var(--green)"></span>
+            <div><div class="mopt-name">AUTO</div><div class="mopt-desc">Camera / Robot tín hiệu · JOG khóa</div></div>
+          </div>
+          <div class="mopt mopt-manual" onclick="setMode('manual')">
+            <span class="mopt-dot" style="background:var(--teal)"></span>
+            <div><div class="mopt-name">MANUAL</div><div class="mopt-desc">Sim sensor · Chọn STATE 1–4 · JOG khóa</div></div>
+          </div>
+          <div class="mopt mopt-jog" onclick="setMode('jog')">
+            <span class="mopt-dot" style="background:var(--orange)"></span>
+            <div><div class="mopt-name">JOG</div><div class="mopt-desc">Di chuyển servo tự do · Workflow khóa</div></div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- System control -->
-    <div class="card">
+    <!-- System Control -->
+    <div class="card" id="sysCtrlCard">
       <div class="ct">System Control</div>
-      <div class="gr3">
-        <button class="btn g" onclick="sys('start')">START</button>
-        <button class="btn r" onclick="sys('stop')">STOP</button>
-        <button class="btn o" onclick="sys('pause')">PAUSE</button>
-      </div>
-      <div class="gr2">
-        <button class="btn bl" onclick="api('/api/confirm')">Confirm</button>
-        <button class="btn g" onclick="api('/api/hmi_resume')">Resume</button>
+      <div id="sysCtrlInner">
+        <div class="gr3">
+          <button class="btn g" onclick="sys('start')">START</button>
+          <button class="btn r" onclick="sys('stop')">STOP</button>
+          <button class="btn o" onclick="sys('pause')">PAUSE</button>
+        </div>
+        <div class="gr2">
+          <button class="btn t" onclick="api('/api/confirm')">Confirm</button>
+          <button class="btn g" onclick="api('/api/hmi_resume')">Resume</button>
+        </div>
       </div>
     </div>
 
-    <!-- State nav -->
-    <div class="card" style="flex:1">
+    <!-- State Navigation -->
+    <div class="card" style="flex:1" id="stateNavCard">
       <div class="ct">State Navigation</div>
-      <!-- Always available -->
-      <div class="gr2" style="margin-bottom:6px">
-        <button class="btn" onclick="gotoState('HOMING')">🏠 HOMING</button>
-        <button class="btn" onclick="gotoState('IDLE')">⏹ IDLE</button>
-      </div>
-      <!-- Workflow: manual only -->
-      <div style="font-size:9px;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px"
-           id="wfLabel">— Workflow (manual only) —</div>
-      <div class="gr2">
-        <button class="btn bl lk" id="bS1" onclick="gotoWf('STATE1')"
-          title="Cấp khay Input: kiểm tra S1/S2/S3 + S12">
-          ▶ STATE 1<br><span style="font-size:9px;font-weight:400;text-transform:none">Cấp khay</span>
-        </button>
-        <button class="btn bl lk" id="bS2" onclick="gotoWf('STATE2')"
-          title="Thay khay Input: kiểm tra S13">
-          ▶ STATE 2<br><span style="font-size:9px;font-weight:400;text-transform:none">Thay khay</span>
-        </button>
-      </div>
-      <div class="lkn show" id="wfLock">🔒 AUTO mode — hệ thống tự chọn STATE</div>
-      <div style="margin-top:4px">
-        <button class="btn r" onclick="gotoState('ERROR')" style="width:100%;padding:4px">⛔ FORCE ERROR</button>
+      <div id="stateNavInner">
+        <!-- Top row: always available -->
+        <div class="gr2" style="margin-bottom:6px">
+          <button class="btn" onclick="gotoState('HOMING')">🏠 HOMING</button>
+          <button class="btn" id="abortJogBtn" onclick="onAbortJog()">⛔ ABORT→JOG</button>
+        </div>
+        <!-- 4 workflow states -->
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin-bottom:4px" id="wfLabel">
+          — Workflow —
+        </div>
+        <div class="gr2">
+          <button class="state-btn" id="bS1" onclick="gotoWf('STATE1')">
+            ▶ STATE 1<br><span style="font-size:9px;font-weight:400;text-transform:none">Nạp khay In</span>
+          </button>
+          <button class="state-btn" id="bS2" onclick="gotoWf('STATE2')">
+            ▶ STATE 2<br><span style="font-size:9px;font-weight:400;text-transform:none">Thay khay In</span>
+          </button>
+        </div>
+        <div class="gr2" style="margin-top:4px">
+          <button class="state-btn" id="bS3" onclick="gotoWf('STATE3')" style="border-color:var(--green);color:var(--green)">
+            ▶ STATE 3<br><span style="font-size:9px;font-weight:400;text-transform:none">Cấp khay Out</span>
+          </button>
+          <button class="state-btn" id="bS4" onclick="gotoWf('STATE4')" style="border-color:var(--green);color:var(--green)">
+            ▶ STATE 4<br><span style="font-size:9px;font-weight:400;text-transform:none">Thay khay Out</span>
+          </button>
+        </div>
+        <div style="margin-top:4px">
+          <button class="btn r" onclick="gotoState('ERROR')" style="width:100%;padding:4px">⛔ FORCE ERROR</button>
+        </div>
       </div>
     </div>
-
   </div>
 
   <!-- Center col -->
   <div class="cc">
     <div class="card" style="flex-shrink:0">
       <div class="ct">Target Row</div>
-      <div style="display:flex;gap:4px" id="trbar"></div>
+      <div style="display:flex;gap:3px;flex-wrap:wrap" id="trbar"></div>
     </div>
     <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-shrink:0">
@@ -537,7 +612,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
         <span style="font-size:10px;color:var(--dim)">Vel:</span>
         <input type="number" class="vel" id="jv" value="30" min="1" max="200">
         <span style="font-size:10px;color:var(--dim)">mm/s</span>
-        <span id="jlk" style="display:none;font-size:10px;color:var(--dim)">🔒 AUTO</span>
+        <span id="jlk" style="display:none;font-size:10px;color:var(--orange)">🔒 JOG mode only</span>
       </div>
       <div id="svlist"></div>
     </div>
@@ -557,78 +632,66 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
   <div class="sc"><div class="card" style="height:100%;display:flex;flex-direction:column">
     <div class="ct">Sensor Panel</div>
 
-    <!-- Auto: real sensor badge -->
-    <div class="rs-badge show" id="rsbadge">📡 REAL SENSORS (sim khóa)</div>
-
-    <!-- Manual: sim controls -->
-    <div id="simCtrl" style="display:none">
+    <!-- Sim controls (hidden in AUTO) -->
+    <div id="simCtrl">
       <div style="display:flex;gap:3px;margin-bottom:3px">
         <button class="btn g" style="flex:1;padding:3px 4px;font-size:10px" onclick="sAll(1)">All ON</button>
         <button class="btn r" style="flex:1;padding:3px 4px;font-size:10px" onclick="sAll(0)">All OFF</button>
         <button class="btn"   style="flex:1;padding:3px 4px;font-size:10px" onclick="sClear()">Clear</button>
       </div>
       <div style="font-size:9px;color:var(--dim);margin-bottom:2px;text-transform:uppercase;letter-spacing:.8px">Quick Preset</div>
-      <div style="display:flex;gap:3px;margin-bottom:3px">
+      <div style="display:flex;gap:3px;margin-bottom:4px">
         <button class="btn bl" style="flex:1;padding:3px 4px;font-size:9px"
-          title="S1+S12+S3+S10 ON — đủ điều kiện vào State 1 và pass Step 3"
-          onclick="simPreset([1,3,10,12])">S1 Entry</button>
-        <button class="btn pu" style="flex:1;padding:3px 4px;font-size:9px"
-          title="S1+S3+S4+S5+S10+S11+S12+S13 ON — full State 1 workflow"
-          onclick="simPreset([1,3,4,5,10,11,12,13])">S1 Full</button>
+          onclick="simPreset([1,3,9])">S1 Entry</button>
+        <button class="btn t"  style="flex:1;padding:3px 4px;font-size:9px"
+          onclick="simPreset([1,3,4,5,7,9])">S1 Full</button>
       </div>
     </div>
-
+    <!-- AUTO: real sensor notice -->
+    <div id="rsbadge" style="display:none;padding:4px 7px;background:#0a1f0a;border:1px solid var(--green);
+      border-radius:4px;font-size:10px;color:var(--green);font-weight:700;margin-bottom:4px">
+      📡 REAL SENSORS — sim khóa
+    </div>
 
     <div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Status</div>
     <div class="sgrid" id="sg"></div>
 
     <div style="font-size:8px;color:var(--dim);line-height:1.5;margin-top:6px">
-      <b>S1-S3</b> Băng tải · <b>S4</b> Stack In · <b>S5</b> Output Det<br>
-      <b>S6</b> In Stack · <b>S7</b> Platform · <b>S8</b> Feed OK · <b>S9</b> Out Finish<br>
-      <b>S10</b> Stack Out · <b>S11</b> Tray@Robot<br>
-      <b>S15/16</b> Cyl1 Ret/Ext<br>
-      <b>S19/20</b> Cyl2 Ret/Ext
-    </div>
-
-    <!-- Feature compare table -->
-    <div style="margin-top:8px;padding:5px;background:var(--card);border-radius:4px;border:1px solid var(--border)">
-      <table class="mft">
-        <tr><th>Tính năng</th><th>AUTO</th><th>MANUAL</th></tr>
-        <tr><td>Sensor đọc</td><td class="yes">Thực tế</td><td class="ok">Thực+Sim</td></tr>
-        <tr><td>Sim sensor</td><td class="no">🔒</td><td class="yes">✅</td></tr>
-        <tr><td>JOG trục</td><td class="no">🔒</td><td class="yes">✅</td></tr>
-        <tr><td>Tự trigger</td><td class="yes">✅ liên tục</td><td class="no">Manual</td></tr>
-        <tr><td>Chọn STATE</td><td class="ok">Auto</td><td class="yes">GUI nút</td></tr>
-      </table>
+      <b>S1-S3</b> Băng tải · <b>S4</b> Scan Stack P1 · <b>S5</b> Output Det<br>
+      <b>S6</b> Check Tray P1 · <b>S7</b> Tray@Robot<br>
+      <b>S9/S10</b> Cyl1 Ret/Ext · <b>S11/S12</b> ATV Run/Fault<br>
+      <b>S17</b> Platform · <b>S18</b> Feed OK<br>
+      <b>S19</b> Check Tray P2 · <b>S20</b> Scan Stack P2<br>
+      <b>S21/S22</b> Cyl2 Ret/Ext
     </div>
   </div></div>
 
 </div></div>
 
-<!-- ════════════════ CONFIG PAGE ════════════════ -->
+<!-- ════════════════ TECHNICAL SYSTEM PAGE ════════════════ -->
 <div class="page" id="page-cfg"><div class="cgrid">
   <div class="card"><div class="ct">Input Stack — InY (mm)</div>
-    <table class="ct2"><tr><th>Row</th><th>Pos (mm)</th><th>Note</th></tr></table>
+    <table class="ct2"><tr><th>Row</th><th>Pos (mm)</th><th></th></tr></table>
     <table class="ct2" id="tIS"></table>
     <div style="margin-top:7px;display:flex;gap:5px">
       <button class="btn g" style="padding:3px 9px;font-size:11px" onclick="saveCfg('iny_input_stack','tIS')">Save</button>
-      <button class="btn" style="padding:3px 9px;font-size:11px" onclick="loadCfg()">↻ Reload</button>
+      <button class="btn"   style="padding:3px 9px;font-size:11px" onclick="loadCfg()">↻ Reload</button>
     </div>
   </div>
   <div class="card"><div class="ct">Output Stack — InY (mm)</div>
-    <table class="ct2"><tr><th>Row</th><th>Pos (mm)</th><th>Note</th></tr></table>
+    <table class="ct2"><tr><th>Row</th><th>Pos (mm)</th><th></th></tr></table>
     <table class="ct2" id="tOS"></table>
     <div style="margin-top:7px;display:flex;gap:5px">
       <button class="btn g" style="padding:3px 9px;font-size:11px" onclick="saveCfg('iny_output_stack','tOS')">Save</button>
-      <button class="btn" style="padding:3px 9px;font-size:11px" onclick="loadCfg()">↻ Reload</button>
+      <button class="btn"   style="padding:3px 9px;font-size:11px" onclick="loadCfg()">↻ Reload</button>
     </div>
   </div>
   <div class="card"><div class="ct">Output Table — OutY (mm)</div>
-    <table class="ct2"><tr><th>Row</th><th>Pos (mm)</th><th>Note</th></tr></table>
+    <table class="ct2"><tr><th>Row</th><th>Pos (mm)</th><th></th></tr></table>
     <table class="ct2" id="tOT"></table>
     <div style="margin-top:7px;display:flex;gap:5px">
       <button class="btn g" style="padding:3px 9px;font-size:11px" onclick="saveCfg('outy_output_table','tOT')">Save</button>
-      <button class="btn" style="padding:3px 9px;font-size:11px" onclick="loadCfg()">↻ Reload</button>
+      <button class="btn"   style="padding:3px 9px;font-size:11px" onclick="loadCfg()">↻ Reload</button>
     </div>
   </div>
   <div class="card"><div class="ct">Key Positions (mm)</div>
@@ -636,72 +699,168 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
   </div>
 </div></div>
 
+<!-- ════════════════ ROBOT CONTROL PAGE ════════════════ -->
+<div class="page" id="page-robot"><div class="rgrid">
+
+  <!-- Left: status + controls -->
+  <div class="rcol">
+    <div class="card">
+      <div class="ct">Robot Status</div>
+      <div class="robot-state-row">
+        <span class="robot-label">System</span>
+        <span class="robot-value" id="rSysState" style="color:var(--cyan)">—</span>
+      </div>
+      <div class="robot-state-row">
+        <span class="robot-label">Mode</span>
+        <span class="robot-value" id="rMode" style="color:var(--yellow)">—</span>
+      </div>
+      <div class="robot-state-row">
+        <span class="robot-label">Homing</span>
+        <span class="robot-value" id="rHomed">—</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ct">Emergency</div>
+      <button class="btn r" style="width:100%;padding:10px;font-size:14px;margin-bottom:6px"
+        onclick="sys('stop')">🛑 EMERGENCY STOP</button>
+      <button class="btn g" style="width:100%;padding:8px;font-size:13px"
+        onclick="api('/api/hmi_resume')">▶ Resume</button>
+    </div>
+
+    <div class="card">
+      <div class="ct">State Control</div>
+      <div class="gr2">
+        <button class="btn" onclick="gotoState('HOMING')" style="padding:8px">🏠 Homing</button>
+        <button class="btn" onclick="gotoState('IDLE')"   style="padding:8px">⏹ Idle</button>
+      </div>
+      <button class="btn r" style="width:100%;padding:6px;margin-top:4px"
+        onclick="gotoState('ABORT_TO_JOG')">⛔ Abort → JOG</button>
+    </div>
+
+    <div class="card">
+      <div class="ct">Reset</div>
+      <button class="btn o" style="width:100%;padding:8px" onclick="resetFaults()">🔄 Reset Faults</button>
+    </div>
+  </div>
+
+  <!-- Right: log -->
+  <div class="card" style="display:flex;flex-direction:column;overflow:hidden">
+    <div class="lh">
+      <div class="ct" style="margin-bottom:0">Robot Event Log</div>
+      <button class="btn" style="padding:3px 9px;font-size:11px"
+        onclick="document.getElementById('rlb').innerHTML=''">Clear</button>
+    </div>
+    <div class="lb" id="rlb"></div>
+  </div>
+
+</div></div>
+
 <div class="tc" id="tc"></div>
 
 <script>
 // ─── State ──────────────────────────────────────────────
-const SS={};for(let i=1;i<=20;i++)SS[i]=false;
-let mode='auto', sysState='unknown';
+const SS={};for(let i=1;i<=22;i++)SS[i]=false;
+let mode='', sysState='';
 
 const SERVOS=[
-  {id:1,name:'InX',d:'Trục X đầu vào'},
-  {id:2,name:'InY',d:'Trục Y đầu vào'},
-  {id:3,name:'Platform',d:'Đỡ/đẩy khay'},
-  {id:4,name:'OutX',d:'Trục X đầu ra'},
-  {id:5,name:'OutY',d:'Trục Y đầu ra'}
+  {id:1,name:'InX',    d:'Trục X đầu vào'},
+  {id:2,name:'InY',    d:'Trục Y đầu vào'},
+  {id:3,name:'PutTray',d:'Đẩy khay'},
+  {id:4,name:'OutX',   d:'Trục X đầu ra'},
+  {id:5,name:'OutY',   d:'Trục Y đầu ra'}
 ];
 const SLB={
-  1:'Belt start',2:'Belt mid',3:'Belt end',4:'Stack In',5:'Output det.',
-  6:'In stack tray',7:'Platform tray',8:'Feed OK',9:'Out finish',
-  10:'Stack Out',11:'Tray@Robot',12:'[reserved]',13:'[reserved]',
-  14:'[reserved]',15:'Cyl1 Ret',16:'Cyl1 Ext',17:'Dự phòng',
-  18:'Dự phòng',19:'Cyl2 Ret',20:'Cyl2 Ext'
+  1:'Belt start',2:'Belt mid',3:'Belt end',4:'Scan Stack P1',5:'Output det.',
+  6:'Check Tray P1',7:'Tray@Robot',8:'[reserved]',9:'Cyl1 Ret',
+  10:'Cyl1 Ext',11:'ATV Run',12:'ATV Fault',13:'[reserved]',
+  14:'[res]',15:'[res]',16:'[res]',17:'Platform',
+  18:'Feed OK',19:'Check Tray P2',20:'Scan Stack P2',
+  21:'Cyl2 Ret',22:'Cyl2 Ext'
 };
 
 // ─── Mode ───────────────────────────────────────────────
 function setMode(m) {
-  if(m!=='auto'&&m!=='manual') return;
+  document.getElementById('mdropOpts').classList.remove('open');
+  document.getElementById('mhArr').textContent='▼';
   fetch('/api/set_mode',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({mode:m})})
   .then(r=>r.json()).then(j=>{
-    if(j.ok){
-      mode=m; updateModeUI();
-      log('Mode → '+m.toUpperCase(), m==='auto'?'ok':'in');
-    } else {
-      toast('❌ '+(j.err||'Mode change failed'),'er');
-      log(j.err||'Mode blocked','er');
-    }
+    if(j.ok){ mode=m; updateModeUI(); log('Mode → '+m.toUpperCase(),'ok'); }
+    else     { toast('❌ '+(j.err||'Mode change failed'),'er'); log(j.err,'er'); }
   }).catch(()=>toast('❌ Connection error','er'));
 }
 
+function toggleMdrop() {
+  if(mode && sysState && sysState!=='idle' && sysState!=='unknown' && sysState!=='offline') {
+    toast('⚠ Cannot change mode while running','wn'); return;
+  }
+  const o=document.getElementById('mdropOpts');
+  o.classList.toggle('open');
+  document.getElementById('mhArr').textContent=o.classList.contains('open')?'▲':'▼';
+}
+
+// Close dropdown on outside click
+document.addEventListener('click',e=>{
+  if(!document.getElementById('mdropWrap').contains(e.target)){
+    document.getElementById('mdropOpts').classList.remove('open');
+    document.getElementById('mhArr').textContent='▼';
+  }
+});
+
 function updateModeUI() {
-  const ia=mode==='auto', im=mode==='manual';
+  const dot=document.getElementById('mhDot'), txt=document.getElementById('mhTxt');
+  const pill=document.getElementById('mpill');
+  const jlk=document.getElementById('jlk');
+
   // Header pill
-  const p=document.getElementById('mpill');
-  p.className='mpill '+(ia?'m-auto':'m-manual');
-  document.getElementById('micon').textContent=ia?'🤖':'🖐';
-  document.getElementById('mtxt').textContent=ia?'AUTO':'MANUAL';
-  // Mode btns
-  document.getElementById('bAuto').classList.toggle('sel',ia);
-  document.getElementById('bMan').classList.toggle('sel',im);
-  // Description
-  document.getElementById('dAuto').style.display=ia?'':'none';
-  document.getElementById('dMan').style.display=im?'':'none';
-  // JOG lock
-  document.getElementById('jlk').style.display=ia?'':'none';
-  document.querySelectorAll('.jb').forEach(b=>b.classList.toggle('lk',ia));
-  // Sensor panel
-  document.getElementById('rsbadge').classList.toggle('show',ia);
-  document.getElementById('simCtrl').style.display=im?'':'none';
-  document.querySelectorAll('.sb').forEach(b=>b.classList.toggle('lk',ia));
-  // Workflow buttons
-  document.getElementById('bS1').classList.toggle('lk',ia);
-  document.getElementById('bS2').classList.toggle('lk',ia);
-  document.getElementById('wfLabel').style.color=im?'var(--purple)':'var(--dim)';
-  document.getElementById('wfLabel').textContent=ia?'— Workflow (auto — read only) —':'— Workflow — chọn để chạy —';
-  const lkn=document.getElementById('wfLock');
-  lkn.classList.toggle('show',ia);
-  lkn.textContent=ia?'🔒 AUTO mode — hệ thống tự trigger STATE 1/2':'✅ Nhấn STATE 1 hoặc STATE 2 để bắt đầu';
+  pill.className='mpill';
+  if(!mode||mode==='idle'||mode===''){
+    pill.className+=' mp-none'; pill.textContent='⚠ SELECT MODE';
+    dot.style.background='var(--dim)'; txt.textContent='Chọn chế độ...'; txt.style.color='var(--dim)';
+  } else if(mode==='auto'){
+    pill.className+=' mp-auto';   pill.textContent='● AUTO';
+    dot.style.background='var(--green)'; txt.textContent='AUTO'; txt.style.color='var(--green)';
+  } else if(mode==='manual'){
+    pill.className+=' mp-manual'; pill.textContent='● MANUAL';
+    dot.style.background='var(--teal)';  txt.textContent='MANUAL'; txt.style.color='var(--teal)';
+  } else if(mode==='jog'){
+    pill.className+=' mp-jog';    pill.textContent='● MANUAL (JOG)';
+    dot.style.background='var(--orange)'; txt.textContent='MANUAL (JOG)'; txt.style.color='var(--orange)';
+  }
+
+  const noMode = !mode || mode==='' || mode==='idle';
+
+  // System Control + State Nav: dim when no mode
+  document.getElementById('sysCtrlInner').className = noMode ? 'dim-section' : '';
+  document.getElementById('stateNavInner').className = noMode ? 'dim-section' : '';
+
+  // JOG lock indicator
+  const jogAllowed = mode==='jog';
+  jlk.style.display = (!noMode && !jogAllowed) ? '' : 'none';
+  document.querySelectorAll('.jb').forEach(b=>b.classList.toggle('lk', !jogAllowed));
+
+  // Sensor sim
+  const simAllowed = mode==='manual' || mode==='jog';
+  document.getElementById('rsbadge').style.display = mode==='auto' ? '' : 'none';
+  document.getElementById('simCtrl').style.display  = simAllowed   ? '' : 'none';
+  document.querySelectorAll('.sb').forEach(b=>b.classList.toggle('lk', mode==='auto'));
+
+  // Workflow state buttons: locked in JOG mode
+  const wfLocked = mode==='jog' || noMode;
+  ['bS1','bS2','bS3','bS4'].forEach(id=>{
+    document.getElementById(id).classList.toggle('lk', wfLocked);
+  });
+  const wfl=document.getElementById('wfLabel');
+  if(noMode)        { wfl.style.color='var(--dim)';    wfl.textContent='— Workflow —'; }
+  else if(wfLocked) { wfl.style.color='var(--orange)'; wfl.textContent='— Workflow (JOG mode — locked) —'; }
+  else if(mode==='auto')  { wfl.style.color='var(--dim)';    wfl.textContent='— Workflow (auto trigger) —'; }
+  else              { wfl.style.color='var(--teal)';  wfl.textContent='— Workflow — chọn để chạy —'; }
+
+  // Abort→JOG button: shows JOG MODE when already in JOG
+  const abtn=document.getElementById('abortJogBtn');
+  if(mode==='jog'){ abtn.textContent='✅ JOG MODE'; abtn.style.borderColor='var(--orange)'; abtn.style.color='var(--orange)'; }
+  else            { abtn.textContent='⛔ ABORT→JOG'; abtn.style.borderColor=''; abtn.style.color=''; }
 }
 
 // ─── API ────────────────────────────────────────────────
@@ -717,57 +876,50 @@ async function api(ep,data={}) {
   } catch(e){ toast('❌ Connection','er'); return {ok:false}; }
 }
 
-function sys(a) { api('/api/'+a); }
+function sys(a)       { api('/api/'+a); }
 function resetFaults() { api('/api/reset_faults'); }
+function gotoState(s)  { api('/api/goto_state',{state:s}); log('goto '+s,'in'); }
 
-function gotoState(s) { api('/api/goto_state',{state:s}); log('goto '+s,'in'); }
-
-// STATE1/STATE2 workflow — manual only
 function gotoWf(s) {
-  if(mode!=='manual'){
-    toast('🔒 MANUAL mode only','wn');
-    log('STATE nav blocked — switch to MANUAL','wn');
-    return;
-  }
-  api('/api/goto_state',{state:s});
-  log('Manual → '+s,'ok');
+  if(mode==='jog')  { toast('🔒 JOG mode — workflow locked','wn'); return; }
+  if(!mode||mode===''||mode==='idle') { toast('⚠ Chọn mode trước','wn'); return; }
+  api('/api/goto_state',{state:s}); log('Workflow → '+s,'ok');
+}
+
+function onAbortJog() {
+  if(mode==='jog'){ toast('✅ Already in JOG mode','ok'); return; }
+  api('/api/goto_state',{state:'ABORT_TO_JOG'}); log('ABORT_TO_JOG','wn');
 }
 
 function setRow(r) { api('/api/set_target_row',{row:r}); }
 
 // ─── Sensor sim ─────────────────────────────────────────
 function tog(id) {
-  if(mode!=='manual'){ toast('🔒 Sim: MANUAL mode only','wn'); return; }
+  if(mode==='auto'){ toast('🔒 Sim: not available in AUTO','wn'); return; }
   SS[id]=!SS[id];
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({cmd:id+':'+(SS[id]?1:0)})});
   rfs(id);
 }
 function sAll(v) {
-  if(mode!=='manual'){ toast('🔒 MANUAL only','wn'); return; }
-  for(let i=1;i<=20;i++){ SS[i]=!!v; rfs(i); }
+  if(mode==='auto'){ toast('🔒 AUTO mode','wn'); return; }
+  for(let i=1;i<=22;i++){ SS[i]=!!v; rfs(i); }
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'all:'+v})});
 }
 function sClear() {
-  if(mode!=='manual'){ toast('🔒 MANUAL only','wn'); return; }
-  for(let i=1;i<=20;i++){ SS[i]=false; rfs(i); }
+  if(mode==='auto'){ toast('🔒 AUTO mode','wn'); return; }
+  for(let i=1;i<=22;i++){ SS[i]=false; rfs(i); }
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'clear'})});
 }
 function simPreset(ids) {
-  if(mode!=='manual'){ toast('🔒 MANUAL only','wn'); return; }
-  // Clear all first
-  for(let i=1;i<=20;i++){ SS[i]=false; rfs(i); }
+  if(mode==='auto'){ toast('🔒 AUTO mode','wn'); return; }
+  for(let i=1;i<=22;i++){ SS[i]=false; rfs(i); }
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'clear'})});
-  // Set preset sensors ON
-  ids.forEach(id=>{ SS[id]=true; rfs(id); });
-  const cmd=ids.map(id=>id+':1').join(',');
-  // Send each ON
-  ids.forEach(id=>{
-    fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({cmd:id+':1'})});
+  ids.forEach(id=>{ SS[id]=true; rfs(id);
+    fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:id+':1'})});
   });
   log('Preset: S['+ids.join(',')+'] ON','ok');
-  toast('✅ Preset: S'+ids.join('+'),'ok');
+  toast('✅ Preset: S'+ids.join('+'));
 }
 function rfs(id) {
   const el=document.getElementById('s'+id);
@@ -776,25 +928,25 @@ function rfs(id) {
 
 // ─── JOG ────────────────────────────────────────────────
 function jog(id,dir) {
-  if(mode!=='manual'){ toast('🔒 JOG: MANUAL mode only','wn'); return; }
+  if(mode!=='jog'){ toast('🔒 JOG: switch to JOG mode first','wn'); return; }
   const v=document.getElementById('jv').value||30;
   fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:id+' '+dir+' '+v})});
 }
-function jStop(id) { // STOP always works (safety)
+function jStop(id) {
   fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:id+' stop'})});
 }
 function hSv(id) {
-  if(mode!=='manual'){ toast('🔒 MANUAL only','wn'); return; }
+  if(mode!=='jog'){ toast('🔒 JOG mode required','wn'); return; }
   fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'home '+id})});
   log('Home S'+id,'in');
 }
 function clSv(id) {
-  if(mode!=='manual'){ toast('🔒 MANUAL only','wn'); return; }
+  if(mode!=='jog'){ toast('🔒 JOG mode required','wn'); return; }
   fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'clear '+id})});
   log('Clear S'+id,'in');
 }
 function mvSv(id) {
-  if(mode!=='manual'){ toast('🔒 MANUAL only','wn'); return; }
+  if(mode!=='jog'){ toast('🔒 JOG mode required','wn'); return; }
   const pos=parseFloat(document.getElementById('pi'+id)?.value);
   if(isNaN(pos)){ toast('❌ Invalid pos','er'); return; }
   api('/api/move_servo',{cmd:id+':'+pos});
@@ -807,18 +959,20 @@ async function loadCfg() {
   const j=await(await fetch('/api/config')).json();
   if(!j.ok||!j.config) return;
   const c=j.config;
-  if(c.iny_input_stack)  buildTbl('tIS',c.iny_input_stack);
-  if(c.iny_output_stack) buildTbl('tOS',c.iny_output_stack);
-  if(c.outy_output_table)buildTbl('tOT',c.outy_output_table);
-  if(c.operation_mode)   { mode=c.operation_mode; updateModeUI(); }
+  if(c.iny_input_stack)   buildTbl('tIS',c.iny_input_stack);
+  if(c.iny_output_stack)  buildTbl('tOS',c.iny_output_stack);
+  if(c.outy_output_table) buildTbl('tOT',c.outy_output_table);
+  if(c.operation_mode && c.operation_mode !== mode) {
+    mode=c.operation_mode; updateModeUI();
+  }
   buildKP(c);
 }
 function buildTbl(id,data) {
   const tbl=document.getElementById(id); tbl.innerHTML='';
-  for(let r=8;r>=1;r--) {
+  for(let r=10;r>=1;r--) {
     const v=data[r]||data[String(r)]||0;
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td class="rl">R${r}</td><td><input type="number" step="0.1" value="${v}" id="${id}_r${r}"></td><td style="font-size:9px;color:var(--dim)">${r===8?'Top':r===1?'Bot':''}</td>`;
+    tr.innerHTML=`<td class="rl">R${r}</td><td><input type="number" step="0.1" value="${v}" id="${id}_r${r}"></td><td style="font-size:9px;color:var(--dim)">${r===10?'Top':r===1?'Bot':''}</td>`;
     tbl.appendChild(tr);
   }
 }
@@ -837,7 +991,7 @@ function buildKP(c) {
 }
 async function saveCfg(tbl,id) {
   const pos={};
-  for(let r=1;r<=8;r++) {
+  for(let r=1;r<=10;r++) {
     const el=document.getElementById(id+'_r'+r);
     if(el) pos[r]=parseFloat(el.value)||0;
   }
@@ -847,15 +1001,15 @@ async function saveCfg(tbl,id) {
 // ─── Build UI ───────────────────────────────────────────
 function buildRows() {
   const bar=document.getElementById('trbar');
-  for(let r=1;r<=8;r++) {
+  for(let r=10;r>=1;r--) {
     const b=document.createElement('button');
-    b.className='btn';b.style.cssText='flex:1;padding:4px 5px;font-size:11px';
+    b.className='btn';b.style.cssText='padding:4px 7px;font-size:11px;min-width:32px';
     b.textContent='R'+r;b.onclick=()=>setRow(r);bar.appendChild(b);
   }
 }
 function buildSensors() {
   const g=document.getElementById('sg');
-  for(let i=1;i<=20;i++) {
+  for(let i=1;i<=22;i++) {
     const d=document.createElement('div');
     d.className='sb';d.id='s'+i;d.onclick=()=>tog(i);
     const lb=SLB[i]||'';
@@ -895,27 +1049,67 @@ function toast(msg,type='ok') {
   t.textContent=msg;c.appendChild(t);
   setTimeout(()=>t.remove(),3000);
 }
-function log(msg,type='in') {
-  const box=document.getElementById('lb');
+function log(msg,type='in',target='lb') {
+  const box=document.getElementById(target);
+  if(!box) return;
   const tm=new Date().toLocaleTimeString('vi-VN');
   box.innerHTML+=`<div class="${type}">[${tm}] ${msg}</div>`;
   box.scrollTop=box.scrollHeight;
   while(box.children.length>200) box.removeChild(box.firstChild);
 }
+function rlog(msg,type='in') { log(msg,type,'rlb'); }
 
 // ─── Polling ────────────────────────────────────────────
 async function pollSt() {
   try {
     const j=await(await fetch('/api/status')).json();
-    const s=j.state||'';
+    const s=(j.state||'').toUpperCase();
+    const m=(j.mode||'').toLowerCase();
     sysState=s.toLowerCase();
+
+    // State badge
     document.getElementById('stTxt').textContent=s||'UNKNOWN';
     const dot=document.getElementById('sdot');
-    if(!s||s==='UNKNOWN'){dot.style.background='#555';dot.style.boxShadow='';}
+    if(!s||s==='UNKNOWN'||s==='OFFLINE'){dot.style.background='#555';dot.style.boxShadow='';}
     else if(s.includes('ERROR')){dot.style.background='var(--red)';dot.style.boxShadow='0 0 7px var(--red)';}
     else if(s==='IDLE'){dot.style.background='var(--orange)';dot.style.boxShadow='0 0 7px var(--orange)';}
     else{dot.style.background='var(--green)';dot.style.boxShadow='0 0 7px var(--green)';}
-  } catch(e) { document.getElementById('stTxt').textContent='OFFLINE'; }
+
+    // Homing badge
+    const hb=document.getElementById('homedBadge');
+    if(sysState.indexOf('homing')!==-1){
+      hb.className='badge badge-homed homing'; hb.textContent='⟳ HOMING...';
+    } else if(m && m!=='' && (sysState==='idle'||sysState.indexOf('s1')!==-1||sysState.indexOf('state')!==-1)){
+      hb.className='badge badge-homed homed'; hb.textContent='✓ HOMED';
+    } else {
+      hb.className='badge badge-homed not-homed'; hb.textContent='○ NOT HOMED';
+    }
+
+    // Active state buttons
+    ['S1','S2','S3','S4'].forEach(n=>{
+      const el=document.getElementById('b'+n);
+      if(el) el.classList.toggle('active-state',
+        s.indexOf(n+'_')!==-1 || s.indexOf('STATE'+n.slice(1))!==-1);
+    });
+
+    // Sync mode from server if different
+    if(m && m!=='' && m!=='idle' && m!==mode){
+      mode=m; updateModeUI();
+    }
+
+    // Robot tab
+    document.getElementById('rSysState').textContent=s||'—';
+    document.getElementById('rMode').textContent=(m||'—').toUpperCase();
+    const hbClone=hb.textContent;
+    document.getElementById('rHomed').textContent=hbClone;
+    document.getElementById('rHomed').style.color=
+      hbClone.includes('HOMED')&&!hbClone.includes('NOT') ? 'var(--green)'
+      : hbClone.includes('HOMING') ? 'var(--orange)' : 'var(--dim)';
+
+  } catch(e) {
+    document.getElementById('stTxt').textContent='OFFLINE';
+    sysState='offline';
+  }
 }
 async function pollPos() {
   try {
@@ -936,8 +1130,11 @@ async function pollN() {
       _ni=j.total;
       const last=j.notifications[j.notifications.length-1];
       showN(last.level,last.title,last.detail,last.time);
-      j.notifications.forEach(n=>log(n.title+(n.detail?': '+n.detail:''),
-        n.level==='error'?'er':n.level==='warn'?'wn':'in'));
+      j.notifications.forEach(n=>{
+        const t=n.level==='error'?'er':n.level==='warn'?'wn':'in';
+        log(n.title+(n.detail?': '+n.detail:''), t);
+        rlog(n.title+(n.detail?': '+n.detail:''), t);
+      });
     }
   }catch(e){}
 }
@@ -968,8 +1165,7 @@ pollSt(); pollPos();
 setInterval(pollSt,2000);
 setInterval(pollN,1500);
 setInterval(pollPos,500);
-log('GUI v4 — AUTO mode active','ok');
-log('💡 Chuyển MANUAL để dùng JOG + Sim sensor','in');
+log('GUI v5 ready — chọn mode để bắt đầu','ok');
 </script>
 </body>
 </html>
@@ -1000,7 +1196,7 @@ def main():
     signal.signal(signal.SIGINT, _sig)
 
     print("=" * 55)
-    print("  Cartridge System GUI v4 — Auto / Manual Mode")
+    print("  Cartridge System GUI v5 — AUTO / MANUAL / JOG")
     print("=" * 55)
     print(f"  Local  : http://localhost:{PORT}?token={AUTH_TOKEN}")
     print(f"  Network: http://{local_ip}:{PORT}?token={AUTH_TOKEN}")

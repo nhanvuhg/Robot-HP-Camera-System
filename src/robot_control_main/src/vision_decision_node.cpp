@@ -37,6 +37,7 @@
 #include <mutex>
 #include <atomic>
 #include <chrono>
+#include <numeric>
 
 using vision_msgs::msg::Detection2D;
 using vision_msgs::msg::Detection2DArray;
@@ -92,9 +93,9 @@ struct ROIQuad {
 };
 
 struct RowFilter {
-    size_t window = 5;
+    size_t window = 3;
     int max_fall = 2;
-    int ready_consec = 3;
+    int ready_consec = 4;
 
     std::deque<int> hist;
     int last_filtered = 0;
@@ -135,10 +136,59 @@ enum class SlotStableState : int {
     MIS = 2
 };
 
+// ============================================================================
+// DETECTION HELPERS (Nova5-style: NMS + IoU greedy slot assignment)
+// ============================================================================
+
+struct Box { double x1, y1, x2, y2; };
+
+static double IoU(const Box& A, const Box& B) {
+    double xA = std::max(A.x1, B.x1), yA = std::max(A.y1, B.y1);
+    double xB = std::min(A.x2, B.x2), yB = std::min(A.y2, B.y2);
+    double inter = std::max(0.0, xB - xA) * std::max(0.0, yB - yA);
+    double aA = (A.x2 - A.x1) * (A.y2 - A.y1);
+    double aB = (B.x2 - B.x1) * (B.y2 - B.y1);
+    return inter / std::max(1e-6, aA + aB - inter);
+}
+
+static std::vector<int> nmsGreedy(const std::vector<Box>& boxes,
+                                   const std::vector<double>& scores, double iou_thresh) {
+    std::vector<int> idx(boxes.size());
+    std::iota(idx.begin(), idx.end(), 0);
+    std::sort(idx.begin(), idx.end(), [&](int a, int b){ return scores[a] > scores[b]; });
+    std::vector<int> keep;
+    std::vector<bool> removed(boxes.size(), false);
+    for (size_t i = 0; i < idx.size(); ++i) {
+        int ia = idx[i];
+        if (removed[ia]) continue;
+        keep.push_back(ia);
+        for (size_t j = i + 1; j < idx.size(); ++j) {
+            int ib = idx[j];
+            if (!removed[ib] && IoU(boxes[ia], boxes[ib]) >= iou_thresh)
+                removed[ib] = true;
+        }
+    }
+    return keep;
+}
+
+static int select_contiguous_empty(const std::vector<int>& empty_slots, int total_slots = 9) {
+    std::vector<bool> is_empty(total_slots + 1, false);
+    for (int id : empty_slots)
+        if (id >= 1 && id <= total_slots) is_empty[id] = true;
+    for (int i = 1; i <= total_slots; ++i) {
+        if (!is_empty[i]) continue;
+        bool all_full_before = true;
+        for (int j = 1; j < i; ++j)
+            if (is_empty[j]) { all_full_before = false; break; }
+        return all_full_before ? i : -1;
+    }
+    return -1;
+}
+
 enum class ControlMode : uint8_t {
-    AUTO = 1,
-    AI = 2,
-    MANUAL = 3
+    MANUAL = 0,
+    AUTO   = 1,
+    AI     = 2
 };
 
 // ============================================================================
@@ -162,22 +212,28 @@ public:
         // Publishers
         pub_selected_row_ = create_publisher<std_msgs::msg::Int32>(
             "/vision/input_tray/selected_row", 10);
+        pub_ai_row_ = create_publisher<std_msgs::msg::Int32>(
+            "/camera/ai/selected_row", 10);
         pub_row_status_ = create_publisher<std_msgs::msg::Int32MultiArray>(
             "/vision/input_tray/row_status", 10);
         pub_input_empty_ = create_publisher<std_msgs::msg::Bool>(
             "/vision/input_tray/empty", 10);
         pub_selected_slot_ = create_publisher<std_msgs::msg::Int32>(
             "/vision/output_tray/selected_slot", 10);
+        pub_ai_slot_ = create_publisher<std_msgs::msg::Int32>(
+            "/camera/ai/selected_slot", 10);
         pub_slot_status_ = create_publisher<std_msgs::msg::Int32MultiArray>(
             "/vision/output_tray/slot_status", 10);
         pub_heartbeat_ = create_publisher<std_msgs::msg::Header>(
             "/vision/heartbeat", 10);
         
         // Tray change publishers
-        pub_change_tray_input_ = create_publisher<std_msgs::msg::Bool>(
-            "/robot/change_tray", 10);
+        // Camera → Cartridge trực tiếp (AI mode output tray full)
         pub_change_tray_output_ = create_publisher<std_msgs::msg::Bool>(
             "/robot/done_tray_output", 10);
+        // Camera → Robot logic (để robot biết tray đang thay)
+        pub_output_tray_full_ = create_publisher<std_msgs::msg::Bool>(
+            "/vision/output_tray/full", 10);
 
         
         // Subscriptions with SensorDataQoS for low latency
@@ -195,10 +251,6 @@ public:
             [this](const std_msgs::msg::Int32::SharedPtr msg) {
                 current_mode_ = static_cast<ControlMode>(msg->data);
                 RCLCPP_INFO(get_logger(), "[VISION] Mode changed to: %d", msg->data);
-                // Reset counter when switching modes
-                if (current_mode_ == ControlMode::AUTO) {
-                    auto_slot_counter_ = 1;
-                }
             });
 
         // Heartbeat Timer
@@ -209,17 +261,7 @@ public:
             pub_heartbeat_->publish(h);
         });
 
-        
-        // Sync for AUTO mode counter
-        sub_place_done_ = create_subscription<std_msgs::msg::Bool>(
-            "/robot/place_done", 10,
-            [this](const std_msgs::msg::Bool::SharedPtr msg) {
-                if (msg->data && current_mode_ == ControlMode::AUTO) {
-                    auto_slot_counter_++;
-                    if (auto_slot_counter_ > 9) auto_slot_counter_ = 1;
-                    RCLCPP_INFO(get_logger(), "[VISION] AUTO Slot incremented to: %d", auto_slot_counter_.load());
-                }
-            });
+
 
         RCLCPP_INFO(get_logger(), "[VISION] === Vision Decision Node Ready ===");
     }
@@ -228,9 +270,10 @@ private:
     // ========================================================================
     // CONSTANTS
     // ========================================================================
-    static constexpr int INPUT_ROW_THRESHOLD = 8;
-    static constexpr float DETECTION_SCORE_THRESH = 0.6f;
-    static constexpr int SLOT_CONFIRM_FRAMES = 3;
+    static constexpr int    INPUT_ROW_THRESHOLD    = 8;
+    static constexpr float  DETECTION_SCORE_THRESH = 0.45f;
+    static constexpr int    SLOT_CONFIRM_FRAMES    = 2;
+    static constexpr size_t N_OUTPUT_SLOTS         = 9;  // must match output_tray_rois_ size
 
     // ========================================================================
     // MODE STATE
@@ -245,14 +288,11 @@ private:
     std::vector<bool> row_full_;
     std::atomic<bool> input_tray_empty_{false};
     int selected_input_row_{-1};
-    
-    // Last place result subscription (for AUTO mode counter)
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_place_done_;
 
     // ========================================================================
     // OUTPUT TRAY STATE
     // ========================================================================
-    std::array<ROIQuad, 8> output_tray_rois_;
+    std::array<ROIQuad, 9> output_tray_rois_;
     std::array<SlotStableState, 9> slot_stable_state_;
     std::array<int, 9> slot_empty_streak_;
     std::array<int, 9> slot_occ_streak_;
@@ -274,25 +314,24 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr sub_mode_;
     
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_selected_row_;
+    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_ai_row_;
     rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr pub_row_status_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_input_empty_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_selected_slot_;
+    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_ai_slot_;
     rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr pub_slot_status_;
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr pub_heartbeat_;
     
     // Tray change publishers
-    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_change_tray_input_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_change_tray_output_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_output_tray_full_;
     
     // Debounce counters for tray change
-    std::atomic<int> input_empty_streak_{0};
     std::atomic<int> output_full_streak_{0};
-    std::atomic<bool> tray_input_change_sent_{false};
     std::atomic<bool> tray_output_change_sent_{false};
     static constexpr int TRAY_CHANGE_CONFIRM_FRAMES = 10;
 
     rclcpp::TimerBase::SharedPtr heartbeat_timer_;
-    std::atomic<int> auto_slot_counter_{1};
 
     // ========================================================================
     // INITIALIZATION
@@ -328,13 +367,19 @@ private:
         for (size_t i = 0; i < slot_corners.size() && i < output_tray_rois_.size(); ++i) {
             output_tray_rois_[i] = ROIQuad::FromCorners(slot_corners[i]);
         }
-        
+
         slot_stable_state_.fill(SlotStableState::EMPTY);
         slot_empty_streak_.fill(0);
         slot_occ_streak_.fill(0);
         slot_mis_streak_.fill(0);
-        
-        RCLCPP_INFO(get_logger(), "[VISION] Initialized %zu output tray slots", slot_corners.size());
+
+        // Slots without a defined ROI are treated as occupied so they are
+        // never selected by select_contiguous_empty (avoids ghost-slot bug).
+        for (size_t i = slot_corners.size(); i < N_OUTPUT_SLOTS; ++i)
+            slot_stable_state_[i] = SlotStableState::OCC_OK;
+
+        RCLCPP_INFO(get_logger(), "[VISION] Initialized %zu/%zu output tray slots",
+                    slot_corners.size(), N_OUTPUT_SLOTS);
     }
 
     // ========================================================================
@@ -343,44 +388,41 @@ private:
     void camera1Callback(const Detection2DArray::SharedPtr msg) {
         auto start = std::chrono::high_resolution_clock::now();
         
-        // Skip processing in MANUAL mode
         if (current_mode_ == ControlMode::MANUAL) return;
-        
-        std::vector<int> row_counts(5, 0);
-        
-        // Count detections per ROI
-        for (const auto& det : msg->detections) {
-            if (det.results.empty()) continue;
-            
-            const std::string& class_id = det.results[0].hypothesis.class_id;
-            float score = det.results[0].hypothesis.score;
-            
-            if (class_id != "0" || score < DETECTION_SCORE_THRESH) continue;
-            
-            float cx = det.bbox.center.position.x;
-            float cy = det.bbox.center.position.y;
-            
-            for (size_t i = 0; i < input_tray_rois_.size(); ++i) {
-                if (!input_tray_rois_[i].bbox_contains(cx, cy)) continue;
-                
-                if (input_tray_rois_[i].contains(cx, cy)) {
-                    row_counts[i]++;
-                    break;
+
+        bool use_ai = (current_mode_ == ControlMode::AI);
+
+        if (!use_ai) {
+            // AUTO: skip YOLO entirely, assume all rows full
+            std::fill(row_full_.begin(), row_full_.end(), true);
+        } else {
+            // AI: count detections per ROI then apply RowFilter
+            std::vector<int> row_counts(5, 0);
+
+            for (const auto& det : msg->detections) {
+                if (det.results.empty()) continue;
+                const std::string& class_id = det.results[0].hypothesis.class_id;
+                float score = det.results[0].hypothesis.score;
+                if (class_id != "0" || score < DETECTION_SCORE_THRESH) continue;
+                float cx = det.bbox.center.position.x;
+                float cy = det.bbox.center.position.y;
+                for (size_t i = 0; i < input_tray_rois_.size(); ++i) {
+                    if (!input_tray_rois_[i].bbox_contains(cx, cy)) continue;
+                    if (input_tray_rois_[i].contains(cx, cy)) { row_counts[i]++; break; }
                 }
             }
-        }
-        
-        // Update row status
-        bool use_ai = (current_mode_ == ControlMode::AI);
-        
-        for (size_t i = 0; i < row_counts.size(); ++i) {
-            if (!use_ai) {
-                row_full_[i] = true;  // Auto Mode: Assume all rows full
-            } else {
-                int filtered_count = row_filters_[i].filter_count(row_counts[i]);
-                bool raw_ready = (filtered_count >= INPUT_ROW_THRESHOLD);
-                bool stable_ready = row_filters_[i].update_ready(raw_ready);
-                row_full_[i] = stable_ready;
+
+            for (size_t i = 0; i < 5; ++i) {
+                int raw_count  = row_counts[i];
+                int filtered   = row_filters_[i].filter_count(raw_count);
+                bool raw_ready = (raw_count >= INPUT_ROW_THRESHOLD);
+                bool stable    = row_filters_[i].update_ready(raw_ready);
+                row_full_[i]   = stable;
+                RCLCPP_INFO(get_logger(),
+                    "[ROW %zu] raw=%d filtered=%d thr=%d READY(raw)=%s READY(stable)=%s (streak=%d/%d)",
+                    i + 1, raw_count, filtered, INPUT_ROW_THRESHOLD,
+                    raw_ready ? "YES" : "NO", stable ? "YES" : "NO",
+                    row_filters_[i].ready_streak, row_filters_[i].ready_consec);
             }
         }
         
@@ -400,6 +442,7 @@ private:
         auto row_msg = std_msgs::msg::Int32();
         row_msg.data = selected_input_row_;
         pub_selected_row_->publish(row_msg);
+        pub_ai_row_->publish(row_msg);
         
         auto empty_msg = std_msgs::msg::Bool();
         empty_msg.data = input_tray_empty_;
@@ -411,21 +454,7 @@ private:
             status_msg.data[i] = row_full_[i] ? 1 : 0;
         }
         pub_row_status_->publish(status_msg);
-        
-        // Tray change detection with debounce
-        if (input_tray_empty_) {
-            input_empty_streak_++;
-            if (input_empty_streak_ >= TRAY_CHANGE_CONFIRM_FRAMES && !tray_input_change_sent_) {
-                auto change_msg = std_msgs::msg::Bool();
-                change_msg.data = true;
-                pub_change_tray_input_->publish(change_msg);
-                tray_input_change_sent_ = true;
-                RCLCPP_WARN(get_logger(), "[VISION] 📦 INPUT TRAY EMPTY - Change tray signal sent");
-            }
-        } else {
-            input_empty_streak_ = 0;
-            tray_input_change_sent_ = false;  // Reset when new tray loaded
-        }
+
         
         // Performance tracking
         auto end = std::chrono::high_resolution_clock::now();
@@ -446,46 +475,60 @@ private:
         if (current_mode_ == ControlMode::MANUAL) return;
         
         if (current_mode_ == ControlMode::AUTO) {
-            // Bypass YOLO, use counter
-            selected_output_slot_ = auto_slot_counter_;
-            
-            auto slot_msg = std_msgs::msg::Int32();
-            slot_msg.data = selected_output_slot_;
-            pub_selected_slot_->publish(slot_msg);
-
-            auto status_msg = std_msgs::msg::Int32MultiArray();
-            status_msg.data.assign(9, 0); // All fake empty
-            pub_slot_status_->publish(status_msg);
+            // AUTO: Robot logic tự quản lý slot, camera không can thiệp
             return;
         }
 
-        // Step 1: Detect instant state (AI Mode)
-        std::array<SlotStableState, 9> instant_state;
-        instant_state.fill(SlotStableState::EMPTY);
-        
+        // Step 1: NMS + IoU greedy slot assignment (Nova5-style)
+        struct DetRec { Box box; double score; };
+        std::vector<DetRec> dets_raw;
         for (const auto& det : msg->detections) {
             if (det.results.empty()) continue;
-            
-            const std::string& class_id = det.results[0].hypothesis.class_id;
-            float score = det.results[0].hypothesis.score;
-            
             int cid = -1;
-            try { cid = std::stoi(class_id); } catch (...) { continue; }
-            if (cid == 0) continue;  // Skip tray
+            try { cid = std::stoi(det.results[0].hypothesis.class_id); } catch (...) { continue; }
             if (cid != 1 && cid != 2 && cid != 3) continue;
+            double score = det.results[0].hypothesis.score;
             if (score < DETECTION_SCORE_THRESH) continue;
-            
-            float cx = det.bbox.center.position.x;
-            float cy = det.bbox.center.position.y;
-            
-            for (size_t i = 0; i < 8 && i < output_tray_rois_.size(); ++i) {
-                if (!output_tray_rois_[i].bbox_contains(cx, cy)) continue;
-                
-                if (output_tray_rois_[i].contains(cx, cy)) {
-                    instant_state[i] = SlotStableState::OCC_OK;
-                    break;
-                }
+            double cx = det.bbox.center.position.x;
+            double cy = det.bbox.center.position.y;
+            double hw = det.bbox.size_x / 2.0, hh = det.bbox.size_y / 2.0;
+            dets_raw.push_back({{cx - hw, cy - hh, cx + hw, cy + hh}, score});
+        }
+        std::vector<Box> nms_boxes;
+        std::vector<double> nms_scores;
+        for (auto& d : dets_raw) { nms_boxes.push_back(d.box); nms_scores.push_back(d.score); }
+        auto kept = nmsGreedy(nms_boxes, nms_scores, 0.45);
+
+        // Build candidates sorted by match score
+        struct Cand { int slot; int ki; double sc; };
+        std::vector<Cand> cands;
+        const size_t n_slots = N_OUTPUT_SLOTS;
+        for (size_t s = 0; s < n_slots; ++s) {
+            const auto& roi = output_tray_rois_[s];
+            Box slot_box{(double)roi.min_x, (double)roi.min_y,
+                         (double)roi.max_x, (double)roi.max_y};
+            for (size_t ki = 0; ki < kept.size(); ++ki) {
+                const Box& db = nms_boxes[kept[ki]];
+                double iou = IoU(slot_box, db);
+                float dcx = (float)((db.x1 + db.x2) / 2.0);
+                float dcy = (float)((db.y1 + db.y2) / 2.0);
+                bool inside = roi.contains(dcx, dcy);
+                if (iou < 0.1 && !inside) continue;
+                cands.push_back({(int)s, (int)ki, iou + (inside ? 1.0 : 0.0)});
             }
+        }
+        std::sort(cands.begin(), cands.end(),
+                  [](const Cand& a, const Cand& b){ return a.sc > b.sc; });
+
+        std::array<SlotStableState, 9> instant_state;
+        instant_state.fill(SlotStableState::EMPTY);
+        std::vector<bool> slot_used(n_slots, false);
+        std::vector<bool> det_used(kept.size(), false);
+        for (auto& c : cands) {
+            if (slot_used[c.slot] || det_used[c.ki]) continue;
+            instant_state[c.slot] = SlotStableState::OCC_OK;
+            slot_used[c.slot] = true;
+            det_used[c.ki] = true;
         }
         
         // Step 2: Update debouncing with mutex
@@ -494,7 +537,7 @@ private:
         {
             std::lock_guard<std::mutex> lock(slot_detection_mutex_);
             
-            for (size_t s = 0; s < 9; ++s) {
+            for (size_t s = 0; s < N_OUTPUT_SLOTS; ++s) {
                 if (instant_state[s] == SlotStableState::EMPTY) {
                     slot_empty_streak_[s]++;
                     slot_occ_streak_[s] = 0;
@@ -515,23 +558,14 @@ private:
                         slot_stable_state_[s] = SlotStableState::MIS;
                 }
             }
-            
-            // Select first EMPTY slot (contiguous fill)
-            for (size_t i = 0; i < 9; ++i) {
-                if (slot_stable_state_[i] == SlotStableState::EMPTY) {
-                    bool all_before_occupied = true;
-                    for (size_t j = 0; j < i; ++j) {
-                        if (slot_stable_state_[j] == SlotStableState::EMPTY) {
-                            all_before_occupied = false;
-                            break;
-                        }
-                    }
-                    if (all_before_occupied) {
-                        local_selected_slot = static_cast<int>(i + 1);
-                        break;
-                    }
-                }
-            }
+
+            // Select first EMPTY slot (contiguous fill) — Nova5-style
+            std::vector<int> empty_slots;
+            for (size_t i = 0; i < N_OUTPUT_SLOTS; ++i)
+                if (slot_stable_state_[i] == SlotStableState::EMPTY)
+                    empty_slots.push_back(static_cast<int>(i + 1));
+            local_selected_slot = select_contiguous_empty(
+                empty_slots, static_cast<int>(N_OUTPUT_SLOTS));
         }
         
         selected_output_slot_ = local_selected_slot;
@@ -540,10 +574,11 @@ private:
         auto slot_msg = std_msgs::msg::Int32();
         slot_msg.data = local_selected_slot;
         pub_selected_slot_->publish(slot_msg);
+        pub_ai_slot_->publish(slot_msg);
         
         auto status_msg = std_msgs::msg::Int32MultiArray();
-        status_msg.data.resize(9);
-        for (size_t i = 0; i < 9; ++i) {
+        status_msg.data.resize(N_OUTPUT_SLOTS);
+        for (size_t i = 0; i < N_OUTPUT_SLOTS; ++i) {
             status_msg.data[i] = (slot_stable_state_[i] == SlotStableState::EMPTY) ? 0 : 1;
         }
         pub_slot_status_->publish(status_msg);
@@ -555,9 +590,12 @@ private:
             if (output_full_streak_ >= TRAY_CHANGE_CONFIRM_FRAMES && !tray_output_change_sent_) {
                 auto change_msg = std_msgs::msg::Bool();
                 change_msg.data = true;
+                // Gửi trực tiếp tới cartridge system
                 pub_change_tray_output_->publish(change_msg);
+                // Thông báo robot logic để set waiting_for_new_output_
+                pub_output_tray_full_->publish(change_msg);
                 tray_output_change_sent_ = true;
-                RCLCPP_WARN(get_logger(), "[VISION] 📦 OUTPUT TRAY FULL - Change tray signal sent");
+                RCLCPP_WARN(get_logger(), "[VISION] 📦 OUTPUT TRAY FULL - Change tray signal sent to cartridge + robot");
             }
         } else {
             output_full_streak_ = 0;

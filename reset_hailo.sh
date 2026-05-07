@@ -7,11 +7,11 @@ pkill -9 -f yolo_ros_hailort
 pkill -9 -f csi_camera_node
 pkill -9 -f ros2
 
-# Kill Python processes (often hold locks)
-pkill -9 -f python3
+# Kill only Hailo-related Python processes (not all python3)
+pkill -9 -f "yolo_ros_hailort" 2>/dev/null || true
+pkill -9 -f "csi_camera" 2>/dev/null || true
 
-# Reset Hailo runtime (if possible via driver, usually just killing process is enough)
-# But ensuring no zombie holding /dev/hailo0
+# Release /dev/hailo0 device lock
 fuser -k /dev/hailo0 >/dev/null 2>&1
 
 echo "✅ Cleanup complete. You can now relaunch."

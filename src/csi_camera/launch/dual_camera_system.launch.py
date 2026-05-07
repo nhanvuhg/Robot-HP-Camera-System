@@ -116,10 +116,33 @@ def generate_launch_description():
         respawn_delay=2.0,
     )
     
+    # ================================================================
+    # 4. VISION DECISION NODE (Row/Slot Selection from YOLO)
+    # ================================================================
+    # Converts YOLO bounding boxes → robot control decisions
+    # Publishes:
+    #   - /vision/input_tray/selected_row  (Int32)
+    #   - /vision/input_tray/row_status    (Int32MultiArray)
+    #   - /vision/input_tray/empty         (Bool)
+    #   - /vision/output_tray/selected_slot (Int32)
+    #   - /vision/output_tray/slot_status  (Int32MultiArray)
+    #   - /vision/output_tray/full         (Bool)
+    #   - /vision/heartbeat                (Header)
+
+    vision_decision_node = Node(
+        package='robot_control_main',
+        executable='vision_decision_node',
+        name='vision_decision_node',
+        output='screen',
+        respawn=True,
+        respawn_delay=3.0,
+    )
+
     return LaunchDescription([
         dual_camera_node,
         yolo_container,
         bbox_drawer_node,
+        vision_decision_node,
     ])
 
 """
