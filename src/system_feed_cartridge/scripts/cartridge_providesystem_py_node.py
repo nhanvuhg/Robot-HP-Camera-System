@@ -155,115 +155,7 @@ class SystemState(Enum):
 
 # ─── Config ──────────────────────────────────────────────────────
 
-class CartridgeConfig:
-    def __init__(self, config_file: Optional[str] = None):
-        self.servo_ips = {1: "192.168.27.248", 2: "192.168.27.249",
-                          3: "192.168.27.250",  4: "192.168.27.251", 5: "192.168.27.252"}
-        self.io_ip = "192.168.27.253"
-        self.io_ip_2 = "192.168.27.254"
-
-        self.cylinder1_extend_channel  = 5
-        self.cylinder1_retract_channel = 4
-        self.cylinder2_extend_channel  = 9
-        self.cylinder2_retract_channel = 8
-
-        self.iny_input_zones   = {}
-        self.iny_output_zones  = {}
-        self.outy_output_zones = {}
-        
-        self.iny_scan_arm_mm = 50.0
-        self.homing_timeout = 30.0
-        self.servo_limits = {1: 1000.0, 2: 1000.0, 3: 1000.0, 4: 1000.0, 5: 1000.0}
-        self.iny_safe_zone = 50.0
-        self.outy_safe_zone = 50.0
-
-        # S1 Scan & Noise Handling Mapping
-        self.target_scaninp1 = 850.0
-        self.iny_scan_valid_min_mm = 200.0
-        self.iny_scan_valid_max_mm = 850.0
-        self.s1_scan_noise_retry_limit = 1
-        self.inx_noise_recovery_mm = 10.0
-        self.inx_home = 20.0
-        self.inx_target2 = 500.0
-        self.inx_output_stack = 100.0
-        self.iny_home = 10.0
-        self.iny_scan_vel = 30
-        self.iny_row_vel = 20
-
-        self._config_file: Optional[str] = None
-
-        if config_file and os.path.exists(config_file):
-            self.load_from_file(config_file)
-
-    def load_from_file(self, path: str):
-        try:
-            with open(path) as f:
-                data = yaml.safe_load(f) or {}
-            for k, v in data.items():
-                if isinstance(v, dict):
-                    v = {int(kk) if str(kk).isdigit() else kk: vv for kk, vv in v.items()}
-                setattr(self, k, v)
-                
-            if getattr(self, 'iny_scan_arm_mm', None) is None:
-                self.iny_scan_arm_mm = getattr(self, 'iny_safe_zone', 50.0)
-
-            # --- Defensive Fallback for Critical Keys ---
-            critical_keys = {
-                'inx_target1': 0.0,
-                'inx_target2': 500.0,
-                'iny_home': 10.0,
-                'iny_safe_zone': 50.0,
-                'outx_target1': 300.0,
-                'outy_home': 10.0,
-                'cylinder1_retract_channel': 4,
-                'cylinder1_extend_channel': 5,
-                'cylinder2_retract_channel': 8,
-                'cylinder2_extend_channel': 9,
-                'homing_timeout': 30.0,
-                'modbus_timeout_ms': 3000,
-                'servo_limits': {1: 1000.0, 2: 1000.0, 3: 1000.0, 4: 1000.0, 5: 1000.0},
-                'target_scaninp1': 850.0,
-                'iny_scan_valid_min_mm': 200.0,
-                'iny_scan_valid_max_mm': 850.0,
-                's1_scan_noise_retry_limit': 1,
-                'inx_noise_recovery_mm': 10.0,
-                'target_scanoutp2': 500.0,
-                'outy_scan_arm_mm': 50.0
-            }
-            for key, default in critical_keys.items():
-                if not hasattr(self, key):
-                    setattr(self, key, default)
-                
-            self._config_file = path
-            print(f"Config loaded: {path}")
-        except Exception as e:
-            print(f"Config load error: {e}")
-
-    def save_to_file(self):
-        if not self._config_file:
-            return
-        
-        try:
-            import yaml
-            import os
-            data = {}
-            if os.path.exists(self._config_file):
-                with open(self._config_file, 'r') as f:
-                    data = yaml.safe_load(f) or {}
-
-            # Cập nhật data với TẤT CẢ các public attributes của config
-            for k, v in self.__dict__.items():
-                if not k.startswith('_') and not callable(v):
-                    if isinstance(v, dict):
-                        v = {int(kk) if str(kk).isdigit() else kk: float(vv) if isinstance(vv, (int, float)) else vv for kk, vv in v.items()}
-                    data[k] = v
-
-            with open(self._config_file, 'w') as f:
-                yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-            print(f"Config saved safely to: {self._config_file}")
-        except Exception as e:
-            print(f"Config save error: {e}")
-
+from config import SystemConfig as CartridgeConfig
 
 # ─── Main Node ───────────────────────────────────────────────────
 
@@ -1341,6 +1233,7 @@ class CartridgeSystem(Node):
         self._notify('warn', f'goto_state: khong biet "{cmd}"', '')
 
     def _s1_abort(self, reason: str):
+        self._pub_cartridge_busy(False)
         self._s1_scan_noise_retry = 0
         self._s4_prev_in         = False
         self.get_logger().error(f"S1 ABORT: {reason}")
@@ -1666,6 +1559,7 @@ class CartridgeSystem(Node):
 
     def _s1_confirm_safe(self):
         if not self._cmd_sent_in and not self._inx_moving and not self._iny_moving:
+            self._pub_cartridge_busy(True)
             if self._input_tray_done:
                 self._input_tray_done = False
         iny = self._pos(2)
@@ -2140,6 +2034,7 @@ class CartridgeSystem(Node):
         Publish new_tray_loaded. Check S7 với timeout 3s.
         Xong thì về IDLE. IDLE sẽ chờ robot done_tray_input rồi kích S2A.
         """
+        self._pub_cartridge_busy(False)
         self._s1_scan_noise_retry = 0
         self._s4_prev_in         = False
         if not self._cmd_sent_in:
@@ -2867,14 +2762,17 @@ def main(args=None):
     signal.signal(signal.SIGINT, _sig)
 
     try:
-        config = CartridgeConfig()
+        config = None
         for candidate in [
             os.path.join(os.path.dirname(__file__), '..', 'config', 'cartridge_config.yaml'),
             os.path.expanduser('~/ros2_ws/src/system_feed_cartridge/config/cartridge_config.yaml'),
         ]:
             if os.path.exists(candidate):
-                config.load_from_file(candidate)
+                config = CartridgeConfig.load(candidate)
                 break
+        
+        if config is None:
+            config = CartridgeConfig()
 
         system = CartridgeSystem(config)
         print("=" * 60)

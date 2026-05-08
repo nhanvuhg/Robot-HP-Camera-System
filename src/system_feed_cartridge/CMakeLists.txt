@@ -23,9 +23,11 @@ install(PROGRAMS scripts/cartridge_gui.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(PROGRAMS scripts/start_cartridge_test.sh
+install(PROGRAMS scripts/config.py
   DESTINATION lib/${PROJECT_NAME}
 )
+
+
 
 # Install launch files
 install(DIRECTORY launch
