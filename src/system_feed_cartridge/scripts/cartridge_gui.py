@@ -324,6 +324,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
   animation:blink .7s infinite alternate;}
 @keyframes blink{from{opacity:.5}to{opacity:1}}
 .mp-auto  {background:#0a332e;border-color:var(--green);color:var(--green);animation:none;}
+.mp-ai    {background:#2d1a3a;border-color:#b462ff;color:#b462ff;animation:none;}
 .mp-manual{background:#051a1a;border-color:var(--teal); color:var(--teal); animation:none;}
 .mp-jog   {background:#332e0a;border-color:var(--orange);color:var(--orange);animation:none;}
 .hdr-fault{height:26px;padding:0 10px;font-size:11px;font-weight:700;border-radius:4px;
@@ -407,6 +408,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 .mopt-name{font-size:12px;font-weight:700;}
 .mopt-desc{font-size:9px;color:var(--dim);margin-top:1px;}
 .mopt-auto  {color:var(--green); background:#0d3d2e;border-color:var(--green);}
+.mopt-ai    {color:#b462ff; background:#291834;border-color:#b462ff;}
 .mopt-manual{color:var(--teal);  background:#051a1a;border-color:var(--teal);}
 .mopt-jog   {color:var(--orange);background:#332e0a;border-color:var(--orange);}
 
@@ -573,6 +575,10 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
           <div class="mopt mopt-auto" onclick="setMode('auto')">
             <span class="mopt-dot" style="background:var(--green)"></span>
             <div><div class="mopt-name">AUTO</div><div class="mopt-desc">Camera / Robot tín hiệu · JOG khóa</div></div>
+          </div>
+          <div class="mopt mopt-ai" onclick="setMode('ai')">
+            <span class="mopt-dot" style="background:#b462ff"></span>
+            <div><div class="mopt-name">AI MODE</div><div class="mopt-desc">Tự động + YOLO Vision · JOG khóa</div></div>
           </div>
           <div class="mopt mopt-manual" onclick="setMode('manual')">
             <span class="mopt-dot" style="background:var(--teal)"></span>
@@ -860,6 +866,9 @@ function updateModeUI() {
   } else if(mode==='auto'){
     pill.className+=' mp-auto';   pill.textContent='● AUTO';
     dot.style.background='var(--green)'; txt.textContent='AUTO'; txt.style.color='var(--green)';
+  } else if(mode==='ai'){
+    pill.className+=' mp-ai';     pill.textContent='● AI MODE';
+    dot.style.background='#b462ff'; txt.textContent='AI MODE'; txt.style.color='#b462ff';
   } else if(mode==='manual'){
     pill.className+=' mp-manual'; pill.textContent='● MANUAL';
     dot.style.background='var(--teal)';  txt.textContent='MANUAL'; txt.style.color='var(--teal)';
@@ -881,9 +890,9 @@ function updateModeUI() {
 
   // Sensor sim
   const simAllowed = mode==='manual' || mode==='jog';
-  document.getElementById('rsbadge').style.display = mode==='auto' ? '' : 'none';
+  document.getElementById('rsbadge').style.display = (mode==='auto' || mode==='ai') ? '' : 'none';
   document.getElementById('simCtrl').style.display  = simAllowed   ? '' : 'none';
-  document.querySelectorAll('.sb').forEach(b=>b.classList.toggle('lk', mode==='auto'));
+  document.querySelectorAll('.sb').forEach(b=>b.classList.toggle('lk', mode==='auto' || mode==='ai'));
 
   // Workflow state buttons: locked in JOG mode
   const wfLocked = mode==='jog' || noMode;
@@ -893,7 +902,7 @@ function updateModeUI() {
   const wfl=document.getElementById('wfLabel');
   if(noMode)        { wfl.style.color='var(--dim)';    wfl.textContent='— Workflow —'; }
   else if(wfLocked) { wfl.style.color='var(--orange)'; wfl.textContent='— Workflow (JOG mode — locked) —'; }
-  else if(mode==='auto')  { wfl.style.color='var(--dim)';    wfl.textContent='— Workflow (auto trigger) —'; }
+  else if(mode==='auto' || mode==='ai')  { wfl.style.color='var(--dim)';    wfl.textContent='— Workflow (' + mode.toUpperCase() + ' trigger) —'; }
   else              { wfl.style.color='var(--teal)';  wfl.textContent='— Workflow — chọn để chạy —'; }
 
   // Abort→JOG button: shows JOG MODE when already in JOG
@@ -935,24 +944,24 @@ function setRow(r) { api('/api/set_target_row',{row:r}); }
 
 // ─── Sensor sim ─────────────────────────────────────────
 function tog(id) {
-  if(mode==='auto'){ toast('🔒 Sim: not available in AUTO','wn'); return; }
+  if(mode==='auto' || mode==='ai'){ toast('🔒 Sim: not available in AUTO/AI','wn'); return; }
   SS[id]=!SS[id];
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({cmd:id+':'+(SS[id]?1:0)})});
   rfs(id);
 }
 function sAll(v) {
-  if(mode==='auto'){ toast('🔒 AUTO mode','wn'); return; }
+  if(mode==='auto' || mode==='ai'){ toast('🔒 AUTO/AI mode','wn'); return; }
   for(let i=1;i<=22;i++){ SS[i]=!!v; rfs(i); }
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'all:'+v})});
 }
 function sClear() {
-  if(mode==='auto'){ toast('🔒 AUTO mode','wn'); return; }
+  if(mode==='auto' || mode==='ai'){ toast('🔒 AUTO/AI mode','wn'); return; }
   for(let i=1;i<=22;i++){ SS[i]=false; rfs(i); }
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'clear'})});
 }
 function simPreset(ids) {
-  if(mode==='auto'){ toast('🔒 AUTO mode','wn'); return; }
+  if(mode==='auto' || mode==='ai'){ toast('🔒 AUTO/AI mode','wn'); return; }
   for(let i=1;i<=22;i++){ SS[i]=false; rfs(i); }
   fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'clear'})});
   ids.forEach(id=>{ SS[id]=true; rfs(id);
@@ -963,7 +972,7 @@ function simPreset(ids) {
 }
 function rfs(id) {
   const el=document.getElementById('s'+id);
-  if(el) el.className='sb'+(SS[id]?' on':'')+(mode==='auto'?' lk':'');
+  if(el) el.className='sb'+(SS[id]?' on':'')+((mode==='auto' || mode==='ai')?' lk':'');
 }
 
 // ─── JOG ────────────────────────────────────────────────

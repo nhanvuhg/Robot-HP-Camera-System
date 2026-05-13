@@ -23,7 +23,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from rclpy.executors import ExternalShutdownException
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, String, Int32
 from enum import Enum
 import time
 from typing import Optional, Any
@@ -249,7 +249,7 @@ class CartridgeSystem(Node):
 
         # Operation
         self.state           = SystemState.IDLE
-        self.operation_mode  = 'manual'   # 'auto' | 'manual'
+        self.operation_mode  = 'manual'   # 'auto' | 'ai' | 'manual'
         self._input_tray_done     = False
         self._state1_enabled = False
         self._gui_confirmed  = False
@@ -272,6 +272,8 @@ class CartridgeSystem(Node):
         self.pub_busy_cartridge = self.create_publisher(Bool, '/cartridge/busy', qos)
         self.pub_input_trays_empty = self.create_publisher(Bool, '/cartridge/input_trays_empty', qos)
         self.pub_current_mode   = self.create_publisher(String, '/providesystem/current_mode', qos)        
+        self.pub_robot_mode     = self.create_publisher(Int32, '/robot/set_mode', qos)
+        self.pub_homing_done    = self.create_publisher(Bool, '/cartridge/homing_done', qos)
         self.pub_vfd_run        = self.create_publisher(Bool,   '/vfd/cmd_run', qos)
         self._vfd_current_cmd   = False
 
@@ -291,6 +293,7 @@ class CartridgeSystem(Node):
         qos_sim = QoSProfile(depth=10)
         self.create_subscription(String, '/providesystem/sim_sensor',        self._cb_sim,                qos_sim)
         self.create_subscription(String, '/providesystem/set_operation_mode',self._cb_mode,               qos)
+        self.create_subscription(Int32, '/robot/set_mode', self._cb_robot_mode, qos)
         self.create_subscription(String, '/providesystem/goto_state',        self._cb_goto_state,         qos)
         self.create_subscription(String, '/providesystem/update_config',     self._cb_update_config,      qos)
         self.create_subscription(String, '/providesystem/get_config',        self._cb_get_config,         qos)
@@ -840,7 +843,7 @@ class CartridgeSystem(Node):
 
     def _can_start_s1(self) -> bool:
         """Điều kiện để bắt đầu STATE 1 (sensor theo mode hiện tại)."""
-        if self.operation_mode != 'auto' or not self.zero_offset or self._motion_busy:
+        if self.operation_mode not in ['auto', 'ai'] or not self.zero_offset or self._motion_busy:
             return False
         has_tray     = self.sensor(S1_BELT_START) or self.sensor(S2_BELT_MID) or self.sensor(S3_BELT_END)
         place_ok     = not self.sensor(S7_TRAY_AT_ROBOT)
@@ -853,7 +856,7 @@ class CartridgeSystem(Node):
                 and self.sensor(S7_TRAY_AT_ROBOT) and not self._motion_busy)
 
     def _can_start_s3(self) -> bool:
-        if self.operation_mode != 'auto' or self._motion_busy:
+        if self.operation_mode not in ['auto', 'ai'] or self._motion_busy:
             return False
             
         # Neu S18 dang OFF va da duoc ghi nhan thoi gian
@@ -1042,7 +1045,7 @@ class CartridgeSystem(Node):
         self._system_paused = False
         self._system_running = True
         self._inx_moving = self._iny_moving = False
-        self._state1_enabled = (self.operation_mode == 'auto')
+        self._state1_enabled = (self.operation_mode in ['auto', 'ai'])
         self._motion_busy = False
         
         if self.operation_mode == 'manual':
@@ -1053,11 +1056,14 @@ class CartridgeSystem(Node):
         self.get_logger().info(f"[START] System running. Mode: {self.operation_mode}")
         self._sync_mode_jog()
         
-        if not self.zero_offset and self.operation_mode == 'auto':
-            self.get_logger().info("[START] Auto mode — not homed → HOMING")
-            self._enter(SystemState.HOMING)
+        if self.operation_mode in ['auto', 'ai']:
+            if not self.zero_offset:
+                self.get_logger().info("[START] Auto/AI mode — not homed → HOMING")
+                self._enter(SystemState.HOMING)
+            else:
+                self._enter(SystemState.IDLE)
         else:
-            self._enter(SystemState.IDLE)
+            self.get_logger().info("[START] Manual mode — keeping current state")
 
     def _cb_stop(self, msg: Bool):
         if not msg.data:
@@ -1078,8 +1084,15 @@ class CartridgeSystem(Node):
         self._motion_busy = False
         self._state1_enabled = False
         self._s4_trigger = False
-        self._jog_mode = True
+        
+        # Chuyển về MANUAL mode
         self.operation_mode = 'manual'
+        self._jog_mode = True
+        self._sync_mode_jog()
+        robot_msg = Int32()
+        robot_msg.data = 3
+        self.pub_robot_mode.publish(robot_msg)
+        self.get_logger().info("[STOP] Hệ thống dừng - Đã chuyển về MANUAL mode")
         # zero_offset preserved — coordinates remain valid, next START skips re-homing
         self._sync_mode_jog()
         self.get_logger().info('[STOP] STOP — JOG sẵn sàng (toa do giu nguyen)')
@@ -1094,9 +1107,19 @@ class CartridgeSystem(Node):
     def _cb_gui_confirm(self, msg: String):
         self._gui_confirmed = True
 
+    def _cb_robot_mode(self, msg: Int32):
+        mapping = {1: 'auto', 2: 'ai', 3: 'manual'}
+        requested = mapping.get(msg.data, 'manual')
+        if requested != self.operation_mode:
+            self.get_logger().info(f"[SYNC MODE] Cập nhật mode từ Robot Node: {requested.upper()}")
+            self.operation_mode = requested
+            self._guide_logged.clear()
+            self._sim_sensors.clear()
+            self._sync_mode_jog()
+
     def _cb_mode(self, msg: String):
         requested = msg.data.strip().lower()
-        if requested not in ('auto', 'manual'):
+        if requested not in ('auto', 'manual', 'ai'):
             self._notify('warn', f'Mode khong hop le: {requested}', '')
             return
         active_states = {SystemState.IDLE, SystemState.ERROR,
@@ -1111,6 +1134,13 @@ class CartridgeSystem(Node):
             self._guide_logged.clear()
             self._sim_sensors.clear()  # Reset sim khi đổi mode
             self._sync_mode_jog()  # Publish mode ngay cho GUI hiển thị
+            
+            # Sync to robot node
+            robot_msg = Int32()
+            if requested == 'auto': robot_msg.data = 1
+            elif requested == 'ai': robot_msg.data = 2
+            elif requested == 'manual': robot_msg.data = 3
+            self.pub_robot_mode.publish(robot_msg)
 
     def _cb_jog(self, msg: String):
         parts = msg.data.strip().split()
@@ -1230,7 +1260,7 @@ class CartridgeSystem(Node):
         if cmd in ('STATE1', 'STATE_1', 'S1'):
             if self.operation_mode != 'manual':
                 self._notify('warn', 'STATE1 manual only',
-                             'Trong AUTO mode hệ thống tự trigger STATE1')
+                             'Trong AUTO/AI mode hệ thống tự trigger STATE1')
                 return
             if self.state_in not in (SystemState.IDLE,):
                 self._notify('warn', 'Không thể vào STATE 1',
@@ -1506,6 +1536,9 @@ class CartridgeSystem(Node):
                 self._homing_done_event.clear()
                 if self._homing_result:
                     self.get_logger().info("Homing complete (main thread transition)")
+                    msg = Bool()
+                    msg.data = True
+                    self.pub_homing_done.publish(msg)
                     if self.operation_mode == 'manual':
                         self._jog_mode = True
                         self._sync_mode_jog()

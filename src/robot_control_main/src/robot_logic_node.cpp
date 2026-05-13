@@ -119,6 +119,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr vision_hb_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   motion_busy_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  set_mode_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_homing_done_sub_;
 
     rclcpp::Time last_motion_hb_;
     rclcpp::Time last_vision_hb_;
@@ -321,6 +322,7 @@ private:
     void commandRowCallback(const std_msgs::msg::Int32::SharedPtr msg);
     void commandSlotCallback(const std_msgs::msg::Int32::SharedPtr msg);
     void setModeCallback(const std_msgs::msg::Int32::SharedPtr msg);
+    void cartridgeHomingDoneCallback(const std_msgs::msg::Bool::SharedPtr msg);
 
     void publishCameraStatus(const std::string& status);
 
@@ -612,6 +614,10 @@ void RobotLogicNode::initSubscriptions()
     goto_state_sub_ = create_subscription<std_msgs::msg::String>(
         "/robot/goto_state", 10,
         std::bind(&RobotLogicNode::gotoStateCallback, this, std::placeholders::_1));
+
+    cartridge_homing_done_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/cartridge/homing_done", 10,
+        std::bind(&RobotLogicNode::cartridgeHomingDoneCallback, this, std::placeholders::_1));
 
     command_row_sub_ = create_subscription<std_msgs::msg::Int32>(
         "/robot/command_row", 10,
@@ -997,10 +1003,15 @@ void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr ms
     callService<EnableRobot>(enable_client_, enable_req, "EnableRobot");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
-    sendMotionAction("HOME");
+    if (!manual_mode_) {
+        RCLCPP_INFO(get_logger(), "[INIT] Auto/AI mode — waiting for Cartridge Homing to finish before moving HOME.");
+        // system_started_ will be set to true in cartridgeHomingDoneCallback
+    } else {
+        RCLCPP_INFO(get_logger(), "[INIT] ⚡ Manual mode — skipping HOME command, holding position");
+        // We do NOT set system_started_ = true, because manual mode shouldn't jump to INIT_CHECK sequence
+    }
 
-    system_started_ = true;
-    RCLCPP_INFO(get_logger(), "[INIT] ✅ System Ready");
+    RCLCPP_INFO(get_logger(), "[INIT] ✅ System Received Start");
     notifyStateChange();
 }
 
@@ -1188,15 +1199,17 @@ void RobotLogicNode::startSystemCallback(
         }
 
         system_running_ = true;
-        manual_mode_ = false;
         stop_after_single_motion_ = false;
         system_start_time_ = this->now();
 
         // REMOVED: waiting_for_new_input_ = false; (must wait for actual tray)
 
-        sendMotionAction("HOME");
+        if (!manual_mode_) {
+            RCLCPP_INFO(get_logger(), "[INIT] Auto/AI mode — waiting for Cartridge Homing to finish before moving HOME.");
+        } else {
+            RCLCPP_INFO(get_logger(), "[INIT] ⚡ Manual mode — skipping HOME command, holding position");
+        }
 
-        system_started_ = true;
         notifyStateChange();
 
         response->success = true;
@@ -1358,6 +1371,18 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
     notifyStateChange();
 }
 
+void RobotLogicNode::cartridgeHomingDoneCallback(const std_msgs::msg::Bool::SharedPtr msg)
+{
+    if (!msg->data) return;
+    
+    if (system_running_ && !manual_mode_) {
+        RCLCPP_INFO(get_logger(), "[INIT] Cartridge Homing Done. Executing Robot HOME and starting process.");
+        sendMotionAction("HOME");
+        system_started_ = true;
+        notifyStateChange();
+    }
+}
+
 // ============================================================================
 // STATE MACHINE LOOP
 // ============================================================================
@@ -1476,7 +1501,7 @@ void RobotLogicNode::stateIdle()
     }
 
     // Auto-restart after drain: need both input tray and output tray ready
-    if (system_running_ && !waiting_for_new_input_.load() && !waiting_for_new_output_.load()) {
+    if (!manual_mode_ && system_running_ && !waiting_for_new_input_.load() && !waiting_for_new_output_.load()) {
         RCLCPP_INFO(get_logger(),
             "[IDLE] ✅ Both trays ready — auto-restart from Row 1");
         is_first_batch_ = true;
