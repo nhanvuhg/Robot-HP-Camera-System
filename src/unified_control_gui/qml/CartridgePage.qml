@@ -680,11 +680,44 @@
 
                                     Row { width: parent.width; height: 20; spacing: 6
                                         Text { text: "SERVO CONTROL"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5; anchors.verticalCenter: parent.verticalCenter }
-                                        Text { text: "Vel:"; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
-                                        Rectangle { width: 50; height: 18; radius: 6; color: root.cBg; border.color: root.cBorder; anchors.verticalCenter: parent.verticalCenter
-                                            TextInput { id: velInput; anchors.centerIn: parent; text: "30"; font.pixelSize: 11; color: root.cText; horizontalAlignment: TextInput.AlignHCenter; validator: IntValidator { bottom:1; top:200 } }
+                                        Text { text: "JOG Vel:"; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                                        Rectangle {
+                                            id: velDisplay
+                                            width: 70; height: 18; radius: 6
+                                            color: root.cBg; border.color: root.cAccent
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            property int jogVelMms: 50
+                                            Text { anchors.centerIn: parent; text: velDisplay.jogVelMms + " mm/s"; font.pixelSize: 11; color: root.cText }
+                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: velPopup.open() }
+                                            Connections {
+                                                target: cartridgeController
+                                                function onServoPositionsChanged() {
+                                                    try {
+                                                        var d = JSON.parse(cartridgeController.servoPositions)
+                                                        if (d["_jog_vel"] !== undefined)
+                                                            velDisplay.jogVelMms = Math.round(Number(d["_jog_vel"]) * 1000)
+                                                    } catch(e) {}
+                                                }
+                                            }
                                         }
-                                        Text { text: "mm/s"; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                                        Text { text: "| FAS:"; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                                        Text {
+                                            id: fasVelText; text: "idle"
+                                            color: root.cCyan; font.pixelSize: 11; font.family: "monospace"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            Connections {
+                                                target: cartridgeController
+                                                function onServoPositionsChanged() {
+                                                    try {
+                                                        var vel = JSON.parse(cartridgeController.servoPositions)["_vel"]
+                                                        if (!vel) { fasVelText.text = "idle"; return }
+                                                        var maxV = 0
+                                                        for (var k in vel) { var v = Math.abs(Number(vel[k])); if (v > maxV) maxV = v }
+                                                        fasVelText.text = maxV > 0.5 ? maxV.toFixed(1) + " mm/s" : "idle"
+                                                    } catch(e) {}
+                                                }
+                                            }
+                                        }
                                     }
 
                                     // 5 servo cards horizontal
@@ -744,14 +777,34 @@
                                                         }
                                                     }
 
+                                                    // actual velocity from FAS drive
+                                                    Text {
+                                                        id: velText
+                                                        width: parent.width; horizontalAlignment: Text.AlignHCenter
+                                                        text: "-- mm/s"; color: root.cDim; font.pixelSize: 10
+                                                        Connections {
+                                                            target: cartridgeController
+                                                            function onServoPositionsChanged() {
+                                                                try {
+                                                                    var vel = JSON.parse(cartridgeController.servoPositions)["_vel"]
+                                                                    if (vel) {
+                                                                        var v = vel[String(model.sid)]
+                                                                        velText.text = v !== undefined ? Math.abs(Number(v)).toFixed(1) + " mm/s" : "-- mm/s"
+                                                                        velText.color = (v !== undefined && Math.abs(Number(v)) > 0.5) ? root.cCyan : root.cDim
+                                                                    }
+                                                                } catch(e) {}
+                                                            }
+                                                        }
+                                                    }
+
                                                     // − STOP + (jog hoặc manual mode)
                                                     Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
                                                         CBtn { lbl:"−"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
-                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-",parseInt(velInput.text)||30) }
+                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-", velDisplay.jogVelMms) }
                                                             onReleased: cartridgeController.jogStop(model.sid) }
                                                         CBtn { lbl:"STOP"; padV:10; padH:8; fontSize:14; bg:"#4d1a1a"; bc:root.cRed; tc:root.cRed; onClicked: cartridgeController.jogStop(model.sid) }
                                                         CBtn { lbl:"+"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
-                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+",parseInt(velInput.text)||30) }
+                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+", velDisplay.jogVelMms) }
                                                             onReleased: cartridgeController.jogStop(model.sid) }
                                                     }
 
@@ -2129,6 +2182,60 @@
         target: cartridgeController
         function onCurrentModeChanged() { checkOutTrayTimer(); }
         function onSystemStateChanged() { checkOutTrayTimer(); }
+    }
+
+    Popup {
+        id: velPopup
+        width: 280; height: 210
+        anchors.centerIn: parent
+        modal: true; focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        background: Rectangle {
+            color: "#0e0e22"; border.color: root.cAccent; border.width: 2; radius: 10
+        }
+        contentItem: Column {
+            spacing: 10; anchors.fill: parent; anchors.margins: 16
+            Text {
+                text: "Đặt tốc độ JOG"
+                color: root.cText; font.pixelSize: 15; font.bold: true
+                width: parent.width; horizontalAlignment: Text.AlignHCenter
+            }
+            Row { spacing: 8; anchors.horizontalCenter: parent.horizontalCenter
+                Rectangle { width: 90; height: 36; radius: 6; color: root.cBg; border.color: root.cAccent
+                    TextInput {
+                        id: velPopupInput
+                        anchors.centerIn: parent; width: parent.width - 8
+                        text: velDisplay.jogVelMms.toString()
+                        font.pixelSize: 18; color: root.cText; horizontalAlignment: TextInput.AlignHCenter
+                        validator: IntValidator { bottom: 1; top: 80 }
+                        onAccepted: velPopupApply()
+                    }
+                }
+                Text { text: "mm/s"; color: root.cDim; font.pixelSize: 13; anchors.verticalCenter: parent.verticalCenter }
+            }
+            Text {
+                text: "⚠  Tối đa: 80 mm/s (0.08 m/s)\nChỉ áp dụng JOG — State/Homing\ngiữ nguyên theo FAS."
+                color: root.cOrange; font.pixelSize: 10; lineHeight: 1.4
+                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+            }
+            Row { spacing: 10; anchors.horizontalCenter: parent.horizontalCenter
+                Rectangle { width: 100; height: 34; radius: 6; color: root.cGreen
+                    Text { anchors.centerIn: parent; text: "Áp dụng"; color: "#fff"; font.pixelSize: 13; font.bold: true }
+                    MouseArea { anchors.fill: parent; onClicked: velPopupApply() }
+                }
+                Rectangle { width: 80; height: 34; radius: 6; color: root.cBg; border.color: root.cBorder
+                    Text { anchors.centerIn: parent; text: "Hủy"; color: root.cDim; font.pixelSize: 13 }
+                    MouseArea { anchors.fill: parent; onClicked: velPopup.close() }
+                }
+            }
+        }
+        function velPopupApply() {
+            var v = parseInt(velPopupInput.text) || 50
+            v = Math.max(1, Math.min(v, 80))
+            velDisplay.jogVelMms = v
+            cartridgeController.setJogVelocity((v / 1000.0).toFixed(3))
+            velPopup.close()
+        }
     }
 
     Popup {

@@ -132,6 +132,11 @@ void CartridgeController::jogStop(int id)
     publishString(jog_pub_, QString("%1 stop").arg(id));
 }
 
+void CartridgeController::setJogVelocity(const QString &velocity_ms)
+{
+    publishString(jog_pub_, QString("0 set_jog_vel %1").arg(velocity_ms));
+}
+
 void CartridgeController::homeServo(int id)
 {
     publishString(jog_pub_, QString("home %1").arg(id));

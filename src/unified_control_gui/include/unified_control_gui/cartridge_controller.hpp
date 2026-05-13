@@ -44,6 +44,7 @@ public slots:
     void homeServo(int id);
     void clearServo(int id);
     void moveServo(int id, double position);
+    Q_INVOKABLE void setJogVelocity(const QString &velocity_ms);
 
     // System control
     void setMode(const QString &mode);

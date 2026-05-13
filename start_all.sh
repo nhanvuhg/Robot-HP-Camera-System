@@ -247,11 +247,11 @@ sleep 1
 # GUI
 # ══════════════════════════════════════════
 
-# ── [6/7] Web GUI (cartridge_gui.py — port 8080) — OPTIONAL ──
+# ── [6/7] Web GUI (cartridge_gui.py — port 8080) ──
 LOG_WEB="$LOG_DIR/cartridge_web_gui.log"
 WEB_GUI="$WS/src/system_feed_cartridge/scripts/cartridge_gui.py"
-WEB_GUI_ENABLED=false
-for arg in "$@"; do [ "$arg" = "--web" ] && WEB_GUI_ENABLED=true; done
+WEB_GUI_ENABLED=true
+for arg in "$@"; do [ "$arg" = "--no-web" ] && WEB_GUI_ENABLED=false; done
 
 if $WEB_GUI_ENABLED && [ -f "$WEB_GUI" ]; then
     echo "  [6/7] 🌐 Web GUI (port 8080)..."
@@ -261,7 +261,7 @@ if $WEB_GUI_ENABLED && [ -f "$WEB_GUI" ]; then
     echo "$PID_WEB_GUI" >> "$PIDFILE"
     sleep 1
 else
-    echo "  [6/7] ⏭️  Web GUI skipped (thêm --web để bật)"
+    echo "  [6/7] ⏭️  Web GUI skipped (--no-web)"
 fi
 
 # ── [7/7] QML GUI (native, HDMI) ──
