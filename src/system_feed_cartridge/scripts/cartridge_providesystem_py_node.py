@@ -53,7 +53,7 @@ except ImportError:
 # ─── Constants ───────────────────────────────────────────────────
 COUNTS_PER_MM        = 1000
 CYLINDER_TIMEOUT_S   = 15.0
-OUTPUT_DETECT_WAIT_S = 60.0
+OUTPUT_DETECT_WAIT_S = 25.0
 INY_JOG_VEL          = 40
 OUTY_ROW1_LIMIT_MM   = 590.0
 TRAY_ROBOT_CHECK_TIMEOUT_S = 3.0
@@ -606,19 +606,22 @@ class CartridgeSystem(Node):
         if not mot:
             return True
         try:
-            offset = self.zero_offset.get(servo_id, 0)
+            offset = int(self.zero_offset.get(servo_id, 0))
             counts = offset + int(pos_mm * COUNTS_PER_MM)
             self._ensure_ready(mot, servo_id)
             with self._servo_lock:
-                mot.position_task(counts, vel, absolute=True, nonblocking=True)
+                mot.position_task(int(counts), int(vel), absolute=True, nonblocking=True)
             if servo_id == 1: self._inx_moving = True
             elif servo_id == 2: self._iny_moving = True
+            setattr(self, f'_ignore_arrived_{servo_id}', time.time() + 0.5)
             return True
         except Exception as e:
             self.get_logger().error(f"S{servo_id} nb_move error: {e}")
             return False
 
     def _arrived(self, servo_id: int) -> bool:
+        if time.time() < getattr(self, f'_ignore_arrived_{servo_id}', 0.0):
+            return False
         mot = self.servos.get(servo_id)
         if not mot:
             return True
@@ -816,7 +819,7 @@ class CartridgeSystem(Node):
 
     def _zone_to_row(self, trigger_pos: float, zone_table: dict) -> int:
         for row, vals in zone_table.items():
-            if len(vals) >= 2 and vals[0] <= trigger_pos <= vals[1]:
+            if len(vals) >= 2 and min(vals[0], vals[1]) <= trigger_pos <= max(vals[0], vals[1]):
                 return row
         self.get_logger().warn(
             f"[zone_to_row] {trigger_pos:.1f}mm không khớp zone nào → fallback row1"
@@ -1759,10 +1762,11 @@ class CartridgeSystem(Node):
             self._s4_armed = True
 
         s4_now = self.sensor(S4_SCAN_STACK_P1)
-        s4_rising = (not self._s4_prev_in) and s4_now
+        # S4 la thuong dong (NC): cham vao khay se tu ON chuyen sang OFF -> Falling edge
+        s4_falling = self._s4_prev_in and (not s4_now)
         self._s4_prev_in = s4_now
 
-        if self._s4_armed and s4_rising:
+        if self._s4_armed and s4_falling:
             trigger_pos = self._pos(2) or iny
             
             valid_min = self._conf('iny_scan_valid_min_mm', 200.0)
@@ -1770,7 +1774,7 @@ class CartridgeSystem(Node):
 
             if not (valid_min <= trigger_pos <= valid_max):
                 self.get_logger().warn(
-                    f"[S1 SCAN] S4 rising edge nhiễu @ {trigger_pos:.1f}mm "
+                    f"[S1 SCAN] S4 falling edge nhiễu @ {trigger_pos:.1f}mm "
                     f"(ngoài range {valid_min:.1f}..{valid_max:.1f})"
                 )
                 self._stop(2)
@@ -1780,7 +1784,7 @@ class CartridgeSystem(Node):
                     self._notify(
                         'warn',
                         'S4 nhiễu',
-                        f'S4 ON ngoài range {valid_min:.0f}-{valid_max:.0f}mm, retry lần {self._s1_scan_noise_retry}'
+                        f'S4 chạm ngoài range {valid_min:.0f}-{valid_max:.0f}mm, retry lần {self._s1_scan_noise_retry}'
                     )
                     self._enter_in(SystemState.S1_RETRY_SCAN_HOME)
                     return
@@ -1804,7 +1808,7 @@ class CartridgeSystem(Node):
             self._s1_scan_noise_retry = 0
 
             self.get_logger().info(
-                f"[S1 SCAN] S4 rising edge hợp lệ @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm)"
+                f"[S1 SCAN] S4 falling edge hợp lệ @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm)"
             )
             self._nb_move(2, target_mm, vel=self.config.iny_row_vel)
             self._cmd_sent_in     = True
@@ -1816,7 +1820,7 @@ class CartridgeSystem(Node):
         timed_out = time.time() > self._step_timeout_in
         at_target = self._arrived(2) or iny >= self.config.target_scaninp1 - 2.0
         if timed_out or at_target:
-            self.get_logger().warn("[S1 SCAN] Hết hạn scan mà không có rising edge hợp lệ của S4")
+            self.get_logger().warn("[S1 SCAN] Hết hạn scan mà không có falling edge hợp lệ của S4")
             self._stop(2)
 
             if self._s1_scan_noise_retry < self._conf('s1_scan_noise_retry_limit', 1):
@@ -2148,6 +2152,7 @@ class CartridgeSystem(Node):
                 self._notify('info', 'STATE 1 COMPLETE', 'Khay đã ở robot')
                 self._tray_robot_check_start = -1.0
 
+            self._state1_enabled = False
             self._enter_in(SystemState.IDLE)
         else:
             if self._tray_robot_check_start == 0.0:
@@ -2158,6 +2163,7 @@ class CartridgeSystem(Node):
                 self.get_logger().error(f"S7 OFF sau {TRAY_ROBOT_CHECK_TIMEOUT_S:.0f}s — caution")
                 self._notify('warn', 'S7 OFF sau timeout', 'Kiem tra lai S7.')
                 self.pub_new_tray.publish(Bool(data=True))
+                self._state1_enabled = False
                 self._enter_in(SystemState.IDLE)
             else:
                 self._log_once("S1C_S18_WAIT",

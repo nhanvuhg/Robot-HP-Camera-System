@@ -26,13 +26,13 @@ iny_safe_zone: 40.0        # Limit for "Safe" INY position before INX moves (Saf
 iny_push_clearance_mm: 5.0  # INY dừng tạm để kẹp trước khi đẩy vào robot (S1 step trung gian)
 
 # S1 INY Scanning Logic
-target_scaninp1: 805.0       # Scan endpoint target (mm)
+target_scaninp1: 970.0       # Scan endpoint target (mm)
 target_scanoutp1: 500.0
 iny_scan_vel: 30             # Scanning speed (mm/s)
 iny_row_vel: 20              # Docking speed (mm/s)
-iny_scan_valid_min_mm: 50.0 # Ignore triggers below this X coordinate (Noise filter)
-iny_scan_valid_max_mm: 1000.0 # Valid scan range upper limit
-iny_scan_arm_mm: 200.0       # INY position threshold — S4 detection armed only above this
+iny_scan_valid_min_mm: 20.0 # Ignore triggers below this X coordinate (Noise filter)
+iny_scan_valid_max_mm: 970.0 # Valid scan range upper limit
+iny_scan_arm_mm: 150.0       # INY position threshold — S4 detection armed only above this
 s1_scan_noise_retry_limit: 1 # Max automatic retries if noise is detected
 inx_noise_recovery_mm: 10.0  # Safe INX recovery pos during noise failure
 
@@ -42,36 +42,36 @@ iny_input_zones:
   - 880.0
   - 1015.0
   2:
-  - 875.0
-  - 785.0
+  - 879.0
+  - 780.0
   - 945.0
   3:
-  - 780.0
+  - 779.0
   - 690.0
   - 875.0
   4:
-  - 685.0
-  - 595.0
+  - 689.0
+  - 590.0
   - 805.0
   5:
-  - 590.0
+  - 589.0
   - 500.0
   - 735.0
   6:
-  - 490.0
-  - 400.0
+  - 499.0
+  - 410.0
   - 665.0
   7:
-  - 395.0
-  - 305.0
+  - 409.0
+  - 320.0
   - 595.0
   8:
-  - 300.0
-  - 210.0
+  - 319.0
+  - 220.0
   - 525.0
   9:
-  - 205.0
-  - 115.0
+  - 219.0
+  - 120.0
   - 455.0
   10:
   - 110.0
@@ -79,44 +79,44 @@ iny_input_zones:
   - 385.0
 iny_output_zones:
   1:
-  - 451.0
   - 500.0
+  - 451.0
   - 550.0
   2:
-  - 401.0
   - 450.0
+  - 401.0
   - 300.0
   3:
-  - 351.0
   - 400.0
+  - 351.0
   - 280.0
   4:
-  - 301.0
   - 350.0
+  - 301.0
   - 260.0
   5:
-  - 251.0
   - 300.0
+  - 251.0
   - 240.0
   6:
-  - 201.0
   - 250.0
+  - 201.0
   - 220.0
   7:
+  - 200.0
   - 151.0
   - 200.0
-  - 200.0
   8:
-  - 100.0
   - 150.0
+  - 100.0
   - 180.0
   9:
-  - 50.0
   - 99.0
+  - 50.0
   - 160.0
   10:
-  - 0.0
   - 49.0
+  - 0.0
   - 140.0
 iny_target2: 140.0          # Tọa độ INY đẩy khay vào robot / kẹp khay cũ (S1 & S2A)
 servo3_home: 0.0           # Điểm lùi sâu nhất của trục Servo 3
@@ -141,48 +141,48 @@ target_scanoutp2: 500.0
 outy_scan_arm_mm: 50.0
 outy_output_zones:
   10:
-  - 0.0
   - 9.0
+  - 0.0
   - 40.0
   9:
-  - 10.0
   - 49.0
+  - 10.0
   - 60.0
   8:
-  - 50.0
   - 110.0
+  - 50.0
   - 80.0
   7:
-  - 111.0
   - 170.0
+  - 111.0
   - 140.0
   6:
-  - 171.0
   - 230.0
+  - 171.0
   - 200.0
   5:
-  - 231.0
   - 290.0
+  - 231.0
   - 260.0
   4:
-  - 291.0
   - 350.0
+  - 291.0
   - 320.0
   3:
-  - 351.0
   - 410.0
+  - 351.0
   - 380.0
   2:
-  - 411.0
   - 470.0
+  - 411.0
   - 440.0
   1:
-  - 471.0
   - 530.0
+  - 471.0
   - 500.0
 servo_limits:
-  1: 700.0
-  2: 900.0
+  1: 560.0
+  2: 1050.0
   3: 400.0
   4: 600.0
   5: 600.0
@@ -192,9 +192,9 @@ position_tolerance: 5.0
 outx_safe_position_threshold: 100.0
 max_trays: 8
 max_slots_per_output_tray: 9
-homing_timeout: 30.0
-move_timeout: 60.0
-cylinder_timeout: 15.0
+homing_timeout: 120.0
+move_timeout: 80.0
+cylinder_timeout: 70.0
 # --------------------------------------------------------------------------
 # LƯU Ý QUAN TRỌNG VỀ NETWORK TIMEOUT (Anti-Deadlock Modbus)
 # - modbus_timeout_ms (mặc định: 3000ms): 
