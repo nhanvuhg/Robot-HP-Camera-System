@@ -116,6 +116,16 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
             emit trayCountChanged();
         });
     
+    // Subscribe to hardware speed factor readback from Dobot feedback node
+    hw_speed_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
+        "/robot/hw_speed_factor", 10,
+        [this](const std_msgs::msg::Int32::SharedPtr msg) {
+            if (hw_speed_ratio_ != msg->data) {
+                hw_speed_ratio_ = msg->data;
+                emit hwSpeedRatioChanged();
+            }
+        });
+
     qDebug() << "RobotController initialized";
 
     // Load persisted speed ratio
@@ -124,13 +134,31 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     speed_ratio_ = qBound(1, savedSpeed, 100);
     qDebug() << "Loaded speed ratio:" << speed_ratio_;
 
-    // Publish initial speed ratio so motion_executor gets it on startup
-    // Use a single-shot timer to ensure publisher is ready before sending
-    QTimer::singleShot(2000, this, [this]() {
+    // Publish initial speed ratio so motion_executor AND Dobot hardware get it on startup
+    // Use a single-shot timer to ensure services/publishers are ready before sending
+    QTimer::singleShot(3000, this, [this]() {
+        // 1. Sync to motion_executor (for SpeedJ/SpeedL before each move)
         std_msgs::msg::Int32 msg;
         msg.data = speed_ratio_;
         speed_ratio_pub_->publish(msg);
         qDebug() << "[STARTUP] Published initial speed ratio:" << speed_ratio_;
+
+        // 2. Sync to Dobot hardware (SpeedFactor — persists until power cycle)
+        if (speed_factor_client_ && speed_factor_client_->service_is_ready()) {
+            auto req = std::make_shared<dobot_msgs_v3::srv::SpeedFactor::Request>();
+            req->ratio = speed_ratio_;
+            speed_factor_client_->async_send_request(req,
+                [this](rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedFuture f) {
+                    try {
+                        auto r = f.get();
+                        qDebug() << "[STARTUP] SpeedFactor synced to hardware:" << speed_ratio_ << "% (res:" << r->res << ")";
+                    } catch (...) {
+                        qWarning() << "[STARTUP] SpeedFactor sync failed — hardware may use default speed";
+                    }
+                });
+        } else {
+            qWarning() << "[STARTUP] SpeedFactor service not ready — hardware speed may differ from GUI";
+        }
     });
 
     // Auto-poll angles/pose every 500ms for realtime display

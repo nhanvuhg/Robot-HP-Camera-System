@@ -37,6 +37,7 @@ class RobotController : public QObject
     Q_PROPERTY(QVariantList jointAngles READ jointAngles NOTIFY jointAnglesChanged)
     Q_PROPERTY(QVariantList cartesianPose READ cartesianPose NOTIFY cartesianPoseChanged)
     Q_PROPERTY(int speedRatio READ speedRatio NOTIFY speedRatioChanged)
+    Q_PROPERTY(int hwSpeedRatio READ hwSpeedRatio NOTIFY hwSpeedRatioChanged)
     Q_PROPERTY(bool jogContinuous READ jogContinuous WRITE setJogContinuous NOTIFY jogContinuousChanged)
     Q_PROPERTY(double jogStepSize READ jogStepSize WRITE setJogStepSize NOTIFY jogStepSizeChanged)
     Q_PROPERTY(bool inReady READ inReady NOTIFY inReadyChanged)
@@ -55,6 +56,7 @@ public:
     QVariantList jointAngles() const { return joint_angles_; }
     QVariantList cartesianPose() const { return cartesian_pose_; }
     int speedRatio() const { return speed_ratio_; }
+    int hwSpeedRatio() const { return hw_speed_ratio_; }
     QString errorLog() const { return error_log_; }
     bool jogContinuous() const { return jog_continuous_; }
     double jogStepSize() const { return jog_step_size_; }
@@ -122,6 +124,7 @@ signals:
     void jointAnglesChanged();
     void cartesianPoseChanged();
     void speedRatioChanged();
+    void hwSpeedRatioChanged();
     void errorLogChanged();
     void jogContinuousChanged();
     void jogStepSizeChanged();
@@ -180,6 +183,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr tray_count_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr in_ready_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr out_ready_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr hw_speed_sub_;
     
     // State
     QString system_status_{"UNKNOWN"};
@@ -191,6 +195,7 @@ private:
     QVariantList joint_angles_;
     QVariantList cartesian_pose_;
     int speed_ratio_{100};
+    int hw_speed_ratio_{0};
     QString error_log_;
     QTimer *poll_timer_;
     

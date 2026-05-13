@@ -1347,7 +1347,7 @@
                                                         TextInput { id: cartInp
                                                             anchors { fill: parent; margins: 2 }
                                                             color: root.cText; font.pixelSize: 14; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; clip: true
-                                                            text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(1) : "0"
+                                                            text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0"
                                                             selectByMouse: true; verticalAlignment: Text.AlignVCenter; validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
                                                         }
                                                     }
@@ -1366,7 +1366,7 @@
                                                     robotController.getPose()
                                                     for (var i = 0; i < 6; i++) {
                                                         if (robotController.cartesianPose.length > i)
-                                                            cartInputs.itemAt(i).children[1].children[0].text = robotController.cartesianPose[i].toFixed(2)
+                                                            cartInputs.itemAt(i).children[1].children[0].text = robotController.cartesianPose[i].toFixed(4)
                                                     }
                                                 }}
                                             }
@@ -1445,7 +1445,7 @@
                                                         TextInput {
                                                             anchors { fill: parent; margins: 2 }
                                                             color: root.cText; font.pixelSize: 14; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true
-                                                            text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(1) : "0"
+                                                            text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0"
                                                             selectByMouse: true; validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
                                                         }
                                                     }
@@ -1464,7 +1464,7 @@
                                                     robotController.getAngles()
                                                     for (var i = 0; i < 6; i++) {
                                                         if (robotController.jointAngles.length > i)
-                                                            jointInputs.itemAt(i).children[1].children[0].text = robotController.jointAngles[i].toFixed(2)
+                                                            jointInputs.itemAt(i).children[1].children[0].text = robotController.jointAngles[i].toFixed(4)
                                                     }
                                                 }}
                                             }
@@ -1589,8 +1589,29 @@
                                             }
                                         }
 
-                                        // Speed Ratio
-                                        Text { text: "SPEED %"; color: root.cDim; font.pixelSize: 9; font.bold: true }
+                                        // Hardware Speed (read-only from Dobot)
+                                        Text { text: "HW SPEED"; color: root.cDim; font.pixelSize: 9; font.bold: true }
+                                        Rectangle {
+                                            width: parent.width; height: 26; radius: 4
+                                            color: "#0d1117"; border.color: "#2a3a4a"; border.width: 1
+                                            Row {
+                                                anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                                                spacing: 4
+                                                Text {
+                                                    text: "⚙ Dobot:"
+                                                    color: root.cDim; font.pixelSize: 11
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                }
+                                                Text {
+                                                    text: robotController.hwSpeedRatio + "%"
+                                                    color: "#f59e0b"; font.pixelSize: 14; font.bold: true; font.family: "monospace"
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                }
+                                            }
+                                        }
+
+                                        // Set Speed (interactive slider)
+                                        Text { text: "SET SPEED %"; color: root.cDim; font.pixelSize: 9; font.bold: true }
                                         Row { spacing: 4; width: parent.width; height: 30
                                             Slider {
                                                 id: speedSlider

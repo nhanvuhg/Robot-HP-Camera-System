@@ -42,6 +42,7 @@
 #include "dobot_msgs_v3/srv/do.hpp"
 #include "dobot_msgs_v3/srv/robot_mode.hpp"
 #include "dobot_msgs_v3/srv/speed_l.hpp"
+#include "dobot_msgs_v3/srv/speed_factor.hpp"
 #include "dobot_msgs_v3/srv/acc_l.hpp"
 #include "dobot_msgs_v3/srv/speed_j.hpp"
 #include "dobot_msgs_v3/srv/acc_j.hpp"
@@ -71,6 +72,7 @@ using RelMovLUser = dobot_msgs_v3::srv::RelMovLUser;
 using DO = dobot_msgs_v3::srv::DO;
 using RobotMode = dobot_msgs_v3::srv::RobotMode;
 using SpeedL = dobot_msgs_v3::srv::SpeedL;
+using SpeedFactor = dobot_msgs_v3::srv::SpeedFactor;
 using AccL = dobot_msgs_v3::srv::AccL;
 using SpeedJ = dobot_msgs_v3::srv::SpeedJ;
 using AccJ = dobot_msgs_v3::srv::AccJ;
@@ -103,7 +105,7 @@ public:
             "/robot/speed_ratio", rclcpp::QoS(10).reliable().transient_local(),
             [this](const std_msgs::msg::Int32::SharedPtr msg) {
                 current_speed_ratio_ = std::clamp(msg->data, 1, 100);
-                RCLCPP_INFO(get_logger(), "[SPEED] Speed ratio updated: %d%%", current_speed_ratio_);
+                RCLCPP_INFO(get_logger(), "[SPEED] Speed ratio updated: %d%% (GUI already sent SpeedFactor to hardware)", current_speed_ratio_);
             });
 
         // Heartbeat Timer (500ms)
@@ -177,6 +179,7 @@ private:
     rclcpp::Client<DO>::SharedPtr do_client_;
     rclcpp::Client<RobotMode>::SharedPtr robot_mode_client_;
     rclcpp::Client<SpeedL>::SharedPtr speedl_client_;
+    rclcpp::Client<SpeedFactor>::SharedPtr speedfactor_client_;
     rclcpp::Client<AccL>::SharedPtr accl_client_;
     rclcpp::Client<SpeedJ>::SharedPtr speedj_client_;
     rclcpp::Client<AccJ>::SharedPtr accj_client_;
@@ -201,6 +204,7 @@ private:
         do_client_ = create_client<DO>("/nova5/dobot_bringup/DO", qos);
         robot_mode_client_ = create_client<RobotMode>("/nova5/dobot_bringup/RobotMode", qos);
         speedl_client_ = create_client<SpeedL>("/nova5/dobot_bringup/SpeedL", qos);
+        speedfactor_client_ = create_client<SpeedFactor>("/nova5/dobot_bringup/SpeedFactor", qos);
         accl_client_ = create_client<AccL>("/nova5/dobot_bringup/AccL", qos);
         speedj_client_ = create_client<SpeedJ>("/nova5/dobot_bringup/SpeedJ", qos);
         accj_client_ = create_client<AccJ>("/nova5/dobot_bringup/AccJ", qos);
@@ -529,8 +533,8 @@ private:
     }
 
     bool prepareLinearMotion() {
-        int spd = current_speed_ratio_;
-        RCLCPP_INFO(get_logger(), "[MOTION] prepareLinearMotion speed=%d%%", spd);
+        int spd = 100;  // Always 100% — actual speed is controlled by SpeedFactor (global)
+        RCLCPP_INFO(get_logger(), "[MOTION] prepareLinearMotion speed=100%% (SpeedFactor=%d%%)", current_speed_ratio_);
         // Set SpeedL
         auto speed_req = std::make_shared<SpeedL::Request>();
         speed_req->r = spd;
@@ -545,8 +549,8 @@ private:
     }
 
     bool prepareJointMotion() {
-        int spd = current_speed_ratio_;
-        RCLCPP_INFO(get_logger(), "[MOTION] prepareJointMotion speed=%d%%", spd);
+        int spd = 100;  // Always 100% — actual speed is controlled by SpeedFactor (global)
+        RCLCPP_INFO(get_logger(), "[MOTION] prepareJointMotion speed=100%% (SpeedFactor=%d%%)", current_speed_ratio_);
         // Set SpeedJ
         auto speed_req = std::make_shared<SpeedJ::Request>();
         speed_req->r = spd;
