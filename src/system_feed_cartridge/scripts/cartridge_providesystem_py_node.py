@@ -58,6 +58,8 @@ INY_JOG_VEL          = 40
 OUTY_ROW1_LIMIT_MM   = 590.0
 TRAY_ROBOT_CHECK_TIMEOUT_S = 3.0
 JOG_OUTPUT_TIMEOUT_S = 120.0
+POSITION_TOLERANCE_HOME = 5.0   # mm — vị trí gần 0 đủ để skip re-home
+HOME_SPEED              = 30    # mm/s cho position_task về 0
 
 # ─── Sensor IDs — matching sensors.yaml ─────────────────────────
 S1_BELT_START      = 1
@@ -240,7 +242,7 @@ class CartridgeSystem(Node):
 
         # Operation
         self.state           = SystemState.IDLE
-        self.operation_mode  = 'auto'   # 'auto' | 'manual'
+        self.operation_mode  = 'manual'   # 'auto' | 'manual'
         self._input_tray_done     = False
         self._state1_enabled = False
         self._gui_confirmed  = False
@@ -318,58 +320,72 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
     def _connect_hardware(self):
+        threads = []
+
         if EDCON_AVAILABLE:
             if EdconLogging:
                 EdconLogging()
             for sid, ip in self.config.servo_ips.items():
-                self._connect_servo(sid, ip)
-            threading.Thread(
-                target=self._servo_reconnect_loop, daemon=True, name="servo_reconnect"
-            ).start()
+                t = threading.Thread(
+                    target=self._connect_servo, args=(sid, ip, 2),
+                    daemon=True, name=f"connect_s{sid}"
+                )
+                threads.append(t)
         else:
             self.get_logger().warn("Simulation mode (edcon not installed)")
 
         if CPXAP_AVAILABLE:
-            for attempt in range(1, 4):
-                try:
-                    self.io_module = CpxAp(ip_address=self.config.io_ip, cycle_time=0.5)
-                    self.get_logger().info(f"IO 1 {self.config.io_ip} OK")
-                    break
-                except Exception as e:
-                    self.get_logger().warn(f"IO 1 attempt {attempt}/3: {e}")
-                    if attempt < 3:
-                        time.sleep(3.0)
-            else:
-                self.get_logger().error("IO 1 module failed — sensor reads will be False")
+            threads.append(threading.Thread(
+                target=self._connect_io, args=(1, self.config.io_ip),
+                daemon=True, name="connect_io1"
+            ))
+            io2_ip = getattr(self.config, 'io_ip_2', "192.168.27.254")
+            threads.append(threading.Thread(
+                target=self._connect_io, args=(2, io2_ip),
+                daemon=True, name="connect_io2"
+            ))
 
-            for attempt in range(1, 4):
-                try:
-                    self.io_module_2 = CpxAp(ip_address=getattr(self.config, 'io_ip_2', "192.168.27.254"), cycle_time=0.5)
-                    self.get_logger().info(f"IO 2 {getattr(self.config, 'io_ip_2', '192.168.27.254')} OK")
-                    break
-                except Exception as e:
-                    self.get_logger().warn(f"IO 2 attempt {attempt}/3: {e}")
-                    if attempt < 3:
-                        time.sleep(3.0)
-            else:
-                self.get_logger().error("IO 2 module failed")
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=15)
 
-            if self.io_module or self.io_module_2:
-                threading.Thread(target=self._io_bg_loop, daemon=True, name="io_bg").start()
+        if EDCON_AVAILABLE:
+            threading.Thread(
+                target=self._servo_reconnect_loop, daemon=True, name="servo_reconnect"
+            ).start()
+
+        if CPXAP_AVAILABLE and (self.io_module or self.io_module_2):
+            threading.Thread(target=self._io_bg_loop, daemon=True, name="io_bg").start()
+
+    def _connect_io(self, idx: int, ip: str):
+        for attempt in range(1, 4):
+            try:
+                mod = CpxAp(ip_address=ip, cycle_time=0.5)
+                if idx == 1:
+                    self.io_module = mod
+                else:
+                    self.io_module_2 = mod
+                self.get_logger().info(f"IO {idx} {ip} OK")
+                return
+            except Exception as e:
+                self.get_logger().warn(f"IO {idx} attempt {attempt}/3: {e}")
+                if attempt < 3:
+                    time.sleep(3.0)
+        self.get_logger().error(f"IO {idx} module failed — sensor reads will be False")
 
     def _connect_servo(self, sid: int, ip: str, attempts: int = 5) -> bool:
         for attempt in range(1, attempts + 1):
             try:
                 t_ms = int(getattr(self.config, 'modbus_timeout_ms', 3000))
                 com = ComModbus(ip_address=ip, cycle_time=60, timeout_ms=t_ms)
-                with self._servo_lock:
-                    tg = com.read_pnu(3490, 0)
-                    if tg != 111:
-                        com.write_pnu(3490, 0, 111)
+                tg = com.read_pnu(3490, 0)
+                if tg != 111:
+                    com.write_pnu(3490, 0, 111)
                 mot = MotionHandler(com)
+                mot.acknowledge_faults()
                 with self._servo_lock:
-                    mot.acknowledge_faults()
-                    self.servos[sid] = mot  # assign inside lock to avoid race with reconnect_loop pop()
+                    self.servos[sid] = mot
                 self.get_logger().info(f"S{sid} ({ip}) OK (attempt {attempt})")
                 return True
             except Exception as e:
@@ -409,16 +425,11 @@ class CartridgeSystem(Node):
     def destroy_node(self):
         self._pos_thread_stop = True
         for sid, mot in list(self.servos.items()):
-            if self._servo_lock.acquire(timeout=2.0):
-                try:
-                    mot.stop_motion_task()
-                    mot.shutdown()
-                except Exception as e:
-                    self.get_logger().warn(f"S{sid} shutdown: {e}")
-                finally:
-                    self._servo_lock.release()
-            else:
-                self.get_logger().warn(f"S{sid} shutdown: lock timeout (bo qua)")
+            try:
+                mot.stop_motion_task()
+                mot.shutdown()
+            except Exception as e:
+                self.get_logger().warn(f"S{sid} shutdown: {e}")
 
         if getattr(self, 'io_module', None) is not None:
             try:
@@ -638,14 +649,26 @@ class CartridgeSystem(Node):
             self.get_logger().error(f"S{servo_id} jog error: {e}")
 
     def _ensure_ready(self, mot, servo_id: int, timeout: float = 3.0):
-        mot.acknowledge_faults()
-        mot.enable_powerstage()
+        # Short lock holds — tránh race condition trên Modbus socket
+        acquired = self._servo_lock.acquire(timeout=1.0)
+        if acquired:
+            try:
+                mot.acknowledge_faults()
+                mot.enable_powerstage()
+            finally:
+                self._servo_lock.release()
+
         if not hasattr(mot, 'ready_for_motion'):
             return
         start = time.time()
         while time.time() - start < timeout:
-            if mot.ready_for_motion():
-                return
+            if self._servo_lock.acquire(timeout=0.5):
+                try:
+                    ready = mot.ready_for_motion()
+                finally:
+                    self._servo_lock.release()
+                if ready:
+                    return
             time.sleep(0.05)
         self.get_logger().warn(f"S{servo_id}: drive not ready after {timeout}s")
 
@@ -871,55 +894,80 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
     def _home_all(self) -> bool:
-        NAMES  = {1: "InX", 2: "InY", 3: "Platform", 4: "OutX", 5: "OutY"}
-        phases = [([2, 5], "InY+OutY"), ([1, 4, 3], "InX+OutX+Platform")]
+        """[V8] Blocking home pattern — mô phỏng dosing-machine code đã chạy thật.
+        Dùng referencing_task() blocking (không nonblocking=True), home tuần tự,
+        track _servo_homed_once để skip re-home nếu đã homed gần zero.
+        Fail loud thay vì silent-assume-home khi drive không di chuyển.
+        """
+        NAMES = {1: "InX", 2: "InY", 3: "Platform", 4: "OutX", 5: "OutY"}
+        ORDER = [(2, "InY"), (5, "OutY"), (1, "InX"), (4, "OutX"), (3, "Platform")]
 
-        for servo_ids, phase_name in phases:
-            active = [(sid, self.servos[sid]) for sid in servo_ids if sid in self.servos]
-            if not active:
+        if not hasattr(self, '_servo_homed_once'):
+            self._servo_homed_once = {sid: False for sid in self.config.servo_ips}
+
+        for sid, name in ORDER:
+            if sid not in self.servos:
+                self.get_logger().info(f"  {name} (S{sid}): not connected, skip")
                 continue
-            self.get_logger().info(f"Homing {phase_name}...")
+            mot = self.servos[sid]
 
-            for sid, mot in active:
-                try:
-                    self._ensure_ready(mot, sid, timeout=5.0)
+            try:
+                self._ensure_ready(mot, sid, timeout=5.0)
+
+                with self._servo_lock:
+                    current_pos = mot.current_position()
+                self.get_logger().info(f"Homing {name} (S{sid}): current={current_pos}")
+
+                zero = self.zero_offset.get(sid, 0)
+                near_zero = abs(current_pos - zero) <= POSITION_TOLERANCE_HOME * COUNTS_PER_MM
+
+                if self._servo_homed_once.get(sid) and near_zero:
+                    # Đã homed, vị trí gần 0 → chỉ position_task về 0 (blocking)
+                    self.get_logger().info(f"  {name}: near zero → position_task(0)")
                     with self._servo_lock:
-                        mot.referencing_task(nonblocking=True)
-                except Exception as e:
-                    self.get_logger().error(f"{NAMES.get(sid)} home start: {e}")
-                    return False
-
-            start = time.time()
-            while time.time() - start < self.config.homing_timeout:
-                if self._servo_lock.acquire(timeout=1.0):
-                    try:
-                        done = all(mot.referenced() for _, mot in active)
-                    finally:
-                        self._servo_lock.release()
+                        mot.position_task(zero, HOME_SPEED, absolute=True, nonblocking=False)
                 else:
-                    done = False
-                if done:
-                    break
-                time.sleep(0.1)
-            else:
-                for sid, mot in active:
-                    if self._servo_lock.acquire(timeout=1.0):
-                        try:
-                            if not mot.referenced():
-                                self.get_logger().warn(f"{NAMES.get(sid)} timeout — assume home")
-                                mot.stop_motion_task()
-                        finally:
-                            self._servo_lock.release()
+                    # Lần đầu hoặc đã lệch xa → blocking referencing_task thật
+                    self.get_logger().info(
+                        f"  {name}: {'first home' if not self._servo_homed_once.get(sid) else 're-home'} "
+                        f"→ blocking referencing_task"
+                    )
+                    pre_pos = current_pos
 
-            time.sleep(0.3)
-            for sid, mot in active:
-                if sid not in self.zero_offset:
-                    if self._servo_lock.acquire(timeout=1.0):
-                        try:
-                            self.zero_offset[sid] = mot.current_position()
-                        finally:
-                            self._servo_lock.release()
-                self.get_logger().info(f"  {NAMES.get(sid)} = 0mm")
+                    with self._servo_lock:
+                        mot.referencing_task()  # BLOCKING — đợi drive home xong
+
+                    with self._servo_lock:
+                        post_pos = mot.current_position()
+
+                    delta_mm = abs(post_pos - pre_pos) / COUNTS_PER_MM
+
+                    if delta_mm < 0.5:
+                        # Drive không di chuyển — kiểm tra referenced() để quyết định
+                        with self._servo_lock:
+                            is_ref = mot.referenced()
+                        if not is_ref:
+                            self.get_logger().error(
+                                f"  {name}: NOT referenced + no motion (Δ={delta_mm:.2f}mm) "
+                                f"→ HOMING FAIL. Check FAS: Referencing tab method/velocity/REF-cam."
+                            )
+                            self._notify('error', f'{name} home FAIL',
+                                         f'Drive khong di chuyen va khong referenced (delta={delta_mm:.2f}mm). '
+                                         f'Check FAS Referencing tab.')
+                            return False
+                        self.get_logger().warn(
+                            f"  {name}: moved only {delta_mm:.2f}mm but drive says referenced — "
+                            f"may already be at REF position"
+                        )
+
+                    self._servo_homed_once[sid] = True
+                    self.zero_offset[sid] = post_pos
+                    self.get_logger().info(f"  {name} = 0mm (homed, Δ={delta_mm:.1f}mm)")
+
+            except Exception as e:
+                self.get_logger().error(f"  {name} home exception: {e}")
+                self._notify('error', f'{name} home FAIL', str(e))
+                return False
 
         return True
 
@@ -980,6 +1028,8 @@ class CartridgeSystem(Node):
         self._jog_mode = True
         self.operation_mode = 'manual'
         self.zero_offset.clear()
+        if hasattr(self, '_servo_homed_once'):
+            self._servo_homed_once = {sid: False for sid in self.config.servo_ips}
         self._sync_mode_jog()
         self.get_logger().info('[STOP] STOP — JOG sẵn sàng')
         self._notify('warn', 'STOP', 'Dừng hệ thống — JOG sẵn sàng')
@@ -1023,9 +1073,8 @@ class CartridgeSystem(Node):
                     sid = int(parts[1])
                     mot = self.servos.get(sid)
                     if mot:
-                        with self._servo_lock:
-                            mot.acknowledge_faults()
-                            self.get_logger().info(f"Acknowledge faults cho Servo {sid} (như FAS)")
+                        mot.acknowledge_faults()
+                        self.get_logger().info(f"Acknowledge faults cho Servo {sid} (như FAS)")
                 except Exception as e:
                     self.get_logger().warn(f"Lỗi khi clear servo: {e}")
             return
@@ -1051,42 +1100,36 @@ class CartridgeSystem(Node):
                         self._ensure_ready(mot, sid, timeout=5.0)
                         with self._servo_lock:
                             mot.referencing_task(nonblocking=True)
-                        # Poll referenced() with short lock holds (matches _home_all pattern)
                         start = time.time()
                         timeout = self.config.homing_timeout
                         while time.time() - start < timeout:
-                            if self._servo_lock.acquire(timeout=1.0):
-                                try:
-                                    done = mot.referenced()
-                                finally:
-                                    self._servo_lock.release()
-                                if done:
-                                    break
-                            time.sleep(0.1)
+                            with self._servo_lock:
+                                ref = mot.referenced()
+                            if ref:
+                                break
+                            time.sleep(0.2)
                         else:
                             self.get_logger().warn(f"S{sid} JOG home timeout after {timeout}s")
                             with self._servo_lock:
                                 mot.stop_motion_task()
                         if sid not in self.zero_offset:
-                            if self._servo_lock.acquire(timeout=1.0):
-                                try:
-                                    self.zero_offset[sid] = mot.current_position()
-                                finally:
-                                    self._servo_lock.release()
+                            with self._servo_lock:
+                                self.zero_offset[sid] = mot.current_position()
                         self._notify('silent_ok', f'Homing complete ...', f'Servo {sid}')
                     threading.Thread(target=_do, daemon=True).start()
                 return
             sid = int(parts[0])
             d   = parts[1]
-            vel = int(parts[2]) if len(parts) > 2 else 30
+            vel_raw = float(parts[2]) if len(parts) > 2 else 0.03
+            vel = int(vel_raw * 1000)   # m/s → mm/s (0.05 → 50)
             if d == 'stop':   self._stop(sid)
             elif d == '+':    self._jog(sid,  vel)
             elif d == '-':    self._jog(sid, -vel)
             elif d == 'move':
                 pos = float(parts[2]) if len(parts) > 2 else 0.0
                 self._nb_move(sid, pos)
-        except Exception:
-            pass
+        except Exception as e:
+            self.get_logger().error(f"[JOG] exception: {e}")
 
     def _cb_sim(self, msg: String):
         """

@@ -40,12 +40,22 @@ class SystemConfig(BaseModel):
     cylinder_timeout: float = 15.0
     modbus_timeout_ms: int = 3000
 
+    # Velocity (m/s) — synced with FAS
+    fas_position_velocity: float = 0.05
+    jog_velocity: float = 0.05
+    jog_velocity_max: float = 0.08
+
     # Axes
-    inx_home: float = 20.0
+    inx_home: float = 0.0
     inx_target2: float = 500.0
     inx_output_stack: float = 100.0
-    iny_home: float = 10.0
+    iny_home: float = 0.0
     iny_safe_zone: float = 50.0
+    iny_push_clearance_mm: float = 5.0   # INY dừng tạm để kẹp trước khi đẩy vào robot (S1)
+
+    # INX Danger Zone — INY không được ra ngoài safe zone khi INX trong vùng này
+    inx_danger_zone_min: float = 150.0
+    inx_danger_zone_max: float = 200.0
 
     # Scan
     target_scaninp1: float = 550.0
@@ -54,6 +64,7 @@ class SystemConfig(BaseModel):
     iny_row_vel: float = 20.0
     iny_scan_valid_min_mm: float = 200.0
     iny_scan_valid_max_mm: float = 550.0
+    iny_scan_arm_mm: float = 200.0
     s1_scan_noise_retry_limit: int = 1
     inx_noise_recovery_mm: float = 10.0
 
@@ -63,7 +74,7 @@ class SystemConfig(BaseModel):
     outy_output_zones: Dict[int, List[float]]
 
     # Pos 2
-    iny_target2: float = 200.0
+    iny_target2: float = 60.0
     servo3_home: float = 0.0
     servo3_target1: float = 10.0
     servo3_target2: float = 400.0

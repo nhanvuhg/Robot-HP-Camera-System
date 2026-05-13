@@ -105,34 +105,34 @@ class FestoGripperNode(Node):
             self.get_logger().error(f'Error controlling gripper: {e}')
 
 
-    def gripper_close(self):    #gripper_close 0        
+    def gripper_close(self):    #gripper_close — coil ch0/1
         """Close gripper - equivalent to setting valve"""
         if self.gripper_open:
             self.get_logger().info('🔽 Gripper: CLOSING (setting valve)')
             
             if self.simulation_mode:
-                self.get_logger().info('[SIM] Gripper closed (channels: 2=reset, 3=set)')
+                self.get_logger().info('[SIM] Gripper closed (channels: 0=reset, 1=set)')
                 self.gripper_open = False
                 return
             
             try:
                 if not self.myIO:
                     raise RuntimeError('CPX IO not available')
-                # Use channel 2 = open, 3 = close (module-specific mapping)
-                self.myIO.reset_channel(2)
-                self.myIO.set_channel(3)
+                # Gripper uses channel 0 = open, 1 = close
+                self.myIO.reset_channel(0)
+                self.myIO.set_channel(1)
                 self.gripper_open = False
                 time.sleep(0.05)
             except Exception as e:
                 self.get_logger().error(f'Failed to close gripper: {e}')
     
-    def gripper_open_cmd(self):      #gripper_open_cmd 1
+    def gripper_open_cmd(self):      #gripper_open_cmd — coil ch0/1
         """Open gripper - reset valve"""
         if not self.gripper_open:
             self.get_logger().info('🔼 Gripper: OPENING (resetting valve)')
             
             if self.simulation_mode:
-                self.get_logger().info('[SIM] Gripper opened (channels: 3=reset, 2=set)')
+                self.get_logger().info('[SIM] Gripper opened (channels: 1=reset, 0=set)')
                 self.gripper_open = True
                 return
             
@@ -140,14 +140,14 @@ class FestoGripperNode(Node):
                 if not self.myIO:
                     raise RuntimeError('CPX IO not available')
                 # Reset close channel then set open
-                self.myIO.reset_channel(3)
-                self.myIO.set_channel(2)
+                self.myIO.reset_channel(1)
+                self.myIO.set_channel(0)
                 time.sleep(0.05)
                 self.gripper_open = True
             except Exception as e:
                 self.get_logger().error(f'Failed to open gripper: {e}')
 
-    # Picker methods (previously defined outside the class) - use channels 0/1
+    # Picker methods — use channels 2/3
     def picker_callback(self, msg: Bool):
         """Callback for picker commands (separate from gripper)"""
         try:
@@ -159,40 +159,40 @@ class FestoGripperNode(Node):
             self.get_logger().error(f'Error controlling picker: {e}')
 
     def picker_close(self):
-        """Close picker - set channels for picker close"""
+        """Close picker - set channels for picker close (ch2/3)"""
         if self.picker_open:
             self.get_logger().info('🔽 Picker: CLOSING (setting valve)')
             
             if self.simulation_mode:
-                self.get_logger().info('[SIM] Picker closed (channels: 0=reset, 1=set)')
+                self.get_logger().info('[SIM] Picker closed (channels: 2=reset, 3=set)')
                 self.picker_open = False
                 return
             
             try:
                 if not self.myIO:
                     raise RuntimeError('CPX IO not available')
-                self.myIO.reset_channel(0)
-                self.myIO.set_channel(1)
+                self.myIO.reset_channel(2)
+                self.myIO.set_channel(3)
                 self.picker_open = False
                 time.sleep(0.05)
             except Exception as e:
                 self.get_logger().error(f'Failed to close picker: {e}')
 
     def picker_open_cmd(self):
-        """Open picker - reset picker channels"""
+        """Open picker - reset picker channels (ch2/3)"""
         if not self.picker_open:
             self.get_logger().info('🔼 Picker: OPENING (resetting valve)')
             
             if self.simulation_mode:
-                self.get_logger().info('[SIM] Picker opened (channels: 1=reset, 0=set)')
+                self.get_logger().info('[SIM] Picker opened (channels: 3=reset, 2=set)')
                 self.picker_open = True
                 return
             
             try:
                 if not self.myIO:
                     raise RuntimeError('CPX IO not available')
-                self.myIO.reset_channel(1)
-                self.myIO.set_channel(0)
+                self.myIO.reset_channel(3)
+                self.myIO.set_channel(2)
                 time.sleep(0.05)
                 self.picker_open = True
             except Exception as e:

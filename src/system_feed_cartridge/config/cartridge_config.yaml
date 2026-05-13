@@ -12,64 +12,73 @@ cylinder1_retract_channel: 4
 cylinder2_retract_channel: 8  
 cylinder2_extend_channel: 9
 
+# Velocity (m/s) — synced with FAS
+fas_position_velocity: 0.05   # Fixed velocity for position moves (m/s) — match FAS setting
+jog_velocity: 0.05            # Default JOG velocity (m/s)
+jog_velocity_max: 0.08        # Max allowed JOG velocity (m/s) — matches drive max 80mm/s
+
 # Axis Coordinate Mapping (mm)
-inx_home: 20.0             # Home position for INX (used in S1_INX_10)
-inx_target2: 500.0         # Position 2 for S1 loading
+inx_home: 0.0              # Home position for INX
+inx_target2: 505.5         # Position 2 for S1 loading
 inx_output_stack: 100.0    # Tray stacking position for robot pickup
-iny_home: 10.0             # Home/Neutral position for INY
-iny_safe_zone: 50.0        # Limit for "Safe" INY position before INX moves
+iny_home: 0.0              # Home/Neutral position for INY
+iny_safe_zone: 50.0        # Limit for "Safe" INY position before INX moves (Safety interlock — block INX khi INY > giá trị này)
+iny_push_clearance_mm: 5.0  # INY dừng tạm để kẹp trước khi đẩy vào robot (S1 step trung gian)
+inx_danger_zone_min: 60.0 # INX danger zone start (mm) — INY bị khóa khi INX trong vùng này
+inx_danger_zone_max: 400.0 # INX danger zone end (mm)
 
 # S1 INY Scanning Logic
-target_scaninp1: 550.0       # Scan endpoint target (mm)
+target_scaninp1: 805.0       # Scan endpoint target (mm)
 target_scanoutp1: 500.0
 iny_scan_vel: 30             # Scanning speed (mm/s)
 iny_row_vel: 20              # Docking speed (mm/s)
-iny_scan_valid_min_mm: 200.0 # Ignore triggers below this X coordinate (Noise filter)
-iny_scan_valid_max_mm: 550.0 # Valid scan range upper limit
+iny_scan_valid_min_mm: 20.0 # Ignore triggers below this X coordinate (Noise filter)
+iny_scan_valid_max_mm: 800.0 # Valid scan range upper limit
+iny_scan_arm_mm: 200.0       # INY position threshold — S4 detection armed only above this
 s1_scan_noise_retry_limit: 1 # Max automatic retries if noise is detected
 inx_noise_recovery_mm: 10.0  # Safe INX recovery pos during noise failure
 
 iny_input_zones:
   1:
-  - 451.0
-  - 500.0
-  - 550.0
+  - 970.0
+  - 875.0
+  - 1015.0
   2:
-  - 401.0
-  - 450.0
-  - 300.0
+  - 870.0
+  - 780.0
+  - 945.0
   3:
-  - 351.0
-  - 400.0
-  - 280.0
+  - 775.0
+  - 685.0
+  - 875.0
   4:
-  - 301.0
-  - 350.0
-  - 260.0
+  - 680.0
+  - 590.0
+  - 805.0
   5:
-  - 251.0
-  - 300.0
-  - 240.0
+  - 585.0
+  - 495.0
+  - 735.0
   6:
-  - 201.0
-  - 250.0
-  - 220.0
+  - 490.0
+  - 400.0
+  - 665.0
   7:
-  - 151.0
-  - 200.0
-  - 200.0
+  - 395.0
+  - 305.0
+  - 595.0
   8:
-  - 100.0
-  - 150.0
-  - 180.0
+  - 300.0
+  - 210.0
+  - 525.0
   9:
-  - 50.0
-  - 99.0
-  - 160.0
+  - 205.0
+  - 115.0
+  - 455.0
   10:
-  - 0.0
-  - 49.0
-  - 140.0
+  - 110.0
+  - 20.0
+  - 385.0
 iny_output_zones:
   1:
   - 451.0
@@ -111,7 +120,7 @@ iny_output_zones:
   - 0.0
   - 49.0
   - 140.0
-iny_target2: 200.0         # Tọa độ INY nơi Robot tiến vào để thả khay thành phẩm (2A)
+iny_target2: 60.0          # Tọa độ INY đẩy khay vào robot / kẹp khay cũ (S1 & S2A)
 servo3_home: 0.0           # Điểm lùi sâu nhất của trục Servo 3
 servo3_target1: 10.0       # Điểm chờ của Servo 3 (Bãi đỗ khi dẹp đường)
 servo3_target2: 400.0      # Tọa độ đẩy băng nhám / băng đạn ra của Servo 3

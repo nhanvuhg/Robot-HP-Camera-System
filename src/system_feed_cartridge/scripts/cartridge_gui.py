@@ -84,6 +84,7 @@ class GuiRosNode(Node):
             '/providesystem/set_target_row':     self.create_publisher(String, '/providesystem/set_target_row', qos),
             '/providesystem/hmi_resume':         self.create_publisher(Bool,   '/providesystem/hmi_resume', qos),
             '/providesystem/reset_faults':       self.create_publisher(String, '/providesystem/reset_faults', qos),
+            '/providesystem/valve_cmd':          self.create_publisher(String, '/providesystem/valve_cmd', qos),
             '/system/start_button':              self.create_publisher(Bool,   '/system/start_button', qos),
             '/system/stop_button':               self.create_publisher(Bool,   '/system/stop_button', qos),
             '/system/pause_button':              self.create_publisher(Bool,   '/system/pause_button', qos),
@@ -222,6 +223,7 @@ class GUIHandler(http.server.BaseHTTPRequestHandler):
             '/api/update_config':  lambda: fast_pub_string('/providesystem/update_config', json.dumps(d.get('config', {}))),
             '/api/get_config':     lambda: fast_pub_string('/providesystem/get_config', 'request'),
             '/api/reset_faults':   lambda: fast_pub_string('/providesystem/reset_faults', 'reset'),
+            '/api/valve_cmd':      lambda: fast_pub_string('/providesystem/valve_cmd', d.get('cmd', '')),
             '/api/notifications':  lambda: self._get_notifs(d),
             '/api/positions':      lambda: self._get_pos(),
         }
@@ -262,7 +264,11 @@ class GUIHandler(http.server.BaseHTTPRequestHandler):
 
     def _get_pos(self):
         node = get_ros_node()
-        return {"ok": True, "positions": node._servo_positions} if node else {"ok": True, "positions": {}}
+        if node:
+            return {"ok": True, "positions": node._servo_positions,
+                    "jog_velocity": getattr(node, '_jog_velocity_ms', 0.1),
+                    "jog_velocity_max": getattr(node, '_jog_velocity_max', 1.0)}
+        return {"ok": True, "positions": {}, "jog_velocity": 0.1, "jog_velocity_max": 1.0}
 
 
 # ============================================================
@@ -339,7 +345,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 /* ── Grid ── */
 .grid{display:grid;grid-template-columns:215px 1fr 248px;
   grid-template-rows:3fr 2.2fr;
-  grid-template-areas:"lc cc sc" "log log sc";
+  grid-template-areas:"lc cc sc" "lc log sc";
   gap:4px;padding:5px;height:100%;overflow:hidden;}
 .lc{grid-area:lc;display:flex;flex-direction:column;gap:4px;overflow:hidden;}
 .cc{grid-area:cc;display:flex;flex-direction:column;gap:4px;overflow:hidden;}
@@ -416,6 +422,12 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 .svn{font-size:13px;font-weight:700;color:var(--cyan);}
 .svd{font-size:9px;color:var(--dim);}
 .svp{font-size:20px;font-weight:700;color:var(--yellow);}
+
+/* ── Valve control ── */
+.vlv-row{display:flex;gap:4px;}
+.vlv-grp{flex:1;text-align:center;}
+.vlv-grp .vlv-title{font-size:10px;font-weight:700;color:var(--purple);margin-bottom:3px;letter-spacing:.5px;}
+.vlv-grp .btn{width:100%;padding:4px 2px;font-size:10px;font-weight:700;margin-bottom:2px;}
 .jr{display:flex;gap:3px;width:100%;}
 .jr .btn{flex:1;font-size:17px;font-weight:700;padding:9px 2px;}
 .sfw{width:100%;}.sfw .btn{width:100%;font-size:14px;padding:9px 4px;}
@@ -522,7 +534,23 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
   <!-- Left col -->
   <div class="lc">
 
-    <!-- Mode Selection (dropdown) -->
+    <!-- System Control — đặt trên cùng để không bị dropdown Mode che -->
+    <div class="card" id="sysCtrlCard">
+      <div class="ct">System Control</div>
+      <div id="sysCtrlInner">
+        <div class="gr3">
+          <button class="btn g" onclick="sys('start')">START</button>
+          <button class="btn r" onclick="sys('stop')">STOP</button>
+          <button class="btn o" onclick="sys('pause')">PAUSE</button>
+        </div>
+        <div class="gr2">
+          <button class="btn t" onclick="api('/api/confirm')">Confirm</button>
+          <button class="btn g" onclick="api('/api/hmi_resume')">Resume</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode Selection (dropdown) — đặt sau System Control -->
     <div class="card">
       <div class="ct">Mode Selection</div>
       <div class="mdrop" id="mdropWrap">
@@ -548,24 +576,8 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
       </div>
     </div>
 
-    <!-- System Control -->
-    <div class="card" id="sysCtrlCard">
-      <div class="ct">System Control</div>
-      <div id="sysCtrlInner">
-        <div class="gr3">
-          <button class="btn g" onclick="sys('start')">START</button>
-          <button class="btn r" onclick="sys('stop')">STOP</button>
-          <button class="btn o" onclick="sys('pause')">PAUSE</button>
-        </div>
-        <div class="gr2">
-          <button class="btn t" onclick="api('/api/confirm')">Confirm</button>
-          <button class="btn g" onclick="api('/api/hmi_resume')">Resume</button>
-        </div>
-      </div>
-    </div>
-
     <!-- State Navigation -->
-    <div class="card" style="flex:1" id="stateNavCard">
+    <div class="card" id="stateNavCard">
       <div class="ct">State Navigation</div>
       <div id="stateNavInner">
         <!-- Top row: always available -->
@@ -598,6 +610,19 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
         </div>
       </div>
     </div>
+
+    <!-- Valve Control -->
+    <div class="card" style="flex-shrink:0">
+      <div class="ct">Valve Control</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div class="vlv-title">CYL 1</div>
+        <button class="btn g" onclick="valveCmd('cyl1_extend')" style="width:100%;padding:4px;font-size:10px;font-weight:700">▶ Extend</button>
+        <button class="btn o" onclick="valveCmd('cyl1_retract')" style="width:100%;padding:4px;font-size:10px;font-weight:700">◀ Retract</button>
+        <div class="vlv-title" style="margin-top:4px">CYL 2</div>
+        <button class="btn g" onclick="valveCmd('cyl2_extend')" style="width:100%;padding:4px;font-size:10px;font-weight:700">▶ Extend</button>
+        <button class="btn o" onclick="valveCmd('cyl2_retract')" style="width:100%;padding:4px;font-size:10px;font-weight:700">◀ Retract</button>
+      </div>
+    </div>
   </div>
 
   <!-- Center col -->
@@ -609,9 +634,10 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
     <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-shrink:0">
         <span class="ct" style="margin-bottom:0">Servo Control</span>
-        <span style="font-size:10px;color:var(--dim)">Vel:</span>
-        <input type="number" class="vel" id="jv" value="30" min="1" max="200">
-        <span style="font-size:10px;color:var(--dim)">mm/s</span>
+        <span style="font-size:10px;color:var(--dim)">JOG Vel:</span>
+        <input type="number" class="vel" id="jv" value="0.05" min="0.001" max="0.08" step="0.001" style="width:60px">
+        <span style="font-size:10px;color:var(--dim)">m/s</span>
+        <button class="btn" style="font-size:9px;padding:2px 6px" onclick="setJogVel()">✓</button>
         <span id="jlk" style="display:none;font-size:10px;color:var(--orange)">🔒 JOG mode only</span>
       </div>
       <div id="svlist"></div>
@@ -879,6 +905,7 @@ async function api(ep,data={}) {
 function sys(a)       { api('/api/'+a); }
 function resetFaults() { api('/api/reset_faults'); }
 function gotoState(s)  { api('/api/goto_state',{state:s}); log('goto '+s,'in'); }
+function valveCmd(cmd) { api('/api/valve_cmd',{cmd:cmd}); log('Valve: '+cmd,'in'); }
 
 function gotoWf(s) {
   if(mode==='jog')  { toast('🔒 JOG mode — workflow locked','wn'); return; }
@@ -929,11 +956,19 @@ function rfs(id) {
 // ─── JOG ────────────────────────────────────────────────
 function jog(id,dir) {
   if(mode!=='jog'){ toast('🔒 JOG: switch to JOG mode first','wn'); return; }
-  const v=document.getElementById('jv').value||30;
-  fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:id+' '+dir+' '+v})});
+  fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:id+' '+dir})});
 }
 function jStop(id) {
   fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:id+' stop'})});
+}
+function setJogVel() {
+  const v=parseFloat(document.getElementById('jv').value);
+  if(isNaN(v)||v<0.001||v>parseFloat(document.getElementById('jv').max||1)){
+    toast('❌ Velocity: 0.001 ~ '+document.getElementById('jv').max+' m/s','er'); return;
+  }
+  fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({cmd:'0 set_jog_vel '+v})});
+  toast('✅ JOG velocity: '+v+' m/s','ok');
 }
 function hSv(id) {
   if(mode!=='jog'){ toast('🔒 JOG mode required','wn'); return; }
@@ -1119,6 +1154,14 @@ async function pollPos() {
         const el=document.getElementById('sp'+i);
         if(el){ const v=j.positions[String(i)];el.textContent=v!==undefined?Number(v).toFixed(1)+' mm':'-- mm'; }
       }
+    }
+    // Sync JOG velocity from node (initial load)
+    if(j.jog_velocity!==undefined) {
+      const jvEl=document.getElementById('jv');
+      if(jvEl && !jvEl.matches(':focus')) {
+        jvEl.value=parseFloat(j.jog_velocity).toFixed(3);
+      }
+      if(j.jog_velocity_max!==undefined) jvEl.max=j.jog_velocity_max;
     }
   }catch(e){}
 }
