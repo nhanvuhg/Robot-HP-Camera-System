@@ -235,6 +235,7 @@ class CartridgeSystem(Node):
         # Homing completion flag (set by bg thread, consumed by main loop)
         self._homing_done_event  = threading.Event()
         self._homing_result      = False
+        self._homing_abort       = threading.Event()  # set by STOP to cancel homing thread
 
         # Tray tracking
         self.stack_row_index  = 0
@@ -927,15 +928,45 @@ class CartridgeSystem(Node):
                     with self._servo_lock:
                         mot.position_task(zero, HOME_SPEED, absolute=True, nonblocking=False)
                 else:
-                    # Lần đầu hoặc đã lệch xa → blocking referencing_task thật
+                    # Lần đầu hoặc đã lệch xa → referencing_task nonblocking
+                    # Lock chỉ giữ đủ để issue lệnh — STOP có thể acquire lock ngay
                     self.get_logger().info(
                         f"  {name}: {'first home' if not self._servo_homed_once.get(sid) else 're-home'} "
-                        f"→ blocking referencing_task"
+                        f"→ referencing_task"
                     )
                     pre_pos = current_pos
 
                     with self._servo_lock:
-                        mot.referencing_task()  # BLOCKING — đợi drive home xong
+                        mot.referencing_task(nonblocking=True)
+                    # Lock released immediately — _cb_stop có thể stop_motion_task ngay
+
+                    # 3s interruptible delay: cho drive xóa stale referenced() flag từ NVM
+                    # và bắt đầu chuyển động vật lý. Event.wait() trả True nếu abort set.
+                    if self._homing_abort.wait(timeout=3.0):
+                        self.get_logger().warn(f"  {name}: homing aborted (STOP) during init delay")
+                        return False
+
+                    # Poll referenced() với abort check mỗi iteration
+                    start = time.time()
+                    while time.time() - start < self.config.homing_timeout:
+                        if self._homing_abort.is_set():
+                            self.get_logger().warn(f"  {name}: homing aborted (STOP) during poll")
+                            return False
+                        with self._servo_lock:
+                            ref = mot.referenced()
+                        if ref:
+                            break
+                        time.sleep(0.2)
+                    else:
+                        with self._servo_lock:
+                            is_ref = mot.referenced()
+                        if not is_ref:
+                            self.get_logger().error(
+                                f"  {name}: homing TIMEOUT ({self.config.homing_timeout}s) — NOT referenced"
+                            )
+                            self._notify('error', f'{name} home FAIL',
+                                         'Timeout — drive khong home duoc. Check FAS Referencing tab.')
+                            return False
 
                     with self._servo_lock:
                         post_pos = mot.current_position()
@@ -943,7 +974,6 @@ class CartridgeSystem(Node):
                     delta_mm = abs(post_pos - pre_pos) / COUNTS_PER_MM
 
                     if delta_mm < 0.5:
-                        # Drive không di chuyển — kiểm tra referenced() để quyết định
                         with self._servo_lock:
                             is_ref = mot.referenced()
                         if not is_ref:
@@ -987,7 +1017,8 @@ class CartridgeSystem(Node):
     def _cb_start(self, msg: Bool):
         if not msg.data or self.state == SystemState.HOMING_RUNNING:
             return
-            
+
+        self._homing_abort.clear()
         self._system_paused = False
         self._system_running = True
         self._inx_moving = self._iny_moving = False
@@ -1002,8 +1033,8 @@ class CartridgeSystem(Node):
         self.get_logger().info(f"[START] System running. Mode: {self.operation_mode}")
         self._sync_mode_jog()
         
-        if not self.zero_offset:
-            self.get_logger().info("[START] System not homed. Auto-triggering HOMING.")
+        if not self.zero_offset and self.operation_mode == 'auto':
+            self.get_logger().info("[START] Auto mode — not homed → HOMING")
             self._enter(SystemState.HOMING)
         else:
             self._enter(SystemState.IDLE)
@@ -1011,6 +1042,8 @@ class CartridgeSystem(Node):
     def _cb_stop(self, msg: Bool):
         if not msg.data:
             return
+        # Signal homing thread to abort FIRST — before acquiring servo_lock in _stop()
+        self._homing_abort.set()
         for sid in list(self.servos):
             self._stop(sid)
         self._cyl1_retract()
@@ -1027,11 +1060,9 @@ class CartridgeSystem(Node):
         self._s4_trigger = False
         self._jog_mode = True
         self.operation_mode = 'manual'
-        self.zero_offset.clear()
-        if hasattr(self, '_servo_homed_once'):
-            self._servo_homed_once = {sid: False for sid in self.config.servo_ips}
+        # zero_offset preserved — coordinates remain valid, next START skips re-homing
         self._sync_mode_jog()
-        self.get_logger().info('[STOP] STOP — JOG sẵn sàng')
+        self.get_logger().info('[STOP] STOP — JOG sẵn sàng (toa do giu nguyen)')
         self._notify('warn', 'STOP', 'Dừng hệ thống — JOG sẵn sàng')
 
     def _cb_pause(self, msg: Bool):
@@ -1463,7 +1494,11 @@ class CartridgeSystem(Node):
                     self._system_running = True
                     self._enter(SystemState.IDLE)
                 else:
-                    self._error("Homing that bai")
+                    if self._homing_abort.is_set():
+                        # STOP pressed during homing — _cb_stop already set state to IDLE
+                        self.get_logger().info("Homing cancelled by STOP (not an error)")
+                    else:
+                        self._error("Homing that bai")
             return
         if s == SystemState.ERROR:            self._do_error(); return
         self._dispatch_input()
