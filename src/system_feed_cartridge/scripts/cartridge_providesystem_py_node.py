@@ -237,6 +237,10 @@ class CartridgeSystem(Node):
         self._homing_result      = False
         self._homing_abort       = threading.Event()  # set by STOP to cancel homing thread
 
+        # JOG velocity — only affects JOG; state/homing velocities fixed by FAS firmware
+        self._jog_velocity_ms  = 0.05   # m/s (default)
+        self._jog_velocity_max = 0.08   # m/s (hard limit per FAS firmware)
+
         # Tray tracking
         self.stack_row_index  = 0
         self._tray_loaded_ack = False
@@ -1151,11 +1155,15 @@ class CartridgeSystem(Node):
                 return
             sid = int(parts[0])
             d   = parts[1]
-            vel_raw = float(parts[2]) if len(parts) > 2 else 0.03
+            vel_raw = float(parts[2]) if len(parts) > 2 else self._jog_velocity_ms
             vel = int(vel_raw * 1000)   # m/s → mm/s (0.05 → 50)
             if d == 'stop':   self._stop(sid)
             elif d == '+':    self._jog(sid,  vel)
             elif d == '-':    self._jog(sid, -vel)
+            elif d == 'set_jog_vel':
+                v = max(0.001, min(vel_raw, self._jog_velocity_max))
+                self._jog_velocity_ms = v
+                self.get_logger().info(f"JOG velocity: {v:.3f} m/s ({int(v*1000)} mm/s)")
             elif d == 'move':
                 pos = float(parts[2]) if len(parts) > 2 else 0.0
                 self._nb_move(sid, pos)
@@ -1455,11 +1463,24 @@ class CartridgeSystem(Node):
     def _publish_positions(self):
         try:
             pos = {}
+            vel = {}
             for sid in self.servos:
                 p = self._pos(sid)
                 if p is not None:
                     pos[str(sid)] = round(p, 2)
-            msg = String(); msg.data = json.dumps(pos); self.pub_servo_pos.publish(msg)
+                try:
+                    with self._servo_lock:
+                        v_raw = self.servos[sid].current_velocity()
+                    vel[str(sid)] = round(v_raw, 1)  # mm/s from edcon
+                except Exception:
+                    pass
+            data = pos.copy()
+            if vel:
+                data['_vel'] = vel
+            data['_jog_vel'] = self._jog_velocity_ms
+            msg = String()
+            msg.data = json.dumps(data)
+            self.pub_servo_pos.publish(msg)
         except Exception:
             pass
 

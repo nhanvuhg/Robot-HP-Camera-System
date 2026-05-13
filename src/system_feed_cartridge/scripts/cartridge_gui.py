@@ -95,7 +95,9 @@ class GuiRosNode(Node):
         self._system_state   = 'UNKNOWN'
         self._current_mode   = ''
         self._notifications  = []
-        self._servo_positions = {}
+        self._servo_positions  = {}
+        self._servo_velocities = {}
+        self._jog_velocity_ms  = 0.05
 
         self.create_subscription(String, '/providesystem/config_data',    self._on_config, qos)
         self.create_subscription(String, '/system_state',                  self._on_state,  qos)
@@ -107,7 +109,13 @@ class GuiRosNode(Node):
     def _on_state(self, msg):   self._system_state = msg.data
     def _on_mode(self, msg):    self._current_mode = msg.data.strip().lower()
     def _on_pos(self, msg):
-        try: self._servo_positions = json.loads(msg.data)
+        try:
+            data = json.loads(msg.data)
+            self._servo_velocities = data.pop('_vel', {})
+            jv = data.pop('_jog_vel', None)
+            if jv is not None:
+                self._jog_velocity_ms = jv
+            self._servo_positions = data
         except: pass
 
     def _on_notify(self, msg):
@@ -265,10 +273,12 @@ class GUIHandler(http.server.BaseHTTPRequestHandler):
     def _get_pos(self):
         node = get_ros_node()
         if node:
-            return {"ok": True, "positions": node._servo_positions,
-                    "jog_velocity": getattr(node, '_jog_velocity_ms', 0.1),
-                    "jog_velocity_max": getattr(node, '_jog_velocity_max', 1.0)}
-        return {"ok": True, "positions": {}, "jog_velocity": 0.1, "jog_velocity_max": 1.0}
+            return {"ok": True,
+                    "positions":    node._servo_positions,
+                    "velocities":   node._servo_velocities,
+                    "jog_velocity": node._jog_velocity_ms,
+                    "jog_velocity_max": 0.08}
+        return {"ok": True, "positions": {}, "velocities": {}, "jog_velocity": 0.05, "jog_velocity_max": 0.08}
 
 
 # ============================================================
@@ -635,9 +645,12 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-shrink:0">
         <span class="ct" style="margin-bottom:0">Servo Control</span>
         <span style="font-size:10px;color:var(--dim)">JOG Vel:</span>
-        <input type="number" class="vel" id="jv" value="0.05" min="0.001" max="0.08" step="0.001" style="width:60px">
-        <span style="font-size:10px;color:var(--dim)">m/s</span>
-        <button class="btn" style="font-size:9px;padding:2px 6px" onclick="setJogVel()">✓</button>
+        <button class="btn" id="jvBtn" title="Nhấn để đặt tốc độ JOG"
+          style="font-size:11px;padding:2px 9px;min-width:62px;border-color:var(--accent)"
+          onclick="openVelModal()"><span id="jvDisp">0.050</span> m/s</button>
+        <span style="font-size:10px;color:var(--dim)">|</span>
+        <span style="font-size:10px;color:var(--dim)">FAS:</span>
+        <span id="jvFas" style="font-size:11px;color:var(--cyan);font-family:monospace">-- mm/s</span>
         <span id="jlk" style="display:none;font-size:10px;color:var(--orange)">🔒 JOG mode only</span>
       </div>
       <div id="svlist"></div>
@@ -961,14 +974,27 @@ function jog(id,dir) {
 function jStop(id) {
   fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:id+' stop'})});
 }
-function setJogVel() {
-  const v=parseFloat(document.getElementById('jv').value);
-  if(isNaN(v)||v<0.001||v>parseFloat(document.getElementById('jv').max||1)){
-    toast('❌ Velocity: 0.001 ~ '+document.getElementById('jv').max+' m/s','er'); return;
+function openVelModal() {
+  const cur=parseFloat(document.getElementById('jvDisp').textContent)||0.05;
+  document.getElementById('jvInput').value=cur.toFixed(3);
+  const m=document.getElementById('velModal');
+  m.style.display='flex';
+  setTimeout(()=>document.getElementById('jvInput').focus(),50);
+}
+function closeVelModal() {
+  document.getElementById('velModal').style.display='none';
+}
+function applyVelModal() {
+  const v=parseFloat(document.getElementById('jvInput').value);
+  if(isNaN(v)||v<0.001||v>0.08){
+    toast('❌ Velocity: 0.001 ~ 0.08 m/s','er'); return;
   }
+  const vs=v.toFixed(3);
   fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({cmd:'0 set_jog_vel '+v})});
-  toast('✅ JOG velocity: '+v+' m/s','ok');
+    body:JSON.stringify({cmd:'0 set_jog_vel '+vs})});
+  document.getElementById('jvDisp').textContent=vs;
+  closeVelModal();
+  toast('✅ JOG velocity: '+vs+' m/s','ok');
 }
 function hSv(id) {
   if(mode!=='jog'){ toast('🔒 JOG mode required','wn'); return; }
@@ -1060,6 +1086,7 @@ function buildServos() {
     d.innerHTML=`
       <div style="text-align:center"><div class="svn">S${s.id}: ${s.name}</div><div class="svd">${s.d}</div></div>
       <div class="svp" id="sp${s.id}">-- mm</div>
+      <div style="font-size:9px;color:var(--dim);margin-top:-3px">V: <span id="sv${s.id}" style="color:var(--cyan);font-family:monospace">--</span> mm/s</div>
       <div class="jr">
         <button class="btn jb" onmousedown="jog(${s.id},'-')" onmouseup="jStop(${s.id})" onmouseleave="jStop(${s.id})" ontouchstart="jog(${s.id},'-')" ontouchend="jStop(${s.id})">−</button>
         <button class="btn r" onclick="jStop(${s.id})" style="font-size:13px">STOP</button>
@@ -1149,19 +1176,31 @@ async function pollSt() {
 async function pollPos() {
   try {
     const j=await(await fetch('/api/positions',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).json();
-    if(j.ok&&j.positions) {
+    if(!j.ok) return;
+    // Positions
+    if(j.positions) {
       for(let i=1;i<=5;i++) {
         const el=document.getElementById('sp'+i);
-        if(el){ const v=j.positions[String(i)];el.textContent=v!==undefined?Number(v).toFixed(1)+' mm':'-- mm'; }
+        if(el){ const v=j.positions[String(i)]; el.textContent=v!==undefined?Number(v).toFixed(1)+' mm':'-- mm'; }
       }
     }
-    // Sync JOG velocity from node (initial load)
-    if(j.jog_velocity!==undefined) {
-      const jvEl=document.getElementById('jv');
-      if(jvEl && !jvEl.matches(':focus')) {
-        jvEl.value=parseFloat(j.jog_velocity).toFixed(3);
+    // Actual velocities per servo (read from FAS drive)
+    if(j.velocities) {
+      let maxV=0;
+      for(let i=1;i<=5;i++) {
+        const el=document.getElementById('sv'+i);
+        if(el){ const v=j.velocities[String(i)]; const vv=v!==undefined?Math.abs(Number(v)):null;
+          el.textContent=vv!==null?vv.toFixed(1):'--';
+          if(vv!==null && vv>maxV) maxV=vv; }
       }
-      if(j.jog_velocity_max!==undefined) jvEl.max=j.jog_velocity_max;
+      // Header: show max active velocity
+      const hdr=document.getElementById('jvFas');
+      if(hdr) hdr.textContent=maxV>0.5?maxV.toFixed(1)+' mm/s':'idle';
+    }
+    // Sync JOG velocity display from node
+    if(j.jog_velocity!==undefined) {
+      const disp=document.getElementById('jvDisp');
+      if(disp) disp.textContent=parseFloat(j.jog_velocity).toFixed(3);
     }
   }catch(e){}
 }
@@ -1210,6 +1249,38 @@ setInterval(pollN,1500);
 setInterval(pollPos,500);
 log('GUI v5 ready — chọn mode để bắt đầu','ok');
 </script>
+
+<!-- ════ JOG Velocity Modal ════ -->
+<div id="velModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
+  z-index:900;align-items:center;justify-content:center"
+  onclick="if(event.target===this)closeVelModal()">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;
+    padding:20px 24px;min-width:270px;max-width:320px;box-shadow:0 8px 32px #000a">
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">
+      Đặt tốc độ JOG
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <input type="number" id="jvInput" class="vel"
+        style="width:80px;font-size:14px;padding:5px 8px;text-align:right"
+        min="0.001" max="0.08" step="0.001" value="0.050"
+        onkeydown="if(event.key==='Enter')applyVelModal()">
+      <span style="color:var(--dim);font-size:12px">m/s</span>
+    </div>
+    <div style="font-size:10px;color:var(--orange);margin-bottom:4px">
+      ⚠ Tốc độ tối đa: <b>0.08 m/s</b> (80 mm/s) — theo firmware FAS
+    </div>
+    <div style="font-size:9px;color:var(--dim);margin-bottom:14px;line-height:1.5">
+      Chỉ áp dụng cho lệnh JOG.<br>
+      Tốc độ State và Homing <b>không thay đổi</b> — cấu hình trong FAS.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn g" style="flex:1;padding:7px;font-size:12px"
+        onclick="applyVelModal()">Áp dụng</button>
+      <button class="btn"   style="flex:1;padding:7px;font-size:12px"
+        onclick="closeVelModal()">Hủy</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
 """
