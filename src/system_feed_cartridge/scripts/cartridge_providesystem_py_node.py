@@ -238,8 +238,10 @@ class CartridgeSystem(Node):
         self._homing_abort       = threading.Event()  # set by STOP to cancel homing thread
 
         # JOG velocity — only affects JOG; state/homing velocities fixed by FAS firmware
-        self._jog_velocity_ms  = 0.05   # m/s (default)
+        self._jog_velocity_ms  = 0.05   # m/s (default, overwritten by FAS read on first connect)
         self._jog_velocity_max = 0.08   # m/s (hard limit per FAS firmware)
+        self._jog_vel_from_fas = False  # flag: already initialized from drive PNU
+        self._fas_jog_vel: dict = {}    # per-servo FAS JOG velocity (m/s), keyed by sid
 
         # Tray tracking
         self.stack_row_index  = 0
@@ -388,6 +390,21 @@ class CartridgeSystem(Node):
                 if tg != 111:
                     com.write_pnu(3490, 0, 111)
                 mot = MotionHandler(com)
+                try:
+                    mot.base_velocity = com.read_pnu(12345, 0)
+                    self.get_logger().info(f"S{sid} base_velocity={mot.base_velocity}")
+                except Exception as e:
+                    self.get_logger().warn(f"S{sid} base_velocity read failed: {e}")
+                try:
+                    fas_v1 = float(com.read_pnu(11352, 0))
+                    self._fas_jog_vel[sid] = fas_v1
+                    self.get_logger().info(f"S{sid} FAS jog v1={fas_v1:.3f} m/s")
+                    with self._servo_lock:
+                        if not self._jog_vel_from_fas and 0.001 <= fas_v1 <= 0.08:
+                            self._jog_velocity_ms = fas_v1
+                            self._jog_vel_from_fas = True
+                except Exception as e:
+                    self.get_logger().warn(f"S{sid} FAS jog v1 read failed: {e}")
                 mot.acknowledge_faults()
                 with self._servo_lock:
                     self.servos[sid] = mot
@@ -638,18 +655,14 @@ class CartridgeSystem(Node):
             self.get_logger().warn(f"S{servo_id} _pos() error: {e}")
             return None
 
-    def _jog(self, servo_id: int, vel_mm_s: float):
-        if servo_id not in self.zero_offset and servo_id in self.servos:
-            if self.operation_mode != 'manual':
-                self.get_logger().error(f"S{servo_id} JOG blocked — chua home (AUTO)")
-                return
+    def _jog(self, servo_id: int, forward: bool):
         mot = self.servos.get(servo_id)
         if not mot:
             return
         try:
             self._ensure_ready(mot, servo_id)
             with self._servo_lock:
-                mot.velocity_task(int(vel_mm_s), duration=0.0)
+                mot.jog_task(forward, not forward, duration=0.0)
         except Exception as e:
             self.get_logger().error(f"S{servo_id} jog error: {e}")
 
@@ -1155,15 +1168,9 @@ class CartridgeSystem(Node):
                 return
             sid = int(parts[0])
             d   = parts[1]
-            vel_raw = float(parts[2]) if len(parts) > 2 else self._jog_velocity_ms
-            vel = int(vel_raw * 1000)   # m/s → mm/s (0.05 → 50)
             if d == 'stop':   self._stop(sid)
-            elif d == '+':    self._jog(sid,  vel)
-            elif d == '-':    self._jog(sid, -vel)
-            elif d == 'set_jog_vel':
-                v = max(0.001, min(vel_raw, self._jog_velocity_max))
-                self._jog_velocity_ms = v
-                self.get_logger().info(f"JOG velocity: {v:.3f} m/s ({int(v*1000)} mm/s)")
+            elif d == '+':    self._jog(sid, True)
+            elif d == '-':    self._jog(sid, False)
             elif d == 'move':
                 pos = float(parts[2]) if len(parts) > 2 else 0.0
                 self._nb_move(sid, pos)
@@ -1463,21 +1470,14 @@ class CartridgeSystem(Node):
     def _publish_positions(self):
         try:
             pos = {}
-            vel = {}
             for sid in self.servos:
                 p = self._pos(sid)
                 if p is not None:
                     pos[str(sid)] = round(p, 2)
-                try:
-                    with self._servo_lock:
-                        v_raw = self.servos[sid].current_velocity()
-                    vel[str(sid)] = round(v_raw, 1)  # mm/s from edcon
-                except Exception:
-                    pass
             data = pos.copy()
-            if vel:
-                data['_vel'] = vel
             data['_jog_vel'] = self._jog_velocity_ms
+            if self._fas_jog_vel:
+                data['_fas_vel'] = {str(k): round(v, 4) for k, v in self._fas_jog_vel.items()}
             msg = String()
             msg.data = json.dumps(data)
             self.pub_servo_pos.publish(msg)

@@ -680,15 +680,11 @@
 
                                     Row { width: parent.width; height: 20; spacing: 6
                                         Text { text: "SERVO CONTROL"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5; anchors.verticalCenter: parent.verticalCenter }
-                                        Text { text: "JOG Vel:"; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
-                                        Rectangle {
+                                        // hidden data source — syncs jogVelMms from FAS PNU via _jog_vel topic
+                                        Item {
                                             id: velDisplay
-                                            width: 70; height: 18; radius: 6
-                                            color: root.cBg; border.color: root.cAccent
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            property int jogVelMms: 50
-                                            Text { anchors.centerIn: parent; text: velDisplay.jogVelMms + " mm/s"; font.pixelSize: 11; color: root.cText }
-                                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: velPopup.open() }
+                                            visible: false; width: 0; height: 0
+                                            property int jogVelMms: 30
                                             Connections {
                                                 target: cartridgeController
                                                 function onServoPositionsChanged() {
@@ -696,24 +692,6 @@
                                                         var d = JSON.parse(cartridgeController.servoPositions)
                                                         if (d["_jog_vel"] !== undefined)
                                                             velDisplay.jogVelMms = Math.round(Number(d["_jog_vel"]) * 1000)
-                                                    } catch(e) {}
-                                                }
-                                            }
-                                        }
-                                        Text { text: "| FAS:"; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
-                                        Text {
-                                            id: fasVelText; text: "idle"
-                                            color: root.cCyan; font.pixelSize: 11; font.family: "monospace"
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            Connections {
-                                                target: cartridgeController
-                                                function onServoPositionsChanged() {
-                                                    try {
-                                                        var vel = JSON.parse(cartridgeController.servoPositions)["_vel"]
-                                                        if (!vel) { fasVelText.text = "idle"; return }
-                                                        var maxV = 0
-                                                        for (var k in vel) { var v = Math.abs(Number(vel[k])); if (v > maxV) maxV = v }
-                                                        fasVelText.text = maxV > 0.5 ? maxV.toFixed(1) + " mm/s" : "idle"
                                                     } catch(e) {}
                                                 }
                                             }
@@ -737,6 +715,18 @@
                                                 ListElement { sid: 5; sname: "OutY";    sdesc: "Trục Y đầu ra" }
                                             }
                                             delegate: Rectangle {
+                                                id: cardItem
+                                                property int jogVelMms: 30
+                                                Connections {
+                                                    target: cartridgeController
+                                                    function onServoPositionsChanged() {
+                                                        try {
+                                                            var fv = JSON.parse(cartridgeController.servoPositions)["_fas_vel"]
+                                                            if (fv && fv[String(model.sid)] !== undefined)
+                                                                cardItem.jogVelMms = Math.round(Number(fv[String(model.sid)]) * 1000)
+                                                        } catch(e) {}
+                                                    }
+                                                }
                                                 width: Math.floor((servoRow.width - 4*root.gap) / 5)
                                                 height: servoRow.height
                                                 color: root.cCard; border.color: root.cBorder; radius: 4; clip: true
@@ -777,34 +767,28 @@
                                                         }
                                                     }
 
-                                                    // actual velocity from FAS drive
-                                                    Text {
-                                                        id: velText
-                                                        width: parent.width; horizontalAlignment: Text.AlignHCenter
-                                                        text: "-- mm/s"; color: root.cDim; font.pixelSize: 10
-                                                        Connections {
-                                                            target: cartridgeController
-                                                            function onServoPositionsChanged() {
-                                                                try {
-                                                                    var vel = JSON.parse(cartridgeController.servoPositions)["_vel"]
-                                                                    if (vel) {
-                                                                        var v = vel[String(model.sid)]
-                                                                        velText.text = v !== undefined ? Math.abs(Number(v)).toFixed(1) + " mm/s" : "-- mm/s"
-                                                                        velText.color = (v !== undefined && Math.abs(Number(v)) > 0.5) ? root.cCyan : root.cDim
-                                                                    }
-                                                                } catch(e) {}
-                                                            }
+                                                    // JOG velocity from FAS (read-only)
+                                                    Row {
+                                                        width: parent.width; spacing: 4
+                                                        anchors.horizontalCenter: parent.horizontalCenter
+                                                        Text { text: "Vel:"; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                                                        Text {
+                                                            id: velText
+                                                            text: cardItem.jogVelMms > 0 ? (cardItem.jogVelMms / 1000.0).toFixed(3) + " m/s" : "–"
+                                                            color: root.cCyan
+                                                            font.pixelSize: 11; font.bold: true; font.family: "monospace"
+                                                            anchors.verticalCenter: parent.verticalCenter
                                                         }
                                                     }
 
                                                     // − STOP + (jog hoặc manual mode)
                                                     Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
                                                         CBtn { lbl:"−"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
-                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-", velDisplay.jogVelMms) }
+                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-", cardItem.jogVelMms) }
                                                             onReleased: cartridgeController.jogStop(model.sid) }
                                                         CBtn { lbl:"STOP"; padV:10; padH:8; fontSize:14; bg:"#4d1a1a"; bc:root.cRed; tc:root.cRed; onClicked: cartridgeController.jogStop(model.sid) }
                                                         CBtn { lbl:"+"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
-                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+", velDisplay.jogVelMms) }
+                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+", cardItem.jogVelMms) }
                                                             onReleased: cartridgeController.jogStop(model.sid) }
                                                     }
 
@@ -2186,55 +2170,109 @@
 
     Popup {
         id: velPopup
-        width: 280; height: 210
+        width: 280; height: 370
         anchors.centerIn: parent
         modal: true; focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         background: Rectangle {
             color: "#0e0e22"; border.color: root.cAccent; border.width: 2; radius: 10
         }
-        contentItem: Column {
-            spacing: 10; anchors.fill: parent; anchors.margins: 16
-            Text {
-                text: "Đặt tốc độ JOG"
-                color: root.cText; font.pixelSize: 15; font.bold: true
-                width: parent.width; horizontalAlignment: Text.AlignHCenter
-            }
-            Row { spacing: 8; anchors.horizontalCenter: parent.horizontalCenter
-                Rectangle { width: 90; height: 36; radius: 6; color: root.cBg; border.color: root.cAccent
-                    TextInput {
-                        id: velPopupInput
-                        anchors.centerIn: parent; width: parent.width - 8
-                        text: velDisplay.jogVelMms.toString()
-                        font.pixelSize: 18; color: root.cText; horizontalAlignment: TextInput.AlignHCenter
-                        validator: IntValidator { bottom: 1; top: 80 }
-                        onAccepted: velPopupApply()
-                    }
-                }
-                Text { text: "mm/s"; color: root.cDim; font.pixelSize: 13; anchors.verticalCenter: parent.verticalCenter }
-            }
-            Text {
-                text: "⚠  Tối đa: 80 mm/s (0.08 m/s)\nChỉ áp dụng JOG — State/Homing\ngiữ nguyên theo FAS."
-                color: root.cOrange; font.pixelSize: 10; lineHeight: 1.4
-                width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
-            }
-            Row { spacing: 10; anchors.horizontalCenter: parent.horizontalCenter
-                Rectangle { width: 100; height: 34; radius: 6; color: root.cGreen
-                    Text { anchors.centerIn: parent; text: "Áp dụng"; color: "#fff"; font.pixelSize: 13; font.bold: true }
-                    MouseArea { anchors.fill: parent; onClicked: velPopupApply() }
-                }
-                Rectangle { width: 80; height: 34; radius: 6; color: root.cBg; border.color: root.cBorder
-                    Text { anchors.centerIn: parent; text: "Hủy"; color: root.cDim; font.pixelSize: 13 }
-                    MouseArea { anchors.fill: parent; onClicked: velPopup.close() }
-                }
+
+        property string inputStr: ""
+        property var targetCard: null
+
+        onOpened: { velPopup.inputStr = "" }
+
+        function openForCard(card) {
+            velPopup.targetCard = card
+            velPopup.inputStr = ""
+            velPopup.open()
+        }
+
+        function velPopupApply() {
+            var v = parseInt(velPopup.inputStr) || (velPopup.targetCard ? velPopup.targetCard.jogVelMms : velDisplay.jogVelMms)
+            v = Math.max(1, Math.min(v, 80))
+            if (velPopup.targetCard) velPopup.targetCard.jogVelMms = v
+            else velDisplay.jogVelMms = v
+            velPopup.close()
+        }
+
+        function numpadPress(ch) {
+            if (ch === "←") {
+                if (velPopup.inputStr.length > 0)
+                    velPopup.inputStr = velPopup.inputStr.slice(0, -1)
+            } else if (ch === "✓") {
+                velPopupApply()
+            } else {
+                if (velPopup.inputStr.length < 3)
+                    velPopup.inputStr += ch
             }
         }
-        function velPopupApply() {
-            var v = parseInt(velPopupInput.text) || 50
-            v = Math.max(1, Math.min(v, 80))
-            velDisplay.jogVelMms = v
-            cartridgeController.setJogVelocity((v / 1000.0).toFixed(3))
-            velPopup.close()
+
+        contentItem: Column {
+            anchors.fill: parent; anchors.margins: 14; spacing: 7
+
+            Text {
+                text: "Đặt tốc độ JOG"
+                color: root.cText; font.pixelSize: 14; font.bold: true
+                width: parent.width; horizontalAlignment: Text.AlignHCenter
+            }
+
+            Rectangle {
+                width: parent.width; height: 44; radius: 6
+                color: "#1a1a3a"; border.color: root.cAccent; border.width: 1
+                Row {
+                    anchors.centerIn: parent; spacing: 6
+                    Text {
+                        text: velPopup.inputStr.length > 0 ? velPopup.inputStr : "–"
+                        color: root.cText; font.pixelSize: 26; font.bold: true
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Text {
+                        text: "mm/s"; color: root.cDim; font.pixelSize: 13
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+            }
+
+            Text {
+                text: "max 80 mm/s — chỉ áp dụng JOG"
+                color: root.cOrange; font.pixelSize: 9
+                width: parent.width; horizontalAlignment: Text.AlignHCenter
+            }
+
+            Repeater {
+                model: [["7","8","9"],["4","5","6"],["1","2","3"],["←","0","✓"]]
+                delegate: Row {
+                    property var keys: modelData
+                    spacing: 7
+                    Repeater {
+                        model: keys
+                        delegate: Rectangle {
+                            width: 79; height: 44; radius: 6
+                            color: modelData === "✓" ? root.cGreen
+                                 : modelData === "←" ? "#3a2a2a" : "#1a1a3a"
+                            border.color: root.cBorder; border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData; color: root.cText
+                                font.pixelSize: 20; font.bold: true
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: velPopup.numpadPress(modelData)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: parent.width; height: 38; radius: 6
+                color: root.cBg; border.color: root.cBorder
+                Text { anchors.centerIn: parent; text: "Hủy"; color: root.cDim; font.pixelSize: 13 }
+                MouseArea { anchors.fill: parent; onClicked: velPopup.close() }
+            }
         }
     }
 
