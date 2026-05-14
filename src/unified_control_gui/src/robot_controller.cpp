@@ -432,7 +432,34 @@ void RobotController::sendCartesianStep()
     }
 
     double step = (jog_cart_idx_ < 3) ? 0.5 : 0.2;  // 0.5mm for XYZ, 0.2° for rotation
-    jog_cart_target_[jog_cart_idx_] += jog_cart_positive_ ? step : -step;
+    double delta = jog_cart_positive_ ? step : -step;
+
+    if (jog_cart_idx_ == 0 || jog_cart_idx_ == 1) {
+        double current_x = jog_cart_target_[0];
+        double current_y = jog_cart_target_[1];
+        double R = std::hypot(current_x, current_y);
+
+        if (R > 1.0) {
+            double ux = current_x / R; // Radial forward
+            double uy = current_y / R; 
+            double vx = -uy;           // Tangential left (đi ngang)
+            double vy = ux;            
+
+            if (jog_cart_idx_ == 0) {
+                // X JOG = Đi ngang (Tangential)
+                jog_cart_target_[0] += delta * vx;
+                jog_cart_target_[1] += delta * vy;
+            } else {
+                // Y JOG = Tiến lùi (Radial)
+                jog_cart_target_[0] += delta * ux;
+                jog_cart_target_[1] += delta * uy;
+            }
+        } else {
+            jog_cart_target_[jog_cart_idx_] += delta;
+        }
+    } else {
+        jog_cart_target_[jog_cart_idx_] += delta;
+    }
 
     auto req = std::make_shared<dobot_msgs_v3::srv::ServoP::Request>();
     req->x  = jog_cart_target_[0];
