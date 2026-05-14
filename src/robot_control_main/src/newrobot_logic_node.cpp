@@ -1448,6 +1448,11 @@ void RobotLogicNode::resetStateCallback(
     
     // ✅ STOP ROBOT MOTION FIRST
     RCLCPP_INFO(this->get_logger(), "[RESET] Stopping robot motion...");
+    
+    auto reset_req = std::make_shared<ResetRobot::Request>();
+    callService<ResetRobot>(reset_robot_client_, reset_req, "ResetRobot");
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
     auto clear_req = std::make_shared<ClearError::Request>();
     callService<ClearError>(clear_error_client_, clear_req, "ClearError");
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
