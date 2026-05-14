@@ -2,7 +2,7 @@
 //-------add---------
 #include <mutex>
 #include <memory>
-#include <sstream>
+#include <sstream>v  
 //-------------------
 // constexpr bool QUANTIZED = true;
 // constexpr hailo_format_type_t FORMAT_TYPE = HAILO_FORMAT_TYPE_AUTO;

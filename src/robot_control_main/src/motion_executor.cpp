@@ -338,27 +338,52 @@ private:
             return false;
         }
 
-        RCLCPP_INFO(get_logger(),
-            "[moveR] RelMovLUser Target: dx=%.2f dy=%.2f dz=%.2f (User 0)",
-            dx, dy, dz);
+        auto current_pose = getCurrentPose();
+        if (current_pose.size() < 6) {
+            RCLCPP_ERROR(get_logger(), "[moveR] No current pose");
+            return false;
+        }
 
-        auto req = std::make_shared<RelMovLUser::Request>();
-        req->offset1 = dx;
-        req->offset2 = dy;
-        req->offset3 = dz;
-        req->offset4 = 0.0;
-        req->offset5 = 0.0;
-        req->offset6 = 0.0;
-        req->user = 0;
+        double x = current_pose[0];
+        double y = current_pose[1];
+        double R = std::hypot(x, y);
+
+        double base_dx = dx;
+        double base_dy = dy;
+
+        // Calculate radial (tiến/lùi) and tangential (đi ngang) components
+        if (R > 1.0) {
+            double ux = x / R; // Radial forward
+            double uy = y / R;
+            
+            double vx = -uy;   // Tangential left (đi ngang)
+            double vy = ux;
+            
+            // Y input (dy) = tiến/lùi, X input (dx) = ngang
+            base_dx = dy * ux + dx * vx;
+            base_dy = dy * uy + dx * vy;
+        }
+
+        RCLCPP_INFO(get_logger(),
+            "[moveR] Radial Move: X_input=%.2f(ngang), Y_input=%.2f(tiến/lùi), Z_input=%.2f -> Base_dx=%.2f, Base_dy=%.2f",
+            dx, dy, dz, base_dx, base_dy);
+
+        auto req = std::make_shared<MovL::Request>();
+        req->x  = current_pose[0] + base_dx;
+        req->y  = current_pose[1] + base_dy;
+        req->z  = current_pose[2] + dz;
+        req->rx = current_pose[3];
+        req->ry = current_pose[4];
+        req->rz = current_pose[5];
         req->param_value.clear();
 
-        auto res = callService<RelMovLUser>(relmovluser_client_, req, "RelMovLUser");
+        auto res = callService<MovL>(movl_client_, req, "MovL");
         if (!res) {
             RCLCPP_ERROR(get_logger(), "[moveR] Service call returned nullptr (timeout/unavailable)");
             return false;
         }
         if (res->res != 0) {
-            RCLCPP_ERROR(get_logger(), "[moveR] RelMovLUser failed (err: %d)", res->res);
+            RCLCPP_ERROR(get_logger(), "[moveR] MovL failed (err: %d)", res->res);
             return false;
         }
 
