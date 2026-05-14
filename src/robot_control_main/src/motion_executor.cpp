@@ -338,38 +338,27 @@ private:
             return false;
         }
 
-        auto current_pose = getCurrentPose();
-        if (current_pose.size() < 6) {
-            RCLCPP_ERROR(get_logger(), "[moveR] No current pose");
-            return false;
-        }
-
-        // Full pose log for debugging
         RCLCPP_INFO(get_logger(),
-            "[moveR] Current: X=%.2f Y=%.2f Z=%.2f Rx=%.2f Ry=%.2f Rz=%.2f",
-            current_pose[0], current_pose[1], current_pose[2],
-            current_pose[3], current_pose[4], current_pose[5]);
+            "[moveR] RelMovLUser Target: dx=%.2f dy=%.2f dz=%.2f (User 0)",
+            dx, dy, dz);
 
-        auto req = std::make_shared<MovL::Request>();
-        req->x  = current_pose[0] + dx;
-        req->y  = current_pose[1] + dy;
-        req->z  = current_pose[2] + dz;
-        req->rx = current_pose[3];
-        req->ry = current_pose[4];
-        req->rz = current_pose[5];
+        auto req = std::make_shared<RelMovLUser::Request>();
+        req->offset1 = dx;
+        req->offset2 = dy;
+        req->offset3 = dz;
+        req->offset4 = 0.0;
+        req->offset5 = 0.0;
+        req->offset6 = 0.0;
+        req->user = 0;
         req->param_value.clear();
 
-        RCLCPP_INFO(get_logger(),
-            "[moveR] Target:  X=%.2f Y=%.2f Z=%.2f Rx=%.2f Ry=%.2f Rz=%.2f",
-            req->x, req->y, req->z, req->rx, req->ry, req->rz);
-
-        auto res = callService<MovL>(movl_client_, req, "MovL");
+        auto res = callService<RelMovLUser>(relmovluser_client_, req, "RelMovLUser");
         if (!res) {
             RCLCPP_ERROR(get_logger(), "[moveR] Service call returned nullptr (timeout/unavailable)");
             return false;
         }
         if (res->res != 0) {
-            RCLCPP_ERROR(get_logger(), "[moveR] MovL failed (err: %d)", res->res);
+            RCLCPP_ERROR(get_logger(), "[moveR] RelMovLUser failed (err: %d)", res->res);
             return false;
         }
 
@@ -790,7 +779,7 @@ private:
         if (!moveR(0, 0, 101)) return false;
         if (!moveToIndex(8)) return false;
         if (!moveR(0, 0, -30)) return false;
-        if (!setDigitalOutput(1, false)) return false;
+        if (!setDigitalOutput(0, false)) return false;
         if (!moveR(0, 0, 30)) return false;
         if (!moveToIndex(0)) return false;
         return true;
@@ -799,10 +788,9 @@ private:
     bool executeChamberScale() {
         RCLCPP_INFO(get_logger(), "[MOTION] Chamber → Scale");
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 30, 0)) return false;
-        if (!moveR(0, -30, 0)) return false;
+        if (!moveR(0, 40, 0)) return false;
+        if (!moveR(0, -40, 0)) return false;
         if (!moveToIndex(9)) return false;
-        if (!moveToIndex(10)) return false;
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(1, false)) return false;
         if (!moveR(0, 0, 30)) return false;
@@ -812,10 +800,18 @@ private:
     bool executeScaleOutput(int slot) {
         RCLCPP_INFO(get_logger(), "[MOTION] Scale → Output Slot %d", slot);
         if (slot < 1 || slot > 9) return false;
+        if (!setDigitalOutput(0, true)) return false;
+        if (!moveToIndex(10)) return false;
+        if (!moveR(0, 40, 0)) return false;
+        if (!setDigitalOutput(1, true)) return false;
+        if (!moveR(0, 0, 40)) return false;
+        if (!moveToIndex(12)) return false;
+        if (!moveR(0, 0, -40)) return false;
+        if (!moveR(0, 0, -60)) return false;
         if (!moveToIndex(11)) return false;
-        if (!moveR(0, 0, -30)) return false;
+        if (!moveR(0, 0, -40)) return false;
         if (!setDigitalOutput(2, true)) return false;
-        if (!moveR(0, 0, 30)) return false;
+        if (!moveR(0, 0, 40)) return false;
         if (!moveToIndex(13)) return false;
         if (!moveToIndex(13 + slot)) return false;
         if (!moveR(0, 0, -30)) return false;
