@@ -13,14 +13,14 @@ def generate_launch_description():
     # Parameters for gripper node
     cpx_ip_arg = DeclareLaunchArgument(
         'cpx_ip',
-        default_value='192.168.27.93',
+        default_value='192.168.27.253',
         description='IP address of Festo CPX-AP module'
     )
     
     cpx_module_arg = DeclareLaunchArgument(
         'cpx_module',
-        default_value='1',
-        description='CPX module index (usually 1 for CPX-AP-8DI)'
+        default_value='3',
+        description='CPX module index (3 for VABX valve terminal)'
     )
     
     # Robot logic node (C++)

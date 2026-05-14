@@ -29,11 +29,11 @@ class FestoGripperNode(Node):
         super().__init__('festo_gripper_controller')
         
         # Get CPX IP from parameters (default: Festo gripper IP)
-        self.declare_parameter('cpx_ip', '192.168.27.163')
+        self.declare_parameter('cpx_ip', '192.168.27.253')
         self.cpx_ip = self.get_parameter('cpx_ip').value
         
-        # Get module index (default: module 1)
-        self.declare_parameter('cpx_module_index', 1)
+        # Get module index (default: module 3 for VABX valve terminal)
+        self.declare_parameter('cpx_module_index', 3)
         self.cpx_module_index = self.get_parameter('cpx_module_index').value
         
         # Simulation mode flag
@@ -54,6 +54,18 @@ class FestoGripperNode(Node):
                     # single logical name for module
                     self.myIO.name = "festo_io_module"
                     self.get_logger().info(f'✔ Connected to Festo CPX module {self.cpx_module_index}')
+                    
+                    # Force default state (DigitalOutput 1 and 2 = false) to ensure safety on startup
+                    try:
+                        self.get_logger().info('Initializing valves to default OPEN/OFF state...')
+                        self.myIO.reset_channel(1)
+                        self.myIO.set_channel(0)
+                        self.myIO.reset_channel(3)
+                        self.myIO.set_channel(2)
+                        time.sleep(0.1)
+                    except Exception as e:
+                        self.get_logger().warn(f'Could not initialize valves: {e}')
+                        
                 else:
                     self.get_logger().error(f'✗ CPX module index {self.cpx_module_index} out of range')
                     self.myIO = None
@@ -84,6 +96,10 @@ class FestoGripperNode(Node):
             self.picker_callback,
             10
         )
+
+        # Status publishers for feedback
+        self.gripper_pub = self.create_publisher(Bool, '/robot/gripper_status', 10)
+        self.picker_pub = self.create_publisher(Bool, '/robot/picker_status', 10)
 
         mode_str = "SIMULATION" if self.simulation_mode else "LIVE"
         self.get_logger().info(f'[{mode_str}] Waiting for gripper commands on /robot/gripper_cmd and /robot/picker_cmd...')
@@ -123,6 +139,10 @@ class FestoGripperNode(Node):
                 self.myIO.set_channel(1)
                 self.gripper_open = False
                 time.sleep(0.05)
+                # Publish feedback
+                msg = Bool()
+                msg.data = True # Gripper closed = ON
+                self.gripper_pub.publish(msg)
             except Exception as e:
                 self.get_logger().error(f'Failed to close gripper: {e}')
     
@@ -144,6 +164,10 @@ class FestoGripperNode(Node):
                 self.myIO.set_channel(0)
                 time.sleep(0.05)
                 self.gripper_open = True
+                # Publish feedback
+                msg = Bool()
+                msg.data = False # Gripper opened = OFF
+                self.gripper_pub.publish(msg)
             except Exception as e:
                 self.get_logger().error(f'Failed to open gripper: {e}')
 
@@ -175,6 +199,9 @@ class FestoGripperNode(Node):
                 self.myIO.set_channel(3)
                 self.picker_open = False
                 time.sleep(0.05)
+                msg = Bool()
+                msg.data = True # Picker closed = ON
+                self.picker_pub.publish(msg)
             except Exception as e:
                 self.get_logger().error(f'Failed to close picker: {e}')
 
@@ -195,6 +222,9 @@ class FestoGripperNode(Node):
                 self.myIO.set_channel(2)
                 time.sleep(0.05)
                 self.picker_open = True
+                msg = Bool()
+                msg.data = False # Picker opened = OFF
+                self.picker_pub.publish(msg)
             except Exception as e:
                 self.get_logger().error(f'Failed to open picker: {e}')
     

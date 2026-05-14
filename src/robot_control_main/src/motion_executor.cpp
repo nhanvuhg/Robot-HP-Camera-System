@@ -101,6 +101,18 @@ public:
 
         
         // Subscriptions
+        sub_gripper_status_ = create_subscription<std_msgs::msg::Bool>(
+            "/robot/gripper_status", 10,
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                last_gripper_status_ = msg->data;
+            });
+            
+        sub_picker_status_ = create_subscription<std_msgs::msg::Bool>(
+            "/robot/picker_status", 10,
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                last_picker_status_ = msg->data;
+            });
+
         speed_ratio_sub_ = create_subscription<std_msgs::msg::Int32>(
             "/robot/speed_ratio", rclcpp::QoS(10).reliable().transient_local(),
             [this](const std_msgs::msg::Int32::SharedPtr msg) {
@@ -155,6 +167,11 @@ private:
 
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_gripper_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_picker_;
+
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_gripper_status_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_picker_status_;
+    std::atomic<bool> last_gripper_status_{false};
+    std::atomic<bool> last_picker_status_{false};
 
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr speed_ratio_sub_;
     
@@ -300,14 +317,14 @@ private:
     // ========================================================================
     // MOTION PRIMITIVES
     // ========================================================================
-    bool moveToIndex(size_t index) {
+    bool moveToIndex(size_t index, int speed_override = -1) {
         if (index >= joint_sequences_.size()) {
             RCLCPP_ERROR(get_logger(), "[MOTION] Invalid index: %zu (max: %zu)", 
                          index, joint_sequences_.size() - 1);
             return false;
         }
 
-        if (!prepareJointMotion()) {
+        if (!prepareJointMotion(speed_override)) {
             RCLCPP_WARN(get_logger(), "[MOTION] Failed to prepare Joint Motion (Speed/Acc)");
         }
 
@@ -332,8 +349,8 @@ private:
         return sync();
     }
 
-    bool moveR(double dx, double dy, double dz) {
-        if (!prepareLinearMotion()) {
+    bool moveR(double dx, double dy, double dz, int speed_override = -1) {
+        if (!prepareLinearMotion(speed_override)) {
             RCLCPP_ERROR(get_logger(), "[moveR] Prepare failed");
             return false;
         }
@@ -431,29 +448,51 @@ private:
 
 
     bool setDigitalOutput(int index, bool status) {
-        auto req = std::make_shared<DO::Request>();
-        req->index = index;
-        req->status = status ? 1 : 0;
-
-        auto res = callService<DO>(do_client_, req, "DO");
-        if (!res) return false;
-        if (res->res != 0) {
-            RCLCPP_ERROR(get_logger(), "[DO] Failed (err: %d)", res->res);
-            return false;
-        }
-
-        // Publish feedback
+        // Publish to ROS topics first for the Festo Gripper Node
         if (index == 1 && pub_gripper_) {
             auto msg = std_msgs::msg::Bool();
             msg.data = status;
             pub_gripper_->publish(msg);
+            
+            // Wait for feedback from Python node
+            auto start = std::chrono::steady_clock::now();
+            while (last_gripper_status_ != status && rclcpp::ok()) {
+                if (std::chrono::steady_clock::now() - start > std::chrono::milliseconds(2000)) {
+                    RCLCPP_WARN(get_logger(), "[DO] Timeout waiting for Gripper status feedback!");
+                    break;
+                }
+                rclcpp::sleep_for(std::chrono::milliseconds(10));
+            }
         }
         if (index == 2 && pub_picker_) {
             auto msg = std_msgs::msg::Bool();
             msg.data = status;
             pub_picker_->publish(msg);
+            
+            // Wait for feedback from Python node
+            auto start = std::chrono::steady_clock::now();
+            while (last_picker_status_ != status && rclcpp::ok()) {
+                if (std::chrono::steady_clock::now() - start > std::chrono::milliseconds(2000)) {
+                    RCLCPP_WARN(get_logger(), "[DO] Timeout waiting for Picker status feedback!");
+                    break;
+                }
+                rclcpp::sleep_for(std::chrono::milliseconds(10));
+            }
         }
 
+        // Try to trigger Dobot's hardware DO (optional, might fail if not configured)
+        auto req = std::make_shared<DO::Request>();
+        req->index = index;
+        req->status = status ? 1 : 0;
+
+        auto res = callService<DO>(do_client_, req, "DO");
+        if (!res) {
+            RCLCPP_WARN(get_logger(), "[DO] Hardware DO service call failed.");
+        } else if (res->res != 0) {
+            RCLCPP_WARN(get_logger(), "[DO] Hardware DO Failed (err: %d), but ROS topic published.", res->res);
+        }
+
+        // Always return true to keep the motion sequence running
         return true;
     }
 
@@ -534,8 +573,8 @@ private:
         return pose;
     }
 
-    bool prepareLinearMotion() {
-        int spd = current_speed_ratio_;  // Use system speed
+    bool prepareLinearMotion(int speed_override = -1) {
+        int spd = (speed_override > 0) ? speed_override : current_speed_ratio_;  // Use system or override speed
         RCLCPP_INFO(get_logger(), "[MOTION] prepareLinearMotion speed=%d%%", spd);
         // Set SpeedL
         auto speed_req = std::make_shared<SpeedL::Request>();
@@ -550,8 +589,8 @@ private:
         return true;
     }
 
-    bool prepareJointMotion() {
-        int spd = current_speed_ratio_;  // Use system speed
+    bool prepareJointMotion(int speed_override = -1) {
+        int spd = (speed_override > 0) ? speed_override : current_speed_ratio_;  // Use system or override speed
         RCLCPP_INFO(get_logger(), "[MOTION] prepareJointMotion speed=%d%%", spd);
         // Set SpeedJ
         auto speed_req = std::make_shared<SpeedJ::Request>();
@@ -768,24 +807,26 @@ private:
         if (row < 1 || row > 5) return false;
         if (!moveToIndex(0)) return false;
         // MoveJ đến row1new1 (Index 1)
+        if (!moveToIndex(27)) return false;
         if (!moveToIndex(1)) return false;
         
         // Tính tiến theo row index DỰA TRÊN TRỤC CỦA TAY MÁY (Khay đặt theo góc của tay)
         if (row > 1) {
             double dx = (row - 1) * (-105.0); // Đi dọc theo khay (hướng đâm thẳng của tay)
-            double dy = (row - 1) * -9.0;      // Đi ngang khay (hướng vuông góc với tay)
+            double dy = (row - 1) * -8.7;      // Đi ngang khay (hướng vuông góc với tay)
             double dz = (row - 1) * 1.0;
             if (!moveR(dx, dy, dz)) return false;
         }
         
         // --- CÁC LỆNH MOVE TIẾP THEO BẠN CÓ THỂ TỰ THÊM HOẶC CHỈNH SỬA Ở ĐÂY ---
-        if (!moveR(0, 0, -101)) return false;
+        if (!moveR(0, 0, -101,3)) return false;
         if (!setDigitalOutput(1, true)) return false;
-        if (!moveR(0, 0, 150)) return false;
+        if (!moveR(0, 0, 100,3)) return false;
+        if (!moveToIndex(27)) return false;  // ensure safe
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 30, 0)) return false;
+        if (!moveR(0, 30, 0,5)) return false;
         if (!setDigitalOutput(1, false)) return false;
-        if (!moveR(0, -30, 0)) return false;
+        if (!moveR(0, -30, 0,5)) return false;
         return true;
     }
 
@@ -793,26 +834,27 @@ private:
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Buffer", row);
         if (row < 1 || row > 5) return false;
         // if (!moveToIndex(6)) return false; // Tạm thời bỏ move đến vị trí an toàn
-        
+        if (!moveToIndex(27)) return false;
         // MoveJ đến row1new1 (Index 1)
         if (!moveToIndex(1)) return false;
         
         // Tính tiến theo row index DỰA TRÊN TRỤC CỦA TAY MÁY (Khay đặt theo góc của tay)
         if (row > 1) {
             double dx = (row - 1) * (-105.0); // Đi dọc theo khay (hướng đâm thẳng của tay)
-            double dy = (row - 1) * -9.0;      // Đi ngang khay (hướng vuông góc với tay)
+            double dy = (row - 1) * -8.7;      // Đi ngang khay (hướng vuông góc với tay)
             double dz = (row - 1) * 1.0;
             if (!moveR(dx, dy, dz)) return false;
         }
         
-        // --- CÁC LỆNH MOVE TIẾP THEO BẠN CÓ THỂ TỰ THÊM HOẶC CHỈNH SỬA Ở ĐÂY ---
-        if (!moveR(0, 0, -101)) return false;
+        // ---
+        if (!moveR(0, 0, -101,3)) return false;
         if (!setDigitalOutput(1, true)) return false;
-        if (!moveR(0, 0, 150)) return false;
+        if (!moveR(0, 0, 100,3)) return false;
+        if (!moveToIndex(27)) return false;  // ensure safe
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 0, -40)) return false;
+        if (!moveR(0, 0, -40,5)) return false;
         if (!setDigitalOutput(1, false)) return false;
-        if (!moveR(0, 0, 40)) return false;
+        if (!moveR(0, 0, 40,5)) return false;
         if (!moveToIndex(0)) return false;
         return true;
     }
@@ -820,35 +862,37 @@ private:
     bool executeChamberScale() {
         RCLCPP_INFO(get_logger(), "[MOTION] Chamber → Scale");
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 40, 0)) return false;
-        if (!moveR(0, -40, 0)) return false;
+        if (!moveR(0, 40, 0,5)) return false;
+        if (!setDigitalOutput(1, true)) return false;
+        if (!moveR(0, -40, 0,5)) return false;
         if (!moveToIndex(9)) return false;
-        if (!moveR(0, 0, -30)) return false;
+        if (!moveR(0, 0, -30,5)) return false;
         if (!setDigitalOutput(1, false)) return false;
-        if (!moveR(0, 0, 30)) return false;
+        if (!moveR(0, 0, 30,5)) return false;
         return true;
     }
 
     bool executeScaleOutput(int slot) {
         RCLCPP_INFO(get_logger(), "[MOTION] Scale → Output Slot %d", slot);
         if (slot < 1 || slot > 9) return false;
-        if (!setDigitalOutput(0, true)) return false;
-        if (!moveToIndex(10)) return false;
-        if (!moveR(0, 40, 0)) return false;
         if (!setDigitalOutput(1, true)) return false;
-        if (!moveR(0, 0, 40)) return false;
+        if (!moveToIndex(10)) return false;
+        if (!moveR(40, 0, 0)) return false;
+        if (!setDigitalOutput(1, false)) return false;
+        if (!moveR(0, 0, 40,5)) return false;
         if (!moveToIndex(12)) return false;
-        if (!moveR(0, 0, -40)) return false;
-        if (!moveR(0, 0, -60)) return false;
+        if (!moveR(0, 0, -60,5)) return false;
+        if (!setDigitalOutput(2, false)) return false;
+        if (!moveR(0, 0, 60,5)) return false;
         if (!moveToIndex(11)) return false;
-        if (!moveR(0, 0, -40)) return false;
+        if (!moveR(0, 0, -60,5)) return false;
         if (!setDigitalOutput(2, true)) return false;
-        if (!moveR(0, 0, 40)) return false;
+        if (!moveR(0, 0, 60,5)) return false;
         if (!moveToIndex(13)) return false;
         if (!moveToIndex(13 + slot)) return false;
-        if (!moveR(0, 0, -30)) return false;
+        if (!moveR(0, 0, -30,5)) return false;
         if (!setDigitalOutput(2, false)) return false;
-        if (!moveR(0, 0, 30)) return false;
+        if (!moveR(0, 0, 30,5)) return false;
         if (!moveToIndex(13)) return false;
         if (!moveToIndex(0)) return false;
         return true;
@@ -869,13 +913,13 @@ private:
     bool executeBufferChamber() {
         RCLCPP_INFO(get_logger(), "[MOTION] Buffer → Chamber");
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 0, -30)) return false;
+        if (!moveR(0, 0, -30,5)) return false;
         if (!setDigitalOutput(2, true)) return false;
-        if (!moveR(0, 0, 30)) return false;
+        if (!moveR(0, 0, 30,5)) return false;
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 30, 0)) return false;
+        if (!moveR(0, 30, 0,5)) return false;
         if (!setDigitalOutput(2, false)) return false;
-        if (!moveR(0, -30, 0)) return false;
+        if (!moveR(0, -30, 0,5)) return false;
         if (!moveToIndex(0)) return false;
         return true;
     }

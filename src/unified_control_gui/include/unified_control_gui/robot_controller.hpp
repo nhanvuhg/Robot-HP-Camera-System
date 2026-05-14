@@ -173,6 +173,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr speed_ratio_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr system_start_pub_;  // /system/start_button — shared with cartridge
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ignore_scale_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr gripper_cmd_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr picker_cmd_pub_;
     
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_status_sub_;

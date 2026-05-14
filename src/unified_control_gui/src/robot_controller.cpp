@@ -54,6 +54,8 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     speed_ratio_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/speed_ratio", rclcpp::QoS(10).reliable().transient_local());
     system_start_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/start_button", 10);  // shared with cartridge
     ignore_scale_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/ignore_scale", 10);
+    gripper_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
+    picker_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
     
     // Create subscribers
     system_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
@@ -644,15 +646,16 @@ void RobotController::saveJointPose(const QString& name, double j1, double j2, d
 
 void RobotController::setDigitalOutput(int index, bool status)
 {
-    qDebug() << "SetDO:" << index << status;
-    auto request = std::make_shared<dobot_msgs_v3::srv::DO::Request>();
-    request->index = index;
-    request->status = status ? 1 : 0;
-    do_client_->async_send_request(request,
-        [this, index, status](rclcpp::Client<dobot_msgs_v3::srv::DO>::SharedFuture future) {
-            try { auto r = future.get(); qDebug() << "DO" << index << "=" << status << "result:" << r->res; }
-            catch (const std::exception& e) { qWarning() << "SetDO failed:" << e.what(); }
-        });
+    qDebug() << "SetDO (via Topic):" << index << status;
+    auto msg = std_msgs::msg::Bool();
+    msg.data = status;
+    if (index == 1 && gripper_cmd_pub_) {
+        gripper_cmd_pub_->publish(msg);
+    } else if (index == 2 && picker_cmd_pub_) {
+        picker_cmd_pub_->publish(msg);
+    } else {
+        qWarning() << "Invalid DO index for GUI control:" << index;
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
