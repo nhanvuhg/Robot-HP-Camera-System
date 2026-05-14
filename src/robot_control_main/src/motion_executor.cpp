@@ -784,12 +784,12 @@ private:
         // MoveJ đến row1new1 (Index 1)
         if (!moveToIndex(1)) return false;
         
-        // Tính tiến theo row index DỰA TRÊN TRỤC CỦA MẶT BÀN (Khay hình chữ nhật)
+        // Tính tiến theo row index DỰA TRÊN TRỤC CỦA TAY MÁY (Khay đặt theo góc của tay)
         if (row > 1) {
-            double dx = (row - 1) * (-105.0); // Khay đặt dọc theo trục X của Base
-            double dy = (row - 1) * 9.0;      // Ngang của khay là trục Y của Base
+            double dx = (row - 1) * (-105.0); // Đi dọc theo khay (hướng đâm thẳng của tay)
+            double dy = (row - 1) * 9.0;      // Đi ngang khay (hướng vuông góc với tay)
             double dz = (row - 1) * 1.0;
-            if (!moveBase(dx, dy, dz)) return false;
+            if (!moveR(dx, dy, dz)) return false;
         }
         
         // --- CÁC LỆNH MOVE TIẾP THEO BẠN CÓ THỂ TỰ THÊM HOẶC CHỈNH SỬA Ở ĐÂY ---
@@ -811,12 +811,12 @@ private:
         // MoveJ đến row1new1 (Index 1)
         if (!moveToIndex(1)) return false;
         
-        // Tính tiến theo row index DỰA TRÊN TRỤC CỦA MẶT BÀN (Khay hình chữ nhật)
+        // Tính tiến theo row index DỰA TRÊN TRỤC CỦA TAY MÁY (Khay đặt theo góc của tay)
         if (row > 1) {
-            double dx = (row - 1) * (-105.0); // Khay đặt dọc theo trục X của Base
-            double dy = (row - 1) * 9.0;      // Ngang của khay là trục Y của Base
+            double dx = (row - 1) * (-105.0); // Đi dọc theo khay (hướng đâm thẳng của tay)
+            double dy = (row - 1) * 9.0;      // Đi ngang khay (hướng vuông góc với tay)
             double dz = (row - 1) * 1.0;
-            if (!moveBase(dx, dy, dz)) return false;
+            if (!moveR(dx, dy, dz)) return false;
         }
         
         // --- CÁC LỆNH MOVE TIẾP THEO BẠN CÓ THỂ TỰ THÊM HOẶC CHỈNH SỬA Ở ĐÂY ---
