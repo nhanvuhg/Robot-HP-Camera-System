@@ -189,6 +189,17 @@ void RobotController::stopAndResetRobot()
 {
     qDebug() << "Stop & Reset Robot";
 
+    // ✅ FORCE INSTANT STOP: Call Pause and ResetRobot directly from GUI
+    auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
+    if (pause_client_ && pause_client_->service_is_ready()) {
+        pause_client_->async_send_request(pauseReq);
+    }
+    
+    auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
+    if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
+        reset_robot_client_->async_send_request(resetRobotReq);
+    }
+
     // Step 1: Reset state machine → IDLE (stops auto mode, clears all flags)
     auto resetReq = std::make_shared<std_srvs::srv::SetBool::Request>();
     resetReq->data = true;
