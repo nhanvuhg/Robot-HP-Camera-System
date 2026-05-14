@@ -535,8 +535,8 @@ private:
     }
 
     bool prepareLinearMotion() {
-        int spd = 100;  // Always 100% — actual speed is controlled by SpeedFactor (global)
-        RCLCPP_INFO(get_logger(), "[MOTION] prepareLinearMotion speed=100%% (SpeedFactor=%d%%)", current_speed_ratio_);
+        int spd = current_speed_ratio_;  // Use system speed
+        RCLCPP_INFO(get_logger(), "[MOTION] prepareLinearMotion speed=%d%%", spd);
         // Set SpeedL
         auto speed_req = std::make_shared<SpeedL::Request>();
         speed_req->r = spd;
@@ -551,8 +551,8 @@ private:
     }
 
     bool prepareJointMotion() {
-        int spd = 100;  // Always 100% — actual speed is controlled by SpeedFactor (global)
-        RCLCPP_INFO(get_logger(), "[MOTION] prepareJointMotion speed=100%% (SpeedFactor=%d%%)", current_speed_ratio_);
+        int spd = current_speed_ratio_;  // Use system speed
+        RCLCPP_INFO(get_logger(), "[MOTION] prepareJointMotion speed=%d%%", spd);
         // Set SpeedJ
         auto speed_req = std::make_shared<SpeedJ::Request>();
         speed_req->r = spd;
@@ -766,7 +766,7 @@ private:
     bool executeInputTrayChamber(int row) {
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Chamber", row);
         if (row < 1 || row > 5) return false;
-        
+        if (!moveToIndex(0)) return false;
         // MoveJ đến row1new1 (Index 1)
         if (!moveToIndex(1)) return false;
         
@@ -800,7 +800,7 @@ private:
         // Tính tiến theo row index DỰA TRÊN TRỤC CỦA TAY MÁY (Khay đặt theo góc của tay)
         if (row > 1) {
             double dx = (row - 1) * (-105.0); // Đi dọc theo khay (hướng đâm thẳng của tay)
-            double dy = (row - 1) * 9.0;      // Đi ngang khay (hướng vuông góc với tay)
+            double dy = (row - 1) * -9.0;      // Đi ngang khay (hướng vuông góc với tay)
             double dz = (row - 1) * 1.0;
             if (!moveR(dx, dy, dz)) return false;
         }
@@ -810,9 +810,9 @@ private:
         if (!setDigitalOutput(1, true)) return false;
         if (!moveR(0, 0, 150)) return false;
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 40, 0)) return false;
-        if (!setDigitalOutput(0, false)) return false;
-        if (!moveR(0, -40, 0)) return false;
+        if (!moveR(0, 0, -40)) return false;
+        if (!setDigitalOutput(1, false)) return false;
+        if (!moveR(0, 0, 40)) return false;
         if (!moveToIndex(0)) return false;
         return true;
     }

@@ -256,6 +256,7 @@ private:
     bool chamber_is_empty_{true};
     bool chamber_has_cartridge_{false};
     bool scale_has_cartridge_{false};
+    bool cartridge_is_homed_{false};
 
     // ========================================================================
     // ASYNC MOTION STATE
@@ -1004,8 +1005,14 @@ void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr ms
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     if (!manual_mode_) {
-        RCLCPP_INFO(get_logger(), "[INIT] Auto/AI mode — waiting for Cartridge Homing to finish before moving HOME.");
-        // system_started_ will be set to true in cartridgeHomingDoneCallback
+        if (cartridge_is_homed_) {
+            RCLCPP_INFO(get_logger(), "[INIT] Cartridge is already homed. Executing Robot HOME and starting process.");
+            sendMotionAction("HOME");
+            system_started_ = true;
+        } else {
+            RCLCPP_INFO(get_logger(), "[INIT] Auto/AI mode — waiting for Cartridge Homing to finish before moving HOME.");
+            // system_started_ will be set to true in cartridgeHomingDoneCallback
+        }
     } else {
         RCLCPP_INFO(get_logger(), "[INIT] ⚡ Manual mode — skipping HOME command, holding position");
         // We do NOT set system_started_ = true, because manual mode shouldn't jump to INIT_CHECK sequence
@@ -1373,7 +1380,12 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
 
 void RobotLogicNode::cartridgeHomingDoneCallback(const std_msgs::msg::Bool::SharedPtr msg)
 {
-    if (!msg->data) return;
+    if (!msg->data) {
+        cartridge_is_homed_ = false;
+        return;
+    }
+    
+    cartridge_is_homed_ = true;
     
     if (system_running_ && !manual_mode_) {
         RCLCPP_INFO(get_logger(), "[INIT] Cartridge Homing Done. Executing Robot HOME and starting process.");
