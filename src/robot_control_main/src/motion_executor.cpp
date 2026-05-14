@@ -744,11 +744,23 @@ private:
     bool executeInputTrayChamber(int row) {
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Chamber", row);
         if (row < 1 || row > 5) return false;
-        if (!moveToIndex(6)) return false;
-        if (!moveToIndex(static_cast<size_t>(row))) return false;
-        if (!moveR(0, 0, -30)) return false;
+        // if (!moveToIndex(6)) return false; // Tạm thời bỏ move đến vị trí an toàn nếu bạn muốn đi thẳng đến row1new1
+        
+        // MoveJ đến row1new1 (Index 1)
+        if (!moveToIndex(1)) return false;
+        
+        // Tính tiến theo row index
+        if (row > 1) {
+            double dx = (row - 1) * (-105.0);
+            double dy = (row - 1) * 9.0;
+            double dz = (row - 1) * 1.0;
+            if (!moveR(dx, dy, dz)) return false;
+        }
+        
+        // --- CÁC LỆNH MOVE TIẾP THEO BẠN CÓ THỂ TỰ THÊM HOẶC CHỈNH SỬA Ở ĐÂY ---
+        if (!moveR(0, 0, -101)) return false;
         if (!setDigitalOutput(1, true)) return false;
-        if (!moveR(0, 0, 30)) return false;
+        if (!moveR(0, 0, 101)) return false;
         if (!moveToIndex(7)) return false;
         if (!moveR(0, 30, 0)) return false;
         if (!setDigitalOutput(1, false)) return false;
@@ -759,11 +771,23 @@ private:
     bool executeInputTrayBuffer(int row) {
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Buffer", row);
         if (row < 1 || row > 5) return false;
-        if (!moveToIndex(6)) return false;
-        if (!moveToIndex(static_cast<size_t>(row))) return false;
-        if (!moveR(0, 0, -30)) return false;
+        // if (!moveToIndex(6)) return false; // Tạm thời bỏ move đến vị trí an toàn
+        
+        // MoveJ đến row1new1 (Index 1)
+        if (!moveToIndex(1)) return false;
+        
+        // Tính tiến theo row index
+        if (row > 1) {
+            double dx = (row - 1) * (-105.0);
+            double dy = (row - 1) * 9.0;
+            double dz = (row - 1) * 1.0;
+            if (!moveR(dx, dy, dz)) return false;
+        }
+        
+        // --- CÁC LỆNH MOVE TIẾP THEO BẠN CÓ THỂ TỰ THÊM HOẶC CHỈNH SỬA Ở ĐÂY ---
+        if (!moveR(0, 0, -101)) return false;
         if (!setDigitalOutput(1, true)) return false;
-        if (!moveR(0, 0, 30)) return false;
+        if (!moveR(0, 0, 101)) return false;
         if (!moveToIndex(8)) return false;
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(1, false)) return false;
@@ -792,19 +816,19 @@ private:
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(2, true)) return false;
         if (!moveR(0, 0, 30)) return false;
-        if (!moveToIndex(12)) return false;
-        if (!moveToIndex(12 + slot)) return false;
+        if (!moveToIndex(13)) return false;
+        if (!moveToIndex(13 + slot)) return false;
         if (!moveR(0, 0, -30)) return false;
         if (!setDigitalOutput(2, false)) return false;
         if (!moveR(0, 0, 30)) return false;
-        if (!moveToIndex(12)) return false;
+        if (!moveToIndex(13)) return false;
         if (!moveToIndex(0)) return false;
         return true;
     }
 
     bool executeScaleFail() {
         RCLCPP_INFO(get_logger(), "[MOTION] Scale → Fail Position %d", current_fail_slot_);
-        if (!moveToIndex(20 + current_fail_slot_)) return false;
+        if (!moveToIndex(23 + current_fail_slot_)) return false;
         current_fail_slot_++;
         if (current_fail_slot_ > 4) current_fail_slot_ = 1;
         if (!moveR(0, 0, -30)) return false;
