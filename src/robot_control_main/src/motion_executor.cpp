@@ -795,7 +795,7 @@ private:
         // --- CÁC LỆNH MOVE TIẾP THEO BẠN CÓ THỂ TỰ THÊM HOẶC CHỈNH SỬA Ở ĐÂY ---
         if (!moveR(0, 0, -101)) return false;
         if (!setDigitalOutput(1, true)) return false;
-        if (!moveR(0, 0, 101)) return false;
+        if (!moveR(0, 0, 150)) return false;
         if (!moveToIndex(7)) return false;
         if (!moveR(0, 30, 0)) return false;
         if (!setDigitalOutput(1, false)) return false;
@@ -822,11 +822,11 @@ private:
         // --- CÁC LỆNH MOVE TIẾP THEO BẠN CÓ THỂ TỰ THÊM HOẶC CHỈNH SỬA Ở ĐÂY ---
         if (!moveR(0, 0, -101)) return false;
         if (!setDigitalOutput(1, true)) return false;
-        if (!moveR(0, 0, 101)) return false;
+        if (!moveR(0, 0, 150)) return false;
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 0, -30)) return false;
+        if (!moveR(0, 40, 0)) return false;
         if (!setDigitalOutput(0, false)) return false;
-        if (!moveR(0, 0, 30)) return false;
+        if (!moveR(0, -40, 0)) return false;
         if (!moveToIndex(0)) return false;
         return true;
     }
