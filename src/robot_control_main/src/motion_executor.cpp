@@ -497,11 +497,13 @@ private:
             try {
                 auto res = future.get();
                 if (res && res->res == 0) {
-                    // mode field is a string like "5" or "7"
                     int mode = std::stoi(res->mode);
-                    if (mode != 7) { // 7 = in motion
-                        RCLCPP_DEBUG(get_logger(), "[SYNC] Robot idle (mode=%d) after %d polls", mode, i);
+                    if (mode == 5) {
+                        RCLCPP_DEBUG(get_logger(), "[SYNC] Robot idle (mode=5) after %d polls - SUCCESS", i);
                         return true;
+                    } else if (mode != 7) {
+                        RCLCPP_ERROR(get_logger(), "[SYNC] Motion INTERRUPTED! Mode=%d (not 7 or 5)", mode);
+                        return false;
                     }
                 }
             } catch (...) {}
