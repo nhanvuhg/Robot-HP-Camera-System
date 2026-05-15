@@ -108,7 +108,6 @@ class SystemState(Enum):
     S1_INY_200          = "s1_iny_200"
     S1_WAIT_RELEASE     = "s1_wait_release"
     S1_WAIT_S7         = "s1_wait_s7"
-    S1_INY_10_FINAL     = "s1_iny_10_final"
     S1_INX_10           = "s1_inx_10"
     S1_COMPLETE         = "s1_complete"
     S1_RETRY_SCAN_HOME  = "s1_retry_scan_home"
@@ -288,6 +287,12 @@ class CartridgeSystem(Node):
         self.create_subscription(Bool,   '/robot/done_tray_output',          self._cb_done_tray_output,     qos)
         self.create_subscription(Bool,   '/robot/done_tray_input',           self._cb_done_tray_input,      qos)
 
+        self.pub_gripper_status = self.create_publisher(Bool, '/robot/gripper_status', 10)
+        self.pub_picker_status  = self.create_publisher(Bool, '/robot/picker_status', 10)
+        self.create_subscription(Bool, '/robot/gripper_cmd', self._cb_gripper_cmd, 10)
+        self.create_subscription(Bool, '/robot/picker_cmd', self._cb_picker_cmd, 10)
+        self.create_subscription(Bool,   '/robot/done_tray_input',           self._cb_done_tray_input,      qos)
+
         self.create_subscription(String, '/providesystem/gui_confirm',       self._cb_gui_confirm,        qos)
         self.create_subscription(String, '/providesystem/jog_cmd',           self._cb_jog,                qos)
         qos_sim = QoSProfile(depth=10)
@@ -317,6 +322,12 @@ class CartridgeSystem(Node):
         self.get_logger().info("CartridgeSystem node started")
 
     def _safe_control_loop(self):
+        """
+        Wrapper bảo vệ cho vòng lặp điều khiển chính (20Hz, timer 0.05s).
+        Bắt mọi exception không mong muốn và chuyển hệ thống sang trạng thái ERROR
+        thay vì để node bị crash. Giúp hệ thống không bị treo hoàn toàn khi có lỗi
+        bất ngờ trong logic state machine.
+        """
         try:
             self._control_loop()
         except Exception as e:
@@ -330,6 +341,15 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
     def _connect_hardware(self):
+        """
+        Khởi động kết nối song song đến tất cả phần cứng khi node start:
+          - 5 servo Festo CMMT-AS qua Modbus TCP (edcon library)
+          - IO Module 1 (Festo CPX-AP, IP: config.io_ip) — cảm biến S1–S16, cylinder 1/2
+          - IO Module 2 (IP: config.io_ip_2) — cảm biến S17–S24 (output side)
+        Mỗi thiết bị kết nối trong thread riêng (timeout 15s).
+        Sau khi xong: khởi động thread _servo_reconnect_loop và _io_bg_loop để
+        tự động reconnect khi mất kết nối.
+        """
         threads = []
 
         if EDCON_AVAILABLE:
@@ -369,11 +389,32 @@ class CartridgeSystem(Node):
             threading.Thread(target=self._io_bg_loop, daemon=True, name="io_bg").start()
 
     def _connect_io(self, idx: int, ip: str):
+        """
+        Kết nối đến IO Module Festo CPX-AP qua EtherNet/IP (tối đa 3 lần thử).
+        idx=1 → Module chính (S1–S16, valve cylinder 1/2, gripper, picker)
+        idx=2 → Module phụ output side (S17–S24)
+        Khi kết nối Module 1 thành công: reset tất cả valve về 0V để đảm bảo
+        trạng thái an toàn (cylinder retracted) ngay khi khởi động node.
+        """
         for attempt in range(1, 4):
             try:
                 mod = CpxAp(ip_address=ip, cycle_time=0.5)
                 if idx == 1:
                     self.io_module = mod
+                    # Initialize valve states (module 3) to 0V
+                    try:
+                        if len(mod.modules) > 3:
+                            v_mod = mod.modules[3]
+                            if v_mod.is_function_supported("read_channels"):
+                                ch = v_mod.read_channels()
+                                if len(ch) > 1 and (ch[0] or ch[1]):
+                                    v_mod.reset_channel(0)
+                                    v_mod.reset_channel(1)
+                                if len(ch) > 3 and (ch[2] or ch[3]):
+                                    v_mod.reset_channel(2)
+                                    v_mod.reset_channel(3)
+                    except Exception as ve:
+                        self.get_logger().warn(f"Failed to init valves: {ve}")
                 else:
                     self.io_module_2 = mod
                 self.get_logger().info(f"IO {idx} {ip} OK")
@@ -385,6 +426,16 @@ class CartridgeSystem(Node):
         self.get_logger().error(f"IO {idx} module failed — sensor reads will be False")
 
     def _connect_servo(self, sid: int, ip: str, attempts: int = 5) -> bool:
+        """
+        Kết nối đến một servo Festo CMMT-AS qua Modbus TCP.
+        Các bước sau khi kết nối:
+          1. Đọc/ghi PNU 3490 → đặt telegram group = 111 (yêu cầu của edcon)
+          2. Đọc base_velocity từ firmware FAS
+          3. Đọc PNU 11352 (FAS JOG velocity v1) → lưu vào _fas_jog_vel[sid] và
+             cập nhật _jog_velocity_ms nếu chưa được khởi tạo từ FAS
+          4. Acknowledge faults để drive sẵn sàng nhận lệnh
+        Trả về True nếu kết nối thành công, False nếu hết số lần thử.
+        """
         for attempt in range(1, attempts + 1):
             try:
                 t_ms = int(getattr(self.config, 'modbus_timeout_ms', 3000))
@@ -421,6 +472,14 @@ class CartridgeSystem(Node):
         return False
 
     def _servo_reconnect_loop(self):
+        """
+        Thread nền chạy vô tận để giám sát và tự động reconnect servo.
+        Mỗi 10s (khi đủ kết nối) hoặc 5s (khi thiếu), thực hiện:
+          - Với servo chưa kết nối: thử _connect_servo(attempts=1)
+          - Với servo đang kết nối: ping bằng current_position()
+        Nếu ping thất bại 2 lần liên tiếp → xóa servo khỏi dict và reconnect.
+        Gửi thông báo GUI khi mất/khôi phục kết nối.
+        """
         consecutive_fail: dict = {}
         while rclpy.ok():
             all_connected = all(sid in self.servos for sid in self.config.servo_ips)
@@ -448,6 +507,11 @@ class CartridgeSystem(Node):
                             self._notify('info', f'S{sid} ket noi lai', f'S{sid} OK')
 
     def destroy_node(self):
+        """
+        Dọn dẹp tài nguyên khi node bị shutdown (Ctrl+C hoặc ros2 node kill).
+        Dừng thread đọc vị trí, gửi lệnh stop + shutdown đến từng servo,
+        và giải phóng kết nối IO module. Được ROS2 executor gọi tự động.
+        """
         self._pos_thread_stop = True
         for sid, mot in list(self.servos.items()):
             try:
@@ -475,6 +539,14 @@ class CartridgeSystem(Node):
     # ── IO background reader ──────────────────────────────────────
 
     def _io_bg_loop(self):
+        """
+        Thread nền đọc trạng thái toàn bộ IO module với chu kỳ 50ms.
+        Đọc tất cả channel của Module 1 và Module 2 vào cache (_io_sensor_cache,
+        _io_sensor_cache_2) để vòng lặp điều khiển chính không bị block bởi
+        latency Modbus/EtherNet/IP.
+        Nếu lỗi liên tiếp >= 3 lần → đánh dấu module không sẵn sàng (_io_ready=False)
+        và tự động spawn thread reconnect.
+        """
         fail1, fail2 = 0, 0
         while rclpy.ok():
             # Module 1
@@ -522,12 +594,14 @@ class CartridgeSystem(Node):
             time.sleep(0.05)
 
     def _reconnect_io1(self):
+        """Reconnect IO Module 1 sau 5s delay (tránh flood nếu lỗi liên tục)."""
         time.sleep(5.0)
         try:
             self.io_module = CpxAp(ip_address=self.config.io_ip)
         except Exception: pass
 
     def _reconnect_io2(self):
+        """Reconnect IO Module 2 sau 5s delay."""
         time.sleep(5.0)
         try:
             self.io_module_2 = CpxAp(ip_address=getattr(self.config, 'io_ip_2', "192.168.27.254"))
@@ -597,7 +671,16 @@ class CartridgeSystem(Node):
 
     # ── Non-blocking servo motion ─────────────────────────────────
 
-    def _nb_move(self, servo_id: int, pos_mm: float, vel: int = 30) -> bool:
+    def _nb_move(self, servo_id: int, pos_mm: float, vel: int = 30, continuous_update: bool = False) -> bool:
+        """
+        Gửi lệnh di chuyển tuyệt đối non-blocking đến servo (không chờ đến đích).
+        Kiểm tra giới hạn phần mềm (servo_limits) và yêu cầu đã homed trước khi gửi.
+        pos_mm: vị trí đích tính từ điểm zero (sau homing), đơn vị mm.
+        vel: tốc độ mm/s (mặc định 30).
+        Sau khi gửi lệnh: đặt _ignore_arrived_X trong 0.5s để tránh
+        target_position_reached() trả True sai ngay khi bắt đầu di chuyển.
+        Trả về False nếu vượt giới hạn hoặc chưa homed, True nếu thành công.
+        """
         limit = self._conf('servo_limits', {}).get(servo_id, 999.0)
         if pos_mm > limit:
             self.get_logger().error(f"S{servo_id}: {pos_mm}mm > limit {limit}mm")
@@ -613,7 +696,11 @@ class CartridgeSystem(Node):
             counts = offset + int(pos_mm * COUNTS_PER_MM)
             self._ensure_ready(mot, servo_id)
             with self._servo_lock:
+                if continuous_update and hasattr(mot, 'configure_continuous_update'):
+                    mot.configure_continuous_update(True)
                 mot.position_task(int(counts), int(vel), absolute=True, nonblocking=True)
+                if continuous_update and hasattr(mot, 'configure_continuous_update'):
+                    mot.configure_continuous_update(False)
             if servo_id == 1: self._inx_moving = True
             elif servo_id == 2: self._iny_moving = True
             setattr(self, f'_ignore_arrived_{servo_id}', time.time() + 0.5)
@@ -623,6 +710,12 @@ class CartridgeSystem(Node):
             return False
 
     def _arrived(self, servo_id: int) -> bool:
+        """
+        Kiểm tra servo đã đến đích chưa (target_position_reached từ FAS firmware).
+        Trả về False trong 0.5s đầu sau khi gửi lệnh (_ignore_arrived_X)
+        để tránh false-positive khi drive chưa kịp bắt đầu di chuyển.
+        Nếu servo không kết nối → trả về True (không block flow).
+        """
         if time.time() < getattr(self, f'_ignore_arrived_{servo_id}', 0.0):
             return False
         mot = self.servos.get(servo_id)
@@ -639,6 +732,10 @@ class CartridgeSystem(Node):
             return False
 
     def _stop(self, servo_id: int):
+        """
+        Dừng ngay servo (stop_motion_task) và reset flag đang di chuyển.
+        Dùng khi nhấn STOP, ABORT, hoặc timeout bước.
+        """
         mot = self.servos.get(servo_id)
         if mot:
             try:
@@ -650,6 +747,11 @@ class CartridgeSystem(Node):
         if servo_id == 2: self._iny_moving = False
 
     def _pos(self, servo_id: int) -> Optional[float]:
+        """
+        Đọc vị trí hiện tại của servo (mm, tính từ zero_offset sau homing).
+        Công thức: (encoder_counts - zero_offset) / COUNTS_PER_MM
+        Trả về 0.0 nếu servo không kết nối, None nếu có lỗi đọc.
+        """
         mot = self.servos.get(servo_id)
         if not mot:
             return 0.0
@@ -662,6 +764,11 @@ class CartridgeSystem(Node):
             return None
 
     def _jog(self, servo_id: int, forward: bool):
+        """
+        Phát lệnh JOG liên tục đến servo (duration=0.0 = giữ cho đến khi có lệnh stop).
+        forward=True → chiều dương (xa home), forward=False → chiều âm (về home).
+        Chỉ dùng trong MANUAL mode khi operator điều khiển từ GUI.
+        """
         mot = self.servos.get(servo_id)
         if not mot:
             return
@@ -673,6 +780,13 @@ class CartridgeSystem(Node):
             self.get_logger().error(f"S{servo_id} jog error: {e}")
 
     def _ensure_ready(self, mot, servo_id: int, timeout: float = 3.0):
+        """
+        Đảm bảo drive sẵn sàng nhận lệnh chuyển động:
+          1. acknowledge_faults() — xóa lỗi cũ trên drive (giống bấm ACK trong FAS)
+          2. enable_powerstage() — bật nguồn stage
+          3. Chờ ready_for_motion() = True trong timeout giây
+        Lock được giữ ngắn nhất có thể để STOP có thể acquire _servo_lock ngay.
+        """
         # Short lock holds — tránh race condition trên Modbus socket
         acquired = self._servo_lock.acquire(timeout=1.0)
         if acquired:
@@ -699,6 +813,11 @@ class CartridgeSystem(Node):
     # ── Cylinders ─────────────────────────────────────────────────
 
     def _set_do(self, channel: int, state: bool) -> bool:
+        """
+        Ghi giá trị digital output lên IO Module 1 (set/reset một channel).
+        Duyệt qua các module con của CPX-AP và ghi vào module đầu tiên hỗ trợ set_channel.
+        Trả về False nếu IO module không kết nối.
+        """
         if not self.io_module: return False
         with self._io_bg_lock:
             for mod in self.io_module.modules:
@@ -711,7 +830,12 @@ class CartridgeSystem(Node):
         return False
 
     def _cyl1_extend(self) -> bool:
-        self.get_logger().info("Cyl1 EXTEND (ch5)")
+        """
+        Đẩy xi lanh khí nén 1 ra (EXTEND): reset kênh retract → set kênh extend.
+        Cylinder 1 dùng để giữ/đẩy khay tray trong STATE 1/2.
+        Channel mặc định: retract=4, extend=5 (cấu hình trong config YAML).
+        """
+        self.get_logger().info(f"Cyl1 EXTEND (ch{self._conf('cylinder1_extend_channel', 5)})")
         io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
         if io:
             try:
@@ -724,7 +848,11 @@ class CartridgeSystem(Node):
         return False
 
     def _cyl1_retract(self) -> bool:
-        self.get_logger().info("Cyl1 RETRACT (ch4)")
+        """
+        Thu xi lanh 1 về (RETRACT): reset kênh extend → set kênh retract.
+        Gọi khi kết thúc STATE 1/2, STOP khẩn cấp, hoặc khởi động node.
+        """
+        self.get_logger().info(f"Cyl1 RETRACT (ch{self._conf('cylinder1_retract_channel', 4)})")
         io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
         if io:
             try:
@@ -737,6 +865,11 @@ class CartridgeSystem(Node):
         return False
 
     def _cyl2_extend(self) -> bool:
+        """
+        Đẩy xi lanh 2 ra (EXTEND) — dùng trong STATE 4 để giữ khay output.
+        Channel mặc định: retract=8, extend=9.
+        Yêu cầu IO module sẵn sàng (_io_ready=True) trước khi gửi lệnh.
+        """
         io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
         if self._io_ready and io:
             try:
@@ -749,6 +882,9 @@ class CartridgeSystem(Node):
         return False
 
     def _cyl2_retract(self) -> bool:
+        """
+        Thu xi lanh 2 về (RETRACT). Gọi khi hoàn thành STATE 4 hoặc STOP khẩn cấp.
+        """
         io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
         if self._io_ready and io:
             try:
@@ -763,12 +899,21 @@ class CartridgeSystem(Node):
     # ── Helpers ──────────────────────────────────────────────────
 
     def _enter(self, next_state: SystemState):
+        """
+        Chuyển trạng thái GLOBAL (self.state) và log chuyển tiếp.
+        Xóa _guide_logged khi đổi state để các log "chỉ in 1 lần" được reset.
+        """
         self.get_logger().info(f"[GLOBAL] -> {next_state.name}")
         if next_state != self.state:
             self._guide_logged.clear()
         self.state = next_state
 
     def _enter_in(self, next_state: SystemState):
+        """
+        Chuyển trạng thái state machine phụ INPUT (state_in).
+        Reset _cmd_sent_in và các biến step-timer để bước tiếp theo bắt đầu sạch.
+        Dùng cho toàn bộ luồng STATE 1 và STATE 2.
+        """
         self.get_logger().info(f"[IN] -> {next_state.name}")
         self.state_in        = next_state
         self._cmd_sent_in    = False
@@ -776,6 +921,11 @@ class CartridgeSystem(Node):
         self._step_timeout_in = 0.0
 
     def _enter_s3(self, next_state: SystemState):
+        """
+        Chuyển trạng thái state machine phụ S3 (state_s3).
+        Reset _cmd_sent_s3 và step-timer cho bước tiếp theo.
+        Dùng cho toàn bộ luồng STATE 3 (Platform/Servo3 cấp khay vào vị trí feed).
+        """
         self.get_logger().info(f"[S3] -> {next_state.name}")
         self.state_s3        = next_state
         self._cmd_sent_s3    = False
@@ -783,6 +933,11 @@ class CartridgeSystem(Node):
         self._step_timeout_s3 = 0.0
 
     def _enter_s4(self, next_state: SystemState):
+        """
+        Chuyển trạng thái state machine phụ S4 (state_s4).
+        Reset _cmd_sent_s4 và step-timer cho bước tiếp theo.
+        Dùng cho toàn bộ luồng STATE 4 (OutX/OutY thay khay output).
+        """
         self.get_logger().info(f"[S4] -> {next_state.name}")
         self.state_s4        = next_state
         self._cmd_sent_s4    = False
@@ -790,17 +945,30 @@ class CartridgeSystem(Node):
         self._step_timeout_s4 = 0.0
 
     def _error(self, msg: str):
+        """
+        Chuyển hệ thống sang trạng thái ERROR, log lỗi và gửi thông báo GUI.
+        Toàn bộ state machine dừng lại cho đến khi operator nhấn STOP → START.
+        """
         self.get_logger().error(f"ERROR: {msg}")
         self._notify('error', 'ERROR', msg)
         self._enter(SystemState.ERROR)
 
     def _conf(self, key: str, default: Any = 0.0) -> Any:
+        """
+        Đọc một giá trị config an toàn, trả về default nếu key không tồn tại.
+        Tránh AttributeError khi config chưa có key mới (backward compatibility).
+        """
         try:
             return getattr(self.config, key, default)
         except Exception:
             return default
 
     def _notify(self, level: str, title: str, detail: str = ""):
+        """
+        Gửi thông báo đến GUI qua topic /providesystem/gui_notify (JSON).
+        level: 'info' | 'warn' | 'error' | 'silent_ok'
+        Throttle 0.5s/title để không flood GUI với cùng một thông báo lặp lại.
+        """
         now = time.time()
         if now - self._notify_throttle.get(title, 0) < 0.5:
             return
@@ -813,14 +981,29 @@ class CartridgeSystem(Node):
             pass
 
     def _log_once(self, key: str, msg: str):
+        """
+        Log một message chỉ một lần trong mỗi trạng thái (dùng key làm ID).
+        _guide_logged bị xóa mỗi khi state thay đổi, nên message sẽ xuất hiện
+        lại ở trạng thái mới. Tránh spam log khi hệ thống đang chờ điều kiện.
+        """
         if key not in self._guide_logged:
             self._guide_logged.add(key)
             self.get_logger().info(f"[guide] {msg}")
 
     def _find_nearest_row_abs(self, pos_mm: float, row_dict: dict) -> int:
+        """
+        Tìm row gần nhất với vị trí pos_mm trong bảng row_dict {row: position_mm}.
+        Dùng khi InY scan để quyết định row nào của stack tray đang ở vị trí đó.
+        """
         return min(row_dict, key=lambda r: abs(row_dict[r] - pos_mm))
 
     def _zone_to_row(self, trigger_pos: float, zone_table: dict) -> int:
+        """
+        Ánh xạ vị trí trigger_pos (mm) vào row number theo bảng zone_table.
+        zone_table: {row: [min_mm, max_mm]} — mỗi row có một khoảng vị trí.
+        Dùng khi S4 bật (cảm biến scan stack) để xác định khay đang ở row nào.
+        Trả về row 1 làm fallback nếu không khớp zone nào.
+        """
         for row, vals in zone_table.items():
             if len(vals) >= 2 and min(vals[0], vals[1]) <= trigger_pos <= max(vals[0], vals[1]):
                 return row
@@ -838,10 +1021,23 @@ class CartridgeSystem(Node):
     #     return target_pos, occupied_row, is_full
 
     def _iny_safe(self) -> bool:
+        """
+        Kiểm tra InY đang ở vùng an toàn (≤ iny_safe_zone mm).
+        Interlock: InX chỉ được phép di chuyển khi InY < 50mm (safe zone)
+        để tránh va chạm giữa hai trục.
+        """
         p = self._pos(2)
         return p is not None and p <= self.config.iny_safe_zone
 
     def _can_start_s1(self) -> bool:
+        """
+        Điều kiện để auto-trigger STATE 1 (chỉ AUTO/AI mode):
+          - Đã homing (zero_offset có giá trị)
+          - Robot không báo bận (_motion_busy=False)
+          - Có khay trên băng tải (S1 OR S2 OR S3 ON)
+          - Vị trí cấp khay trống (S7_TRAY_AT_ROBOT=OFF)
+          - Cylinder 1 đã thu về (S9 ON, S10 OFF)
+        """
         """Điều kiện để bắt đầu STATE 1 (sensor theo mode hiện tại)."""
         if self.operation_mode not in ['auto', 'ai'] or not self.zero_offset or self._motion_busy:
             return False
@@ -852,10 +1048,24 @@ class CartridgeSystem(Node):
         return has_tray and place_ok and cyl1_ret_ok and cyl1_ext_ok
 
     def _can_start_s2a(self) -> bool:
+        """
+        Điều kiện để trigger STATE 2 (cả AUTO lẫn MANUAL):
+          - Đã homing
+          - Robot đã báo xong khay input (_input_tray_done=True, set bởi _cb_done_tray_input)
+          - Khay đang ở vị trí robot (S7_TRAY_AT_ROBOT=ON)
+          - Robot không báo bận
+        """
         return (bool(self.zero_offset) and getattr(self, '_input_tray_done', False)
                 and self.sensor(S7_TRAY_AT_ROBOT) and not self._motion_busy)
 
     def _can_start_s3(self) -> bool:
+        """
+        Điều kiện để auto-trigger STATE 3 (chỉ AUTO/AI mode):
+          - Đã homing và robot không bận
+          - S18_FEED_OK=OFF (vị trí feed đang trống)
+          - S18 đã OFF liên tục ít nhất 5 giây (debounce — tránh trigger ngay sau khi
+            robot lấy khay, đợi hệ thống ổn định trước khi cấp khay mới)
+        """
         if self.operation_mode not in ['auto', 'ai'] or self._motion_busy:
             return False
             
@@ -872,12 +1082,28 @@ class CartridgeSystem(Node):
                 and s10_off_duration >= 5.0)
 
     def _can_start_s4(self) -> bool:
+        """
+        Điều kiện để trigger STATE 4 (thay khay output):
+          - Đã homing
+          - _s4_trigger=True (set bởi robot qua /robot/done_tray_output)
+          - S18_FEED_OK=ON (có khay ở vị trí feed — đảm bảo output tray đang được dùng)
+          - Robot không báo bận
+        """
         return bool(self.zero_offset) and self._s4_trigger and self.sensor(S18_FEED_OK) and not self._motion_busy
 
     def _pub_cartridge_busy(self, busy: bool):
+        """
+        Publish trạng thái bận của hệ thống nạp cartridge lên /cartridge/busy.
+        Robot node subscribe topic này để biết khi nào hệ thống nạp đang chạy.
+        """
         self.pub_busy_cartridge.publish(Bool(data=busy))
 
     def _cb_motion_busy(self, msg: Bool):
+        """
+        Nhận trạng thái bận của robot từ /robot/motion_busy.
+        Cập nhật _motion_busy và timestamp heartbeat.
+        Lần đầu nhận → set _robot_connected=True, kích hoạt interlock an toàn.
+        """
         self._motion_busy = msg.data
         self._robot_last_seen = time.time()
         if not self._robot_connected:
@@ -885,6 +1111,8 @@ class CartridgeSystem(Node):
             self.get_logger().info("[ROBOT] Robot node connected — interlock ACTIVE")
 
     def _cb_done_tray_output(self, msg: Bool):
+        """Nhận tín hiệu từ robot báo khay output đã đầy → set cờ _s4_trigger để
+        kích hoạt STATE 4 thay khay output trong vòng lặp tiếp theo."""
         """Robot báo khay output đã đầy → trigger State4 thay khay."""
         if msg.data:
             self._s4_trigger = True
@@ -910,6 +1138,10 @@ class CartridgeSystem(Node):
 
 
     def _outy_safe(self) -> bool:
+        """
+        Kiểm tra OutY đang ở vùng an toàn (≤ outy_safe_zone mm).
+        Điều kiện cần trước khi STATE 4 bắt đầu di chuyển OutX.
+        """
         p = self._pos(5)
         return p is not None and p <= self.config.outy_safe_zone
 
@@ -918,6 +1150,22 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
     def _home_all(self) -> bool:
+        """
+        Thực hiện homing toàn bộ 5 servo theo thứ tự an toàn:
+          InY → OutY → InX → OutX → Platform (Servo3)
+        Thứ tự này đảm bảo trục dọc về trước, tránh va chạm với vật thể.
+
+        Logic mỗi servo:
+          - Nếu đã homed trước đó (_servo_homed_once) và vị trí gần 0 (< 5mm):
+            chỉ di chuyển về 0 bằng position_task (nhanh, không cần re-reference)
+          - Ngược lại: gọi referencing_task() theo phương pháp trong FAS firmware
+            (limit switch / encoder index / torque), chờ referenced()=True
+          - Kiểm tra drive thực sự di chuyển (Δ > 0.5mm) để phát hiện lỗi cơ học
+
+        Hỗ trợ abort: _homing_abort Event có thể được set bởi _cb_stop() để
+        dừng homing ngay lập tức tại bất kỳ bước nào.
+        Chạy trong background thread (_do_homing), kết quả báo qua _homing_done_event.
+        """
         """[V8] Blocking home pattern — mô phỏng dosing-machine code đã chạy thật.
         Dùng referencing_task() blocking (không nonblocking=True), home tuần tự,
         track _servo_homed_once để skip re-home nếu đã homed gần zero.
@@ -1029,6 +1277,11 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
     def _sync_mode_jog(self):
+        """
+        Publish mode hiện tại lên /providesystem/current_mode để GUI cập nhật.
+        Nếu đang trong MANUAL mode và đã homed → publish "jog" (GUI hiển thị nút JOG).
+        Ngược lại → publish tên mode thực (auto/manual/ai).
+        """
         msg = String()
         # If in manual and homed, we are in 'jog'. Else just the operation_mode.
         if getattr(self, '_jog_mode', False) and self.operation_mode == 'manual':
@@ -1038,6 +1291,13 @@ class CartridgeSystem(Node):
         self.pub_current_mode.publish(msg)
 
     def _cb_start(self, msg: Bool):
+        """
+        Xử lý lệnh START từ /system/start_button (GUI hoặc operator nhấn nút).
+        - AUTO/AI mode và chưa homed → chuyển sang HOMING tự động
+        - AUTO/AI mode và đã homed → chuyển về IDLE, bắt đầu auto-trigger STATE
+        - MANUAL mode → vào chế độ JOG (giữ nguyên state, không tự động chạy STATE)
+        Bỏ qua nếu đang trong HOMING_RUNNING để tránh xung đột.
+        """
         if not msg.data or self.state == SystemState.HOMING_RUNNING:
             return
 
@@ -1066,6 +1326,17 @@ class CartridgeSystem(Node):
             self.get_logger().info("[START] Manual mode — keeping current state")
 
     def _cb_stop(self, msg: Bool):
+        """
+        Xử lý lệnh STOP khẩn cấp từ /system/stop_button.
+        Thực hiện theo thứ tự an toàn:
+          1. Set _homing_abort để dừng thread homing ngay lập tức
+          2. Dừng tất cả servo (stop_motion_task)
+          3. Thu về cả 2 cylinder
+          4. Reset toàn bộ state machine về IDLE
+          5. Chuyển sang MANUAL mode + JOG sẵn sàng
+        zero_offset được giữ nguyên — START tiếp theo không cần re-home.
+        Gửi mode MANUAL (code 3) đến robot node để đồng bộ.
+        """
         if not msg.data:
             return
         # Signal homing thread to abort FIRST — before acquiring servo_lock in _stop()
@@ -1099,15 +1370,79 @@ class CartridgeSystem(Node):
         self._notify('warn', 'STOP', 'Dừng hệ thống — JOG sẵn sàng')
 
     def _cb_pause(self, msg: Bool):
+        """
+        Tạm dừng vòng lặp điều khiển (_system_paused=True).
+        Vòng lặp trả về ngay mà không xử lý state nào.
+        RESUME: nhấn START để tiếp tục (xóa _system_paused).
+        """
         if not msg.data:
             return
         self._system_paused = True
         self._notify('warn', 'PAUSE', 'Nhan RESUME de tiep tuc')
 
+    def _cb_gripper_cmd(self, msg: Bool):
+        """
+        Điều khiển gripper (kẹp) qua IO Module 1 (tự động dò valve module):
+          msg.data=True  → Đóng gripper (set ch1, reset ch0)
+          msg.data=False → Mở gripper (reset cả ch0 và ch1)
+        Publish trạng thái lên /robot/gripper_status để robot node biết.
+        """
+        if not self.io_module: return
+        with self._io_bg_lock:
+            try:
+                for valve_mod in self.io_module.modules:
+                    if valve_mod.is_function_supported("set_channel"):
+                        if msg.data: # Close
+                            valve_mod.reset_channel(0)
+                            valve_mod.set_channel(1)
+                            self.pub_gripper_status.publish(Bool(data=True))
+                        else: # Open
+                            valve_mod.reset_channel(1)
+                            valve_mod.reset_channel(0)
+                            self.pub_gripper_status.publish(Bool(data=False))
+                        break
+            except Exception as e:
+                self.get_logger().error(f"Gripper cmd error: {e}")
+
+    def _cb_picker_cmd(self, msg: Bool):
+        """
+        Điều khiển picker (hút chân không) qua IO Module 1 (tự động dò valve module):
+          msg.data=True  → Kích hoạt picker (set ch3, reset ch2)
+          msg.data=False → Tắt picker (reset cả ch2 và ch3)
+        Publish trạng thái lên /robot/picker_status.
+        """
+        if not self.io_module: return
+        with self._io_bg_lock:
+            try:
+                for valve_mod in self.io_module.modules:
+                    if valve_mod.is_function_supported("set_channel"):
+                        if msg.data: # Close
+                            valve_mod.reset_channel(2)
+                            valve_mod.set_channel(3)
+                            self.pub_picker_status.publish(Bool(data=True))
+                        else: # Open
+                            valve_mod.reset_channel(3)
+                            valve_mod.reset_channel(2)
+                            self.pub_picker_status.publish(Bool(data=False))
+                        break
+            except Exception as e:
+                self.get_logger().error(f"Picker cmd error: {e}")
+
     def _cb_gui_confirm(self, msg: String):
+        """
+        Nhận xác nhận từ operator qua GUI (topic /providesystem/gui_confirm).
+        Set _gui_confirmed=True để state machine tiếp tục từ trạng thái đang chờ
+        xác nhận (S1_WAIT_GUI_CONFIRM, S3_WAIT_GUI_CONFIRM).
+        """
         self._gui_confirmed = True
 
     def _cb_robot_mode(self, msg: Int32):
+        """
+        Đồng bộ mode từ robot node qua /robot/set_mode.
+        Mapping: 1=auto, 2=ai, 3=manual.
+        Khi mode thay đổi: xóa log guide và reset sim sensor để tránh
+        dữ liệu cũ ảnh hưởng sang mode mới.
+        """
         mapping = {1: 'auto', 2: 'ai', 3: 'manual'}
         requested = mapping.get(msg.data, 'manual')
         if requested != self.operation_mode:
@@ -1118,6 +1453,11 @@ class CartridgeSystem(Node):
             self._sync_mode_jog()
 
     def _cb_mode(self, msg: String):
+        """
+        Thay đổi operation mode từ GUI qua /providesystem/set_operation_mode.
+        Chỉ cho phép đổi mode khi hệ thống ở IDLE hoặc ERROR (không đang chạy STATE).
+        Khi đổi mode: reset sim sensor, sync GUI, và thông báo đến robot node.
+        """
         requested = msg.data.strip().lower()
         if requested not in ('auto', 'manual', 'ai'):
             self._notify('warn', f'Mode khong hop le: {requested}', '')
@@ -1143,6 +1483,20 @@ class CartridgeSystem(Node):
             self.pub_robot_mode.publish(robot_msg)
 
     def _cb_jog(self, msg: String):
+        """
+        Xử lý lệnh JOG từ GUI qua /providesystem/jog_cmd.
+        Định dạng: "<servo_id> <cmd>" | "home <servo_id>" | "clear <servo_id>"
+
+        Lệnh hỗ trợ:
+          "clear <sid>"      → Acknowledge faults (bất kỳ mode nào)
+          "<sid> stop"       → Dừng servo
+          "<sid> +"          → JOG chiều dương (chỉ MANUAL+IDLE)
+          "<sid> -"          → JOG chiều âm
+          "<sid> move <pos>" → Di chuyển đến pos mm
+          "home <sid>"       → Homing thủ công 1 servo (thread riêng)
+
+        Bị khóa nếu đang AUTO mode hoặc bất kỳ state machine nào đang chạy.
+        """
         parts = msg.data.strip().split()
         if not parts: return
         cmd0 = parts[0].lower()
@@ -1212,8 +1566,12 @@ class CartridgeSystem(Node):
 
     def _cb_sim(self, msg: String):
         """
-        [V7-1] Sim sensor chỉ hoạt động trong MANUAL mode.
-        AUTO mode → reject.
+        Nhận lệnh giả lập cảm biến từ GUI qua /providesystem/sim_sensor (chỉ MANUAL mode).
+        Định dạng: "<sensor_id>:<0|1>" hoặc "all:<0|1>" hoặc "clear"
+        Ví dụ: "1:1" → set S1=ON, "7:0" → set S7=OFF, "all:1" → bật hết sensor.
+        Dữ liệu lưu vào _sim_sensors, được sensor() dùng thay cho IO module thực.
+        [V7-1] Chỉ hoạt động trong MANUAL mode — AUTO mode bị reject để tránh
+        nhầm lẫn giữa dữ liệu thực và giả lập.
         """
         if self.operation_mode != 'manual':
             self._notify('warn', 'Sim sensor bi khoa', 'Chuyen MANUAL mode')
@@ -1234,6 +1592,13 @@ class CartridgeSystem(Node):
             pass
 
     def _cb_goto_state(self, msg: String):
+        """
+        Nhận lệnh chuyển state thủ công từ GUI qua /providesystem/goto_state.
+        Lệnh hỗ trợ: HOMING, IDLE, ABORT_TO_JOG, STATE1/S1, STATE2/S2, STATE3/S3, STATE4/S4.
+        STATE1 chỉ cho phép trong MANUAL mode (AUTO tự trigger).
+        STATE2 cho phép cả hai mode nếu điều kiện cảm biến hợp lệ.
+        STATE3/4 cho phép bất kỳ mode nào nếu chưa đang chạy và đã homed.
+        """
         cmd = msg.data.strip().upper()
         if cmd == 'HOMING':
             if self.state != SystemState.HOMING_RUNNING:
@@ -1355,6 +1720,12 @@ class CartridgeSystem(Node):
         self._notify('warn', f'goto_state: khong biet "{cmd}"', '')
 
     def _s1_abort(self, reason: str):
+        """
+        Hủy bỏ STATE đang chạy và đưa hệ thống về IDLE an toàn.
+        Dùng khi: operator nhấn ABORT_TO_JOG, timeout bước, hoặc lỗi cảm biến.
+        Dừng tất cả servo, thu cylinder, reset mọi cờ state, bật JOG sẵn sàng.
+        Khác với _cb_stop: không chuyển sang MANUAL mode vĩnh viễn.
+        """
         self._pub_cartridge_busy(False)
         self._s1_scan_noise_retry = 0
         self._s4_prev_in         = False
@@ -1375,6 +1746,13 @@ class CartridgeSystem(Node):
         self._sync_mode_jog()
 
     def _cb_update_config(self, msg: String):
+        """
+        Cập nhật config runtime từ GUI qua /providesystem/update_config (JSON).
+        Payload: {"key": "tên_config", "data": "giá_trị"}
+        Hỗ trợ cập nhật số, string, dict (row positions) mà không cần restart node.
+        Sau khi cập nhật: lưu vào file YAML (config.save_to_file()).
+        Ví dụ: thay đổi tốc độ scan, vị trí row, timeout — có hiệu lực ngay.
+        """
         try:
             import json
             payload = json.loads(msg.data)
@@ -1404,6 +1782,12 @@ class CartridgeSystem(Node):
             self.get_logger().warn(f"update_config error: {e}")
 
     def _cb_get_config(self, msg: String):
+        """
+        Phục vụ yêu cầu đọc config từ GUI qua /providesystem/get_config.
+        Khi nhận "request": đọc file YAML config, chuyển sang JSON và publish
+        lên /providesystem/config_data (latching QoS — GUI mới join vẫn nhận được).
+        GUI dùng để hiển thị/chỉnh sửa config trực tiếp trên màn hình.
+        """
         if msg.data.strip() == 'request':
             try:
                 import json
@@ -1417,6 +1801,12 @@ class CartridgeSystem(Node):
                 self.get_logger().warn(f"get_config error: {e}")
 
     def _cb_set_target_row(self, msg: String):
+        """
+        Đặt row đích thủ công từ GUI qua /providesystem/set_target_row.
+        Ghi đè _current_row để STATE 1 di chuyển InY đến row được chỉ định
+        thay vì row được tính tự động từ sensor scan.
+        Dùng để debug hoặc vận hành bán tự động khi cần override.
+        """
         try:
             row = int(msg.data.strip())
             valid_rows = list(self.config.iny_input_zones.keys()) if hasattr(self.config, 'iny_input_zones') else list(range(1, 6))
@@ -1434,6 +1824,17 @@ class CartridgeSystem(Node):
 
 
     def _control_loop(self):
+        """
+        Vòng lặp điều khiển chính, chạy mỗi 50ms (20Hz) qua ROS timer.
+        Thực hiện theo thứ tự:
+          1. Cập nhật watchdog tick
+          2. Kiểm tra robot heartbeat (timeout 5s → tự xả interlock)
+          3. Tracking S18 → ghi timestamp khi S18 OFF (dùng cho auto-trigger S3)
+          4. Gọi _process_state() → dispatcher toàn bộ state machine
+          5. Publish system state, sensor states
+          6. Debounce và publish input_trays_empty (sau 20 tick liên tiếp = 1s)
+        Bắt exception trong try/except riêng, chuyển sang ERROR state nếu có lỗi.
+        """
         try:
             self._watchdog_last_tick = time.time()
             if self._system_paused:
@@ -1484,15 +1885,24 @@ class CartridgeSystem(Node):
             time.sleep(1.0) # Throttle error loop if it keeps failing
 
     def _publish_sensors(self):
+        """Publish chuỗi nhị phân 22 ký tự lên /providesystem/sensors_state.
+        Mỗi ký tự = trạng thái cảm biến S1..S22 ('1'=ON, '0'=OFF) theo mode hiện tại."""
         states = "".join("1" if self.sensor(i) else "0" for i in range(1, 23))
         msg = String(); msg.data = states; self.pub_sensors.publish(msg)
 
     def _publish_state(self):
+        """Publish trạng thái state machine dạng chuỗi "<global>|<input>|<s3_or_s4>"
+        lên /system_state. GUI parse để hiển thị badge trạng thái theo thời gian thực."""
         s_out = self.state_s4.value if self.state_s4 != SystemState.IDLE else self.state_s3.value
         combined = f"{self.state.value}|{self.state_in.value}|{s_out}"
         msg = String(); msg.data = combined; self.pub_state.publish(msg)
 
     def _positions_bg_loop(self):
+        """
+        Thread nền publish vị trí servo mỗi 500ms lên /providesystem/servo_positions.
+        Chạy tách biệt khỏi control loop để Modbus read latency không block 20Hz timer.
+        Dừng khi _pos_thread_stop=True (set bởi destroy_node).
+        """
         while rclpy.ok() and not getattr(self, '_pos_thread_stop', False):
             try:
                 self._publish_positions()
@@ -1501,6 +1911,9 @@ class CartridgeSystem(Node):
             time.sleep(0.5)
 
     def _publish_positions(self):
+        """Đọc vị trí tất cả servo và publish JSON lên /providesystem/servo_positions.
+        JSON chứa {sid: mm, _jog_vel: m/s, _fas_vel: {sid: m/s}}.
+        GUI dùng để hiển thị vị trí live và tốc độ JOG hiện tại."""
         try:
             pos = {}
             for sid in self.servos:
@@ -1518,6 +1931,11 @@ class CartridgeSystem(Node):
             pass
 
     def _watchdog(self):
+        """
+        Giám sát độ trễ vòng lặp điều khiển (gọi mỗi 5s qua ROS timer riêng).
+        Nếu control loop không tick trong >3 giây → cảnh báo log + GUI notify.
+        Phát hiện tình trạng loop bị block do Modbus timeout hoặc deadlock.
+        """
         gap = time.time() - self._watchdog_last_tick
         if gap > 3.0:
             self.get_logger().error(f"WATCHDOG: loop silent {gap:.1f}s!")
@@ -1528,6 +1946,17 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
     def _process_state(self):
+        """
+        Điểm vào của toàn bộ state machine, gọi mỗi tick từ _control_loop().
+        Ưu tiên xử lý:
+          1. HOMING / HOMING_RUNNING (global state)
+          2. ERROR (global state)
+          3. Nếu bình thường → gọi song song 3 dispatcher:
+               _dispatch_input() — STATE 1 + STATE 2 (input side)
+               _dispatch_s3()    — STATE 3 (platform/servo3 feed)
+               _dispatch_s4()    — STATE 4 (output side thay khay)
+        Ba dispatcher chạy độc lập, tránh xung đột qua interlock cảm biến.
+        """
         s = self.state
         if s == SystemState.HOMING:           self._do_homing(); return
         if s == SystemState.HOMING_RUNNING:
@@ -1563,6 +1992,12 @@ class CartridgeSystem(Node):
         self._dispatch_s4()
 
     def _dispatch_input(self):
+        """
+        Dispatcher cho state machine phụ INPUT (state_in).
+        Xử lý toàn bộ STATE 1 (cấp khay input từ băng tải vào stack)
+        và STATE 2 (rút khay đã dùng ra, đưa sang side output để xử lý tiếp).
+        Gọi đúng handler function tương ứng với state hiện tại.
+        """
         s = self.state_in
         if   s == SystemState.IDLE:                self._do_idle_input()
         elif s == SystemState.S1_CONFIRM_SAFE:     self._s1_confirm_safe()
@@ -1581,7 +2016,6 @@ class CartridgeSystem(Node):
         elif s == SystemState.S1_INY_200:          self._s1_iny_200()
         elif s == SystemState.S1_WAIT_RELEASE:     self._s1_wait_release()
         elif s == SystemState.S1_WAIT_S7:         self._s1_wait_s7()
-        elif s == SystemState.S1_INY_10_FINAL:     self._s1_iny_10_final()
         elif s == SystemState.S1_INX_10:           self._s1_inx_10()
         elif s == SystemState.S1_COMPLETE:         self._s1_complete()
         elif s == SystemState.S1_RETRY_SCAN_HOME:  self._s1_retry_scan_home()
@@ -1600,6 +2034,10 @@ class CartridgeSystem(Node):
         elif s == SystemState.S2A_COMPLETE:          self._s2a_complete()
 
     def _dispatch_s3(self):
+        """
+        Dispatcher cho STATE 3: Platform/Servo3 đẩy khay từ stack ra vị trí feed (S18).
+        Chạy độc lập với _dispatch_input — có thể chạy xen kẽ STATE 1/2 nếu cần.
+        """
         s = self.state_s3
         if   s == SystemState.IDLE:                self._do_idle_s3()
         elif s == SystemState.S3_CHECK_OUTXY_SAFE: self._s3_check_outxy_safe()
@@ -1612,6 +2050,10 @@ class CartridgeSystem(Node):
         elif s == SystemState.S3_COMPLETE:         self._s3_complete()
 
     def _dispatch_s4(self):
+        """
+        Dispatcher cho STATE 4: OutX/OutY thay khay output khi khay đầy.
+        Chạy độc lập hoàn toàn với STATE 1/2/3 — dùng servo riêng (OutX S4, OutY S5).
+        """
         s = self.state_s4
         if   s == SystemState.IDLE:                self._do_idle_s4()
         elif s == SystemState.S4_CHECK_OUTY_SAFE:  self._s4_check_outy_safe()
@@ -1632,6 +2074,13 @@ class CartridgeSystem(Node):
     # ── IDLE ─────────────────────────────────────────────────────
 
     def _do_idle_input(self):
+        """
+        Trạng thái IDLE của state machine INPUT — chờ điều kiện để trigger STATE 1 hoặc 2.
+        Ưu tiên: STATE 2 (robot đã báo xong) trước STATE 1 (cấp khay mới).
+        AUTO/AI: STATE 1 auto-trigger qua _can_start_s1().
+        MANUAL: STATE 1 chỉ trigger khi operator nhấn nút (_state1_enabled set bởi GUI).
+        Log lý do đang chờ (không có khay / robot bận / vị trí cấp đang có khay).
+        """
         if not self.zero_offset or not getattr(self, '_system_running', False):
             if not self.zero_offset:
                 self._log_once("IDLE_IN_NOT_HOMED", "IDLE-IN: Chua home")
@@ -1661,6 +2110,7 @@ class CartridgeSystem(Node):
             self._log_once("IDLE_IN_BUSY", f"[IN-IDLE] Robot đang báo BẬN (/robot/motion_busy={self._motion_busy}) — chờ")
 
     def _do_idle_s3(self):
+        """Chờ điều kiện để auto-trigger STATE 3: S18 OFF liên tục 5s (vị trí feed trống)."""
         if not self.zero_offset or not getattr(self, '_system_running', False):
             return
         if self._can_start_s3():
@@ -1668,6 +2118,7 @@ class CartridgeSystem(Node):
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
 
     def _do_idle_s4(self):
+        """Chờ điều kiện để trigger STATE 4: _s4_trigger=True (robot báo khay output đầy)."""
         if not self.zero_offset or not getattr(self, '_system_running', False):
             return
         if self._can_start_s4():
@@ -1676,6 +2127,12 @@ class CartridgeSystem(Node):
             self._enter_s4(SystemState.S4_CHECK_OUTY_SAFE)
 
     def _do_homing(self):
+        """
+        Khởi động quá trình homing trong background thread để không block control loop.
+        Chuyển sang HOMING_RUNNING ngay lập tức, rồi spawn thread chạy _home_all().
+        Kết quả được báo về main thread qua _homing_done_event (threading.Event)
+        để tránh race condition khi mutate state từ thread phụ.
+        """
         self._enter(SystemState.HOMING_RUNNING)
         self._homing_done_event.clear()
         def _bg():
@@ -1686,6 +2143,7 @@ class CartridgeSystem(Node):
         threading.Thread(target=_bg, daemon=True).start()
 
     def _do_error(self):
+        """Trạng thái ERROR: log hướng dẫn phục hồi (STOP → START) mỗi lần vào state."""
         self._log_once("ERROR_STATE", "ERROR — kiem tra loi roi nhan STOP -> START")
 
     # ══════════════════════════════════════════════════════════════
@@ -1725,7 +2183,7 @@ class CartridgeSystem(Node):
             self._log_once("S1_INY_SAFE", "Step2: INY chua safe")
             return
         if not self._cmd_sent_in:
-            ok = self._nb_move(1, self.config.inx_target2)
+            ok = self._nb_move(1, self.config.inx_target2, vel=150)
             if not ok:
                 self._log_once("S1_INX_FAIL", "S1 Step2: INX fail")
                 return
@@ -1755,8 +2213,8 @@ class CartridgeSystem(Node):
 
         if not belt_end:
             if time.time() > self._30s_timeout:
-                self.get_logger().info("S3 khong ON sau 50s — INX ve home, retry")
-                self._nb_move(1, self.config.inx_home)
+                self.get_logger().info("S3 khong ON sau 50s — INX ve safe (-60mm), retry")
+                self._nb_move(1, self.config.inx_safe)
                 self._s1_scan_noise_retry = 0
                 self._s4_prev_in = False
                 self._enter_in(SystemState.S1_CONFIRM_SAFE)
@@ -1777,8 +2235,9 @@ class CartridgeSystem(Node):
             return
 
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.target_scaninp1,
-                               vel=self.config.iny_scan_vel)
+            # ok = self._nb_move(2, self.config.target_scaninp1,
+            #                    vel=self.config.iny_scan_vel)
+            ok = self._nb_move(2, self.config.target_scaninp1,vel=70)
             if not ok:
                 self._log_once("S1_SCAN_FAIL", "S1 INY scan: nb_move fail")
                 return
@@ -1795,59 +2254,22 @@ class CartridgeSystem(Node):
             self._s4_armed = True
 
         s4_now = self.sensor(S4_SCAN_STACK_P1)
-        # S4 la thuong dong (NC): cham vao khay se tu ON chuyen sang OFF -> Falling edge
+        # S4 là thường đóng (NC): chạm khay chuyển từ ON sang OFF -> Falling edge
         s4_falling = self._s4_prev_in and (not s4_now)
         self._s4_prev_in = s4_now
 
         if self._s4_armed and s4_falling:
             trigger_pos = self._pos(2) or iny
             
-            valid_min = self._conf('iny_scan_valid_min_mm', 200.0)
-            valid_max = self._conf('iny_scan_valid_max_mm', 850.0)
-
-            if not (valid_min <= trigger_pos <= valid_max):
-                self.get_logger().warn(
-                    f"[S1 SCAN] S4 falling edge nhiễu @ {trigger_pos:.1f}mm "
-                    f"(ngoài range {valid_min:.1f}..{valid_max:.1f})"
-                )
-                self._stop(2)
-                
-                if self._s1_scan_noise_retry < self._conf('s1_scan_noise_retry_limit', 1):
-                    self._s1_scan_noise_retry += 1
-                    self._notify(
-                        'warn',
-                        'S4 nhiễu',
-                        f'S4 chạm ngoài range {valid_min:.0f}-{valid_max:.0f}mm, retry lần {self._s1_scan_noise_retry}'
-                    )
-                    self._enter_in(SystemState.S1_RETRY_SCAN_HOME)
-                    return
-                
-                self._notify(
-                    'error',
-                    'S4 nhiễu 2 lần',
-                    f'INY về {self.config.iny_home:.0f}mm, INX về {self._conf("inx_noise_recovery_mm", 10.0):.0f}mm'
-                )
-                self._nb_move(2, self.config.iny_home)
-                self._nb_move(1, self._conf("inx_noise_recovery_mm", 10.0))
-                self._jog_mode = True
-                self._sync_mode_jog()
-                self._enter_in(SystemState.IDLE)
-                return
-
-            self._stop(2)
             row               = self._zone_to_row(trigger_pos, self.config.iny_input_zones)
             target_mm         = self.config.iny_input_zones[row][2]
             self._current_row = row
-            self._s1_scan_noise_retry = 0
 
             self.get_logger().info(
-                f"[S1 SCAN] S4 falling edge hợp lệ @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm)"
+                f"[S1 SCAN] S4 falling edge trigger @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm) - Moving directly"
             )
-            self._nb_move(2, target_mm, vel=self.config.iny_row_vel)
-            self._cmd_sent_in     = True
-            self._step_timeout_in = time.time() + self.config.move_timeout
-            self._s5_retry        = 0
-            self._enter_in(SystemState.S1_WAIT_STOP_S4)
+            self._s5_retry = 0
+            self._enter_in(SystemState.S1_INY_TO_ROW)
             return
 
         timed_out = time.time() > self._step_timeout_in
@@ -1907,19 +2329,6 @@ class CartridgeSystem(Node):
             self.get_logger().info("[S1 SCAN] Retry lại từ INY home")
             self._enter_in(SystemState.S1_INY_SCAN)
 
-    def _s1_wait_stop_s4(self):
-        if self._arrived(2):
-            self.get_logger().info(
-                f"[S1] InY đến row{self._current_row} OK → S1_INY_TO_ROW"
-            )
-            self._enter_in(SystemState.S1_INY_TO_ROW)
-            return
-        if time.time() > self._step_timeout_in:
-            self.get_logger().warn("[S1] S1_WAIT_STOP_S4 timeout → tiếp tục")
-            self._enter_in(SystemState.S1_INY_TO_ROW)
-            return
-        self._log_once("S1_WAIT_ROW", f"[S1] Đang di chuyển tới row{self._current_row}...")
-
     def _s1_iny_to_row(self):
         zone = self.config.iny_input_zones.get(self._current_row)
         target = zone[2] if zone else None
@@ -1928,7 +2337,7 @@ class CartridgeSystem(Node):
             self._current_row = max(valid[0], min(valid[-1], self._current_row))
             target = self.config.iny_input_zones[self._current_row][2]
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, target)
+            ok = self._nb_move(2, target, vel=self.config.iny_row_vel, continuous_update=True)
             if not ok:
                 self._log_once("S1_ROW_FAIL", f"S1: INY -> {target}mm fail")
                 return
@@ -1996,8 +2405,8 @@ class CartridgeSystem(Node):
             self._error("Fallback INY timeout")
             return
         if self._arrived(2) or self._pos(2) <= self.config.iny_home + 2.0:
-            self.get_logger().info("INY ve home safe -> INX ve home/20mm")
-            self._nb_move(1, self.config.inx_home)
+            self.get_logger().info("INY ve home safe -> INX ve safe (-60mm)")
+            self._nb_move(1, self.config.inx_safe,vel=200)
             self._enter_in(SystemState.S1_CONFIRM_SAFE)
 
     def _go_gui_confirm(self):
@@ -2011,7 +2420,7 @@ class CartridgeSystem(Node):
     def _s1_wait_gui_confirm(self):
         if not self._cmd_sent_in:
             if self._iny_safe():
-                ok = self._nb_move(1, self.config.inx_home)
+                ok = self._nb_move(1, self.config.inx_safe)
                 if ok:
                     self._cmd_sent_in = True
         if self._gui_confirmed:
@@ -2071,7 +2480,7 @@ class CartridgeSystem(Node):
 
     def _s1_iny_50(self):
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.iny_safe_zone)
+            ok = self._nb_move(2, self.config.iny_safe_zone,vel=250)
             if not ok:
                 self.get_logger().warn("S1: INY -> 50mm fail")
                 return
@@ -2116,46 +2525,19 @@ class CartridgeSystem(Node):
     def _s1_wait_s7(self):
         tray_robot, = self._snap(S7_TRAY_AT_ROBOT)
         if tray_robot:
-            self.get_logger().info("S7 ON — Khay o vi tri robot -> INY ve 10mm")
-            self._enter_in(SystemState.S1_INY_10_FINAL)
+            self.get_logger().info("S7 ON — Khay o vi tri robot -> INX ve safe")
+            self._enter_in(SystemState.S1_INX_10)
             return
         self._log_once("S1_WAIT_S7", "Cho S7 ON")
 
-    def _s1_iny_10_final(self):
-        cyl1_ret, cyl1_ext = self._snap(S9_CYL1_RETRACTED, S10_CYL1_EXTENDED)
-        if cyl1_ext or not cyl1_ret:
-            if not getattr(self, '_cmd_sent_in_cyl', False):
-                self._cyl1_retract()
-                self._cmd_sent_in_cyl = True
-                self._cyl_retry_t = time.time() + 3.0
-            if time.time() > self._cyl_retry_t:
-                self._cyl1_retract()
-                self._cyl_retry_t = time.time() + 3.0
-            self._log_once("S1_ILK_10", "Interlock: Cho S9 ON, S10 OFF truoc khi ve 10mm")
-            return
-        self._cmd_sent_in_cyl = False
-
-        if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.iny_home)
-            if not ok:
-                self.get_logger().warn("S1: INY -> 10mm fail")
-                return
-            self._cmd_sent_in     = True
-            self._step_timeout_in = time.time() + self.config.move_timeout
-        else:
-            if time.time() > self._step_timeout_in:
-                self._cmd_sent_in = False
-            elif self._arrived(2):
-                self._enter_in(SystemState.S1_INX_10)
-
     def _s1_inx_10(self):
         if not self._iny_safe():
-            self._log_once("S1_INX_WAIT_INY", f"Cho INY <= {self.config.iny_safe_zone}mm truoc INX ve home")
+            self._log_once("S1_INX_WAIT_INY", f"Cho INY <= {self.config.iny_safe_zone}mm truoc INX ve safe")
             return
         if not self._cmd_sent_in:
-            ok = self._nb_move(1, self.config.inx_home)
+            ok = self._nb_move(1, self.config.inx_safe,vel=150)
             if not ok:
-                self.get_logger().warn(f"S1: INX -> {self.config.inx_home}mm fail")
+                self.get_logger().warn(f"S1: INX -> {self.config.inx_safe}mm fail")
                 return
             self._cmd_sent_in     = True
             self._step_timeout_in = time.time() + self.config.move_timeout
@@ -2344,40 +2726,16 @@ class CartridgeSystem(Node):
         s4_now = self.sensor(S4_SCAN_STACK_P1)
         if s4_now:
             trigger_pos = self._pos(2) or iny
-            arm_mm = self.config.iny_scan_arm_mm
             
-            if trigger_pos < arm_mm:
-                # Bị nhiễu sớm (khi chưa đạt ngưỡng arm_mm)
-                self.get_logger().warn(f"[S2A Output] S4 bị nhiễu sớm @ {trigger_pos:.1f}mm (dưới {arm_mm:.0f}mm)")
-                self._stop(2)
-                
-                if getattr(self, '_s2a_scan_noise_retry', 0) < self._conf('s1_scan_noise_retry_limit', 1):
-                    self._s2a_scan_noise_retry = getattr(self, '_s2a_scan_noise_retry', 0) + 1
-                    self._notify('warn', 'S4 bị nhiễu (Pos1 OUT)', f'S4 ON ngoài range ({trigger_pos:.0f}mm), retry lần {self._s2a_scan_noise_retry}')
-                    self._enter_in(SystemState.S2A_RETRY_SCAN_HOME)
-                    return
-                else:
-                    self._s2a_scan_noise_retry = 0
-                    self._notify('error', 'S4 nhiễu 2 lần (Pos1 OUT)', f'INY rút về {self.config.iny_home:.0f}mm')
-                    self._nb_move(2, self.config.iny_home)
-                    self._jog_mode = True
-                    self._sync_mode_jog()
-                    self._enter_in(SystemState.IDLE)
-                    return
-            else:
-                self._stop(2)
-                row = self._zone_to_row(trigger_pos, self.config.iny_output_zones)
-                if row is not None:
-                    target_mm = self.config.iny_output_zones[row][2]
-                    self._output_target_pos = target_mm
-                    self._output_row = row
-                    self._s2a_scan_noise_retry = 0
-                    self.get_logger().info(f"[S2A Step7] S4 ON @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm)")
-                    self._nb_move(2, target_mm, vel=self.config.iny_row_vel)
-                    self._cmd_sent_in = True
-                    self._step_timeout_in = time.time() + self.config.move_timeout
-                    self._enter_in(SystemState.S2A_INY_OUTPUT_ROW)
-                    return
+            row = self._zone_to_row(trigger_pos, self.config.iny_output_zones)
+            if row is not None:
+                target_mm = self.config.iny_output_zones[row][2]
+                self._output_target_pos = target_mm
+                self._output_row = row
+                self._s2a_scan_noise_retry = 0
+                self.get_logger().info(f"[S2A Step7] S4 ON @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm)")
+                self._enter_in(SystemState.S2A_INY_OUTPUT_ROW)
+                return
 
         timed_out = time.time() > self._step_timeout_in
         at_target = self._arrived(2) or iny >= scan_target - 2.0
@@ -2417,7 +2775,7 @@ class CartridgeSystem(Node):
                 self.get_logger().error("output_target_pos chưa set → skip")
                 self._enter_in(SystemState.S2A_WAIT_CYL1_RET)
                 return
-            ok = self._nb_move(2, target, vel=self.config.iny_row_vel)
+            ok = self._nb_move(2, target, vel=self.config.iny_row_vel, continuous_update=True)
             if not ok:
                 self.get_logger().warn(f"S2A output_row: move {target:.1f}mm fail")
                 return
@@ -2469,9 +2827,9 @@ class CartridgeSystem(Node):
             self._log_once("S2A_INX20", "A11: Cho INY safe")
             return
         if not self._cmd_sent_in:
-            ok = self._nb_move(1, self.config.inx_home)
+            ok = self._nb_move(1, self.config.inx_safe)
             if not ok:
-                self._log_once("S2A_A11_FAIL", "S2A A11: INX 20mm fail")
+                self._log_once("S2A_A11_FAIL", "S2A A11: INX safe fail")
                 return
             self._cmd_sent_in     = True
             self._step_timeout_in = time.time() + self.config.move_timeout
@@ -2758,37 +3116,18 @@ class CartridgeSystem(Node):
         
         if self.sensor(S20_SCAN_STACK_P2):
             trigger_pos = self._pos(5) or oy
-            if trigger_pos < arm_mm:
-                # S20 nhiễu sớm
-                self.get_logger().warn(f"[S4 Output] S20 nhiễu sớm @ {trigger_pos:.1f}mm (dưới {arm_mm:.0f}mm)")
-                self._stop(5)
-                
-                if getattr(self, '_s4_scan_noise_retry', 0) < self._conf('s1_scan_noise_retry_limit', 1):
-                    self._s4_scan_noise_retry = getattr(self, '_s4_scan_noise_retry', 0) + 1
-                    self._notify('warn', 'S20 bị nhiễu (Pos2 OUT)', f'S20 ON sớm ({trigger_pos:.0f}mm), retry lần {self._s4_scan_noise_retry}')
-                    self._enter_s4(SystemState.S4_RETRY_SCAN_HOME)
-                    return
-                else:
-                    self._s4_scan_noise_retry = 0
-                    self._notify('error', 'S20 nhiễu 2 lần (Pos2 OUT)', f'OUTY rút về {cfg.outy_target1:.0f}mm')
-                    self._nb_move(5, cfg.outy_target1)
-                    self._jog_mode = True
-                    self._sync_mode_jog()
-                    self._enter_s4(SystemState.IDLE)
-                    return
-            else:
-                self._stop(5)
-                row = self._zone_to_row(trigger_pos, cfg.outy_output_zones)
-                if row is not None:
-                    target_mm = cfg.outy_output_zones[row][2]
-                    self._outy_jog_pos = target_mm
-                    self._s4_scan_noise_retry = 0
-                    self.get_logger().info(f"[S4] S20 EDGE @ {trigger_pos:.1f}mm → chot ROW{row} Target={target_mm:.0f}mm")
-                    self._nb_move(5, target_mm, vel=cfg.outy_slow_vel)
-                    self._cmd_sent_s4 = True
-                    self._step_timeout_s4 = time.time() + cfg.move_timeout
-                    self._enter_s4(SystemState.S4_OUTY_DROP)
-                    return
+            
+            row = self._zone_to_row(trigger_pos, cfg.outy_output_zones)
+            if row is not None:
+                target_mm = cfg.outy_output_zones[row][2]
+                self._outy_jog_pos = target_mm
+                self._s4_scan_noise_retry = 0
+                self.get_logger().info(f"[S4] S20 ON @ {trigger_pos:.1f}mm → chot ROW{row} Target={target_mm:.0f}mm")
+                self._nb_move(5, target_mm, vel=cfg.outy_slow_vel)
+                self._cmd_sent_s4 = True
+                self._step_timeout_s4 = time.time() + cfg.move_timeout
+                self._enter_s4(SystemState.S4_OUTY_DROP)
+                return
 
         timed_out = time.time() > self._step_timeout_s4
         at_target = self._arrived(5) or oy >= scan_target - 2.0
@@ -2827,7 +3166,7 @@ class CartridgeSystem(Node):
             if target <= 0:
                 self._enter_s4(SystemState.S4_CYL2_RETRACT)
                 return
-            ok = self._nb_move(5, target, vel=self.config.outy_slow_vel)
+            ok = self._nb_move(5, target, vel=self.config.outy_slow_vel, continuous_update=True)
             if not ok:
                 return
             self._cmd_sent_s4 = True

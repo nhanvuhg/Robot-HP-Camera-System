@@ -7,8 +7,8 @@ servo_ips:
 # Hardware Mapping & IO
 io_ip: 192.168.27.253
 io_ip_2: 192.168.27.254
-cylinder1_extend_channel: 5
-cylinder1_retract_channel: 4
+cylinder1_extend_channel: 4
+cylinder1_retract_channel: 5
 cylinder2_retract_channel: 8  
 cylinder2_extend_channel: 9
 
@@ -19,20 +19,21 @@ jog_velocity_max: 0.08        # Max allowed JOG velocity (m/s) — matches drive
 
 # Axis Coordinate Mapping (mm)
 inx_home: 0.0              # Home position for INX
+inx_safe: -60.0              # Safe position for INX (used when iny_safe_zone is active)
 inx_target2: 505.5         # Position 2 for S1 loading
 inx_output_stack: 100.0    # Tray stacking position for robot pickup
 iny_home: 0.0              # Home/Neutral position for INY
-iny_safe_zone: 40.0        # Limit for "Safe" INY position before INX moves (Safety interlock — block INX khi INY > giá trị này)
+iny_safe_zone: 90.0        # Limit for "Safe" INY position before INX moves (Safety interlock — block INX khi INY > giá trị này)
 iny_push_clearance_mm: 5.0  # INY dừng tạm để kẹp trước khi đẩy vào robot (S1 step trung gian)
 
 # S1 INY Scanning Logic
 target_scaninp1: 970.0       # Scan endpoint target (mm)
 target_scanoutp1: 500.0
-iny_scan_vel: 30             # Scanning speed (mm/s)
-iny_row_vel: 20              # Docking speed (mm/s)
+iny_scan_vel: 60             # Scanning speed (mm/s)
+iny_row_vel: 30              # Docking speed (mm/s)
 iny_scan_valid_min_mm: 20.0 # Ignore triggers below this X coordinate (Noise filter)
 iny_scan_valid_max_mm: 970.0 # Valid scan range upper limit
-iny_scan_arm_mm: 150.0       # INY position threshold — S4 detection armed only above this
+iny_scan_arm_mm: 50.0       # INY position threshold — S4 detection armed only above this
 s1_scan_noise_retry_limit: 1 # Max automatic retries if noise is detected
 inx_noise_recovery_mm: 10.0  # Safe INX recovery pos during noise failure
 
@@ -118,7 +119,7 @@ iny_output_zones:
   - 49.0
   - 0.0
   - 140.0
-iny_target2: 140.0          # Tọa độ INY đẩy khay vào robot / kẹp khay cũ (S1 & S2A)
+iny_target2: 87.0          # Tọa độ INY đẩy khay vào robot / kẹp khay cũ (S1 & S2A)
 servo3_home: 0.0           # Điểm lùi sâu nhất của trục Servo 3
 servo3_target1: 10.0       # Điểm chờ của Servo 3 (Bãi đỗ khi dẹp đường)
 servo3_target2: 400.0      # Tọa độ đẩy băng nhám / băng đạn ra của Servo 3

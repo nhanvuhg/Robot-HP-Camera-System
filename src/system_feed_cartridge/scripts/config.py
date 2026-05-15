@@ -47,6 +47,7 @@ class SystemConfig(BaseModel):
 
     # Axes
     inx_home: float = 0.0
+    inx_safe: float = -60.0
     inx_target2: float = 500.0
     inx_output_stack: float = 100.0
     iny_home: float = 0.0

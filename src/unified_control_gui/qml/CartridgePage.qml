@@ -1639,35 +1639,45 @@
 
                                         // Gripper DO1
                                         Text { text: "GRIPPER (DO1)"; color: root.cDim; font.pixelSize: 9; font.bold: true }
-                                        Row { spacing: 4; width: parent.width
+                                        Row { 
+                                            id: rowGripper
+                                            property bool isOn: false
+                                            spacing: 4; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 4) / 2; height: 34; radius: 4
-                                                color: "#0a332e"; border.color: root.cGreen
-                                                Text { anchors.centerIn: parent; text: "ON"; color: root.cGreen; font.pixelSize: 12; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: robotController.setDigitalOutput(1, true) }
+                                                color: rowGripper.isOn ? "#0a332e" : root.cCard
+                                                border.color: rowGripper.isOn ? root.cGreen : root.cBorder
+                                                Text { anchors.centerIn: parent; text: "ON"; color: rowGripper.isOn ? root.cGreen : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, true); rowGripper.isOn = true } }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 4) / 2; height: 34; radius: 4
-                                                color: root.cCard; border.color: root.cBorder
-                                                Text { anchors.centerIn: parent; text: "OFF"; color: root.cDim; font.pixelSize: 12; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: robotController.setDigitalOutput(1, false) }
+                                                color: !rowGripper.isOn ? "#1a3a5a" : root.cCard
+                                                border.color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cBorder
+                                                Text { anchors.centerIn: parent; text: "OFF"; color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, false); rowGripper.isOn = false } }
                                             }
                                         }
 
                                         // Picker DO2
                                         Text { text: "PICKER (DO2)"; color: root.cDim; font.pixelSize: 9; font.bold: true }
-                                        Row { spacing: 4; width: parent.width
+                                        Row { 
+                                            id: rowPicker
+                                            property bool isOn: false
+                                            spacing: 4; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 4) / 2; height: 34; radius: 4
-                                                color: "#0a332e"; border.color: root.cGreen
-                                                Text { anchors.centerIn: parent; text: "ON"; color: root.cGreen; font.pixelSize: 12; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: robotController.setDigitalOutput(2, true) }
+                                                color: rowPicker.isOn ? "#0a332e" : root.cCard
+                                                border.color: rowPicker.isOn ? root.cGreen : root.cBorder
+                                                Text { anchors.centerIn: parent; text: "ON"; color: rowPicker.isOn ? root.cGreen : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, true); rowPicker.isOn = true } }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 4) / 2; height: 34; radius: 4
-                                                color: root.cCard; border.color: root.cBorder
-                                                Text { anchors.centerIn: parent; text: "OFF"; color: root.cDim; font.pixelSize: 12; font.bold: true }
-                                                MouseArea { anchors.fill: parent; onClicked: robotController.setDigitalOutput(2, false) }
+                                                color: !rowPicker.isOn ? "#1a3a5a" : root.cCard
+                                                border.color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cBorder
+                                                Text { anchors.centerIn: parent; text: "OFF"; color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, false); rowPicker.isOn = false } }
                                             }
                                         }
 
