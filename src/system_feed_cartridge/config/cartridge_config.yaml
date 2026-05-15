@@ -24,8 +24,6 @@ inx_target2: 505.5         # Position 2 for S1 loading
 inx_output_stack: 100.0    # Tray stacking position for robot pickup
 iny_home: 0.0              # Home/Neutral position for INY
 iny_safe_zone: 90.0        # Limit for "Safe" INY position before INX moves (Safety interlock — block INX khi INY > giá trị này)
-inx_danger_zone_min: 0.0
-inx_danger_zone_max: 400.0
 iny_push_clearance_mm: 5.0  # INY dừng tạm để kẹp trước khi đẩy vào robot (S1 step trung gian)
 
 # S1 INY Scanning Logic

@@ -681,27 +681,6 @@ class CartridgeSystem(Node):
         target_position_reached() trả True sai ngay khi bắt đầu di chuyển.
         Trả về False nếu vượt giới hạn hoặc chưa homed, True nếu thành công.
         """
-        danger_min = getattr(self.config, 'inx_danger_zone_min', 80.0)
-        danger_max = getattr(self.config, 'inx_danger_zone_max', 400.0)
-        iny_safe   = getattr(self.config, 'iny_safe_zone', 90.0)
-        
-        if servo_id == 1:
-            inx_curr = self._pos(1)
-            if inx_curr is not None:
-                crosses = (inx_curr < danger_min and pos_mm > danger_max) or (inx_curr > danger_max and pos_mm < danger_min)
-                inside = (danger_min <= pos_mm <= danger_max)
-                if crosses or inside:
-                    iny_pos = self._pos(2)
-                    if iny_pos is not None and iny_pos > iny_safe:
-                        self.get_logger().error(f"S1 MOVE blocked: Path intersects danger zone while INY > {iny_safe}")
-                        return False
-        elif servo_id == 2:
-            if pos_mm > iny_safe:
-                inx_pos = self._pos(1)
-                if inx_pos is not None and danger_min <= inx_pos <= danger_max:
-                    self.get_logger().error(f"S2 MOVE blocked: Target {pos_mm:.1f} > safe zone while INX in danger zone")
-                    return False
-                    
         limit = self._conf('servo_limits', {}).get(servo_id, 999.0)
         if pos_mm > limit:
             self.get_logger().error(f"S{servo_id}: {pos_mm}mm > limit {limit}mm")
@@ -793,32 +772,7 @@ class CartridgeSystem(Node):
         mot = self.servos.get(servo_id)
         if not mot:
             return
-            
-        danger_min = getattr(self.config, 'inx_danger_zone_min', 80.0)
-        danger_max = getattr(self.config, 'inx_danger_zone_max', 400.0)
-        iny_safe   = getattr(self.config, 'iny_safe_zone', 90.0)
 
-        if servo_id == 1:
-            iny_pos = self._pos(2)
-            inx_pos = self._pos(1)
-            if iny_pos is not None and iny_pos > iny_safe and inx_pos is not None:
-                if danger_min <= inx_pos <= danger_max:
-                    dist_min = abs(inx_pos - danger_min)
-                    dist_max = abs(danger_max - inx_pos)
-                    if dist_min < dist_max and forward:
-                        self.get_logger().error(f"S1 JOG blocked: Cannot move deeper into danger zone ({inx_pos:.1f})")
-                        return
-                    if dist_max <= dist_min and not forward:
-                        self.get_logger().error(f"S1 JOG blocked: Cannot move deeper into danger zone ({inx_pos:.1f})")
-                        return
-        elif servo_id == 2:
-            inx_pos = self._pos(1)
-            iny_pos = self._pos(2)
-            if inx_pos is not None and (danger_min <= inx_pos <= danger_max) and iny_pos is not None:
-                if iny_pos >= iny_safe and forward:
-                    self.get_logger().error(f"S2 JOG blocked: Cannot exceed safe zone ({iny_pos:.1f}) when INX in danger zone")
-                    return
-                    
         try:
             self._ensure_ready(mot, servo_id)
             with self._servo_lock:
@@ -1803,6 +1757,36 @@ class CartridgeSystem(Node):
         self._enter(SystemState.IDLE)
         self._sync_mode_jog()
 
+    def _safety_check_loop(self):
+        """
+        Luồng kiểm tra an toàn chạy ngầm liên tục (~10Hz).
+        Theo dõi tọa độ thực tế của INX và INY để phát hiện sớm các va chạm
+        tiềm ẩn, bất kể state machine đang ở trạng thái nào.
+        Nếu phát hiện vi phạm Danger Zone hoặc mất kết nối Modbus đột ngột,
+        dừng khẩn cấp và chuyển hệ thống sang ERROR.
+        """
+        while getattr(self, '_system_running', False):
+            try:
+                time.sleep(0.1)
+                
+                # Không kiểm tra nếu chưa homed
+                if 1 not in self.zero_offset or 2 not in self.zero_offset:
+                    continue
+                    
+                # Đọc vị trí
+                inx = self._pos(1)
+                iny = self._pos(2)
+                
+                if inx is None or iny is None:
+                    continue
+                    
+                self._last_inx = inx
+                self._last_iny = iny
+                    
+            except Exception as e:
+                self.get_logger().error(f"Safety Loop Error: {e}")
+                time.sleep(1.0)
+
     def _cb_update_config(self, msg: String):
         """
         Cập nhật config runtime từ GUI qua /providesystem/update_config (JSON).
@@ -2299,8 +2283,15 @@ class CartridgeSystem(Node):
             if not self._inx_arrived:
                 self._log_once("S1_INX_MOVING", "INX dang di chuyen")
                 return
+            # Verify INX actually reached target position
+            inx_curr = self._pos(1)
+            if inx_curr is not None and abs(inx_curr - self.config.inx_target2) > 5.0:
+                self.get_logger().warn(f"INX arrived=True but pos={inx_curr:.1f}mm != target {self.config.inx_target2}mm — resend")
+                self._inx_arrived = False
+                self._nb_move(1, self.config.inx_target2, vel=150)
+                return
             self._30s_timeout = time.time() + 50.0
-            self.get_logger().info("INX dung tai 500mm — check S3+S9 (50s)")
+            self.get_logger().info(f"INX dung tai {inx_curr:.1f}mm — check S3+S9 (50s)")
 
         belt_end, cyl1_ret = self._snap(S3_BELT_END, S9_CYL1_RETRACTED)
 
@@ -2579,9 +2570,9 @@ class CartridgeSystem(Node):
 
     def _s1_iny_50(self):
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.iny_safe_zone,vel=250)
+            ok = self._nb_move(2, self.config.iny_home,vel=250)
             if not ok:
-                self.get_logger().warn("S1: INY -> 50mm fail")
+                self.get_logger().warn("S1: INY -> home (0mm) fail")
                 return
             self._cmd_sent_in     = True
             self._step_timeout_in = time.time() + self.config.move_timeout
@@ -2631,7 +2622,7 @@ class CartridgeSystem(Node):
 
     def _s1_inx_10(self):
         if not self._iny_safe():
-            self._log_once("S1_INX_WAIT_INY", f"Cho INY <= {self.config.iny_safe_zone}mm truoc INX ve safe")
+            self._log_once("S1_INX_WAIT_INY", f"Cho INY <= {self.config.iny_safe_zone}mm truoc INX ve home")
             return
         if not self._cmd_sent_in:
             ok = self._nb_move(1, self.config.inx_safe,vel=150)
