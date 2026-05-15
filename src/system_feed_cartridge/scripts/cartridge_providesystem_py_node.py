@@ -681,6 +681,27 @@ class CartridgeSystem(Node):
         target_position_reached() trả True sai ngay khi bắt đầu di chuyển.
         Trả về False nếu vượt giới hạn hoặc chưa homed, True nếu thành công.
         """
+        danger_min = getattr(self.config, 'inx_danger_zone_min', 80.0)
+        danger_max = getattr(self.config, 'inx_danger_zone_max', 400.0)
+        iny_safe   = getattr(self.config, 'iny_safe_zone', 90.0)
+        
+        if servo_id == 1:
+            inx_curr = self._pos(1)
+            if inx_curr is not None:
+                crosses = (inx_curr < danger_min and pos_mm > danger_max) or (inx_curr > danger_max and pos_mm < danger_min)
+                inside = (danger_min <= pos_mm <= danger_max)
+                if crosses or inside:
+                    iny_pos = self._pos(2)
+                    if iny_pos is not None and iny_pos > iny_safe:
+                        self.get_logger().error(f"S1 MOVE blocked: Path intersects danger zone while INY > {iny_safe}")
+                        return False
+        elif servo_id == 2:
+            if pos_mm > iny_safe:
+                inx_pos = self._pos(1)
+                if inx_pos is not None and danger_min <= inx_pos <= danger_max:
+                    self.get_logger().error(f"S2 MOVE blocked: Target {pos_mm:.1f} > safe zone while INX in danger zone")
+                    return False
+                    
         limit = self._conf('servo_limits', {}).get(servo_id, 999.0)
         if pos_mm > limit:
             self.get_logger().error(f"S{servo_id}: {pos_mm}mm > limit {limit}mm")
@@ -772,6 +793,32 @@ class CartridgeSystem(Node):
         mot = self.servos.get(servo_id)
         if not mot:
             return
+            
+        danger_min = getattr(self.config, 'inx_danger_zone_min', 80.0)
+        danger_max = getattr(self.config, 'inx_danger_zone_max', 400.0)
+        iny_safe   = getattr(self.config, 'iny_safe_zone', 90.0)
+
+        if servo_id == 1:
+            iny_pos = self._pos(2)
+            inx_pos = self._pos(1)
+            if iny_pos is not None and iny_pos > iny_safe and inx_pos is not None:
+                if danger_min <= inx_pos <= danger_max:
+                    dist_min = abs(inx_pos - danger_min)
+                    dist_max = abs(danger_max - inx_pos)
+                    if dist_min < dist_max and forward:
+                        self.get_logger().error(f"S1 JOG blocked: Cannot move deeper into danger zone ({inx_pos:.1f})")
+                        return
+                    if dist_max <= dist_min and not forward:
+                        self.get_logger().error(f"S1 JOG blocked: Cannot move deeper into danger zone ({inx_pos:.1f})")
+                        return
+        elif servo_id == 2:
+            inx_pos = self._pos(1)
+            iny_pos = self._pos(2)
+            if inx_pos is not None and (danger_min <= inx_pos <= danger_max) and iny_pos is not None:
+                if iny_pos >= iny_safe and forward:
+                    self.get_logger().error(f"S2 JOG blocked: Cannot exceed safe zone ({iny_pos:.1f}) when INX in danger zone")
+                    return
+                    
         try:
             self._ensure_ready(mot, servo_id)
             with self._servo_lock:
@@ -787,6 +834,17 @@ class CartridgeSystem(Node):
           3. Chờ ready_for_motion() = True trong timeout giây
         Lock được giữ ngắn nhất có thể để STOP có thể acquire _servo_lock ngay.
         """
+        if hasattr(mot, 'ready_for_motion'):
+            acquired = self._servo_lock.acquire(timeout=0.1)
+            if acquired:
+                try:
+                    if mot.ready_for_motion():
+                        return
+                except Exception:
+                    pass
+                finally:
+                    self._servo_lock.release()
+
         # Short lock holds — tránh race condition trên Modbus socket
         acquired = self._servo_lock.acquire(timeout=1.0)
         if acquired:
@@ -1823,6 +1881,45 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
 
+    def _enforce_danger_zones(self):
+        inx = self._pos(1)
+        iny = self._pos(2)
+        if inx is None or iny is None: return
+        
+        danger_min = getattr(self.config, 'inx_danger_zone_min', 80.0)
+        danger_max = getattr(self.config, 'inx_danger_zone_max', 400.0)
+        iny_safe   = getattr(self.config, 'iny_safe_zone', 90.0)
+        
+        inx_danger = (danger_min <= inx <= danger_max)
+        iny_danger = (iny > iny_safe)
+        
+        if inx_danger and iny_danger:
+            inx_dir = inx - getattr(self, '_last_inx', inx)
+            iny_dir = iny - getattr(self, '_last_iny', iny)
+            
+            stop1 = False
+            stop2 = False
+            
+            dist_min = abs(inx - danger_min)
+            dist_max = abs(danger_max - inx)
+            
+            if dist_min < dist_max:
+                if inx_dir > 0: stop1 = True
+            else:
+                if inx_dir < 0: stop1 = True
+                
+            if iny_dir > 0: stop2 = True
+                
+            if stop1:
+                self._stop(1)
+                self.get_logger().error(f"Safety Stop: S1 entering danger zone! ({inx:.1f})")
+            if stop2:
+                self._stop(2)
+                self.get_logger().error(f"Safety Stop: S2 exceeding safe zone! ({iny:.1f})")
+                
+        self._last_inx = inx
+        self._last_iny = iny
+
     def _control_loop(self):
         """
         Vòng lặp điều khiển chính, chạy mỗi 50ms (20Hz) qua ROS timer.
@@ -1840,13 +1937,15 @@ class CartridgeSystem(Node):
             if self._system_paused:
                 return
                 
+            self._enforce_danger_zones()
+            
             # S18 tracking logic for S3 auto-feed delay
             feed_ok = self.sensor(S18_FEED_OK)
             if not feed_ok and self._s10_prev:
                 self._s10_off_time = time.time()
                 self.get_logger().info("[S18] Bị lấy đi -> bắt đầu đếm ngược 5s để cấp tiếp")
             self._s10_prev = feed_ok
-
+            
             # ── Robot heartbeat timeout ──
             # Nếu robot node chưa bao giờ publish hoặc đã ngắt > 5s → tự xả khóa
             if self._robot_connected and self._robot_last_seen > 0:
