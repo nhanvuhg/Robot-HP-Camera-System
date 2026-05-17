@@ -90,9 +90,41 @@ class SystemState(Enum):
     HOMING          = "homing"
     HOMING_RUNNING  = "homing_running"
 
+    # ══════════════════════════════════════════════════════════════
+    # [RENAME 2026-05-16 — for-Agent-readers]
+    # Enum state đã được đổi tên theo SEMANTIC (mục đích) thay vì NUMERIC
+    # (vị trí số mm). Mapping cũ → mới dùng khi đọc commit/PR cũ:
+    #
+    #   Tên cũ                  →  Tên mới
+    #   ----------------------- → ------------------------------------
+    #   [S1+INX+MOVE]           →  S1_INX_MOVE_POS_PICK
+    #   [S1+INY+50]             →  S1_INY_PICK_TRAY_UP
+    #   [S1+INY+200]            →  S1_INY_PLACE_TRAY_ROBOT
+    #   [S1+INX+10]             →  S1_INX_WAIT_TRAY_DONE
+    #   [S1+RETRY+INX+500]      →  S1_INX_TRY_POS_PICK
+    #   [S2A+INX+500]           →  S2A_INX_MOVE_POS_PICK
+    #   [S2A+INY+200+CYL1]      →  S2A_POS_PLACE_TRAY_ROBOT_CYL1
+    #   [S2A+INY+10]            →  S2A_INY_HOME
+    #   [S2A+INX+10]            →  S2A_INX_PLACE_TRAY_OUT_POS1
+    #   [S2A+INY+10+FINAL]      →  S2A_INY_FINAL
+    #   [S2A+INX+20]            →  S2A_WAIT_NEW_TRAY
+    #
+    # GHI CHÚ (cho Agent khác):
+    #   1. Tên cũ trong bảng trên dùng '+' thay '_' để code search không
+    #      tự nhận nhầm là identifier (vd grep "S2A_INY_10" sẽ trả 0 hit).
+    #   2. Tên method `_s1_inx_move`, `_s1_iny_50`, ... GIỮ NGUYÊN.
+    #      Method là implementation detail; chỉ state enum đổi tên.
+    #   3. String value (lowercase) cũng được rename tương ứng (vd
+    #      "s1_inx_move" → "s1_inx_move_pos_pick") để khớp GUI parse từ
+    #      topic /system_state. Đã verify không file GUI/QML/test nào
+    #      hardcode tên cũ.
+    #   4. Backup trước rename: tag pre-blocking-fix-v2-2026-05-16 ở d2b97eb.
+    #   5. Xem RULES.md (Servo / Sensor mapping table) để biết ngữ cảnh.
+    # ══════════════════════════════════════════════════════════════
+
     # STATE 1
     S1_CONFIRM_SAFE     = "s1_confirm_safe"
-    S1_INX_MOVE         = "s1_inx_move"
+    S1_INX_MOVE_POS_PICK         = "s1_inx_move_pos_pick"
     S1_WAIT_ARRIVE      = "s1_wait_arrive"
     S1_INY_SCAN         = "s1_iny_scan"
     S1_WAIT_STOP_S4     = "s1_wait_stop_s4"
@@ -101,29 +133,29 @@ class SystemState(Enum):
     S1_FALLBACK_RETRACT = "s1_fallback_retract"
     S1_FALLBACK_WAIT_INY = "s1_fallback_wait_iny"
     S1_WAIT_GUI_CONFIRM = "s1_wait_gui_confirm"
-    S1_RETRY_INX_500    = "s1_retry_inx_500"
+    S1_INX_TRY_POS_PICK    = "s1_inx_try_pos_pick"
     S1_RETRY_JOG        = "s1_retry_jog"
     S1_CYL1_EXTEND      = "s1_cyl1_extend"
-    S1_INY_50           = "s1_iny_50"
-    S1_INY_200          = "s1_iny_200"
+    S1_INY_PICK_TRAY_UP           = "s1_iny_pick_tray_up"
+    S1_INY_PLACE_TRAY_ROBOT          = "s1_iny_place_tray_robot"
     S1_WAIT_RELEASE     = "s1_wait_release"
     S1_WAIT_S7         = "s1_wait_s7"
-    S1_INX_10           = "s1_inx_10"
+    S1_INX_WAIT_TRAY_DONE           = "s1_inx_wait_tray_done"
     S1_COMPLETE         = "s1_complete"
     S1_RETRY_SCAN_HOME  = "s1_retry_scan_home"
 
     # STATE 2
     S2A_CHECK_INTERLOCK   = "s2a_check_interlock"
-    S2A_INX_500           = "s2a_inx_500"
-    S2A_INY_200_CYL1      = "s2a_iny_200_cyl1"
+    S2A_INX_MOVE_POS_PICK           = "s2a_inx_move_pos_pick"
+    S2A_POS_PLACE_TRAY_ROBOT_CYL1      = "s2a_pos_place_tray_robot_cyl1"
     S2A_WAIT_S7          = "s2a_wait_s7"
-    S2A_INY_10            = "s2a_iny_10"
-    S2A_INX_10            = "s2a_inx_10"
+    S2A_INY_HOME            = "s2a_iny_home"
+    S2A_INX_PLACE_TRAY_OUT_POS1            = "s2a_inx_place_tray_out_pos1"
     S2A_INY_JOG_OUTPUT    = "s2a_iny_jog_output"
     S2A_INY_OUTPUT_ROW    = "s2a_iny_output_row"
     S2A_WAIT_CYL1_RET     = "s2a_wait_cyl1_ret"
-    S2A_INY_10_FINAL      = "s2a_iny_10_final"
-    S2A_INX_20            = "s2a_inx_20"
+    S2A_INY_FINAL      = "s2a_iny_final"
+    S2A_WAIT_NEW_TRAY            = "s2a_wait_new_tray"
     S2A_RETRY_SCAN_HOME   = "s2a_retry_scan_home"
     S2A_COMPLETE          = "s2a_complete"
 
@@ -730,6 +762,34 @@ class CartridgeSystem(Node):
             return done
         except Exception:
             return False
+
+    def _at_position(self, servo_id: int, target_mm: float, tol: Optional[float] = None) -> bool:
+        """
+        Verify servo ĐÃ THỰC SỰ tới target bằng cách đọc vị trí encoder (_pos),
+        không tin tuyệt đối flag target_position_reached() của drive (có thể lên sớm
+        khi servo còn cách target vài mm do "position window" của FAS firmware).
+
+        Args:
+            servo_id  : 1=InX, 2=InY, 3=Servo3, 4=OutX, 5=OutY
+            target_mm : vị trí target tính bằng mm
+            tol       : sai số cho phép (mm). Nếu None → lấy config.position_tolerance.
+
+        Returns:
+            True  nếu |_pos() - target_mm| ≤ tol
+            False nếu chưa đến hoặc đọc vị trí lỗi
+            True  (skip) nếu servo chưa kết nối (cho phép flow tiếp tục trong sim mode)
+
+        Dùng kết hợp với _arrived() để xác nhận servo đến đích THẬT trước khi
+        chuyển sub-state nguy hiểm (vd: cylinder extend, InY scan).
+        """
+        if servo_id not in self.servos:
+            return True
+        if tol is None:
+            tol = getattr(self.config, 'position_tolerance', 1.0)
+        pos = self._pos(servo_id)
+        if pos is None:
+            return False
+        return abs(pos - target_mm) <= tol
 
     def _stop(self, servo_id: int):
         """
@@ -2084,7 +2144,7 @@ class CartridgeSystem(Node):
         s = self.state_in
         if   s == SystemState.IDLE:                self._do_idle_input()
         elif s == SystemState.S1_CONFIRM_SAFE:     self._s1_confirm_safe()
-        elif s == SystemState.S1_INX_MOVE:         self._s1_inx_move()
+        elif s == SystemState.S1_INX_MOVE_POS_PICK:         self._s1_inx_move()
         elif s == SystemState.S1_WAIT_ARRIVE:      self._s1_wait_arrive()
         elif s == SystemState.S1_INY_SCAN:         self._s1_iny_scan()
         elif s == SystemState.S1_WAIT_STOP_S4:     self._s1_wait_stop_s4()
@@ -2092,27 +2152,27 @@ class CartridgeSystem(Node):
         elif s == SystemState.S1_CHECK_S5:         self._s1_check_s5()
         elif s == SystemState.S1_FALLBACK_RETRACT: self._s1_fallback_retract()
         elif s == SystemState.S1_WAIT_GUI_CONFIRM: self._s1_wait_gui_confirm()
-        elif s == SystemState.S1_RETRY_INX_500:    self._s1_retry_inx_500()
+        elif s == SystemState.S1_INX_TRY_POS_PICK:    self._s1_retry_inx_500()
         elif s == SystemState.S1_RETRY_JOG:        self._s1_retry_jog()
         elif s == SystemState.S1_CYL1_EXTEND:      self._s1_cyl1_extend()
-        elif s == SystemState.S1_INY_50:           self._s1_iny_50()
-        elif s == SystemState.S1_INY_200:          self._s1_iny_200()
+        elif s == SystemState.S1_INY_PICK_TRAY_UP:           self._s1_iny_50()
+        elif s == SystemState.S1_INY_PLACE_TRAY_ROBOT:          self._s1_iny_200()
         elif s == SystemState.S1_WAIT_RELEASE:     self._s1_wait_release()
         elif s == SystemState.S1_WAIT_S7:         self._s1_wait_s7()
-        elif s == SystemState.S1_INX_10:           self._s1_inx_10()
+        elif s == SystemState.S1_INX_WAIT_TRAY_DONE:           self._s1_inx_10()
         elif s == SystemState.S1_COMPLETE:         self._s1_complete()
         elif s == SystemState.S1_RETRY_SCAN_HOME:  self._s1_retry_scan_home()
         elif s == SystemState.S2A_CHECK_INTERLOCK:   self._s2a_check_interlock()
-        elif s == SystemState.S2A_INX_500:           self._s2a_inx_500()
-        elif s == SystemState.S2A_INY_200_CYL1:      self._s2a_iny_200_cyl1()
+        elif s == SystemState.S2A_INX_MOVE_POS_PICK:           self._s2a_inx_500()
+        elif s == SystemState.S2A_POS_PLACE_TRAY_ROBOT_CYL1:      self._s2a_iny_200_cyl1()
         elif s == SystemState.S2A_WAIT_S7:          self._s2a_wait_s7()
-        elif s == SystemState.S2A_INY_10:            self._s2a_iny_10()
-        elif s == SystemState.S2A_INX_10:            self._s2a_inx_10()
+        elif s == SystemState.S2A_INY_HOME:            self._s2a_iny_10()
+        elif s == SystemState.S2A_INX_PLACE_TRAY_OUT_POS1:            self._s2a_inx_10()
         elif s == SystemState.S2A_INY_JOG_OUTPUT:    self._s2a_iny_jog_output()
         elif s == SystemState.S2A_INY_OUTPUT_ROW:    self._s2a_iny_output_row()
         elif s == SystemState.S2A_WAIT_CYL1_RET:          self._s2a_wait_cyl1_ret()
-        elif s == SystemState.S2A_INY_10_FINAL:      self._s2a_iny_10_final()
-        elif s == SystemState.S2A_INX_20:            self._s2a_inx_20()
+        elif s == SystemState.S2A_INY_FINAL:      self._s2a_iny_10_final()
+        elif s == SystemState.S2A_WAIT_NEW_TRAY:            self._s2a_inx_20()
         elif s == SystemState.S2A_RETRY_SCAN_HOME:   self._s2a_retry_scan_home()
         elif s == SystemState.S2A_COMPLETE:          self._s2a_complete()
 
@@ -2234,6 +2294,15 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
     def _s1_confirm_safe(self):
+        """
+        Bước đầu STATE 1: đảm bảo InY về vị trí home (≤ iny_home + 2mm) trước khi
+        InX di chuyển ra `inx_target2`. Nếu InY đã ở home → chuyển ngay sang
+        S1_INX_MOVE_POS_PICK. Ngược lại ra lệnh `_nb_move(2, iny_home)` rồi chờ arrived.
+
+        Pre-condition: không có sub-state khác đang dùng servo (kiểm tra
+        _inx_moving / _iny_moving).
+        Next: S1_INX_MOVE_POS_PICK khi InY về home thật sự (verify bằng _at_position).
+        """
         if not self._cmd_sent_in and not self._inx_moving and not self._iny_moving:
             self._pub_cartridge_busy(True)
             if self._input_tray_done:
@@ -2242,7 +2311,7 @@ class CartridgeSystem(Node):
         if iny is None:
             return
         if iny <= self.config.iny_home + 2.0:
-            self._enter_in(SystemState.S1_INX_MOVE)
+            self._enter_in(SystemState.S1_INX_MOVE_POS_PICK)
         else:
             if not self._cmd_sent_in:
                 ok = self._nb_move(2, self.config.iny_home)
@@ -2254,10 +2323,21 @@ class CartridgeSystem(Node):
             else:
                 if time.time() > self._step_timeout_in:
                     self._cmd_sent_in = False
-                elif self._arrived(2):
-                    self._enter_in(SystemState.S1_INX_MOVE)
+                # [BLOCKING-FIX] verify _at_position(2, iny_home)
+                elif self._arrived(2) and self._at_position(2, self.config.iny_home):
+                    self._enter_in(SystemState.S1_INX_MOVE_POS_PICK)
 
     def _s1_inx_move(self):
+        """
+        Gửi lệnh InX → inx_target2 (505.5mm). KHÔNG chờ arrived ở đây — chỉ kích lệnh
+        và chuyển ngay sang S1_WAIT_ARRIVE (state đó chịu trách nhiệm verify).
+
+        Pre-condition:
+          - Phải có khay trên băng tải (S1 ∨ S2 ∨ S3 ON) — nếu không, log + notify GUI.
+          - InY phải ≤ iny_safe_zone (interlock: tránh va chạm 2 trục).
+
+        Next: S1_WAIT_ARRIVE (sau khi gửi lệnh InX).
+        """
         if not (self.sensor(S1_BELT_START) or self.sensor(S2_BELT_MID) or self.sensor(S3_BELT_END)):
             self._log_once("S1_WAIT_BELT", "Step2: Cho S1/S2/S3")
             self._notify('info', 'Cho khay (S1/S2/S3)', 'Dat khay len bang tai.')
@@ -2278,20 +2358,38 @@ class CartridgeSystem(Node):
             self._enter_in(SystemState.S1_WAIT_ARRIVE)
 
     def _s1_wait_arrive(self):
+        """
+        Chờ InX tới target_2 (505.5mm) THẬT SỰ trước khi cho phép sang S1_INY_SCAN.
+        Cơ chế block 2 lớp:
+          1. _arrived(1) = drive flag target_position_reached (có thể lên sớm)
+          2. _at_position(1, target, position_tolerance=1.0mm) = đọc vị trí encoder
+             qua _pos() để xác nhận sai số ≤ 1mm.
+        Nếu drive báo arrived nhưng vị trí lệch quá 1mm → resend lệnh + chờ tiếp,
+        TUYỆT ĐỐI không cho phép chuyển sang InY scan để tránh va chạm cơ khí.
+        """
         if not self._inx_arrived:
             self._inx_arrived = self._arrived(1)
             if not self._inx_arrived:
                 self._log_once("S1_INX_MOVING", "INX dang di chuyen")
                 return
-            # Verify INX actually reached target position
-            inx_curr = self._pos(1)
-            if inx_curr is not None and abs(inx_curr - self.config.inx_target2) > 5.0:
-                self.get_logger().warn(f"INX arrived=True but pos={inx_curr:.1f}mm != target {self.config.inx_target2}mm — resend")
+            # Verify INX actually reached target position (tolerance từ config, mặc định 1mm)
+            if not self._at_position(1, self.config.inx_target2):
+                inx_curr = self._pos(1)
+                tol      = self.config.position_tolerance
+                self.get_logger().warn(
+                    f"INX arrived=True but pos="
+                    f"{inx_curr if inx_curr is None else f'{inx_curr:.2f}'}mm "
+                    f"!= target {self.config.inx_target2}mm (tol={tol}mm) — resend"
+                )
                 self._inx_arrived = False
                 self._nb_move(1, self.config.inx_target2, vel=150)
                 return
+            inx_curr = self._pos(1)
             self._30s_timeout = time.time() + 50.0
-            self.get_logger().info(f"INX dung tai {inx_curr:.1f}mm — check S3+S9 (50s)")
+            self.get_logger().info(
+                f"INX dung tai {inx_curr:.2f}mm (target {self.config.inx_target2}mm, "
+                f"tol={self.config.position_tolerance}mm) — check S3+S9 (50s)"
+            )
 
         belt_end, cyl1_ret = self._snap(S3_BELT_END, S9_CYL1_RETRACTED)
 
@@ -2320,6 +2418,21 @@ class CartridgeSystem(Node):
             self._log_once("S1_WAIT_S13", "S3 ON, chờ S9 ON")
 
     def _s1_iny_scan(self):
+        """
+        Quét InY từ home → target_scaninp1 (970mm) để phát hiện stack khay đầu vào.
+        Logic chống nhiễu S4 (xem RULES.md RULE 3):
+          1. S4 là NC (Normally Closed) → bắt **falling edge** (s4_prev ON → now OFF)
+          2. Gate S4 armed theo 3 điều kiện AND, re-evaluate mỗi tick:
+             - InX vẫn tại inx_target2 ± position_tolerance (_at_position)
+             - InY ∈ [iny_scan_valid_min_mm, iny_scan_valid_max_mm]
+             - InY ≥ iny_scan_arm_mm (buffer trên valid_min)
+          3. Disarm + log warn nếu InX drift khỏi target giữa lúc scan.
+
+        Falling edge hợp lệ → tính row từ _zone_to_row → chuyển S1_INY_TO_ROW.
+        Hết hành trình mà không có falling edge:
+          - Retry < limit (s1_scan_noise_retry_limit, default 1): → S1_RETRY_SCAN_HOME
+          - Hết retry: notify error, về home + InX về inx_noise_recovery_mm, vào IDLE.
+        """
         iny = self._pos(2)
         if iny is None:
             return
@@ -2340,8 +2453,32 @@ class CartridgeSystem(Node):
                 f"vel={self.config.iny_scan_vel}"
             )
 
-        if iny >= self.config.iny_scan_arm_mm:
-            self._s4_armed = True
+        # [BLOCKING-FIX D+E] Gate S4 theo 3 điều kiện re-check mỗi tick:
+        #   1. InX vẫn TẠI inx_target2 (verify _pos, tolerance position_tolerance)
+        #      → tránh nhận S4 nếu InX bị nudge/trôi khỏi 505.5mm giữa lúc scan.
+        #   2. InY trong vùng quét hợp lệ:
+        #      iny_scan_valid_min_mm ≤ iny ≤ iny_scan_valid_max_mm (vd 20–970mm)
+        #      → cắt cả 2 đầu (chống trigger dưới 20mm và quá 970mm).
+        #   3. InY đã vượt iny_scan_arm_mm (buffer an toàn trên valid_min).
+        # Nếu InX trôi khỏi target → disarm S4 ngay + log warn.
+        inx_at_target = self._at_position(1, self.config.inx_target2)
+        iny_in_valid  = (self.config.iny_scan_valid_min_mm
+                         <= iny <=
+                         self.config.iny_scan_valid_max_mm)
+        iny_armed_min = iny >= self.config.iny_scan_arm_mm
+        new_armed     = inx_at_target and iny_in_valid and iny_armed_min
+
+        # Disarm + warn nếu InX trôi giữa chừng (đã armed mà giờ inx_at_target=False)
+        if self._s4_armed and not inx_at_target:
+            inx_now = self._pos(1)
+            self._log_once(
+                "S1_SCAN_INX_DRIFT",
+                f"[S1 SCAN] InX troi khoi target "
+                f"({inx_now if inx_now is None else f'{inx_now:.2f}'}mm "
+                f"vs {self.config.inx_target2}mm, tol={self.config.position_tolerance}mm) "
+                f"— DISARM S4"
+            )
+        self._s4_armed = new_armed
 
         s4_now = self.sensor(S4_SCAN_STACK_P1)
         # S4 là thường đóng (NC): chạm khay chuyển từ ON sang OFF -> Falling edge
@@ -2394,6 +2531,11 @@ class CartridgeSystem(Node):
                        f"[S1 SCAN] INY {iny:.0f}mm arm={'OK' if self._s4_armed else 'NO'} S4={'ON' if s4_now else 'OFF'}")
 
     def _s1_retry_scan_home(self):
+        """
+        Retry sau khi scan thất bại lần 1: đưa InY về home rồi quay lại S1_INY_SCAN.
+        Có timeout (move_timeout). Nếu InY không về được home → vào IDLE,
+        notify error. Nếu OK → reset _s4_armed, _s4_prev_in rồi vào S1_INY_SCAN.
+        """
         if not self._cmd_sent_in:
             ok = self._nb_move(2, self.config.iny_home)
             if not ok:
@@ -2411,7 +2553,9 @@ class CartridgeSystem(Node):
             self._enter_in(SystemState.IDLE)
             return
 
-        if self._arrived(2):
+        # [BLOCKING-FIX] verify _at_position(2, iny_home) — đảm bảo InY về home
+        # thật sự trước khi retry scan, tránh scan từ vị trí giữa zone
+        if self._arrived(2) and self._at_position(2, self.config.iny_home):
             self._cmd_sent_in = False
             self._step_timeout_in = 0.0
             self._s4_armed = False
@@ -2420,6 +2564,14 @@ class CartridgeSystem(Node):
             self._enter_in(SystemState.S1_INY_SCAN)
 
     def _s1_iny_to_row(self):
+        """
+        Sau khi S4 falling edge phát hiện row N: di chuyển InY đến target
+        `iny_input_zones[N][2]` (chỉ số 2 = robot pickup position của row đó).
+        Vận tốc chậm = iny_row_vel (docking).
+
+        CAO RỦI RO: Cyl1 sẽ kẹp khay tại row này. Vị trí sai = kẹp sai height
+        → va chạm hoặc kẹt. Verify _at_position(2, target) trước khi sang S1_CHECK_S5.
+        """
         zone = self.config.iny_input_zones.get(self._current_row)
         target = zone[2] if zone else None
         if target is None:
@@ -2436,11 +2588,18 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(2):
+            # [BLOCKING-FIX] CAO — Cyl1 sẽ kẹp tại row, sai vị trí = va chạm
+            elif self._arrived(2) and self._at_position(2, target):
                 self._step_start_in = time.time()
                 self._enter_in(SystemState.S1_CHECK_S5)
 
     def _s1_check_s5(self):
+        """
+        Sau khi InY đến row: chờ S5 (Output Detect) ON xác nhận có khay đúng vị trí.
+        S5 ON → kích `_cyl1_extend()` → S1_CYL1_EXTEND.
+        S5 OFF quá OUTPUT_DETECT_WAIT_S: retry 1 lần (về S1_CHECK_S5 với _s5_retry=1);
+        retry lần 2 vẫn fail → S1_FALLBACK_RETRACT.
+        """
         if not self._cmd_sent_in:
             self._step_start_in = time.time()
             self._cmd_sent_in   = True
@@ -2469,6 +2628,11 @@ class CartridgeSystem(Node):
                 self._enter_in(SystemState.S1_FALLBACK_RETRACT)
 
     def _s1_fallback_retract(self):
+        """
+        Recovery khi S5 fail 2 lần: retract Cyl1 + chờ S9 ON + S10 OFF (cross-check
+        cylinder thực sự thu về). Khi an toàn → ra lệnh InY về home → S1_FALLBACK_WAIT_INY.
+        Retry _cyl1_retract() mỗi 3s nếu sensor chưa đúng (chưa có max attempts ở đây).
+        """
         cyl1_ret, cyl1_ext = self._snap(S9_CYL1_RETRACTED, S10_CYL1_EXTENDED)
         if not self._cmd_sent_in:
             self._cyl1_retract()
@@ -2490,6 +2654,11 @@ class CartridgeSystem(Node):
         self._log_once("S1_FB_RETRACT", "Fallback: cho S9 ON, S10 OFF")
 
     def _s1_fallback_wait_iny(self):
+        """
+        Chờ InY về home sau fallback retract. Khi InY ≤ iny_home + 2mm (verify
+        bằng _pos): ra lệnh InX về `inx_safe` (-60mm) rồi vào S1_CONFIRM_SAFE
+        để bắt đầu lại STATE 1 từ đầu. Timeout → ERROR.
+        """
         if time.time() > self._step_timeout_in:
             self.get_logger().error("Timeout iny ve home")
             self._error("Fallback INY timeout")
@@ -2500,6 +2669,13 @@ class CartridgeSystem(Node):
             self._enter_in(SystemState.S1_CONFIRM_SAFE)
 
     def _go_gui_confirm(self):
+        """
+        Helper escalate khi sub-state INPUT (S1/S2A) timeout hoặc gặp lỗi nguy hiểm.
+        Hành động: ra lệnh InY về home + chuyển sang S1_WAIT_GUI_CONFIRM + notify GUI
+        cấp độ 'error' để operator kiểm tra cơ khí/sensor rồi nhấn XÁC NHẬN.
+        Khác `_error()` (vào ERROR state) — `_go_gui_confirm` cho phép phục hồi
+        không cần restart node.
+        """
         self._nb_move(2, self.config.iny_home)
         self._step_timeout_in  = time.time() + self.config.move_timeout
         self._gui_confirmed = False
@@ -2508,6 +2684,11 @@ class CartridgeSystem(Node):
                      'Cam bien khong phat hien khay. Kiem tra va nhan XAC NHAN.')
 
     def _s1_wait_gui_confirm(self):
+        """
+        Đợi operator nhấn XÁC NHẬN trên GUI (set `_gui_confirmed=True`).
+        Trong khi chờ: ra lệnh InX về `inx_safe` (-60mm) nếu InY đã safe.
+        Khi xác nhận → stop cả 2 trục + sang S1_RETRY_JOG.
+        """
         if not self._cmd_sent_in:
             if self._iny_safe():
                 ok = self._nb_move(1, self.config.inx_safe)
@@ -2520,6 +2701,12 @@ class CartridgeSystem(Node):
         self._log_once("S1_GUI_WAIT", "Cho nhan XAC NHAN tren GUI")
 
     def _s1_retry_jog(self):
+        """
+        Sau khi operator XÁC NHẬN từ GUI: tiếp tục STATE 1 nếu có khay.
+        - Không có khay (S1/S2/S3 OFF): notify "Het khay" và chờ.
+        - Có khay + InX gần inx_target2 (sai số <15mm): trực tiếp vào S1_INY_SCAN.
+        - Có khay + InX ở xa: chuyển sang S1_INX_TRY_POS_PICK để di chuyển InX trước.
+        """
         if not (self.sensor(S1_BELT_START) or self.sensor(S2_BELT_MID) or self.sensor(S3_BELT_END)):
             self._log_once("S1_NO_TRAY", "Het khay — S1/S2/S3 OFF")
             self._notify('warn', 'Het khay', 'Nap khay roi nhan START')
@@ -2531,9 +2718,14 @@ class CartridgeSystem(Node):
             self._s4_armed = False; self._s5_retry = 0
             self._enter_in(SystemState.S1_INY_SCAN)
         else:
-            self._enter_in(SystemState.S1_RETRY_INX_500)
+            self._enter_in(SystemState.S1_INX_TRY_POS_PICK)
 
     def _s1_retry_inx_500(self):
+        """
+        Retry đưa InX về inx_target2 (505.5mm) sau khi operator XÁC NHẬN.
+        Pre-condition: InY phải safe (≤ iny_safe_zone) — interlock rule.
+        Verify _at_position(1, inx_target2) trước khi sang S1_INY_SCAN.
+        """
         if not self._cmd_sent_in:
             if not self._iny_safe():
                 self._log_once("S1_RETRY_INY", "Cho INY safe truoc INX 500mm")
@@ -2547,11 +2739,18 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(1):
+            # [BLOCKING-FIX] verify _at_position(1, inx_target2)
+            elif self._arrived(1) and self._at_position(1, self.config.inx_target2):
                 self._s4_armed = False; self._s5_retry = 0
                 self._enter_in(SystemState.S1_INY_SCAN)
 
     def _s1_cyl1_extend(self):
+        """
+        Kích Cyl1 EXTEND để kẹp khay tại row. Chờ S10 (Cyl1 Extended) ON.
+        Retry _cyl1_extend() mỗi 3s nếu S10 chưa ON (chưa có max attempts).
+        BỎ check S5 trong state này vì quá trình đẩy rulo có thể làm rung S5.
+        Next: S1_INY_PICK_TRAY_UP (rút InY về home để chuẩn bị đẩy khay đi).
+        """
         cyl1_ext, = self._snap(S10_CYL1_EXTENDED)
         # BO CHECK S5 o day vi qua trinh day rulo co the lam rung S5
         if not self._cmd_sent_in:
@@ -2560,7 +2759,7 @@ class CartridgeSystem(Node):
             self._cmd_sent_in    = True
         if cyl1_ext:
             self.get_logger().info("S10 ON — gap khay OK -> INY ve 50mm")
-            self._enter_in(SystemState.S1_INY_50)
+            self._enter_in(SystemState.S1_INY_PICK_TRAY_UP)
             return
         if time.time() > self._cyl_retry_t:
             self.get_logger().info("Retry Cyl1 extend")
@@ -2569,6 +2768,12 @@ class CartridgeSystem(Node):
         self._log_once("S1_WAIT_S14", "Cho S10 ON (Cyl1 extend)")
 
     def _s1_iny_50(self):
+        """
+        Sau khi Cyl1 kẹp khay: rút InY về home (0mm) với vận tốc 250mm/s để
+        kéo khay khỏi stack. Tên hàm là "iny_50" vì lịch sử trước đây dừng ở
+        50mm; hiện target là `iny_home` = 0mm.
+        Next: S1_INY_PLACE_TRAY_ROBOT (đẩy InY về iny_target2 để đặt khay vào vị trí robot).
+        """
         if not self._cmd_sent_in:
             ok = self._nb_move(2, self.config.iny_home,vel=250)
             if not ok:
@@ -2579,10 +2784,16 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(2):
-                self._enter_in(SystemState.S1_INY_200)
+            # [BLOCKING-FIX] verify _at_position(2, iny_home)
+            elif self._arrived(2) and self._at_position(2, self.config.iny_home):
+                self._enter_in(SystemState.S1_INY_PLACE_TRAY_ROBOT)
 
     def _s1_iny_200(self):
+        """
+        Di chuyển InY → iny_target2 (87mm) để đặt khay vào vị trí robot pickup.
+        Khay đang được Cyl1 kẹp suốt quá trình này.
+        Next: S1_WAIT_RELEASE (nhả Cyl1 sau khi đến vị trí).
+        """
         if not self._cmd_sent_in:
             ok = self._nb_move(2, self.config.iny_target2)
             if not ok:
@@ -2593,10 +2804,17 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(2):
+            # [BLOCKING-FIX] verify _at_position(2, iny_target2)
+            elif self._arrived(2) and self._at_position(2, self.config.iny_target2):
                 self._enter_in(SystemState.S1_WAIT_RELEASE)
 
     def _s1_wait_release(self):
+        """
+        Sau khi InY tại iny_target2: retract Cyl1 (nhả khay). Cross-check 2 sensor:
+        S9 ON (Cyl1 retracted) AND S10 OFF (Cyl1 NOT extended) — KHÔNG chỉ check 1
+        (xem RULE 9). Retry _cyl1_retract() mỗi 3s nếu chưa đạt cross-check.
+        Next: S1_WAIT_S7 (chờ sensor xác nhận khay tại robot).
+        """
         cyl1_ret, cyl1_ext = self._snap(S9_CYL1_RETRACTED, S10_CYL1_EXTENDED)
         if not self._cmd_sent_in:
             self._cyl1_retract()
@@ -2613,14 +2831,25 @@ class CartridgeSystem(Node):
         self._log_once("S1_WAIT_REL", f"Cho S9 ON + S10 OFF | S9={cyl1_ret} S10={cyl1_ext}")
 
     def _s1_wait_s7(self):
+        """
+        Chờ S7 (Tray At Robot) ON xác nhận khay đã ở vị trí robot pickup
+        sau khi Cyl1 nhả. Khi ON → S1_INX_WAIT_TRAY_DONE (rút InX về safe).
+        Hàm này không có timeout — phụ thuộc robot hoặc operator confirm.
+        """
         tray_robot, = self._snap(S7_TRAY_AT_ROBOT)
         if tray_robot:
             self.get_logger().info("S7 ON — Khay o vi tri robot -> INX ve safe")
-            self._enter_in(SystemState.S1_INX_10)
+            self._enter_in(SystemState.S1_INX_WAIT_TRAY_DONE)
             return
         self._log_once("S1_WAIT_S7", "Cho S7 ON")
 
     def _s1_inx_10(self):
+        """
+        Đưa InX về `inx_safe` (-60mm) để giải phóng workspace cho robot.
+        Tên hàm "inx_10" là lịch sử (trước đây target=10mm); hiện target=inx_safe.
+        Pre-condition: InY safe (interlock).
+        Next: S1_COMPLETE.
+        """
         if not self._iny_safe():
             self._log_once("S1_INX_WAIT_INY", f"Cho INY <= {self.config.iny_safe_zone}mm truoc INX ve home")
             return
@@ -2634,7 +2863,8 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(1):
+            # [BLOCKING-FIX] verify _at_position(1, inx_safe)
+            elif self._arrived(1) and self._at_position(1, self.config.inx_safe):
                 self._enter_in(SystemState.S1_COMPLETE)
 
     def _s1_complete(self):
@@ -2691,7 +2921,7 @@ class CartridgeSystem(Node):
             )
             self._cmd_sent_in = True
         if self._iny_safe():
-            self._enter_in(SystemState.S2A_INX_500)
+            self._enter_in(SystemState.S2A_INX_MOVE_POS_PICK)
         else:
             if not self._iny_moving:
                 ok = self._nb_move(2, self.config.iny_home)
@@ -2701,6 +2931,14 @@ class CartridgeSystem(Node):
             self._log_once("S2A_WAIT_INY", "Step1: cho INY <= 50mm")
 
     def _s2a_inx_500(self):
+        """
+        STATE 2A bước A2: InX → inx_target2 (505.5mm) để lấy khay cũ từ robot về.
+        Pre-condition:
+          - InY safe (interlock).
+          - S9 (Cyl1 RETRACTED) ON — interlock S2 mới: tránh InX di chuyển khi Cyl1
+            còn extended trong workspace.
+        Next: S2A_POS_PLACE_TRAY_ROBOT_CYL1.
+        """
         if not self._iny_safe():
             self._log_once("S2A_INY2", "A2: INY chua safe")
             return
@@ -2718,10 +2956,18 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(1):
-                self._enter_in(SystemState.S2A_INY_200_CYL1)
+            # [BLOCKING-FIX] verify _at_position(1, inx_target2)
+            elif self._arrived(1) and self._at_position(1, self.config.inx_target2):
+                self._enter_in(SystemState.S2A_POS_PLACE_TRAY_ROBOT_CYL1)
 
     def _s2a_iny_200_cyl1(self):
+        """
+        STATE 2A bước A3: InY → iny_target2 (87mm) tới vị trí kẹp khay cũ, sau đó
+        kích Cyl1 EXTEND để kẹp.
+        CAO RỦI RO: verify _at_position(2, iny_target2) trước khi Cyl1 extend
+        để tránh kẹp sai vị trí.
+        Next: S2A_WAIT_S7 (chờ S10 ON xác nhận Cyl1 đã extended).
+        """
         if not self._cmd_sent_in:
             ok = self._nb_move(2, self.config.iny_target2)
             if not ok:
@@ -2732,12 +2978,21 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(2):
-                self.get_logger().info("A3: INY tai 200mm -> Cyl1 EXTEND")
+            # [BLOCKING-FIX] CAO — Cyl1 sẽ extend kẹp khay; sai vị trí = va chạm
+            elif self._arrived(2) and self._at_position(2, self.config.iny_target2):
+                self.get_logger().info(
+                    f"A3: INY tai {self.config.iny_target2}mm -> Cyl1 EXTEND"
+                )
                 self._cyl1_extend()
                 self._enter_in(SystemState.S2A_WAIT_S7)
 
     def _s2a_wait_s7(self):
+        """
+        STATE 2A bước A4: chờ S10 (Cyl1 Extended) ON xác nhận đã kẹp khay cũ.
+        Retry _cyl1_extend() mỗi 3s. Lưu ý tên hàm "wait_s7" là lịch sử — thực tế
+        đang chờ S10 (mã sensor đã đổi tên qua các phiên bản hardware).
+        Next: S2A_INY_HOME (rút InY về home với khay đang kẹp).
+        """
         cyl1_ext, = self._snap(S10_CYL1_EXTENDED)
         if not self._cmd_sent_in:
             self._cyl1_extend()
@@ -2745,7 +3000,7 @@ class CartridgeSystem(Node):
             self._cmd_sent_in    = True
         if cyl1_ext:
             self.get_logger().info("A4: S10 ON — gap khay cu OK")
-            self._enter_in(SystemState.S2A_INY_10)
+            self._enter_in(SystemState.S2A_INY_HOME)
             return
         if time.time() > self._cyl_retry_t:
             self.get_logger().info("Retry Cyl1 extend")
@@ -2754,6 +3009,10 @@ class CartridgeSystem(Node):
         self._log_once("S2A_S14", "A4: Cho S10 ON")
 
     def _s2a_iny_10(self):
+        """
+        STATE 2A bước A5: kéo InY về iny_home (0mm) cùng khay cũ (Cyl1 đang kẹp).
+        Next: S2A_INX_PLACE_TRAY_OUT_POS1 (đưa InX ra vị trí output stack).
+        """
         if not self._cmd_sent_in:
             ok = self._nb_move(2, self.config.iny_home)
             if not ok:
@@ -2764,10 +3023,17 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(2):
-                self._enter_in(SystemState.S2A_INX_10)
+            # [BLOCKING-FIX] verify _at_position(2, iny_home)
+            elif self._arrived(2) and self._at_position(2, self.config.iny_home):
+                self._enter_in(SystemState.S2A_INX_PLACE_TRAY_OUT_POS1)
 
     def _s2a_inx_10(self):
+        """
+        STATE 2A bước A6: InX → inx_output_stack (100mm) — vị trí thả khay vào
+        output stack. Pre-condition: InY safe.
+        Reset _s4_armed_out = False trước khi vào jog output.
+        Next: S2A_INY_JOG_OUTPUT.
+        """
         if not self._iny_safe():
             self._log_once("S2A_INX10_WAIT", "A6: INY chua safe")
             return
@@ -2781,11 +3047,21 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(1):
+            # [BLOCKING-FIX] verify _at_position(1, inx_output_stack)
+            elif self._arrived(1) and self._at_position(1, self.config.inx_output_stack):
                 self._s4_armed_out = False
                 self._enter_in(SystemState.S2A_INY_JOG_OUTPUT)
 
     def _s2a_iny_jog_output(self):
+        """
+        STATE 2A bước A7: tìm slot trống trong output stack để thả khay cũ.
+        2 trường hợp:
+          - S6 OFF (snapshot lúc bắt đầu STATE 2A): stack rỗng → thẳng row1.
+          - S6 ON: stack có khay → InY scan xuống `target_scanoutp1` để tìm khoảng
+            trống (S4 ON khi gặp khay tồn → row đã chiếm → tìm row tiếp).
+        Khi xác định được row trống → set `_output_target_pos` → S2A_INY_OUTPUT_ROW.
+        Timeout / không trigger S4 → fallback thả vào row1.
+        """
         if not self._s6_snapshot:
             self.get_logger().info(
                 f"[S2A Step7] S6 OFF → thẳng row1 ({self.config.iny_output_zones[1][2]:.0f}mm)"
@@ -2844,6 +3120,12 @@ class CartridgeSystem(Node):
         self._log_once("S2A_JOG_OUT", f"[S2A Step7] INY {iny:.0f}mm S4={'ON' if s4_now else 'OFF'}")
 
     def _s2a_retry_scan_home(self):
+        """
+        Recovery khi S2A scan thất bại: đưa InY về home rồi quay lại jog output.
+        Có timeout (move_timeout) → ERROR nếu InY không về được home.
+        Verify _at_position(2, iny_home) hoặc _pos đọc về ≤ iny_home+2 trước
+        khi chuyển state.
+        """
         if not self._cmd_sent_in:
             ok = self._nb_move(2, self.config.iny_home)
             if not ok:
@@ -2858,6 +3140,14 @@ class CartridgeSystem(Node):
                 self._enter_in(SystemState.S2A_INY_JOG_OUTPUT)
 
     def _s2a_iny_output_row(self):
+        """
+        STATE 2A bước A8: di chuyển InY đến `_output_target_pos` (đã xác định ở
+        bước jog_output) với vận tốc iny_row_vel. Khi đến đích → retract Cyl1
+        (thả khay cũ vào output stack tại row trống).
+        CAO RỦI RO: verify _at_position(2, target) trước khi nhả — sai vị trí
+        = thả khay sai row, có thể đè khay khác hoặc rơi ngoài stack.
+        Next: S2A_WAIT_CYL1_RET.
+        """
         if not self._cmd_sent_in:
             # Chỉ vào đây qua path S6=OFF (target đã set, chưa gửi move)
             target = self._output_target_pos
@@ -2874,7 +3164,8 @@ class CartridgeSystem(Node):
 
         if time.time() > self._step_timeout_in:
             self._cmd_sent_in = False
-        elif self._arrived(2):
+        # [BLOCKING-FIX] CAO — Cyl1 retract sẽ thả khay; sai row = thả sai vị trí
+        elif self._arrived(2) and self._at_position(2, self._output_target_pos):
             self.get_logger().info(
                 f"[S2A] InY tới row{self._output_row} "
                 f"({self._output_target_pos:.0f}mm) → Cyl1 RETRACT"
@@ -2883,6 +3174,11 @@ class CartridgeSystem(Node):
             self._enter_in(SystemState.S2A_WAIT_CYL1_RET)
 
     def _s2a_wait_cyl1_ret(self):
+        """
+        STATE 2A bước A9: chờ S9 (Cyl1 Retracted) ON xác nhận đã thả khay vào stack.
+        Retry _cyl1_retract() mỗi 3s nếu sensor chưa đúng.
+        Next: S2A_INY_FINAL (đưa InY về home để chuẩn bị thoát khỏi workspace).
+        """
         cyl1_ret, = self._snap(S9_CYL1_RETRACTED)
         if not self._cmd_sent_in:
             self._cyl1_retract()
@@ -2890,7 +3186,7 @@ class CartridgeSystem(Node):
             self._cmd_sent_in    = True
         if cyl1_ret:
             self.get_logger().info("A9: S9 ON — da tha khay")
-            self._enter_in(SystemState.S2A_INY_10_FINAL)
+            self._enter_in(SystemState.S2A_INY_FINAL)
             return
         if time.time() > self._cyl_retry_t:
             self.get_logger().info("Retry Cyl1 retract")
@@ -2899,6 +3195,10 @@ class CartridgeSystem(Node):
         self._log_once("S2A_S13", "A9: Cho S9 ON")
 
     def _s2a_iny_10_final(self):
+        """
+        STATE 2A bước A10: đưa InY về iny_home để chuẩn bị InX rút.
+        Next: S2A_WAIT_NEW_TRAY.
+        """
         if not self._cmd_sent_in:
             ok = self._nb_move(2, self.config.iny_home)
             if not ok:
@@ -2909,10 +3209,16 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(2):
-                self._enter_in(SystemState.S2A_INX_20)
+            # [BLOCKING-FIX] verify _at_position(2, iny_home)
+            elif self._arrived(2) and self._at_position(2, self.config.iny_home):
+                self._enter_in(SystemState.S2A_WAIT_NEW_TRAY)
 
     def _s2a_inx_20(self):
+        """
+        STATE 2A bước A11: InX về inx_safe (-60mm) để giải phóng workspace.
+        Pre-condition: InY safe.
+        Next: S2A_COMPLETE.
+        """
         if not self._iny_safe():
             self._log_once("S2A_INX20", "A11: Cho INY safe")
             return
@@ -2926,7 +3232,8 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_in:
                 self._cmd_sent_in = False
-            elif self._arrived(1):
+            # [BLOCKING-FIX] verify _at_position(1, inx_safe)
+            elif self._arrived(1) and self._at_position(1, self.config.inx_safe):
                 self._enter_in(SystemState.S2A_COMPLETE)
 
     def _s2a_retry_scan_home(self):
@@ -2948,6 +3255,14 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
     def _s3_check_outxy_safe(self):
+        """
+        STATE 3 bước đầu: đảm bảo OutX về `outx_home` AND OutY về `outy_target1`
+        trước khi Servo3 di chuyển — tránh va chạm trục Z với cụm output.
+        Verify cả 2 servo bằng _arrived AND _at_position.
+        Timeout fallback: vẫn cho tiếp tục (warn log) — vì OutX/OutY ở "near home"
+        thường an toàn cho Servo3.
+        Next: S3_CHECK_S17.
+        """
         if not self._cmd_sent_s3:
             self._pub_cartridge_busy(True)
         cfg = self.config
@@ -2968,12 +3283,21 @@ class CartridgeSystem(Node):
             else:
                 if time.time() > self._step_timeout_s3:
                     self._enter_s3(SystemState.S3_CHECK_S17)
-                elif self._arrived(4) and self._arrived(5):
+                # [BLOCKING-FIX] verify _at_position cho cả OutX và OutY
+                elif (self._arrived(4) and self._arrived(5)
+                      and self._at_position(4, cfg.outx_home)
+                      and self._at_position(5, cfg.outy_target1)):
                     self._enter_s3(SystemState.S3_CHECK_S17)
                 else:
                     self._log_once("S3_SAFE", "Cho OutX/OutY ve home")
 
     def _s3_servo3_target1(self):
+        """
+        STATE 3 bước 2: Servo3 → servo3_target1 (10mm) — điểm chờ cấp khay.
+        Verify _at_position(3, servo3_target1) trước khi sang S3_CHECK_S17
+        (check sensor có khay trên platform).
+        Timeout → _error() (vào ERROR state).
+        """
         cfg = self.config
         if not self._cmd_sent_s3:
             ok = self._nb_move(3, cfg.servo3_target1)
@@ -2985,10 +3309,17 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_s3:
                 self._error(f"S3_SERVO3_TARGET1 timeout")
-            elif self._arrived(3):
+            # [BLOCKING-FIX] verify _at_position(3, servo3_target1)
+            elif self._arrived(3) and self._at_position(3, cfg.servo3_target1):
                 self._enter_s3(SystemState.S3_CHECK_S17)
 
     def _s3_check_s17(self):
+        """
+        Check S17 (Platform Tray) — có khay trên Platform của Servo3 chưa.
+        - S17 OFF: chuyển sang S3_WAIT_S17 (chờ operator/băng tải cấp khay).
+        - S17 ON: confirm 3s rồi sang S3_SERVO3_FEED (đẩy khay vào robot).
+        Confirm 3s = chống nhiễu sensor false-positive trong vài chu kỳ tick.
+        """
         if not self.sensor(S17_PLATFORM):
             self._enter_s3(SystemState.S3_WAIT_S17)
             return
@@ -3002,6 +3333,10 @@ class CartridgeSystem(Node):
             self._enter_s3(SystemState.S3_SERVO3_FEED)
 
     def _s3_wait_s17(self):
+        """
+        Chờ S17 ON (có khay trên Platform). Khi ON → S3_CHECK_S17 (confirm 3s).
+        Không có timeout — chờ vô hạn cho đến khi operator cấp khay.
+        """
         if self.sensor(S17_PLATFORM):
             self._notify('info', 'Da phat hien khay', 'S17 ON — confirm 3s')
             self._enter_s3(SystemState.S3_CHECK_S17)
@@ -3012,6 +3347,15 @@ class CartridgeSystem(Node):
         self._enter_s3(SystemState.S3_SERVO3_FEED)
 
     def _s3_servo3_feed(self):
+        """
+        STATE 3 bước feed: Servo3 → servo3_target2 (400mm) đẩy khay vào robot.
+        Vận tốc = servo3_feed_velocity. Vừa đi vừa monitor S18 (Feed OK).
+        2 nhánh thoát:
+          1. S18 ON sớm → STOP servo3 + S3_WAIT_S18 (confirm 5s).
+          2. Servo3 tới giới hạn (target2) + S18 vẫn OFF → khay kẹt → quay về
+             servo3_target1 thử lại. Verify _at_position(3, target2) trước fallback.
+        Timeout move_timeout → _error().
+        """
         cfg = self.config
         if not self._cmd_sent_s3:
             ok = self._nb_move(3, cfg.servo3_target2, vel=int(cfg.servo3_feed_velocity))
@@ -3031,12 +3375,20 @@ class CartridgeSystem(Node):
 
             if time.time() > self._step_timeout_s3:
                 self._error("S3_SERVO3_FEED timeout")
-            elif self._arrived(3) and time.time() - self._step_start_s3 > 0.5:
+            # [BLOCKING-FIX] verify _at_position(3, servo3_target2). Nhánh này chỉ
+            # vào khi Servo3 đã tới giới hạn target2 mà S18 chưa ON → cần verify thật
+            # đã ở target2, tránh đọc nhầm drive flag rồi quay về 10mm vô lý.
+            elif (self._arrived(3) and self._at_position(3, cfg.servo3_target2)
+                  and time.time() - self._step_start_s3 > 0.5):
                 self.get_logger().warn("[S3] Servo 3 tới giới hạn (target2) chưa có S18 -> Quay về 10mm thử lại!")
                 self._notify('warn', 'Lỗi cấp khay', 'Đã tới 400mm nhưng chưa thấy S18, thu về cấp lại')
                 self._enter_s3(SystemState.S3_SERVO3_TARGET1)
 
     def _s3_wait_s18(self):
+        """
+        Confirm S18 ON liên tục trong 5s sau khi servo3 dừng. Nếu S18 OFF
+        giữa chừng → quay lại S3_SERVO3_FEED (đẩy thêm). Đủ 5s S18 ON → S3_COMPLETE.
+        """
         if not self.sensor(S18_FEED_OK):
             self.get_logger().warn("[S3] S18 OFF during confirm -> Resume FEED")
             self._enter_s3(SystemState.S3_SERVO3_FEED)
@@ -3063,6 +3415,12 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
     def _s4_check_outy_safe(self):
+        """
+        STATE 4 bước đầu: đảm bảo OutY về `outy_target1` (10mm = safe clearance)
+        trước khi OutX di chuyển vào (tránh va chạm 2 trục output).
+        Verify _at_position(5, outy_target1) bằng _at_position helper.
+        Next: S4_OUTX_TARGET2.
+        """
         if not self._cmd_sent_s4:
             self._pub_cartridge_busy(True)
         cfg = self.config
@@ -3080,11 +3438,16 @@ class CartridgeSystem(Node):
             else:
                 if time.time() > self._step_timeout_s4:
                     self._cmd_sent_s4 = False
-                elif self._arrived(5):
+                # [BLOCKING-FIX] verify _at_position(5, outy_target1)
+                elif self._arrived(5) and self._at_position(5, cfg.outy_target1):
                     self._enter_s4(SystemState.S4_OUTX_TARGET2)
             self._log_once("S4_SAFE", "Cho OutY ve safe zone")
 
     def _s4_outx_target2(self):
+        """
+        STATE 4: OutX → outx_target2 (400mm) — vị trí lấy khay thành phẩm từ Pos 1.
+        Verify _at_position trước khi sang S4_OUTY_PICK (hạ OutY xuống kẹp khay).
+        """
         cfg = self.config
         if not self._cmd_sent_s4:
             ok = self._nb_move(4, cfg.outx_target2)
@@ -3096,10 +3459,17 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_s4:
                 self._error("S4_OUTX_TARGET2 timeout")
-            elif self._arrived(4):
+            # [BLOCKING-FIX] verify _at_position(4, outx_target2)
+            elif self._arrived(4) and self._at_position(4, cfg.outx_target2):
                 self._enter_s4(SystemState.S4_OUTY_PICK)
 
     def _s4_outy_pick(self):
+        """
+        STATE 4: OutY → outy_pick_pos (100mm) — hạ xuống vị trí kẹp khay.
+        CAO RỦI RO: Cyl2 sẽ EXTEND để kẹp khay ngay sau khi đến vị trí; sai vị trí
+        = Cyl2 đóng nhầm vào khung gia công. Verify _at_position trước khi sang
+        S4_CYL2_EXTEND.
+        """
         cfg = self.config
         if not self._cmd_sent_s4:
             ok = self._nb_move(5, cfg.outy_pick_pos)
@@ -3111,10 +3481,17 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_s4:
                 self._error("S4_OUTY_PICK timeout")
-            elif self._arrived(5):
+            # [BLOCKING-FIX] CAO — Cyl2 sẽ extend kẹp khay; sai vị trí = va chạm
+            elif self._arrived(5) and self._at_position(5, cfg.outy_pick_pos):
                 self._enter_s4(SystemState.S4_CYL2_EXTEND)
 
     def _s4_cyl2_extend(self):
+        """
+        Kích Cyl2 EXTEND để kẹp khay đầu ra. Chờ S22 (Cyl2 Extended) ON.
+        Timeout CYLINDER_TIMEOUT_S → _error() (vào ERROR state, vì retry pneumatic
+        ở đây không có max attempts giống các state khác — TODO: bổ sung).
+        Next: S4_OUTY_TARGET1 (nâng OutY giữ khay lên 10mm).
+        """
         if not self._cmd_sent_s4:
             self._cyl2_extend()
             self._cmd_sent_s4 = True
@@ -3125,6 +3502,10 @@ class CartridgeSystem(Node):
             self._error("[S4] Timeout: Cyl2 extend — S22 khong ON")
 
     def _s4_outy_target1(self):
+        """
+        STATE 4: nâng OutY lên outy_target1 (10mm) cùng khay (Cyl2 đang kẹp).
+        Next: S4_OUTX_TARGET3 (đẩy OutX về vị trí thả).
+        """
         cfg = self.config
         if not self._cmd_sent_s4:
             ok = self._nb_move(5, cfg.outy_target1)
@@ -3136,10 +3517,17 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_s4:
                 self._error("S4_OUTY_TARGET1 timeout")
-            elif self._arrived(5):
+            # [BLOCKING-FIX] verify _at_position(5, outy_target1)
+            elif self._arrived(5) and self._at_position(5, cfg.outy_target1):
                 self._enter_s4(SystemState.S4_OUTX_TARGET3)
 
     def _s4_outx_target3(self):
+        """
+        STATE 4: OutX → outx_target3 (20mm) — vị trí đặt khay output ra khỏi
+        workspace. Trong khi di chuyển, nếu S17 ON (có khay platform) → set
+        _s3_pending = True để chạy S3 sau khi S4 xong.
+        Next: S4_CHECK_S19 (kiểm tra có cần scan stack output hay không).
+        """
         cfg = self.config
         if not self._cmd_sent_s4:
             ok = self._nb_move(4, cfg.outx_target3)
@@ -3153,10 +3541,16 @@ class CartridgeSystem(Node):
                 self._s3_pending = True
             if time.time() > self._step_timeout_s4:
                 self._error("S4_OUTX_TARGET3 timeout")
-            elif self._arrived(4):
+            # [BLOCKING-FIX] verify _at_position(4, outx_target3)
+            elif self._arrived(4) and self._at_position(4, cfg.outx_target3):
                 self._enter_s4(SystemState.S4_CHECK_S19)
 
     def _s4_check_s19(self):
+        """
+        Check S19 (Check Tray Pos 2) — output stack có khay hay không.
+        - S19 OFF: stack rỗng → thẳng row 1 (S4_OUTY_ROW1).
+        - S19 ON: stack có khay → scan tìm slot trống (S4_OUTY_SCAN_S20).
+        """
         # S17 OFF -> Stack đang rỗng -> Bỏ qua scan, xuống thẳng Row 1
         if not self.sensor(S19_CHECK_TRAY_P2):
             self.get_logger().info(f"[S4] S19 OFF -> Bỏ qua scan S20, xuống thẳng Row 1")
@@ -3166,6 +3560,10 @@ class CartridgeSystem(Node):
             self._enter_s4(SystemState.S4_OUTY_SCAN_S20)
 
     def _s4_outy_row1(self):
+        """
+        Output stack rỗng → di chuyển OutY thẳng đến row 1 (cuối stack)
+        ở `outy_output_zones[1][2]`. Next: S4_CYL2_RETRACT (thả khay).
+        """
         cfg = self.config
         if not self._cmd_sent_s4:
             # Di chuyen nhanh toi vi tri Target cua Row 1 trong Zone
@@ -3179,10 +3577,21 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_s4:
                 self._error("S4_OUTY_ROW1 timeout")
-            elif self._arrived(5):
+            # [BLOCKING-FIX] verify _at_position(5, row1 target)
+            elif (self._arrived(5)
+                  and self._at_position(5, cfg.outy_output_zones[1][2])):
                 self._enter_s4(SystemState.S4_CYL2_RETRACT)
 
     def _s4_outy_scan_s20(self):
+        """
+        Scan OutY xuống `target_scanoutp2` (500mm) hoặc tới `outy_output_zones[2][1]`
+        nếu S19 ON, để tìm row trống trong output stack. S20 (Scan Stack Pos 2) ON
+        khi gặp khay tồn → tính row → chốt vị trí thả.
+        Tương tự RULE 12 (falling edge cho S4), nhưng S20 hiện code dùng raw ON
+        (có thể cần đổi sang falling edge nếu nhiễu).
+        Fallback khi không trigger S20: thả vào row 1.
+        Next: S4_OUTY_DROP.
+        """
         cfg = self.config
         oy = self._pos(5)
         if oy is None:
@@ -3236,6 +3645,10 @@ class CartridgeSystem(Node):
                        f"[S4] OUTY {oy:.0f}mm S20={'ON' if self.sensor(S20_SCAN_STACK_P2) else 'OFF'}")
 
     def _s4_retry_scan_home(self):
+        """
+        Recovery khi S4 scan thất bại: đưa OutY về outy_target1 (safe) rồi quay lại
+        S4_OUTY_SCAN_S20 để scan lại. Timeout → _error().
+        """
         cfg = self.config
         if not self._cmd_sent_s4:
             ok = self._nb_move(5, cfg.outy_target1)
@@ -3251,6 +3664,13 @@ class CartridgeSystem(Node):
                 self._enter_s4(SystemState.S4_OUTY_SCAN_S20)
 
     def _s4_outy_drop(self):
+        """
+        Sau khi scan xong, di chuyển OutY đến target chốt được (`_outy_jog_pos`)
+        với vận tốc chậm `outy_slow_vel`. continuous_update=True cho phép cập nhật
+        target động trong khi servo đang chạy.
+        CAO RỦI RO: vị trí sai = Cyl2 retract thả khay ngoài stack hoặc đè khay khác.
+        Verify _at_position(5, _outy_jog_pos) trước khi sang S4_CYL2_RETRACT.
+        """
         if not self._cmd_sent_s4:
             target = self._outy_jog_pos or 0.0
             if target <= 0:
@@ -3264,11 +3684,18 @@ class CartridgeSystem(Node):
 
         if time.time() > self._step_timeout_s4:
             self._cmd_sent_s4 = False
-        elif self._arrived(5):
+        # [BLOCKING-FIX] CAO — Cyl2 retract thả khay; sai vị trí = khay rơi sai chỗ
+        elif self._arrived(5) and self._at_position(5, self._outy_jog_pos or 0.0):
             self.get_logger().info(f"[S4] OutY tới target ({self._outy_jog_pos:.0f}mm) → CYL2 RETRACT")
             self._enter_s4(SystemState.S4_CYL2_RETRACT)
 
     def _s4_cyl2_retract_state(self):
+        """
+        Retract Cyl2 để nhả khay vào output stack. Cross-check 2 sensor:
+        S21 ON (Cyl2 retracted) AND S22 OFF (Cyl2 NOT extended).
+        Timeout CYLINDER_TIMEOUT_S → _error().
+        Next: S4_OUTY_OUTX_HOME (đưa 2 trục về home, hoàn tất STATE 4).
+        """
         if not self._cmd_sent_s4:
             self._cyl2_retract()
             self._cmd_sent_s4 = True
@@ -3279,6 +3706,12 @@ class CartridgeSystem(Node):
             self._error("[S4] Timeout: Cyl2 retract")
 
     def _s4_outy_outx_home(self):
+        """
+        Hoàn tất STATE 4: đưa OutX về outx_home AND OutY về outy_target1.
+        Verify cả 2 trục bằng _at_position.
+        Next: S4_COMPLETE → có thể chain ngay sang STATE 3 nếu camera AI báo
+        cần cấp khay mới (`_can_start_s3()` True).
+        """
         cfg = self.config
         if not self._cmd_sent_s4:
             ok4 = self._nb_move(4, cfg.outx_home)
@@ -3291,7 +3724,10 @@ class CartridgeSystem(Node):
         else:
             if time.time() > self._step_timeout_s4:
                 self._error("S4_OUTY_OUTX_HOME timeout")
-            elif self._arrived(5) and self._arrived(4):
+            # [BLOCKING-FIX] verify _at_position cho cả OutX và OutY
+            elif (self._arrived(5) and self._arrived(4)
+                  and self._at_position(5, cfg.outy_target1)
+                  and self._at_position(4, cfg.outx_home)):
                 self._enter_s4(SystemState.S4_COMPLETE)
 
     def _s4_complete(self):

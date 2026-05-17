@@ -189,7 +189,10 @@ servo_limits:
   5: 600.0
 iny_search_velocity: 30.0
 iny_slow_velocity: 10.0
-position_tolerance: 5.0
+position_tolerance: 1.0    # mm — sai số cho phép coi servo "đã thực sự đến target"
+                            # (dùng trong _at_position() / _s1_wait_arrive / gate S4).
+                            # Đặt thấp = chặt = chờ servo settle đúng vị trí trước khi sang
+                            # state nguy hiểm. Tăng nếu drive overshoot nhiều và retry vô ích.
 outx_safe_position_threshold: 100.0
 max_trays: 8
 max_slots_per_output_tray: 9
