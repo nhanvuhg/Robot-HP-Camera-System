@@ -152,7 +152,7 @@ class SystemState(Enum):
     S2A_INY_HOME            = "s2a_iny_home"
     S2A_INX_PLACE_TRAY_OUT_POS1            = "s2a_inx_place_tray_out_pos1"
     S2A_INY_JOG_OUTPUT    = "s2a_iny_jog_output"
-    S2A_INY_OUTPUT_ROW    = "s2a_iny_output_row"
+    S2A_INY_TARGETROW    = "s2a_iny_targetrow"
     S2A_WAIT_CYL1_RET     = "s2a_wait_cyl1_ret"
     S2A_INY_FINAL      = "s2a_iny_final"
     S2A_WAIT_NEW_TRAY            = "s2a_wait_new_tray"
@@ -2154,7 +2154,7 @@ class CartridgeSystem(Node):
         elif s == SystemState.S2A_INY_HOME:            self._s2a_iny_home()
         elif s == SystemState.S2A_INX_PLACE_TRAY_OUT_POS1:            self._s2a_inx_place_tray_out_pos1()
         elif s == SystemState.S2A_INY_JOG_OUTPUT:    self._s2a_iny_jog_output()
-        elif s == SystemState.S2A_INY_OUTPUT_ROW:    self._s2a_iny_output_row()
+        elif s == SystemState.S2A_INY_TARGETROW:    self._s2a_iny_targetrow()
         elif s == SystemState.S2A_WAIT_CYL1_RET:          self._s2a_wait_cyl1_ret()
         elif s == SystemState.S2A_INY_FINAL:      self._s2a_iny_final()
         elif s == SystemState.S2A_WAIT_NEW_TRAY:            self._s2a_wait_new_tray()
@@ -3072,70 +3072,109 @@ class CartridgeSystem(Node):
 
     def _s2a_iny_jog_output(self):
         """
-        STATE 2A bước A7: tìm slot trống trong output stack để thả khay cũ.
-        2 trường hợp:
-          - S6 OFF (snapshot lúc bắt đầu STATE 2A): stack rỗng → thẳng row1.
-          - S6 ON: stack có khay → InY scan xuống `target_scanoutp1` để tìm khoảng
-            trống (S4 ON khi gặp khay tồn → row đã chiếm → tìm row tiếp).
-        Khi xác định được row trống → set `_output_target_pos` → S2A_INY_OUTPUT_ROW.
-        Timeout / không trigger S4 → fallback thả vào row1.
-        """
-        if not self._s6_snapshot:
-            self.get_logger().info(
-                f"[S2A Step7] S6 OFF → thẳng row1 ({self.config.iny_output_zones[1][2]:.0f}mm)"
-            )
-            self._output_target_pos = self.config.iny_output_zones[1][2]
-            self._output_row        = 1
-            self._enter_in(SystemState.S2A_INY_OUTPUT_ROW)
-            return
+        STATE 2A bước A7: scan InY để xác định vị trí thả khay cũ vào output stack.
 
+        Logic dùng chung với _s1_iny_scan — CHỈ KHÁC tọa độ InX target:
+          - S1 scan: InX tại inx_target2 (505.5mm — vị trí lấy khay từ robot)
+          - S2A scan: InX tại inx_output_stack (-300mm — vị trí output stack)
+        Đều scan InY → target_scaninp1 (970mm) @ iny_scan_vel.
+
+        S6 (pre-check stack):
+          - S6 OFF (stack rỗng): bỏ qua S4 detect — di chuyển 970mm @ iny_scan_vel,
+            đến nơi → enter S2A_INY_TARGETROW với target row 1 (vel sẽ đổi sang
+            iny_row_vel ở state đó).
+            Lý do: stack rỗng nên không có khay nào để S4 trigger → S4 sẽ không
+            bao giờ phát hiện row 1 → cần S6 confirm trước.
+          - S6 ON (stack có khay): scan với S4 falling-edge + armed-gate (giống S1):
+              * inx_at_target (InX tại inx_output_stack)
+              * iny in [iny_scan_valid_min_mm, iny_scan_valid_max_mm]
+              * iny >= iny_scan_arm_mm
+            S4 falling edge hợp lệ → _zone_to_row(iny_output_zones) → target row →
+            enter S2A_INY_TARGETROW.
+            Hết hành trình mà S4 không trigger → fallback row 1 + warn.
+
+        Next: S2A_INY_TARGETROW (di chuyển đến row target @ iny_row_vel + nhả Cyl1).
+        """
         iny = self._pos(2)
         if iny is None:
             return
 
-        scan_target = self.config.target_scanoutp1
-
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, scan_target, vel=self.config.iny_scan_vel)
+            ok = self._nb_move(2, self.config.target_scaninp1, vel=self.config.iny_scan_vel)
             if not ok:
-                self._log_once("S2A_JOG_FAIL", "S2A Step7: nb_move fail")
+                self._log_once("S2A_SCAN_FAIL", "S2A scan: nb_move fail")
                 return
             self._cmd_sent_in     = True
             self._step_timeout_in = time.time() + self.config.move_timeout
+            self._s4_armed_out    = False
+            self._s4_prev_out     = self.sensor(S4_SCAN_STACK_P1)
             self.get_logger().info(
-                f"[S2A Step7] S6=ON → scan xuống {scan_target:.0f}mm "
-                f"vel={self.config.iny_scan_vel}"
+                f"[S2A SCAN] InY → {self.config.target_scaninp1:.0f}mm "
+                f"vel={self.config.iny_scan_vel} S6={'ON' if self._s6_snapshot else 'OFF'}"
             )
 
-        s4_now = self.sensor(S4_SCAN_STACK_P1)
-        if s4_now:
-            trigger_pos = self._pos(2) or iny
-            
-            row = self._zone_to_row(trigger_pos, self.config.iny_output_zones)
-            if row is not None:
-                target_mm = self.config.iny_output_zones[row][2]
-                self._output_target_pos = target_mm
-                self._output_row = row
-                self._s2a_scan_noise_retry = 0
-                self.get_logger().info(f"[S2A Step7] S4 ON @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm)")
-                self._enter_in(SystemState.S2A_INY_OUTPUT_ROW)
-                return
+        # ── S6 ON: detect S4 (giống S1 falling-edge + armed-gate) ────
+        if self._s6_snapshot:
+            inx_at_target = self._at_position(1, self.config.inx_output_stack)
+            iny_in_valid  = (self.config.iny_scan_valid_min_mm
+                             <= iny <=
+                             self.config.iny_scan_valid_max_mm)
+            iny_armed_min = iny >= self.config.iny_scan_arm_mm
+            new_armed     = inx_at_target and iny_in_valid and iny_armed_min
 
+            if self._s4_armed_out and not inx_at_target:
+                inx_now = self._pos(1)
+                self._log_once(
+                    "S2A_SCAN_INX_DRIFT",
+                    f"[S2A SCAN] InX trôi khỏi {self.config.inx_output_stack}mm "
+                    f"({inx_now if inx_now is None else f'{inx_now:.2f}'}mm, "
+                    f"tol={self.config.position_tolerance}mm) — DISARM S4"
+                )
+            self._s4_armed_out = new_armed
+
+            s4_now = self.sensor(S4_SCAN_STACK_P1)
+            # S4 là NC: chạm khay tồn → falling edge (ON → OFF)
+            s4_falling = self._s4_prev_out and (not s4_now)
+            self._s4_prev_out = s4_now
+
+            if self._s4_armed_out and s4_falling:
+                trigger_pos = self._pos(2) or iny
+                row = self._zone_to_row(trigger_pos, self.config.iny_output_zones)
+                if row is not None:
+                    target_mm = self.config.iny_output_zones[row][2]
+                    self._output_target_pos = target_mm
+                    self._output_row = row
+                    self.get_logger().info(
+                        f"[S2A SCAN] S4 falling edge @ {trigger_pos:.1f}mm → "
+                        f"row{row} ({target_mm:.0f}mm)"
+                    )
+                    self._enter_in(SystemState.S2A_INY_TARGETROW)
+                    return
+
+        # ── Arrived 970mm: S6 OFF default, hoặc S6 ON fallback ───────
         timed_out = time.time() > self._step_timeout_in
-        at_target = self._arrived(2) or iny >= scan_target - 2.0
+        at_target = self._arrived(2) or iny >= self.config.target_scaninp1 - 2.0
         if timed_out or at_target:
             self._stop(2)
-            self.get_logger().warn(f"[S2A Step7] S4 không trigger → fallback row1")
-            tgt = self.config.iny_output_zones[1][2]
-            self._output_target_pos = tgt
+            target_mm = self.config.iny_output_zones[1][2]
+            if self._s6_snapshot:
+                self.get_logger().warn(
+                    f"[S2A SCAN] S4 không trigger trong S6=ON → fallback row1 ({target_mm:.0f}mm)"
+                )
+            else:
+                self.get_logger().info(
+                    f"[S2A SCAN] Stack rỗng (S6=OFF) → row1 ({target_mm:.0f}mm)"
+                )
+            self._output_target_pos = target_mm
             self._output_row = 1
-            self._nb_move(2, tgt, vel=self.config.iny_row_vel)
-            self._cmd_sent_in = True
-            self._step_timeout_in = time.time() + self.config.move_timeout
-            self._enter_in(SystemState.S2A_INY_OUTPUT_ROW)
+            self._enter_in(SystemState.S2A_INY_TARGETROW)
             return
 
-        self._log_once("S2A_JOG_OUT", f"[S2A Step7] INY {iny:.0f}mm S4={'ON' if s4_now else 'OFF'}")
+        self._log_once(
+            "S2A_SCAN",
+            f"[S2A SCAN] InY {iny:.0f}mm S4={'ON' if self.sensor(S4_SCAN_STACK_P1) else 'OFF'} "
+            f"armed={getattr(self, '_s4_armed_out', False)} S6={self._s6_snapshot}"
+        )
 
     def _s2a_retry_scan_home(self):
         """
@@ -3157,7 +3196,7 @@ class CartridgeSystem(Node):
                 self._cmd_sent_in = False
                 self._enter_in(SystemState.S2A_INY_JOG_OUTPUT)
 
-    def _s2a_iny_output_row(self):
+    def _s2a_iny_targetrow(self):
         """
         STATE 2A bước A8: di chuyển InY đến `_output_target_pos` (đã xác định ở
         bước jog_output) với vận tốc iny_row_vel. Khi đến đích → retract Cyl1
