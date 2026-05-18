@@ -245,6 +245,7 @@ class CartridgeSystem(Node):
         self._output_row        = 0
         self._output_target_pos = 0.0
         self._s4_armed_out      = False
+        self._s4_prev_out       = False
 
         # ── STATE S3 runtime ─────────────────────────────────────────
         self.state_s3           = SystemState.IDLE
