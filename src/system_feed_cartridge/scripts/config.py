@@ -100,7 +100,7 @@ class SystemConfig(BaseModel):
     outy_scan_arm_mm: float = 50.0
     iny_search_velocity: float = 30.0
     iny_slow_velocity: float = 10.0
-    position_tolerance: float = 1.0   # mm — sai số servo "đã đến target", dùng cho _at_position()
+    position_tolerance: float = 2.0   # mm — sai số servo "đã đến target", dùng cho _at_position()
     outx_safe_position_threshold: float = 100.0
     max_trays: int = 8
     max_slots_per_output_tray: int = 9

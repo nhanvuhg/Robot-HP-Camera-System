@@ -30,7 +30,7 @@ elif self._arrived(N) and self._at_position(N, TARGET):
     self._enter_*(NEXT_STATE)
 ```
 
-Helper `_at_position(servo_id, target_mm, tol=None)` đọc `_pos()` (encoder counts → mm) và so sánh `|pos - target| ≤ tol`. `tol` mặc định = `config.position_tolerance` = **1.0mm**.
+Helper `_at_position(servo_id, target_mm, tol=None)` đọc `_pos()` (encoder counts → mm) và so sánh `|pos - target| ≤ tol`. `tol` mặc định = `config.position_tolerance` = **2.0mm**.
 
 ### RỦI RO
 - Bỏ check → drive flag false-positive → next state chạy khi servo chưa thực sự dừng → va chạm cơ khí, kẹp khay sai vị trí, Cyl1/Cyl2 extend nhầm chỗ.
@@ -365,9 +365,8 @@ Khi đổi tên field:
 Vùng zone của row khít nhau (vd row 1 = 880-970mm, row 2 = 780-879mm — cách 1mm). Tolerance 5mm có thể nhảy nhầm row khi servo dừng ngay biên.
 
 ### HOW
-- `config.position_tolerance` = **1.0mm** (default).
-- Chỉ tăng lên 2.0mm nếu drive overshoot lớn và retry vô ích nhiều lần.
-- KHÔNG để 5mm trong production.
+- `config.position_tolerance` = **2.0mm** (default — chạm trần RULE 15).
+- KHÔNG nới lên 5mm trong production.
 
 ### RỦI RO
 - Tolerance 5mm + zone width 90mm → 5/90 = 5.5% lệch row → Cyl1 kẹp sai height.
