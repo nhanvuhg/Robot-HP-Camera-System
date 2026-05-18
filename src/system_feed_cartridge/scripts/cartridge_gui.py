@@ -75,7 +75,6 @@ class GuiRosNode(Node):
 
         self._pubs = {
             '/providesystem/jog_cmd':           self.create_publisher(String, '/providesystem/jog_cmd', qos),
-            '/providesystem/sim_sensor':         self.create_publisher(String, '/providesystem/sim_sensor', qos),
             '/providesystem/move_to_pos':        self.create_publisher(String, '/providesystem/move_to_pos', qos),
             '/providesystem/update_config':      self.create_publisher(String, '/providesystem/update_config', qos),
             '/providesystem/get_config':         self.create_publisher(String, '/providesystem/get_config', qos),
@@ -223,7 +222,6 @@ class GUIHandler(http.server.BaseHTTPRequestHandler):
             '/api/confirm':        lambda: fast_pub_bool('/system/confirm_button', True),
             '/api/hmi_resume':     lambda: fast_pub_bool('/providesystem/hmi_resume', True),
             '/api/goto_state':     lambda: fast_pub_string('/providesystem/goto_state', d.get('state', 'IDLE')),
-            '/api/sim_sensor':     lambda: fast_pub_string('/providesystem/sim_sensor', d.get('cmd', '')),
             '/api/jog':            lambda: fast_pub_string('/providesystem/jog_cmd', d.get('cmd', '1 stop')),
             '/api/set_mode':       lambda: fast_pub_string('/providesystem/set_operation_mode', d.get('mode', 'auto')),
             '/api/set_target_row': lambda: fast_pub_string('/providesystem/set_target_row', str(d.get('row', '1'))),
@@ -675,27 +673,12 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 
   <!-- Sensor col -->
   <div class="sc"><div class="card" style="height:100%;display:flex;flex-direction:column">
-    <div class="ct">Sensor Panel</div>
+    <div class="ct">Sensor Signal Display</div>
 
-    <!-- Sim controls (hidden in AUTO) -->
-    <div id="simCtrl">
-      <div style="display:flex;gap:3px;margin-bottom:3px">
-        <button class="btn g" style="flex:1;padding:3px 4px;font-size:10px" onclick="sAll(1)">All ON</button>
-        <button class="btn r" style="flex:1;padding:3px 4px;font-size:10px" onclick="sAll(0)">All OFF</button>
-        <button class="btn"   style="flex:1;padding:3px 4px;font-size:10px" onclick="sClear()">Clear</button>
-      </div>
-      <div style="font-size:9px;color:var(--dim);margin-bottom:2px;text-transform:uppercase;letter-spacing:.8px">Quick Preset</div>
-      <div style="display:flex;gap:3px;margin-bottom:4px">
-        <button class="btn bl" style="flex:1;padding:3px 4px;font-size:9px"
-          onclick="simPreset([1,3,9])">S1 Entry</button>
-        <button class="btn t"  style="flex:1;padding:3px 4px;font-size:9px"
-          onclick="simPreset([1,3,4,5,7,9])">S1 Full</button>
-      </div>
-    </div>
-    <!-- AUTO: real sensor notice -->
-    <div id="rsbadge" style="display:none;padding:4px 7px;background:#0a1f0a;border:1px solid var(--green);
+    <!-- Mọi mode (auto/manual/ai) đều đọc sensor THẬT từ IO module. Sim sensor đã deprecated. -->
+    <div style="padding:4px 7px;background:#0a1f0a;border:1px solid var(--green);
       border-radius:4px;font-size:10px;color:var(--green);font-weight:700;margin-bottom:4px">
-      📡 REAL SENSORS — sim khóa
+      📡 REAL SENSORS — read-only
     </div>
 
     <div style="font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Status</div>
@@ -888,11 +871,7 @@ function updateModeUI() {
   jlk.style.display = (!noMode && !jogAllowed) ? '' : 'none';
   document.querySelectorAll('.jb').forEach(b=>b.classList.toggle('lk', !jogAllowed));
 
-  // Sensor sim
-  const simAllowed = mode==='manual' || mode==='jog';
-  document.getElementById('rsbadge').style.display = (mode==='auto' || mode==='ai') ? '' : 'none';
-  document.getElementById('simCtrl').style.display  = simAllowed   ? '' : 'none';
-  document.querySelectorAll('.sb').forEach(b=>b.classList.toggle('lk', mode==='auto' || mode==='ai'));
+  // Sensor display là read-only — luôn hiển thị real sensor, không phụ thuộc mode
 
   // Workflow state buttons: locked in JOG mode
   const wfLocked = mode==='jog' || noMode;
@@ -943,36 +922,10 @@ function onAbortJog() {
 function setRow(r) { api('/api/set_target_row',{row:r}); }
 
 // ─── Sensor sim ─────────────────────────────────────────
-function tog(id) {
-  if(mode==='auto' || mode==='ai'){ toast('🔒 Sim: not available in AUTO/AI','wn'); return; }
-  SS[id]=!SS[id];
-  fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({cmd:id+':'+(SS[id]?1:0)})});
-  rfs(id);
-}
-function sAll(v) {
-  if(mode==='auto' || mode==='ai'){ toast('🔒 AUTO/AI mode','wn'); return; }
-  for(let i=1;i<=22;i++){ SS[i]=!!v; rfs(i); }
-  fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'all:'+v})});
-}
-function sClear() {
-  if(mode==='auto' || mode==='ai'){ toast('🔒 AUTO/AI mode','wn'); return; }
-  for(let i=1;i<=22;i++){ SS[i]=false; rfs(i); }
-  fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'clear'})});
-}
-function simPreset(ids) {
-  if(mode==='auto' || mode==='ai'){ toast('🔒 AUTO/AI mode','wn'); return; }
-  for(let i=1;i<=22;i++){ SS[i]=false; rfs(i); }
-  fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:'clear'})});
-  ids.forEach(id=>{ SS[id]=true; rfs(id);
-    fetch('/api/sim_sensor',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cmd:id+':1'})});
-  });
-  log('Preset: S['+ids.join(',')+'] ON','ok');
-  toast('✅ Preset: S'+ids.join('+'));
-}
+// Sensor display — read-only refresh based on real sensor topic state
 function rfs(id) {
   const el=document.getElementById('s'+id);
-  if(el) el.className='sb'+(SS[id]?' on':'')+((mode==='auto' || mode==='ai')?' lk':'');
+  if(el) el.className='sb'+(SS[id]?' on':'');
 }
 
 // ─── JOG ────────────────────────────────────────────────
@@ -1078,10 +1031,12 @@ function buildRows() {
   }
 }
 function buildSensors() {
+  // Read-only display — không gán onclick. Trạng thái cập nhật qua rfs() từ
+  // topic /providesystem/sensors_state.
   const g=document.getElementById('sg');
   for(let i=1;i<=22;i++) {
     const d=document.createElement('div');
-    d.className='sb';d.id='s'+i;d.onclick=()=>tog(i);
+    d.className='sb';d.id='s'+i;
     const lb=SLB[i]||'';
     d.innerHTML=`<span class="sn">S${i}</span>${lb?`<span class="slb">${lb}</span>`:''}<span class="sdt"></span>`;
     g.appendChild(d);

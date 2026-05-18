@@ -11,7 +11,6 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
 
     // ── Publishers ───────────────────────────────────────────────
     jog_pub_              = node_->create_publisher<std_msgs::msg::String>("/providesystem/jog_cmd", qos);
-    sim_sensor_pub_       = node_->create_publisher<std_msgs::msg::String>("/providesystem/sim_sensor", qos);
     set_mode_pub_         = node_->create_publisher<std_msgs::msg::String>("/providesystem/set_operation_mode", qos);
     goto_state_pub_       = node_->create_publisher<std_msgs::msg::String>("/providesystem/goto_state", qos);
     update_config_pub_    = node_->create_publisher<std_msgs::msg::String>("/providesystem/update_config", qos);
@@ -235,23 +234,6 @@ void CartridgeController::confirmOutput()
 {
     // Giữ để tương thích QML cũ
     simulateDoneTrayOutput();
-}
-
-// ── Sensor Simulation ─────────────────────────────────────────────
-
-void CartridgeController::simSensor(const QString &cmd)
-{
-    publishString(sim_sensor_pub_, cmd);
-}
-
-void CartridgeController::simAll(int value)
-{
-    publishString(sim_sensor_pub_, QString("all:%1").arg(value));
-}
-
-void CartridgeController::simClear()
-{
-    publishString(sim_sensor_pub_, "clear");
 }
 
 // ── Config ────────────────────────────────────────────────────────

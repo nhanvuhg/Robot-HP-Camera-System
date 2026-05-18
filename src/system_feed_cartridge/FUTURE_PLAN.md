@@ -3,13 +3,16 @@
 
 ---
 
-## Plan 1: Bỏ Hoàn Toàn Sensor Simulation *(chờ thực hiện)*
+## Plan 1: Bỏ Hoàn Toàn Sensor Simulation ✅ DONE (branch feature/manual-real-sensors)
 
-**Mục tiêu:** Xóa toàn bộ `_sim_sensors` và logic simulation. Cả 2 mode chỉ đọc sensor thực.
+**Đã thực hiện:**
+- ✅ Xóa `_sim_sensors` dict + `_cb_sim` callback + subscriber `/providesystem/sim_sensor`
+- ✅ `sensor()` và `_snap()` luôn đọc IO module (bỏ branch theo mode)
+- ✅ `sensor_real()` giữ làm alias backward-compat
+- ✅ Xóa `_sim_sensors.clear()` calls trong `_cb_mode` và `_cb_robot_mode`
+- ✅ QML: rename "SENSOR SIMULATION" → "SENSOR SIGNAL DISPLAY", bỏ controls (All ON/OFF/Clear, Quick Preset), buttons thành LED indicator read-only
+- ✅ C++ controller: xóa `simSensor/simAll/simClear` methods + `sim_sensor_pub_`
+- ✅ HTML GUI (`cartridge_gui.py`): xóa endpoint `/api/sim_sensor` + JS functions (`tog/sAll/sClear/simPreset`), grid sensor read-only
+- ✅ Tests: convert `node._sim_sensors = {...}` → `_set_sensors(node, ...)` helper inject vào `_io_sensor_cache`
 
-**Việc cần làm:**
-- Xóa `self._sim_sensors: dict = {}` khỏi `__init__`
-- Xóa `_sensor_raw()`, `sensor_real()`, đổi `sensor()` đọc thẳng hardware
-- Xóa callback `_cb_sim()` và subscriber `/providesystem/sim_sensor`
-- Xóa `_sim_sensors.clear()` trong `_cb_stop()` và `_cb_mode_change()`
-- Xóa UI sim sensor trong GUI (`cartridge_gui.py`, `CartridgePage.qml`)
+**Behavior sau plan:** Manual mode đọc sensor thật từ IO module (giống auto). State 2/4 vẫn trigger được bằng button (pub `/robot/done_tray_input` / `/robot/done_tray_output`). State 1/3 không auto-trigger trong manual.

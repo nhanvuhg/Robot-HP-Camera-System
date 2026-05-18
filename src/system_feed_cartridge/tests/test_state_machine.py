@@ -213,9 +213,6 @@ def _make_node():
     node._s4_trigger       = False
     node._jog_mode         = False
 
-    # Sensor sim
-    node._sim_sensors = {}
-
     # Hardware stubs
     node.zero_offset = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
     node.servos      = {}
@@ -241,6 +238,10 @@ def _make_node():
     node._step_timeout_s4   = 0.0
     node._inx_moving        = False
     node._iny_moving        = False
+    node._homing_abort      = MagicMock(); node._homing_abort.is_set = MagicMock(return_value=False)
+    node._homing_done_event = MagicMock(); node._homing_done_event.is_set = MagicMock(return_value=False)
+    node._homing_result     = True
+    node._drive_warm_t      = 0.0
     node._s10_off_time      = 0.0
     node._s10_prev          = False
     node._robot_connected   = False
@@ -248,6 +249,7 @@ def _make_node():
 
     # Publishers (mocked)
     node.pub_busy_cartridge   = MagicMock()
+    node.pub_homing_done      = MagicMock()
     node.pub_state            = MagicMock()
     node.pub_new_tray         = MagicMock()
     node.pub_newtray_output   = MagicMock()
@@ -270,6 +272,26 @@ def _make_node():
     return node
 
 
+def _set_sensors(node, **sensor_states):
+    """Helper: inject sensor state qua _io_sensor_cache (thay thế _sim_sensors cũ).
+    Dùng: _set_sensors(node, S1_BELT_START=True, S7_TRAY_AT_ROBOT=False) — key có thể
+    là constant (int) hoặc số sid. Tự phân loại module 1 (1-16) vs module 2 (17-24)."""
+    cache1 = [False] * 16
+    cache2 = [False] * 8
+    for sid, val in sensor_states.items():
+        if isinstance(sid, str):
+            sid_val = globals().get(sid)  # cho phép truyền "S1_BELT_START"=True
+            sid = sid_val if sid_val is not None else int(sid)
+        if 1 <= sid <= 16:
+            cache1[sid - 1] = bool(val)
+        elif 17 <= sid <= 24:
+            cache2[sid - 17] = bool(val)
+    node._io_ready = True
+    node._io_ready_2 = True
+    node._io_sensor_cache = cache1
+    node._io_sensor_cache_2 = cache2
+
+
 class TestCanStartConditions:
     """Test trigger conditions cho từng State."""
 
@@ -277,15 +299,9 @@ class TestCanStartConditions:
         """S1 trigger: auto mode, có khay (S1/S2/S3), S7 OFF, S9 ON, S10 OFF."""
         node = _make_node()
         node.operation_mode = 'auto'
-        node._sim_sensors = {
-            S1_BELT_START: True,
-            S7_TRAY_AT_ROBOT: False,
-            S9_CYL1_RETRACTED: True,
-            S10_CYL1_EXTENDED: False,
-        }
+        _set_sensors(node, S1_BELT_START=True, S7_TRAY_AT_ROBOT=False, S9_CYL1_RETRACTED=True, S10_CYL1_EXTENDED=False)
         # _can_start_s1 reads sensor() which checks operation_mode
         # In auto mode, sensor() calls _sensor_raw() which reads IO cache
-        # Since IO is not available, switch to manual to use _sim_sensors
         node.operation_mode = 'manual'
         # manual mode bypasses _can_start_s1's "auto" check, so we need
         # to test the raw condition logic directly
@@ -303,12 +319,8 @@ class TestCanStartConditions:
         """S7 ON (khay đang tại robot) → không được trigger S1."""
         node = _make_node()
         node.operation_mode = 'manual'
-        node._sim_sensors = {
-            S1_BELT_START: True,
-            S7_TRAY_AT_ROBOT: True,   # ← blocking
-            S9_CYL1_RETRACTED: True,
-            S10_CYL1_EXTENDED: False,
-        }
+        # S7 ON là blocking condition
+        _set_sensors(node, S1_BELT_START=True, S7_TRAY_AT_ROBOT=True, S9_CYL1_RETRACTED=True, S10_CYL1_EXTENDED=False)
         place_ok = not node.sensor(S7_TRAY_AT_ROBOT)
         assert place_ok is False
 
@@ -316,11 +328,7 @@ class TestCanStartConditions:
         """Không có khay nào trên belt → không trigger."""
         node = _make_node()
         node.operation_mode = 'manual'
-        node._sim_sensors = {
-            S1_BELT_START: False,
-            S2_BELT_MID: False,
-            S3_BELT_END: False,
-        }
+        _set_sensors(node, S1_BELT_START=False, S2_BELT_MID=False, S3_BELT_END=False)
         has_tray = node.sensor(S1_BELT_START) or node.sensor(S2_BELT_MID) or node.sensor(S3_BELT_END)
         assert has_tray is False
 
@@ -330,7 +338,7 @@ class TestCanStartConditions:
         node.operation_mode = 'manual'
         node._input_tray_done = True
         node._motion_busy = False
-        node._sim_sensors = {S7_TRAY_AT_ROBOT: True}
+        _set_sensors(node, S7_TRAY_AT_ROBOT=True)
         result = node._can_start_s2a()
         assert result is True
 
@@ -338,7 +346,7 @@ class TestCanStartConditions:
         """Chưa nhận done_tray_input → S2A không trigger."""
         node = _make_node()
         node._input_tray_done = False
-        node._sim_sensors = {S7_TRAY_AT_ROBOT: True}
+        _set_sensors(node, S7_TRAY_AT_ROBOT=True)
         assert node._can_start_s2a() is False
 
     def test_can_start_s4(self):
@@ -347,14 +355,14 @@ class TestCanStartConditions:
         node.operation_mode = 'manual'
         node._s4_trigger = True
         node._motion_busy = False
-        node._sim_sensors = {S18_FEED_OK: True}
+        _set_sensors(node, S18_FEED_OK=True)
         assert node._can_start_s4() is True
 
     def test_can_start_s4_no_trigger(self):
         """Không có _s4_trigger → S4 không chạy."""
         node = _make_node()
         node._s4_trigger = False
-        node._sim_sensors = {S18_FEED_OK: True}
+        _set_sensors(node, S18_FEED_OK=True)
         assert node._can_start_s4() is False
 
 
@@ -423,23 +431,26 @@ class TestStateTransitions:
 
 
 class TestSensorReading:
-    """Test sensor mode switching (auto vs manual)."""
+    """Test sensor reading — sau khi remove sim_sensor, mọi mode đọc real IO."""
 
-    def test_manual_reads_sim(self):
-        """Manual mode → sensor() trả về giá trị từ _sim_sensors."""
+    def test_sensor_reads_real_io_in_manual(self):
+        """Manual mode → sensor() đọc từ IO module thực (giống auto)."""
         node = _make_node()
         node.operation_mode = 'manual'
-        node._sim_sensors = {1: True, 7: False}
+        node._io_ready = True
+        node._io_sensor_cache = [True if i in (0, 6) else False for i in range(16)]  # S1=True, S7=True
 
         assert node.sensor(1) is True
-        assert node.sensor(7) is False
-        assert node.sensor(99) is False  # sid không tồn tại → False
+        assert node.sensor(7) is True
+        assert node.sensor(2) is False
+        assert node.sensor(99) is False  # sid out-of-range → False
 
-    def test_manual_default_false(self):
-        """Manual mode, sensor chưa được set → False."""
+    def test_sensor_io_not_ready_returns_false(self):
+        """Nếu IO module chưa ready → sensor() trả về False (fail-safe)."""
         node = _make_node()
         node.operation_mode = 'manual'
-        node._sim_sensors = {}
+        node._io_ready = False
+        node._io_sensor_cache = []
         assert node.sensor(S1_BELT_START) is False
 
     def test_pub_cartridge_busy(self):
@@ -504,7 +515,7 @@ class TestIdleDispatch:
         node.operation_mode = 'manual'
         node._input_tray_done = True
         node._motion_busy = False
-        node._sim_sensors = {S7_TRAY_AT_ROBOT: True}
+        _set_sensors(node, S7_TRAY_AT_ROBOT=True)
         node._notify = MagicMock()
         node._log_once = MagicMock()
 
@@ -519,12 +530,7 @@ class TestIdleDispatch:
         node.operation_mode = 'manual'
         node._state1_enabled = True
         node._input_tray_done = False
-        node._sim_sensors = {
-            S1_BELT_START: True,
-            S7_TRAY_AT_ROBOT: False,
-            S9_CYL1_RETRACTED: True,
-            S10_CYL1_EXTENDED: False,
-        }
+        _set_sensors(node, S1_BELT_START=True, S7_TRAY_AT_ROBOT=False, S9_CYL1_RETRACTED=True, S10_CYL1_EXTENDED=False)
         node._notify = MagicMock()
         node._log_once = MagicMock()
 
@@ -538,7 +544,7 @@ class TestIdleDispatch:
         node = _make_node()
         node._system_running = False
         node._input_tray_done = True
-        node._sim_sensors = {S7_TRAY_AT_ROBOT: True}
+        _set_sensors(node, S7_TRAY_AT_ROBOT=True)
         node._log_once = MagicMock()
 
         node._do_idle_input()
@@ -583,12 +589,7 @@ class TestHomingPrerequisite:
         node = _make_node()
         node.operation_mode = 'auto'
         node.zero_offset = {}  # ← chưa home
-        node._sim_sensors = {
-            S1_BELT_START: True,
-            S7_TRAY_AT_ROBOT: False,
-            S9_CYL1_RETRACTED: True,
-            S10_CYL1_EXTENDED: False,
-        }
+        _set_sensors(node, S1_BELT_START=True, S7_TRAY_AT_ROBOT=False, S9_CYL1_RETRACTED=True, S10_CYL1_EXTENDED=False)
         assert node._can_start_s1() is False
 
     def test_idle_input_noop_when_not_homed(self):
@@ -597,7 +598,7 @@ class TestHomingPrerequisite:
         node.zero_offset = {}
         node._system_running = True
         node._input_tray_done = True
-        node._sim_sensors = {S7_TRAY_AT_ROBOT: True}
+        _set_sensors(node, S7_TRAY_AT_ROBOT=True)
         node._log_once = MagicMock()
 
         node._do_idle_input()

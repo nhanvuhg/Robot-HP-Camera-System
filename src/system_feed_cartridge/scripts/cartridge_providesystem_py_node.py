@@ -209,7 +209,6 @@ class CartridgeSystem(Node):
         self._io_ready          = False
         self._io_ready_2        = False
         self._io_bg_lock        = threading.Lock()
-        self._sim_sensors: dict = {}
 
         # Motion flags
         self._inx_moving = False
@@ -334,8 +333,6 @@ class CartridgeSystem(Node):
 
         self.create_subscription(String, '/providesystem/gui_confirm',       self._cb_gui_confirm,        qos)
         self.create_subscription(String, '/providesystem/jog_cmd',           self._cb_jog,                qos)
-        qos_sim = QoSProfile(depth=10)
-        self.create_subscription(String, '/providesystem/sim_sensor',        self._cb_sim,                qos_sim)
         self.create_subscription(String, '/providesystem/set_operation_mode',self._cb_mode,               qos)
         self.create_subscription(Int32, '/robot/set_mode', self._cb_robot_mode, qos)
         self.create_subscription(String, '/providesystem/goto_state',        self._cb_goto_state,         qos)
@@ -668,26 +665,16 @@ class CartridgeSystem(Node):
         return False
 
     def sensor(self, sid: int) -> bool:
-        """
-        [V7-1] Nguồn sensor theo mode:
-          AUTO   → đọc sensor thực (IO module).
-          MANUAL → đọc sensor simulation (_sim_sensors).
-                   Nếu sim chưa set cho sensor đó → trả về False.
-        """
-        if self.operation_mode == 'manual':
-            return bool(self._sim_sensors.get(sid, False))
-        # AUTO: đọc thực
+        """Đọc sensor thực từ IO module — áp dụng cho cả AUTO/AI/MANUAL.
+        Trước đây MANUAL đọc từ _sim_sensors dict (deprecated kể từ feature/manual-real-sensors)."""
         return self._sensor_raw(sid)
 
     def sensor_real(self, sid: int) -> bool:
-        """Luôn đọc sensor thực — dùng cho homing, hardware checks."""
+        """Alias của sensor() — giữ để backward-compat call site cũ (homing, hardware checks)."""
         return self._sensor_raw(sid)
 
     def _snap(self, *sids: int) -> tuple:
-        """Snapshot nhiều sensor cùng lúc, theo logic mode hiện tại."""
-        if self.operation_mode == 'manual':
-            return tuple(bool(self._sim_sensors.get(sid, False)) for sid in sids)
-        # AUTO: đọc thực
+        """Snapshot nhiều sensor cùng lúc từ IO module (1 lần acquire lock)."""
         with self._io_bg_lock:
             cache1 = getattr(self, '_io_sensor_cache', [])
             ready1 = getattr(self, '_io_ready', False)
@@ -1533,14 +1520,13 @@ class CartridgeSystem(Node):
             self.get_logger().info(f"[SYNC MODE] Cập nhật mode từ Robot Node: {requested.upper()}")
             self.operation_mode = requested
             self._guide_logged.clear()
-            self._sim_sensors.clear()
             self._sync_mode_jog()
 
     def _cb_mode(self, msg: String):
         """
         Thay đổi operation mode từ GUI qua /providesystem/set_operation_mode.
         Chỉ cho phép đổi mode khi hệ thống ở IDLE hoặc ERROR (không đang chạy STATE).
-        Khi đổi mode: reset sim sensor, sync GUI, và thông báo đến robot node.
+        Khi đổi mode: sync GUI và thông báo đến robot node.
         """
         requested = msg.data.strip().lower()
         if requested not in ('auto', 'manual', 'ai'):
@@ -1556,7 +1542,6 @@ class CartridgeSystem(Node):
         self.operation_mode = requested
         if old != requested:
             self._guide_logged.clear()
-            self._sim_sensors.clear()  # Reset sim khi đổi mode
             self._sync_mode_jog()  # Publish mode ngay cho GUI hiển thị
             
             # Sync to robot node
@@ -1647,33 +1632,6 @@ class CartridgeSystem(Node):
                 self._nb_move(sid, pos)
         except Exception as e:
             self.get_logger().error(f"[JOG] exception: {e}")
-
-    def _cb_sim(self, msg: String):
-        """
-        Nhận lệnh giả lập cảm biến từ GUI qua /providesystem/sim_sensor (chỉ MANUAL mode).
-        Định dạng: "<sensor_id>:<0|1>" hoặc "all:<0|1>" hoặc "clear"
-        Ví dụ: "1:1" → set S1=ON, "7:0" → set S7=OFF, "all:1" → bật hết sensor.
-        Dữ liệu lưu vào _sim_sensors, được sensor() dùng thay cho IO module thực.
-        [V7-1] Chỉ hoạt động trong MANUAL mode — AUTO mode bị reject để tránh
-        nhầm lẫn giữa dữ liệu thực và giả lập.
-        """
-        if self.operation_mode != 'manual':
-            self._notify('warn', 'Sim sensor bi khoa', 'Chuyen MANUAL mode')
-            return
-        cmd = msg.data.strip()
-        if cmd == 'clear':
-            self._sim_sensors.clear()
-            return
-        try:
-            sid_s, val_s = cmd.split(':')
-            val = (val_s.strip() == '1')
-            if sid_s.strip() == 'all':
-                for i in range(1, 23):
-                    self._sim_sensors[i] = val
-            else:
-                self._sim_sensors[int(sid_s)] = val
-        except Exception:
-            pass
 
     def _cb_goto_state(self, msg: String):
         """

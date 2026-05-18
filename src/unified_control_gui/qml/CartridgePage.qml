@@ -858,7 +858,10 @@
                         }
                     }
 
-                    // ─ SENSOR SIMULATION (grid-area: servo, full height) ──
+                    // ─ SENSOR SIGNAL DISPLAY (grid-area: servo, full height) ──
+                    // Hiển thị read-only trạng thái 22 sensor THẬT từ IO module qua topic
+                    // /providesystem/sensors_state (chuỗi 22 bit). Cập nhật real-time, không
+                    // cho click (mode manual vẫn đọc sensor thật, không còn simulation).
                     Rectangle {
                         x: parent.width - root.sensorW
                         y: 0; width: root.sensorW; height: root.outerH
@@ -872,65 +875,8 @@
 
                             // ── Tiêu đề ──
                             Text {
-                                text: "SENSOR SIMULATION"
+                                text: "SENSOR SIGNAL DISPLAY"
                                 color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5
-                            }
-
-                            // ── Nút All ON / OFF / Clear ──
-                            Row {
-                                spacing: 3
-                                enabled: cartridgeController.currentMode === "jog" || cartridgeController.currentMode === "manual"
-                                opacity: enabled ? 1.0 : 0.3
-                                CBtn { lbl:"All ON";  padV:3; padH:8; fontSize:10; bg:"#0a332e"; bc:root.cGreen;  tc:root.cGreen;  onClicked: cartridgeController.simAll(1) }
-                                CBtn { lbl:"All OFF"; padV:3; padH:8; fontSize:10; bg:"#4d1a1a"; bc:root.cRed;    tc:root.cRed;    onClicked: cartridgeController.simAll(0) }
-                                CBtn { lbl:"Clear";   padV:3; padH:6; fontSize:10; bg:root.cCard; bc:root.cBorder; tc:root.cText;  onClicked: cartridgeController.simSensor("clear") }
-                            }
-
-                            // ── Quick Preset ──
-                            Text { text: "QUICK PRESET"; color: root.cDim; font.pixelSize: 9; font.bold: true; font.letterSpacing: 0.8 }
-                            Row {
-                                spacing: 3
-                                enabled: cartridgeController.currentMode === "jog" || cartridgeController.currentMode === "manual"
-                                opacity: enabled ? 1.0 : 0.3
-                                // S1 Entry: điều kiện vào State 1
-                                CBtn {
-                                    lbl: "S1 Entry"
-                                    padV: 3; padH: 6; fontSize: 10
-                                    bg: "#0a1a4d"; bc: root.cAccent; tc: root.cAccent
-                                    onClicked: {
-                                        cartridgeController.simSensor("clear")
-                                        // S1+S3+S9 ON (băng tải có khay, Cyl 1 rút)
-                                        var ids = [1,3,9]
-                                        ids.forEach(function(id) {
-                                            cartridgeController.simSensor(id + ":1")
-                                        })
-                                    }
-                                }
-                                // S1 Full — S4 ON để test scan trigger
-                                CBtn {
-                                    lbl: "S1 Full"
-                                    padV: 3; padH: 6; fontSize: 10
-                                    bg: "#051a1a"; bc: "#5cf4f1"; tc: "#5cf4f1"
-                                    onClicked: {
-                                        cartridgeController.simSensor("clear")
-                                        // S1+S3+S4+S9 ON (Cyl 1 rút)
-                                        var ids = [1,3,4,9]
-                                        ids.forEach(function(id) {
-                                            cartridgeController.simSensor(id + ":1")
-                                        })
-                                    }
-                                }
-                                // S3 Entry: cấp khay Pos2
-                                CBtn {
-                                    lbl: "S3 Entry"
-                                    padV: 3; padH: 6; fontSize: 10
-                                    bg: "#0a3a1a"; bc: root.cGreen; tc: root.cGreen
-                                    onClicked: {
-                                        cartridgeController.simSensor("clear")
-                                        // S7 ON (có khay trên Platform)
-                                        cartridgeController.simSensor("7:1")
-                                    }
-                                }
                             }
 
                             // ── Status label ──
@@ -986,13 +932,6 @@
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
                                         HoverHandler { onHoveredChanged: if(!sBtn.on_) sBtn.border.color = hovered ? root.cCyan : root.cBorder }
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            onClicked: {
-                                                if (cartridgeController.currentMode === "auto") return;
-                                                cartridgeController.simSensor(model.sid + ":" + (sBtn.on_ ? "0" : "1"))
-                                            }
-                                        }
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 1

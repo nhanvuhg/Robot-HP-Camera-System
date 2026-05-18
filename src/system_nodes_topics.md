@@ -147,7 +147,6 @@
 | `/providesystem/gui_confirm` | `String` | GUI xác nhận thủ công |
 | `/providesystem/jog_cmd` | `String` | Lệnh JOG thủ công |
 | `/providesystem/change_tray_input` | `String` | Thay khay thủ công |
-| `/providesystem/sim_sensor` | `String` | Giả lập sensor (AUTO only) |
 | `/providesystem/set_operation_mode` | `String` | Đổi auto/manual |
 | `/providesystem/goto_state` | `String` | Nhảy vào state cụ thể |
 | `/robot/done_tray_output` | `Bool` | `robot_logic_nova5` / `vision_decision_node` | **State 4 trigger** — khay output đầy |

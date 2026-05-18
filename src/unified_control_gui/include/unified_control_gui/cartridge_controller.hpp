@@ -60,11 +60,6 @@ public slots:
     Q_INVOKABLE void simulateDoneTrayOutput();
     void confirmOutput();
 
-    // Sensor simulation
-    void simSensor(const QString &cmd);
-    void simAll(int value);
-    void simClear();
-
     // Config
     void getConfig();
     void saveConfig(const QString &key, const QString &jsonData);
@@ -87,7 +82,6 @@ private:
 
     // Publishers
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr jog_pub_;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr sim_sensor_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr move_to_pos_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr set_mode_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr goto_state_pub_;
