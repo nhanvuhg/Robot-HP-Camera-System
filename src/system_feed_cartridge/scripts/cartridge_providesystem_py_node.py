@@ -148,7 +148,7 @@ class SystemState(Enum):
     S2A_CHECK_INTERLOCK   = "s2a_check_interlock"
     S2A_INX_MOVE_POS_PICK           = "s2a_inx_move_pos_pick"
     S2A_POS_PLACE_TRAY_ROBOT_CYL1      = "s2a_pos_place_tray_robot_cyl1"
-    S2A_WAIT_S7          = "s2a_wait_s7"
+    S2A_WAIT_CYL_EXT          = "s2a_wait_cyl_ext"
     S2A_INY_HOME            = "s2a_iny_home"
     S2A_INX_PLACE_TRAY_OUT_POS1            = "s2a_inx_place_tray_out_pos1"
     S2A_INY_JOG_OUTPUT    = "s2a_iny_jog_output"
@@ -2150,7 +2150,7 @@ class CartridgeSystem(Node):
         elif s == SystemState.S2A_CHECK_INTERLOCK:   self._s2a_check_interlock()
         elif s == SystemState.S2A_INX_MOVE_POS_PICK:           self._s2a_inx_move_pos_pick()
         elif s == SystemState.S2A_POS_PLACE_TRAY_ROBOT_CYL1:      self._s2a_pos_place_tray_robot_cyl1()
-        elif s == SystemState.S2A_WAIT_S7:          self._s2a_wait_cyl_ext()
+        elif s == SystemState.S2A_WAIT_CYL_EXT:          self._s2a_wait_cyl_ext()
         elif s == SystemState.S2A_INY_HOME:            self._s2a_iny_home()
         elif s == SystemState.S2A_INX_PLACE_TRAY_OUT_POS1:            self._s2a_inx_place_tray_out_pos1()
         elif s == SystemState.S2A_INY_JOG_OUTPUT:    self._s2a_iny_jog_output()
@@ -2970,7 +2970,7 @@ class CartridgeSystem(Node):
         kích Cyl1 EXTEND để kẹp.
         CAO RỦI RO: verify _at_position(2, iny_target2) trước khi Cyl1 extend
         để tránh kẹp sai vị trí.
-        Next: S2A_WAIT_S7 (chờ S10 ON xác nhận Cyl1 đã extended).
+        Next: S2A_WAIT_CYL_EXT (chờ S10 ON xác nhận Cyl1 đã extended).
         """
         if not self._cmd_sent_in:
             ok = self._nb_move(2, self.config.iny_target2)
@@ -2988,7 +2988,7 @@ class CartridgeSystem(Node):
                     f"A3: INY tai {self.config.iny_target2}mm -> Cyl1 EXTEND"
                 )
                 self._cyl1_extend()
-                self._enter_in(SystemState.S2A_WAIT_S7)
+                self._enter_in(SystemState.S2A_WAIT_CYL_EXT)
 
     def _s2a_wait_cyl_ext(self):
         """
