@@ -2150,7 +2150,7 @@ class CartridgeSystem(Node):
         elif s == SystemState.S2A_CHECK_INTERLOCK:   self._s2a_check_interlock()
         elif s == SystemState.S2A_INX_MOVE_POS_PICK:           self._s2a_inx_move_pos_pick()
         elif s == SystemState.S2A_POS_PLACE_TRAY_ROBOT_CYL1:      self._s2a_pos_place_tray_robot_cyl1()
-        elif s == SystemState.S2A_WAIT_S7:          self._s2a_wait_s7()
+        elif s == SystemState.S2A_WAIT_S7:          self._s2a_wait_cyl_ext()
         elif s == SystemState.S2A_INY_HOME:            self._s2a_iny_home()
         elif s == SystemState.S2A_INX_PLACE_TRAY_OUT_POS1:            self._s2a_inx_place_tray_out_pos1()
         elif s == SystemState.S2A_INY_JOG_OUTPUT:    self._s2a_iny_jog_output()
@@ -2990,11 +2990,10 @@ class CartridgeSystem(Node):
                 self._cyl1_extend()
                 self._enter_in(SystemState.S2A_WAIT_S7)
 
-    def _s2a_wait_s7(self):
+    def _s2a_wait_cyl_ext(self):
         """
         STATE 2A bước A4: chờ S10 (Cyl1 Extended) ON xác nhận đã kẹp khay cũ.
-        Retry _cyl1_extend() mỗi 3s. Lưu ý tên hàm "wait_s7" là lịch sử — thực tế
-        đang chờ S10 (mã sensor đã đổi tên qua các phiên bản hardware).
+        Retry _cyl1_extend() mỗi 3s.
         Next: S2A_INY_HOME (rút InY về home với khay đang kẹp).
         """
         cyl1_ext, = self._snap(S10_CYL1_EXTENDED)
