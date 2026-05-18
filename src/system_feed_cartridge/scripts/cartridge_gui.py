@@ -873,16 +873,21 @@ function updateModeUI() {
 
   // Sensor display là read-only — luôn hiển thị real sensor, không phụ thuộc mode
 
-  // Workflow state buttons: locked in JOG mode
-  const wfLocked = mode==='jog' || noMode;
-  ['bS1','bS2','bS3','bS4'].forEach(id=>{
-    document.getElementById(id).classList.toggle('lk', wfLocked);
-  });
+  // Workflow state buttons:
+  //   STATE 1/3: chỉ MANUAL được nhấn (AUTO/AI tự trigger; JOG khóa)
+  //   STATE 2/4: nhấn được cả AUTO/AI/MANUAL (pub robot done topic)
+  //   JOG: tất cả lock
+  const wfLockedAll = mode==='jog' || noMode;
+  const stateGated  = mode==='auto' || mode==='ai';  // STATE 1/3 disabled trong auto
+  document.getElementById('bS1').classList.toggle('lk', wfLockedAll || stateGated);
+  document.getElementById('bS3').classList.toggle('lk', wfLockedAll || stateGated);
+  document.getElementById('bS2').classList.toggle('lk', wfLockedAll);
+  document.getElementById('bS4').classList.toggle('lk', wfLockedAll);
   const wfl=document.getElementById('wfLabel');
-  if(noMode)        { wfl.style.color='var(--dim)';    wfl.textContent='— Workflow —'; }
-  else if(wfLocked) { wfl.style.color='var(--orange)'; wfl.textContent='— Workflow (JOG mode — locked) —'; }
-  else if(mode==='auto' || mode==='ai')  { wfl.style.color='var(--dim)';    wfl.textContent='— Workflow (' + mode.toUpperCase() + ' trigger) —'; }
-  else              { wfl.style.color='var(--teal)';  wfl.textContent='— Workflow — chọn để chạy —'; }
+  if(noMode)         { wfl.style.color='var(--dim)';    wfl.textContent='— Workflow —'; }
+  else if(wfLockedAll){ wfl.style.color='var(--orange)'; wfl.textContent='— Workflow (JOG — locked) —'; }
+  else if(stateGated){ wfl.style.color='var(--dim)';    wfl.textContent='— Workflow (' + mode.toUpperCase() + ' auto-trigger · S2/S4 manual override) —'; }
+  else               { wfl.style.color='var(--teal)';   wfl.textContent='— Workflow — chọn để chạy —'; }
 
   // Abort→JOG button: shows JOG MODE when already in JOG
   const abtn=document.getElementById('abortJogBtn');
