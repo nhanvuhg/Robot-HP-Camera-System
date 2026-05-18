@@ -2,21 +2,21 @@
 """
 Cartridge Loading System — ROS 2 + festo-edcon
 
-AUTO mode  : Đọc sensor thực, tự động trigger STATE 1/2/3/4 khi đủ điều kiện.
-MANUAL mode: Đọc sensor simulation, logic STATE giống AUTO.
-             STATE 2/3/4 vẫn trigger tự động (robot topics).
-             STATE 1 CHỈ chạy khi operator nhấn nút STATE1 trên GUI.
-             Sau S1_COMPLETE → về IDLE, chờ operator nhấn STATE1 lần tiếp.
-             S2A_COMPLETE   → về IDLE (không auto-vào S1).
+AUTO/AI mode: Đọc sensor thực từ IO module, tự động trigger STATE 1/2/3/4 khi
+              đủ điều kiện cảm biến.
+MANUAL mode : Đọc sensor THẬT (giống AUTO — không còn simulation từ v8).
+              STATE 1 và STATE 3 KHÔNG auto-trigger — chỉ chạy khi operator
+              nhấn nút STATE1/STATE3 trên GUI; nhấn nút → check sensor → enter.
+              STATE 2/4 trigger qua nút GUI (simulateDoneTrayInput/Output) —
+              pub /robot/done_tray_input và /robot/done_tray_output để set
+              _input_tray_done / _s4_trigger flag, hệ thống tự enter S2A/S4.
+              Sau khi state hoàn tất → về IDLE, không tự kích chain mới.
 
-Patches v4–v6: (giữ nguyên — xem header gốc)
-Manual/Auto mode redesign v7:
-  [V7-1] sensor(): AUTO  → real only. MANUAL → sim only (không OR real+sim).
-  [V7-2] _do_idle_input(): MANUAL không auto-trigger S1 (chỉ qua _state1_enabled
-         được set bởi GUI button). S2/S3/S4 vẫn tự trigger bình thường.
-  [V7-3] _s2a_complete(): MANUAL → về IDLE (không auto-vào S1).
-  [V7-4] sensor_real() giữ nguyên để internal checks (homing, hardware) dùng được.
-  [V7-5] State2 trigger qua /robot/done_tray_input (simulateDoneTrayInput từ GUI).
+Manual/Auto mode redesign v8:
+  [V8-1] sensor() và _snap() luôn đọc real IO module (bỏ sim_sensors dict).
+  [V8-2] _cb_goto_state: STATE1/2/3/4 button đều manual-only, đều check
+         sensor thật trước khi enter.
+  [V8-3] Bảng "SENSOR SIGNAL DISPLAY" trong GUI là LED indicator read-only.
 """
 
 import rclpy
@@ -1511,8 +1511,7 @@ class CartridgeSystem(Node):
         """
         Đồng bộ mode từ robot node qua /robot/set_mode.
         Mapping: 1=auto, 2=ai, 3=manual.
-        Khi mode thay đổi: xóa log guide và reset sim sensor để tránh
-        dữ liệu cũ ảnh hưởng sang mode mới.
+        Khi mode thay đổi: xóa log guide để hiển thị message mới phù hợp mode mới.
         """
         mapping = {1: 'auto', 2: 'ai', 3: 'manual'}
         requested = mapping.get(msg.data, 'manual')
@@ -1679,22 +1678,22 @@ class CartridgeSystem(Node):
             if self._motion_busy:
                 self.get_logger().warn("Robot đang báo bận (topic motion_busy), vẫn cho phép chạy MANUAL...")
                 self._notify('info', 'Robot busy', 'Đang bỏ qua khóa an toàn trong MANUAL mode...')
-            # Kiểm tra điều kiện cảm biến sim
+            # Kiểm tra điều kiện cảm biến THẬT (IO module)
             has_tray    = self.sensor(S1_BELT_START) or self.sensor(S2_BELT_MID) or self.sensor(S3_BELT_END)
             place_ok    = not self.sensor(S7_TRAY_AT_ROBOT)
-            cyl1_ret_ok = self.sensor(S9_CYL1_RETRACTED)      # S9_CYL1_RETRACTED
-            cyl1_ext_ok = not self.sensor(S10_CYL1_EXTENDED) # S10_CYL1_EXTENDED must be OFF
+            cyl1_ret_ok = self.sensor(S9_CYL1_RETRACTED)
+            cyl1_ext_ok = not self.sensor(S10_CYL1_EXTENDED)
 
             if not (has_tray and place_ok and cyl1_ret_ok and cyl1_ext_ok):
                 reasons = []
                 if not has_tray:
-                    reasons.append('S1/S2/S3 OFF (sim chưa set)')
+                    reasons.append('S1/S2/S3 OFF (không có khay trên belt)')
                 if not place_ok:
-                    reasons.append('S7 ON (vị trí cấp có khay)')
+                    reasons.append('S7 ON (vị trí cấp đang có khay)')
                 if not cyl1_ret_ok:
                     reasons.append('S9 OFF (Cyl1 chưa retract)')
                 if not cyl1_ext_ok:
-                    reasons.append('S10 ON (Cyl1 đang thò ra)')
+                    reasons.append('S10 ON (Cyl1 đang extend)')
                 self._notify('warn', 'STATE1: Điều kiện chưa đủ',
                              ' | '.join(reasons))
                 return
@@ -1719,39 +1718,50 @@ class CartridgeSystem(Node):
                 self._notify('warn', 'Chua home', '')
                 return
             if not self.sensor(S7_TRAY_AT_ROBOT):
-                self._notify('warn', 'S7 OFF (sim)',
-                             'Sim S7=1 trước khi vào State2')
+                self._notify('warn', 'S7 OFF',
+                             'Cần có khay tại vị trí robot (S7 ON) trước khi vào State 2')
                 return
             self._input_tray_done = False
-            self._notify('info', 'STATE 2A (manual)', 'S7 ON (sim)')
+            self._notify('info', 'STATE 2A (manual)', 'S7 ON — bắt đầu lấy khay')
             self._enter_in(SystemState.S2A_CHECK_INTERLOCK)
             return
 
-        # ── STATE 3/4: giữ nguyên (cả AUTO lẫn MANUAL) ──────────
+        # ── STATE 3: chỉ cho MANUAL, operator nhấn nút (AUTO tự trigger qua _can_start_s3) ──────────
         if cmd in ('STATE3', 'STATE_3', 'S3'):
+            if self.operation_mode != 'manual':
+                self._notify('warn', 'STATE3 manual only',
+                             'Trong AUTO/AI mode hệ thống tự trigger STATE3')
+                return
             if self.state_s3 not in (SystemState.IDLE,):
                 self._notify('warn', 'Không thể vào STATE 3',
-                             f'{self.state_s3.name} đang chạy')
+                             f'{self.state_s3.name} đang chạy — STOP trước')
                 return
             if not self.zero_offset:
-                self._notify('warn', 'Chua home', '')
+                self._notify('warn', 'Chua home', 'Nhấn HOMING trước')
                 return
+            # Check sensor THẬT — STATE3 chỉ chạy khi vị trí cấp output đang trống
             if self.sensor(S18_FEED_OK):
-                self._notify('warn', 'S18 ON', 'Vị trí cấp (S18) đang có khay')
+                self._notify('warn', 'STATE3: Điều kiện chưa đủ',
+                             'S18 ON (vị trí cấp output đang có khay) — cần S18 OFF')
                 return
-            self._notify('info', 'STATE 3', 'Kích hoạt Manual S3')
+            self._notify('info', 'STATE 3 (manual)', 'Bắt đầu cấp khay output')
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
             return
 
+        # ── STATE 4: chỉ cho MANUAL, operator nhấn nút (AUTO tự trigger khi _s4_trigger=True) ──────────
         if cmd in ('STATE4', 'STATE_4', 'S4'):
+            if self.operation_mode != 'manual':
+                self._notify('warn', 'STATE4 manual only',
+                             'Trong AUTO/AI mode hệ thống tự trigger STATE4 (qua /robot/done_tray_output)')
+                return
             if self.state_s4 not in (SystemState.IDLE,):
                 self._notify('warn', 'Không thể vào STATE 4',
-                             f'{self.state_s4.name} đang chạy')
+                             f'{self.state_s4.name} đang chạy — STOP trước')
                 return
             if not self.zero_offset:
-                self._notify('warn', 'Chua home', '')
+                self._notify('warn', 'Chua home', 'Nhấn HOMING trước')
                 return
-            self._notify('info', 'STATE 4', 'Thay khay output')
+            self._notify('info', 'STATE 4 (manual)', 'Thay khay output')
             self._enter_s4(SystemState.S4_CHECK_OUTY_SAFE)
             return
 
@@ -3770,8 +3780,9 @@ def main(args=None):
         print("=" * 60)
         print("  Cartridge System v8")
         print("  MANUAL + START → Homing → JOG mode")
-        print("  Kích sim sensor → Nhấn STATE 1/3 để chạy")
-        print("  STATE 2/4: nhấn nút trong State Navigation (sim robot signal)")
+        print("  MANUAL: Nhấn STATE 1/3 → check sensor thật → enter state")
+        print("  MANUAL: Nhấn STATE 2/4 → pub robot done_tray topic → enter state")
+        print("  AUTO/AI: Hệ thống tự trigger STATE 1/2/3/4 khi đủ điều kiện sensor")
         print("=" * 60)
 
         rclpy.spin(system)
