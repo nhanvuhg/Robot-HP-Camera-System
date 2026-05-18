@@ -2913,6 +2913,21 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
     def _s2a_check_interlock(self):
+        """
+        STATE 2A bước A1 (entry point): chuẩn bị state cho luồng thay khay input.
+
+        Pre-condition: state_in vừa chuyển từ IDLE → S2A_CHECK_INTERLOCK (qua nút
+        STATE 2 trong manual hoặc qua _can_start_s2a trong auto).
+
+        Việc làm:
+          1. Snapshot S6 (Check Tray OutP1) để biết output stack có khay hay
+             chưa — quyết định bước A7 (jog tìm row hay thẳng row1).
+          2. Reset cờ output: _s4_armed_out, _output_row, _output_target_pos.
+          3. Đảm bảo InY safe (≤ iny_safe_zone, default 90mm) trước khi InX di
+             chuyển ra vị trí lấy khay 505.5mm — interlock tránh va chạm 2 trục.
+
+        Next: S2A_INX_MOVE_POS_PICK (sau khi InY safe).
+        """
         if not self._cmd_sent_in:
             self._pub_cartridge_busy(True)
             self._s6_snapshot       = self.sensor(S6_CHECK_TRAY_P1)
@@ -3238,10 +3253,6 @@ class CartridgeSystem(Node):
             # [BLOCKING-FIX] verify _at_position(1, inx_safe)
             elif self._arrived(1) and self._at_position(1, self.config.inx_safe):
                 self._enter_in(SystemState.S2A_COMPLETE)
-
-    def _s2a_retry_scan_home(self):
-        # Placeholder for S2A retry logic
-        self._enter_in(SystemState.IDLE)
 
     def _s2a_complete(self):
         if not self._cmd_sent_in:
