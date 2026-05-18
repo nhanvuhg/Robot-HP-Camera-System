@@ -112,8 +112,8 @@ class SystemState(Enum):
     # GHI CHÚ (cho Agent khác):
     #   1. Tên cũ trong bảng trên dùng '+' thay '_' để code search không
     #      tự nhận nhầm là identifier (vd grep "S2A_INY_10" sẽ trả 0 hit).
-    #   2. Tên method `_s1_inx_move`, `_s1_iny_50`, ... GIỮ NGUYÊN.
-    #      Method là implementation detail; chỉ state enum đổi tên.
+    #   2. Tên method handler cũng được đổi tương ứng (vd `_s1_inx_move` →
+    #      `_s1_inx_move_pos_pick`) để enum + method + log trace nhất quán.
     #   3. String value (lowercase) cũng được rename tương ứng (vd
     #      "s1_inx_move" → "s1_inx_move_pos_pick") để khớp GUI parse từ
     #      topic /system_state. Đã verify không file GUI/QML/test nào
@@ -2144,7 +2144,7 @@ class CartridgeSystem(Node):
         s = self.state_in
         if   s == SystemState.IDLE:                self._do_idle_input()
         elif s == SystemState.S1_CONFIRM_SAFE:     self._s1_confirm_safe()
-        elif s == SystemState.S1_INX_MOVE_POS_PICK:         self._s1_inx_move()
+        elif s == SystemState.S1_INX_MOVE_POS_PICK:         self._s1_inx_move_pos_pick()
         elif s == SystemState.S1_WAIT_ARRIVE:      self._s1_wait_arrive()
         elif s == SystemState.S1_INY_SCAN:         self._s1_iny_scan()
         elif s == SystemState.S1_WAIT_STOP_S4:     self._s1_wait_stop_s4()
@@ -2152,27 +2152,27 @@ class CartridgeSystem(Node):
         elif s == SystemState.S1_CHECK_S5:         self._s1_check_s5()
         elif s == SystemState.S1_FALLBACK_RETRACT: self._s1_fallback_retract()
         elif s == SystemState.S1_WAIT_GUI_CONFIRM: self._s1_wait_gui_confirm()
-        elif s == SystemState.S1_INX_TRY_POS_PICK:    self._s1_retry_inx_500()
+        elif s == SystemState.S1_INX_TRY_POS_PICK:    self._s1_inx_try_pos_pick()
         elif s == SystemState.S1_RETRY_JOG:        self._s1_retry_jog()
         elif s == SystemState.S1_CYL1_EXTEND:      self._s1_cyl1_extend()
-        elif s == SystemState.S1_INY_PICK_TRAY_UP:           self._s1_iny_50()
-        elif s == SystemState.S1_INY_PLACE_TRAY_ROBOT:          self._s1_iny_200()
+        elif s == SystemState.S1_INY_PICK_TRAY_UP:           self._s1_iny_pick_tray_up()
+        elif s == SystemState.S1_INY_PLACE_TRAY_ROBOT:          self._s1_iny_place_tray_robot()
         elif s == SystemState.S1_WAIT_RELEASE:     self._s1_wait_release()
         elif s == SystemState.S1_WAIT_S7:         self._s1_wait_s7()
-        elif s == SystemState.S1_INX_WAIT_TRAY_DONE:           self._s1_inx_10()
+        elif s == SystemState.S1_INX_WAIT_TRAY_DONE:           self._s1_inx_wait_tray_done()
         elif s == SystemState.S1_COMPLETE:         self._s1_complete()
         elif s == SystemState.S1_RETRY_SCAN_HOME:  self._s1_retry_scan_home()
         elif s == SystemState.S2A_CHECK_INTERLOCK:   self._s2a_check_interlock()
-        elif s == SystemState.S2A_INX_MOVE_POS_PICK:           self._s2a_inx_500()
-        elif s == SystemState.S2A_POS_PLACE_TRAY_ROBOT_CYL1:      self._s2a_iny_200_cyl1()
+        elif s == SystemState.S2A_INX_MOVE_POS_PICK:           self._s2a_inx_move_pos_pick()
+        elif s == SystemState.S2A_POS_PLACE_TRAY_ROBOT_CYL1:      self._s2a_pos_place_tray_robot_cyl1()
         elif s == SystemState.S2A_WAIT_S7:          self._s2a_wait_s7()
-        elif s == SystemState.S2A_INY_HOME:            self._s2a_iny_10()
-        elif s == SystemState.S2A_INX_PLACE_TRAY_OUT_POS1:            self._s2a_inx_10()
+        elif s == SystemState.S2A_INY_HOME:            self._s2a_iny_home()
+        elif s == SystemState.S2A_INX_PLACE_TRAY_OUT_POS1:            self._s2a_inx_place_tray_out_pos1()
         elif s == SystemState.S2A_INY_JOG_OUTPUT:    self._s2a_iny_jog_output()
         elif s == SystemState.S2A_INY_OUTPUT_ROW:    self._s2a_iny_output_row()
         elif s == SystemState.S2A_WAIT_CYL1_RET:          self._s2a_wait_cyl1_ret()
-        elif s == SystemState.S2A_INY_FINAL:      self._s2a_iny_10_final()
-        elif s == SystemState.S2A_WAIT_NEW_TRAY:            self._s2a_inx_20()
+        elif s == SystemState.S2A_INY_FINAL:      self._s2a_iny_final()
+        elif s == SystemState.S2A_WAIT_NEW_TRAY:            self._s2a_wait_new_tray()
         elif s == SystemState.S2A_RETRY_SCAN_HOME:   self._s2a_retry_scan_home()
         elif s == SystemState.S2A_COMPLETE:          self._s2a_complete()
 
@@ -2327,7 +2327,7 @@ class CartridgeSystem(Node):
                 elif self._arrived(2) and self._at_position(2, self.config.iny_home):
                     self._enter_in(SystemState.S1_INX_MOVE_POS_PICK)
 
-    def _s1_inx_move(self):
+    def _s1_inx_move_pos_pick(self):
         """
         Gửi lệnh InX → inx_target2 (505.5mm). KHÔNG chờ arrived ở đây — chỉ kích lệnh
         và chuyển ngay sang S1_WAIT_ARRIVE (state đó chịu trách nhiệm verify).
@@ -2720,7 +2720,7 @@ class CartridgeSystem(Node):
         else:
             self._enter_in(SystemState.S1_INX_TRY_POS_PICK)
 
-    def _s1_retry_inx_500(self):
+    def _s1_inx_try_pos_pick(self):
         """
         Retry đưa InX về inx_target2 (505.5mm) sau khi operator XÁC NHẬN.
         Pre-condition: InY phải safe (≤ iny_safe_zone) — interlock rule.
@@ -2767,7 +2767,7 @@ class CartridgeSystem(Node):
             self._cyl_retry_t = time.time() + 3.0
         self._log_once("S1_WAIT_S14", "Cho S10 ON (Cyl1 extend)")
 
-    def _s1_iny_50(self):
+    def _s1_iny_pick_tray_up(self):
         """
         Sau khi Cyl1 kẹp khay: rút InY về home (0mm) với vận tốc 250mm/s để
         kéo khay khỏi stack. Tên hàm là "iny_50" vì lịch sử trước đây dừng ở
@@ -2788,7 +2788,7 @@ class CartridgeSystem(Node):
             elif self._arrived(2) and self._at_position(2, self.config.iny_home):
                 self._enter_in(SystemState.S1_INY_PLACE_TRAY_ROBOT)
 
-    def _s1_iny_200(self):
+    def _s1_iny_place_tray_robot(self):
         """
         Di chuyển InY → iny_target2 (87mm) để đặt khay vào vị trí robot pickup.
         Khay đang được Cyl1 kẹp suốt quá trình này.
@@ -2843,7 +2843,7 @@ class CartridgeSystem(Node):
             return
         self._log_once("S1_WAIT_S7", "Cho S7 ON")
 
-    def _s1_inx_10(self):
+    def _s1_inx_wait_tray_done(self):
         """
         Đưa InX về `inx_safe` (-60mm) để giải phóng workspace cho robot.
         Tên hàm "inx_10" là lịch sử (trước đây target=10mm); hiện target=inx_safe.
@@ -2930,7 +2930,7 @@ class CartridgeSystem(Node):
                     return
             self._log_once("S2A_WAIT_INY", "Step1: cho INY <= 50mm")
 
-    def _s2a_inx_500(self):
+    def _s2a_inx_move_pos_pick(self):
         """
         STATE 2A bước A2: InX → inx_target2 (505.5mm) để lấy khay cũ từ robot về.
         Pre-condition:
@@ -2960,7 +2960,7 @@ class CartridgeSystem(Node):
             elif self._arrived(1) and self._at_position(1, self.config.inx_target2):
                 self._enter_in(SystemState.S2A_POS_PLACE_TRAY_ROBOT_CYL1)
 
-    def _s2a_iny_200_cyl1(self):
+    def _s2a_pos_place_tray_robot_cyl1(self):
         """
         STATE 2A bước A3: InY → iny_target2 (87mm) tới vị trí kẹp khay cũ, sau đó
         kích Cyl1 EXTEND để kẹp.
@@ -3008,7 +3008,7 @@ class CartridgeSystem(Node):
             self._cyl_retry_t = time.time() + 3.0
         self._log_once("S2A_S14", "A4: Cho S10 ON")
 
-    def _s2a_iny_10(self):
+    def _s2a_iny_home(self):
         """
         STATE 2A bước A5: kéo InY về iny_home (0mm) cùng khay cũ (Cyl1 đang kẹp).
         Next: S2A_INX_PLACE_TRAY_OUT_POS1 (đưa InX ra vị trí output stack).
@@ -3027,7 +3027,7 @@ class CartridgeSystem(Node):
             elif self._arrived(2) and self._at_position(2, self.config.iny_home):
                 self._enter_in(SystemState.S2A_INX_PLACE_TRAY_OUT_POS1)
 
-    def _s2a_inx_10(self):
+    def _s2a_inx_place_tray_out_pos1(self):
         """
         STATE 2A bước A6: InX → inx_output_stack (100mm) — vị trí thả khay vào
         output stack. Pre-condition: InY safe.
@@ -3194,7 +3194,7 @@ class CartridgeSystem(Node):
             self._cyl_retry_t = time.time() + 3.0
         self._log_once("S2A_S13", "A9: Cho S9 ON")
 
-    def _s2a_iny_10_final(self):
+    def _s2a_iny_final(self):
         """
         STATE 2A bước A10: đưa InY về iny_home để chuẩn bị InX rút.
         Next: S2A_WAIT_NEW_TRAY.
@@ -3213,7 +3213,7 @@ class CartridgeSystem(Node):
             elif self._arrived(2) and self._at_position(2, self.config.iny_home):
                 self._enter_in(SystemState.S2A_WAIT_NEW_TRAY)
 
-    def _s2a_inx_20(self):
+    def _s2a_wait_new_tray(self):
         """
         STATE 2A bước A11: InX về inx_safe (-60mm) để giải phóng workspace.
         Pre-condition: InY safe.
