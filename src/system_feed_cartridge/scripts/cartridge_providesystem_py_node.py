@@ -2959,7 +2959,7 @@ class CartridgeSystem(Node):
                 if not ok:
                     self.get_logger().warn("S2 Step1: INY home fail")
                     return
-            self._log_once("S2A_WAIT_INY", "Step1: cho INY <= 50mm")
+            self._log_once("S2A_WAIT_INY", f"Step1: cho INY <= {self.config.iny_safe_zone}mm")
 
     def _s2a_inx_move_pos_pick(self):
         """
