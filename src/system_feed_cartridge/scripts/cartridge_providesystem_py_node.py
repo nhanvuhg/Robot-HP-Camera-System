@@ -214,6 +214,13 @@ class CartridgeSystem(Node):
         # Motion flags
         self._inx_moving = False
         self._iny_moving = False
+        # Drive warm-up gate sau referencing_task (FAS firmware quirk):
+        #   -1.0 = pending flush; 0.0 = done; >0.0 = đang chờ settle (timestamp)
+        # Khi drive vừa làm xong homing, lệnh position_task đầu tiên có thể bị
+        # drive "nuốt" — nó accept lệnh, báo target_position_reached=True ngay,
+        # nhưng không di chuyển vật lý. Phải gọi stop_motion_task() trước để
+        # flush internal queue. _s1_confirm_safe sẽ tự lo chuyện này.
+        self._drive_warm_t = -1.0
 
         # ── INPUT side state machine ──────────────────────────────
         self.state_in           = SystemState.IDLE
@@ -1391,6 +1398,8 @@ class CartridgeSystem(Node):
         if self.operation_mode in ['auto', 'ai']:
             if not self.zero_offset:
                 self.get_logger().info("[START] Auto/AI mode — not homed → HOMING")
+                # Reset drive warm-up gate — sau homing phải flush lại trước motion đầu tiên
+                self._drive_warm_t = -1.0
                 self._enter(SystemState.HOMING)
             else:
                 self._enter(SystemState.IDLE)
@@ -1427,7 +1436,10 @@ class CartridgeSystem(Node):
         self._motion_busy = False
         self._state1_enabled = False
         self._s4_trigger = False
-        
+        # Re-arm drive warm-up gate — phòng khi STOP xảy ra trong tình huống bất thường
+        # (drive vẫn có thể ở state lạ); state1 sau START sẽ tự flush.
+        self._drive_warm_t = -1.0
+
         # Chuyển về MANUAL mode
         self.operation_mode = 'manual'
         self._jog_mode = True
@@ -2302,7 +2314,26 @@ class CartridgeSystem(Node):
         Pre-condition: không có sub-state khác đang dùng servo (kiểm tra
         _inx_moving / _iny_moving).
         Next: S1_INX_MOVE_POS_PICK khi InY về home thật sự (verify bằng _at_position).
+
+        Drive warm-up (FAS firmware quirk): sau referencing_task, drive có thể
+        accept position_task nhưng không physically move (target_position_reached
+        về True sai sớm). Mimic STOP+START fix: gọi stop_motion_task() trên tất
+        cả servo để flush internal queue, đợi 1s settle, rồi mới cho luồng tiếp.
         """
+        # ── Drive warm-up gate ───────────────────────────────────────
+        if self._drive_warm_t < 0.0:
+            # Pending → trigger flush
+            for sid in list(self.servos):
+                self._stop(sid)
+            self._drive_warm_t = time.time() + 1.0
+            self.get_logger().info("S1: drive warm-up (stop_motion_task + 1s settle)")
+            return
+        if self._drive_warm_t > 0.0:
+            if time.time() < self._drive_warm_t:
+                return  # đang chờ settle
+            self._drive_warm_t = 0.0  # done
+        # ─────────────────────────────────────────────────────────────
+
         if not self._cmd_sent_in and not self._inx_moving and not self._iny_moving:
             self._pub_cartridge_busy(True)
             if self._input_tray_done:
