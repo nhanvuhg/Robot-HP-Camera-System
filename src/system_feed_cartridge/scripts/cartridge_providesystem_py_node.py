@@ -1188,12 +1188,17 @@ class CartridgeSystem(Node):
     def _cb_done_tray_input(self, msg: Bool):
         """
         Robot báo đã xong khay input → set _input_tray_done.
-        Cả AUTO lẫn MANUAL đều nhận topic này để trigger STATE 2.
-        STATE 2 sẽ tự trigger qua _can_start_s2a() trong _do_idle_input().
+        Cả AUTO lẫn MANUAL đều nhận topic này để trigger STATE 2:
+          - AUTO: robot pub topic khi xong khay; sau S2A_COMPLETE auto chuỗi S1 lại.
+          - MANUAL: user nhấn nút STATE 2 → QML pub topic; sau S2A_COMPLETE dừng,
+            không tự kích S1 (giữ _state1_enabled=False trong manual).
+        STATE 2 trigger qua _can_start_s2a() trong _do_idle_input() (check S7).
         """
         if msg.data:
             self._input_tray_done = True
-            self._state1_enabled = True
+            # Chỉ enable auto-chain S1 trong AUTO/AI — MANUAL dừng chain sau S2A
+            if self.operation_mode in ('auto', 'ai'):
+                self._state1_enabled = True
             self.get_logger().info(
                 '[DONE_INPUT] Robot xong khay input → sẵn sàng trigger State2 '
                 f'(mode={self.operation_mode})'

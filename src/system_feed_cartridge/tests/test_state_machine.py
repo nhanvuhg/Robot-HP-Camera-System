@@ -465,9 +465,10 @@ class TestSensorReading:
 class TestCallbackLogic:
     """Test ROS callback handlers."""
 
-    def test_cb_done_tray_input_sets_flag(self):
-        """Nhận done_tray_input(True) → _input_tray_done = True."""
+    def test_cb_done_tray_input_sets_flag_in_auto(self):
+        """AUTO mode: done_tray_input(True) → set flag + enable auto-chain S1."""
         node = _make_node()
+        node.operation_mode = 'auto'
         node._input_tray_done = False
         node._state1_enabled = False
 
@@ -477,7 +478,22 @@ class TestCallbackLogic:
         node._cb_done_tray_input(msg)
 
         assert node._input_tray_done is True
-        assert node._state1_enabled is True
+        assert node._state1_enabled is True  # AUTO chain S1 sau S2A_COMPLETE
+
+    def test_cb_done_tray_input_in_manual_keeps_state1_disabled(self):
+        """MANUAL mode: done_tray_input(True) → set flag NHƯNG KHÔNG enable S1 (dừng chain)."""
+        node = _make_node()
+        node.operation_mode = 'manual'
+        node._input_tray_done = False
+        node._state1_enabled = False
+
+        msg = MagicMock()
+        msg.data = True
+        node._notify = MagicMock()
+        node._cb_done_tray_input(msg)
+
+        assert node._input_tray_done is True
+        assert node._state1_enabled is False  # MANUAL không auto-chain S1
 
     def test_cb_done_tray_output_triggers_s4(self):
         """Nhận done_tray_output(True) → _s4_trigger = True."""
