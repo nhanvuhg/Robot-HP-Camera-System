@@ -27,6 +27,17 @@ Item {
             }
         }
     }
+
+    // Sync mode từ Cartridge (đảm bảo 2 UI đồng bộ)
+    Connections {
+        target: cartridgeController
+        function onCurrentModeChanged() {
+            var m = (cartridgeController.currentMode || "").toLowerCase()
+            if (m === "auto" || m === "ai" || m === "camera_ai" || m === "manual") {
+                cameraPageRoot.ctrlMode = (m === "ai") ? "camera_ai" : m;
+            }
+        }
+    }
     Timer {
         interval: 1000
         running: true
@@ -272,7 +283,12 @@ Item {
                                         enabled: !parent.isLocked
                                         onClicked: {
                                             cameraPageRoot.ctrlMode = modelData.key
-                                            if (modelData.key === "camera_ai") robotController.selectRow(0)
+                                            if (modelData.key === "camera_ai") {
+                                                robotController.selectRow(0)
+                                                robotController.setAiMode(true)
+                                            } else if (modelData.key === "auto") {
+                                                robotController.setAutoMode(true)
+                                            }
                                         }
                                     }
                                 }

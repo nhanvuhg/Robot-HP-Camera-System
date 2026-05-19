@@ -34,21 +34,8 @@ def generate_launch_description():
         output='screen'
     )
     
-    # Festo gripper controller node (Python)
-    festo_gripper_node = Node(
-        package='robot_control_main',
-        executable='gripper_festo_node.py',
-        name='festo_gripper_controller',
-        parameters=[
-            {'cpx_ip': LaunchConfiguration('cpx_ip')},
-            {'cpx_module_index': LaunchConfiguration('cpx_module')}
-        ],
-        output='screen'
-    )
-    
     return LaunchDescription([
         cpx_ip_arg,
         cpx_module_arg,
-        robot_logic_node,
-        festo_gripper_node
+        robot_logic_node
     ])

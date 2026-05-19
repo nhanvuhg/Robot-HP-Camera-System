@@ -65,7 +65,6 @@ class SystemConfig(BaseModel):
     iny_row_vel: float = 20.0
     iny_scan_valid_min_mm: float = 200.0
     iny_scan_valid_max_mm: float = 550.0
-    iny_scan_arm_mm: float = 200.0
     s1_scan_noise_retry_limit: int = 1
     inx_noise_recovery_mm: float = 10.0
 

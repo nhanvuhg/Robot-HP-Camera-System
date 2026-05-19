@@ -356,7 +356,32 @@ class CartridgeSystem(Node):
 
         self.create_timer(5.0,  self._watchdog)
 
+        # Sync initial mode (default 'manual') tới robot node — fix race condition:
+        # cartridge default = manual, robot default = manual_mode_{false} (auto-like).
+        # Nếu user không đổi mode rõ ràng → robot vẫn nghĩ auto → fire chain HOME khi
+        # cartridge homing xong. Publish lặp 3 lần (1s/lần) để chắc chắn robot subscriber
+        # đã sẵn sàng nhận (QoS depth=1, không transient_local).
+        self._initial_mode_publish_count = 0
+        self._initial_mode_timer = self.create_timer(1.0, self._publish_initial_mode_safe)
+
         self.get_logger().info("CartridgeSystem node started")
+
+    def _publish_initial_mode_safe(self):
+        """Publish operation_mode hiện tại tới robot 3 lần (1s/lần) ngay sau khi
+        khởi động để đảm bảo sync mode dù robot subscribe trễ. Tự cancel timer
+        sau lần thứ 3."""
+        msg = Int32()
+        if self.operation_mode == 'auto': msg.data = 1
+        elif self.operation_mode == 'ai': msg.data = 2
+        else: msg.data = 3
+        self.pub_robot_mode.publish(msg)
+        self._initial_mode_publish_count += 1
+        if self._initial_mode_publish_count == 1:
+            self.get_logger().info(
+                f"[INIT] Sync initial mode to robot: {self.operation_mode.upper()}"
+            )
+        if self._initial_mode_publish_count >= 3:
+            self._initial_mode_timer.cancel()
 
     def _safe_control_loop(self):
         """
@@ -969,10 +994,15 @@ class CartridgeSystem(Node):
         """
         Chuyển trạng thái GLOBAL (self.state) và log chuyển tiếp.
         Xóa _guide_logged khi đổi state để các log "chỉ in 1 lần" được reset.
+        Khi vào ERROR: clear zero_offset → buộc re-home sau khi recovery
+        (auto/ai tự enter HOMING ở START; manual chờ operator nhấn HOMING).
         """
         self.get_logger().info(f"[GLOBAL] -> {next_state.name}")
         if next_state != self.state:
             self._guide_logged.clear()
+        if next_state == SystemState.ERROR and self.zero_offset:
+            self.zero_offset.clear()
+            self.get_logger().warn("[ERROR] Cleared zero_offset — cần re-home sau khi recovery")
         self.state = next_state
 
     def _enter_in(self, next_state: SystemState):
@@ -1116,12 +1146,15 @@ class CartridgeSystem(Node):
 
     def _can_start_s2a(self) -> bool:
         """
-        Điều kiện để trigger STATE 2 (cả AUTO lẫn MANUAL):
+        Điều kiện để **auto-trigger** STATE 2 (chỉ AUTO/AI mode):
+          - operation_mode in ['auto', 'ai'] (MANUAL không auto-chain — operator phải nhấn STATE2)
           - Đã homing
           - Robot đã báo xong khay input (_input_tray_done=True, set bởi _cb_done_tray_input)
           - Khay đang ở vị trí robot (S7_TRAY_AT_ROBOT=ON)
           - Robot không báo bận
         """
+        if self.operation_mode not in ['auto', 'ai']:
+            return False
         return (bool(self.zero_offset) and getattr(self, '_input_tray_done', False)
                 and self.sensor(S7_TRAY_AT_ROBOT) and not self._motion_busy)
 
@@ -1150,12 +1183,15 @@ class CartridgeSystem(Node):
 
     def _can_start_s4(self) -> bool:
         """
-        Điều kiện để trigger STATE 4 (thay khay output):
+        Điều kiện để **auto-trigger** STATE 4 (chỉ AUTO/AI mode — thay khay output):
+          - operation_mode in ['auto', 'ai'] (MANUAL không auto-chain — operator phải nhấn STATE4)
           - Đã homing
           - _s4_trigger=True (set bởi robot qua /robot/done_tray_output)
           - S18_FEED_OK=ON (có khay ở vị trí feed — đảm bảo output tray đang được dùng)
           - Robot không báo bận
         """
+        if self.operation_mode not in ['auto', 'ai']:
+            return False
         return bool(self.zero_offset) and self._s4_trigger and self.sensor(S18_FEED_OK) and not self._motion_busy
 
     def _pub_cartridge_busy(self, busy: bool):
@@ -1367,7 +1403,9 @@ class CartridgeSystem(Node):
         Xử lý lệnh START từ /system/start_button (GUI hoặc operator nhấn nút).
         - AUTO/AI mode và chưa homed → chuyển sang HOMING tự động
         - AUTO/AI mode và đã homed → chuyển về IDLE, bắt đầu auto-trigger STATE
-        - MANUAL mode → vào chế độ JOG (giữ nguyên state, không tự động chạy STATE)
+        - MANUAL mode → giữ nguyên label (manual/jog tùy `_jog_mode` hiện tại),
+          chỉ set _system_running để cho phép trigger STATE thủ công. KHÔNG ép
+          vào JOG — chỉ vào JOG khi STOP hoặc khi HOMING hoàn tất ở manual.
         Bỏ qua nếu đang trong HOMING_RUNNING để tránh xung đột.
         """
         if not msg.data or self.state == SystemState.HOMING_RUNNING:
@@ -1379,12 +1417,13 @@ class CartridgeSystem(Node):
         self._inx_moving = self._iny_moving = False
         self._state1_enabled = (self.operation_mode in ['auto', 'ai'])
         self._motion_busy = False
-        
-        if self.operation_mode == 'manual':
-            self._jog_mode = True
-        else:
+
+        # Auto/AI: tắt JOG flag để GUI hiển thị đúng mode.
+        # Manual: KHÔNG động _jog_mode — giữ nguyên trạng thái hiện tại
+        # (manual hoặc jog tùy chu trình trước).
+        if self.operation_mode != 'manual':
             self._jog_mode = False
-            
+
         self.get_logger().info(f"[START] System running. Mode: {self.operation_mode}")
         self._sync_mode_jog()
         
@@ -1407,8 +1446,10 @@ class CartridgeSystem(Node):
           2. Dừng tất cả servo (stop_motion_task)
           3. Thu về cả 2 cylinder
           4. Reset toàn bộ state machine về IDLE
-          5. Chuyển sang MANUAL mode + JOG sẵn sàng
-        zero_offset được giữ nguyên — START tiếp theo không cần re-home.
+          5. Clear zero_offset → BẮT BUỘC re-home khi START tiếp (auto/ai)
+          6. Chuyển sang MANUAL mode + JOG sẵn sàng
+        Khác với PAUSE: STOP xóa zero_offset, PAUSE giữ nguyên (resume mid-cycle).
+        Manual mode không tự auto-home — operator phải nhấn nút HOMING tay.
         Gửi mode MANUAL (code 3) đến robot node để đồng bộ.
         """
         if not msg.data:
@@ -1433,6 +1474,12 @@ class CartridgeSystem(Node):
         # (drive vẫn có thể ở state lạ); state1 sau START sẽ tự flush.
         self._drive_warm_t = -1.0
 
+        # Clear zero_offset → bắt buộc re-home ở lần START tiếp (auto/ai tự enter
+        # HOMING; manual chờ operator nhấn nút HOMING).
+        if self.zero_offset:
+            self.zero_offset.clear()
+            self.get_logger().info("[STOP] Cleared zero_offset — START lần sau sẽ phải re-home")
+
         # Chuyển về MANUAL mode
         self.operation_mode = 'manual'
         self._jog_mode = True
@@ -1441,10 +1488,9 @@ class CartridgeSystem(Node):
         robot_msg.data = 3
         self.pub_robot_mode.publish(robot_msg)
         self.get_logger().info("[STOP] Hệ thống dừng - Đã chuyển về MANUAL mode")
-        # zero_offset preserved — coordinates remain valid, next START skips re-homing
         self._sync_mode_jog()
-        self.get_logger().info('[STOP] STOP — JOG sẵn sàng (toa do giu nguyen)')
-        self._notify('warn', 'STOP', 'Dừng hệ thống — JOG sẵn sàng')
+        self.get_logger().info('[STOP] STOP — JOG sẵn sàng (cần re-home trước STATE)')
+        self._notify('warn', 'STOP', 'Dừng hệ thống — Cần HOMING trước khi chạy STATE')
 
     def _cb_pause(self, msg: Bool):
         """
@@ -1518,14 +1564,41 @@ class CartridgeSystem(Node):
         Đồng bộ mode từ robot node qua /robot/set_mode.
         Mapping: 1=auto, 2=ai, 3=manual.
         Khi mode thay đổi: xóa log guide để hiển thị message mới phù hợp mode mới.
+        Khi chuyển sang AUTO/AI: reset trigger flags (_input_tray_done, _s4_trigger)
+        để bắt buộc chu trình mới từ STATE1/STATE3, không kế thừa state cũ.
         """
         mapping = {1: 'auto', 2: 'ai', 3: 'manual'}
         requested = mapping.get(msg.data, 'manual')
         if requested != self.operation_mode:
+            old = self.operation_mode
             self.get_logger().info(f"[SYNC MODE] Cập nhật mode từ Robot Node: {requested.upper()}")
             self.operation_mode = requested
             self._guide_logged.clear()
             self._sync_mode_jog()
+            self._reset_auto_triggers_on_mode_enter(old, requested)
+
+    def _reset_auto_triggers_on_mode_enter(self, old_mode: str, new_mode: str):
+        """
+        Khi chuyển mode: clear zero_offset (bắt buộc re-home) + reset trigger flags.
+        - Auto/AI sau khi clear: lần START tiếp theo sẽ tự enter HOMING.
+        - Manual sau khi clear: operator phải nhấn nút HOMING tay; STATE trigger
+          bị reject cho đến khi homed.
+        An toàn: không động state machine / state_in / state_s3 / state_s4.
+        """
+        if old_mode == new_mode:
+            return
+        if self.zero_offset:
+            self.zero_offset.clear()
+            self.get_logger().info(
+                f"[MODE {old_mode.upper()}→{new_mode.upper()}] Cleared zero_offset — cần re-home"
+            )
+        if new_mode in ('auto', 'ai'):
+            self._input_tray_done = False
+            self._s4_trigger = False
+            self.get_logger().info(
+                f"[MODE→{new_mode.upper()}] Reset _input_tray_done + _s4_trigger — "
+                f"bắt đầu chu trình mới từ STATE1/STATE3"
+            )
 
     def _cb_mode(self, msg: String):
         """
@@ -1545,16 +1618,27 @@ class CartridgeSystem(Node):
             return
         old = self.operation_mode
         self.operation_mode = requested
+
+        # User explicitly chọn 'manual' từ mode selector = ý định thoát JOG sub-state.
+        # Clear _jog_mode kể cả khi mode không đổi (old == 'manual' với _jog_mode=True
+        # do _s1_abort/_cb_stop set). Sau lệnh này GUI sẽ hiện "manual" không còn "jog".
+        if requested == 'manual' and getattr(self, '_jog_mode', False):
+            self._jog_mode = False
+            self._sync_mode_jog()
+            self.get_logger().info("[MODE] User chọn MANUAL — thoát JOG sub-state")
+
         if old != requested:
             self._guide_logged.clear()
             self._sync_mode_jog()  # Publish mode ngay cho GUI hiển thị
-            
+
             # Sync to robot node
             robot_msg = Int32()
             if requested == 'auto': robot_msg.data = 1
             elif requested == 'ai': robot_msg.data = 2
             elif requested == 'manual': robot_msg.data = 3
             self.pub_robot_mode.publish(robot_msg)
+
+            self._reset_auto_triggers_on_mode_enter(old, requested)
 
     def _cb_jog(self, msg: String):
         """
@@ -1649,6 +1733,12 @@ class CartridgeSystem(Node):
         cmd = msg.data.strip().upper()
         if cmd == 'HOMING':
             if self.state != SystemState.HOMING_RUNNING:
+                # Clear abort flag — nếu STOP trước đó set abort mà chưa qua START,
+                # thread homing mới sẽ thoát ngay và state kẹt HOMING_RUNNING.
+                self._homing_abort.clear()
+                # Clear stale event nếu thread trước đã set sau STOP nhưng main
+                # loop chưa consume (state đã về IDLE).
+                self._homing_done_event.clear()
                 self.zero_offset.clear()
                 self._inx_moving = self._iny_moving = False
                 self._enter(SystemState.HOMING)
@@ -1721,13 +1811,16 @@ class CartridgeSystem(Node):
                              f'{self.state_in.name} đang chạy — STOP trước')
                 return
             if not self.zero_offset:
-                self._notify('warn', 'Chua home', '')
+                self._notify('warn', 'Chua home', 'Nhấn HOMING trước')
                 return
             if not self.sensor(S7_TRAY_AT_ROBOT):
                 self._notify('warn', 'S7 OFF',
                              'Cần có khay tại vị trí robot (S7 ON) trước khi vào State 2')
                 return
             self._input_tray_done = False
+            self._jog_mode = False
+            self._drive_warm_t = -1.0  # ép drive warm-up flush trước motion đầu tiên (FAS quirk)
+            self._sync_mode_jog()
             self._notify('info', 'STATE 2A (manual)', 'S7 ON — bắt đầu lấy khay')
             self._enter_in(SystemState.S2A_CHECK_INTERLOCK)
             return
@@ -1750,6 +1843,9 @@ class CartridgeSystem(Node):
                 self._notify('warn', 'STATE3: Điều kiện chưa đủ',
                              'S18 ON (vị trí cấp output đang có khay) — cần S18 OFF')
                 return
+            self._jog_mode = False
+            self._drive_warm_t = -1.0  # FAS drive warm-up
+            self._sync_mode_jog()
             self._notify('info', 'STATE 3 (manual)', 'Bắt đầu cấp khay output')
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
             return
@@ -1767,6 +1863,9 @@ class CartridgeSystem(Node):
             if not self.zero_offset:
                 self._notify('warn', 'Chua home', 'Nhấn HOMING trước')
                 return
+            self._jog_mode = False
+            self._drive_warm_t = -1.0  # FAS drive warm-up
+            self._sync_mode_jog()
             self._notify('info', 'STATE 4 (manual)', 'Thay khay output')
             self._enter_s4(SystemState.S4_CHECK_OUTY_SAFE)
             return
@@ -2097,10 +2196,11 @@ class CartridgeSystem(Node):
                     msg = Bool()
                     msg.data = True
                     self.pub_homing_done.publish(msg)
+                    # Manual mode: KHÔNG auto-set _jog_mode — giữ nguyên label "manual"
+                    # để user chủ động chọn STATE chạy. JOG chỉ kích hoạt khi STOP state.
                     if self.operation_mode == 'manual':
-                        self._jog_mode = True
                         self._sync_mode_jog()
-                        self._notify('info', 'Homing xong', 'Homing xong — JOG sẵn sàng')
+                        self._notify('info', 'Homing xong', 'Chọn STATE để chạy')
                     else:
                         self._notify('info', 'Homing xong', '')
                     self.state_in  = SystemState.IDLE
@@ -2110,9 +2210,12 @@ class CartridgeSystem(Node):
                     self._enter(SystemState.IDLE)
                 else:
                     if self._homing_abort.is_set():
-                        # STOP pressed during homing — _cb_stop already set state to IDLE
-                        self.get_logger().info("Homing cancelled by STOP (not an error)")
+                        self.get_logger().info("Homing cancelled by STOP — về IDLE")
+                        self._homing_abort.clear()  # consume abort flag để lần HOMING sau chạy được
+                        self._enter(SystemState.IDLE)
+                        # _cb_stop đã set _jog_mode=True nếu user bấm STOP, không cần set lại.
                     else:
+                        # Fail không do abort → ERROR (đã transition trong _error)
                         self._error("Homing that bai")
             return
         if s == SystemState.ERROR:            self._do_error(); return
@@ -2215,7 +2318,8 @@ class CartridgeSystem(Node):
                 self._log_once("IDLE_IN_NOT_HOMED", "IDLE-IN: Chua home")
             return
 
-        # S2A: robot done → trigger kể cả manual (robot pub topic)
+        # S2A: chỉ auto-trigger ở AUTO/AI mode (_can_start_s2a đã gate operation_mode).
+        # Manual mode: operator phải nhấn STATE2 qua GUI (_cb_goto_state route riêng).
         if self._can_start_s2a():
             self._input_tray_done = False
             mode_str = self.operation_mode.upper()
@@ -2351,7 +2455,7 @@ class CartridgeSystem(Node):
             self._log_once("S1_INY_SAFE", "Step2: INY chua safe")
             return
         if not self._cmd_sent_in:
-            ok = self._nb_move(1, self.config.inx_target2, vel=150)
+            ok = self._nb_move(1, self.config.inx_target2, vel=200)
             if not ok:
                 self._log_once("S1_INX_FAIL", "S1 Step2: INX fail")
                 return
@@ -2427,10 +2531,9 @@ class CartridgeSystem(Node):
         Quét InY từ home → target_scaninp1 (970mm) để phát hiện stack khay đầu vào.
         Logic chống nhiễu S4 (xem RULES.md RULE 3):
           1. S4 là NC (Normally Closed) → bắt **falling edge** (s4_prev ON → now OFF)
-          2. Gate S4 armed theo 3 điều kiện AND, re-evaluate mỗi tick:
+          2. Gate S4 armed theo 2 điều kiện AND, re-evaluate mỗi tick:
              - InX vẫn tại inx_target2 ± position_tolerance (_at_position)
              - InY ∈ [iny_scan_valid_min_mm, iny_scan_valid_max_mm]
-             - InY ≥ iny_scan_arm_mm (buffer trên valid_min)
           3. Disarm + log warn nếu InX drift khỏi target giữa lúc scan.
 
         Falling edge hợp lệ → tính row từ _zone_to_row → chuyển S1_INY_TO_ROW.
@@ -2443,9 +2546,8 @@ class CartridgeSystem(Node):
             return
 
         if not self._cmd_sent_in:
-            # ok = self._nb_move(2, self.config.target_scaninp1,
-            #                    vel=self.config.iny_scan_vel)
-            ok = self._nb_move(2, self.config.target_scaninp1,vel=70)
+            ok = self._nb_move(2, self.config.target_scaninp1,
+                               vel=self.config.iny_scan_vel)
             if not ok:
                 self._log_once("S1_SCAN_FAIL", "S1 INY scan: nb_move fail")
                 return
@@ -2458,20 +2560,18 @@ class CartridgeSystem(Node):
                 f"vel={self.config.iny_scan_vel}"
             )
 
-        # [BLOCKING-FIX D+E] Gate S4 theo 3 điều kiện re-check mỗi tick:
+        # [BLOCKING-FIX D+E] Gate S4 theo 2 điều kiện re-check mỗi tick:
         #   1. InX vẫn TẠI inx_target2 (verify _pos, tolerance position_tolerance)
         #      → tránh nhận S4 nếu InX bị nudge/trôi khỏi 505.5mm giữa lúc scan.
         #   2. InY trong vùng quét hợp lệ:
-        #      iny_scan_valid_min_mm ≤ iny ≤ iny_scan_valid_max_mm (vd 20–970mm)
-        #      → cắt cả 2 đầu (chống trigger dưới 20mm và quá 970mm).
-        #   3. InY đã vượt iny_scan_arm_mm (buffer an toàn trên valid_min).
+        #      iny_scan_valid_min_mm ≤ iny ≤ iny_scan_valid_max_mm (vd 70–970mm)
+        #      → cắt cả 2 đầu (chống trigger dưới 70mm và quá 970mm).
         # Nếu InX trôi khỏi target → disarm S4 ngay + log warn.
         inx_at_target = self._at_position(1, self.config.inx_target2)
         iny_in_valid  = (self.config.iny_scan_valid_min_mm
                          <= iny <=
                          self.config.iny_scan_valid_max_mm)
-        iny_armed_min = iny >= self.config.iny_scan_arm_mm
-        new_armed     = inx_at_target and iny_in_valid and iny_armed_min
+        new_armed     = inx_at_target and iny_in_valid
 
         # Disarm + warn nếu InX trôi giữa chừng (đã armed mà giờ inx_at_target=False)
         if self._s4_armed and not inx_at_target:
@@ -2800,7 +2900,7 @@ class CartridgeSystem(Node):
         Next: S1_WAIT_RELEASE (nhả Cyl1 sau khi đến vị trí).
         """
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.iny_target2)
+            ok = self._nb_move(2, self.config.iny_target2, vel=120)
             if not ok:
                 self.get_logger().warn("S1: INY -> 200mm fail")
                 return
@@ -2859,7 +2959,7 @@ class CartridgeSystem(Node):
             self._log_once("S1_INX_WAIT_INY", f"Cho INY <= {self.config.iny_safe_zone}mm truoc INX ve home")
             return
         if not self._cmd_sent_in:
-            ok = self._nb_move(1, self.config.inx_safe,vel=150)
+            ok = self._nb_move(1, self.config.inx_safe,vel=200)
             if not ok:
                 self.get_logger().warn(f"S1: INX -> {self.config.inx_safe}mm fail")
                 return
@@ -2920,15 +3020,25 @@ class CartridgeSystem(Node):
         Pre-condition: state_in vừa chuyển từ IDLE → S2A_CHECK_INTERLOCK (qua nút
         STATE 2 trong manual hoặc qua _can_start_s2a trong auto).
 
-        Việc làm:
-          1. Snapshot S6 (Check Tray OutP1) để biết output stack có khay hay
-             chưa — quyết định bước A7 (jog tìm row hay thẳng row1).
-          2. Reset cờ output: _s4_armed_out, _output_row, _output_target_pos.
-          3. Đảm bảo InY safe (≤ iny_safe_zone, default 90mm) trước khi InX di
-             chuyển ra vị trí lấy khay 505.5mm — interlock tránh va chạm 2 trục.
+        Drive warm-up (FAS firmware quirk): tương tự _s1_confirm_safe — sau homing
+        (referencing_task) drive accept position_task nhưng không chuyển động vật lý.
+        Phải gọi stop_motion_task() để flush queue, đợi 1s settle, rồi mới gửi move.
 
-        Next: S2A_INX_MOVE_POS_PICK (sau khi InY safe).
+        Next: S2A_INX_MOVE_POS_PICK (sau khi InY safe + warm-up xong).
         """
+        # ── Drive warm-up gate (FAS firmware quirk) ──────────────────
+        if self._drive_warm_t < 0.0:
+            for sid in list(self.servos):
+                self._stop(sid)
+            self._drive_warm_t = time.time() + 1.0
+            self.get_logger().info("S2A: drive warm-up (stop_motion_task + 1s settle)")
+            return
+        if self._drive_warm_t > 0.0:
+            if time.time() < self._drive_warm_t:
+                return  # đang chờ settle
+            self._drive_warm_t = 0.0
+        # ─────────────────────────────────────────────────────────────
+
         if not self._cmd_sent_in:
             self._pub_cartridge_busy(True)
             self._s6_snapshot       = self.sensor(S6_CHECK_TRAY_P1)
@@ -2967,9 +3077,9 @@ class CartridgeSystem(Node):
             self._notify('warn', 'S9 chua ON', 'Cyl1 chua retract')
             return
         if not self._cmd_sent_in:
-            ok = self._nb_move(1, self.config.inx_target2)
+            ok = self._nb_move(1, self.config.inx_target2, vel=200)
             if not ok:
-                self._log_once("S2A_A2_FAIL", "S2A A2: INX 500mm fail")
+                self._log_once("S2A_A2_FAIL", "S2A A2: INX 505.5mm fail")
                 return
             self._cmd_sent_in     = True
             self._step_timeout_in = time.time() + self.config.move_timeout
@@ -2991,7 +3101,7 @@ class CartridgeSystem(Node):
         if not self._cmd_sent_in:
             ok = self._nb_move(2, self.config.iny_target2)
             if not ok:
-                self._log_once("S2A_A3_FAIL", "S2A A3: INY 200mm fail")
+                self._log_once("S2A_A3_FAIL", "S2A A3: INY 87mm fail")
                 return
             self._cmd_sent_in     = True
             self._step_timeout_in = time.time() + self.config.move_timeout
@@ -3057,7 +3167,7 @@ class CartridgeSystem(Node):
             self._log_once("S2A_INX10_WAIT", "A6: INY chua safe")
             return
         if not self._cmd_sent_in:
-            ok = self._nb_move(1, self.config.inx_output_stack)
+            ok = self._nb_move(1, self.config.inx_output_stack, vel=200)
             if not ok:
                 self._log_once("S2A_A6_FAIL", "S2A A6: INX output pos fail")
                 return
@@ -3089,7 +3199,6 @@ class CartridgeSystem(Node):
           - S6 ON (stack có khay): scan với S4 falling-edge + armed-gate (giống S1):
               * inx_at_target (InX tại inx_output_stack)
               * iny in [iny_scan_valid_min_mm, iny_scan_valid_max_mm]
-              * iny >= iny_scan_arm_mm
             S4 falling edge hợp lệ → _zone_to_row(iny_output_zones) → target row →
             enter S2A_INY_TARGETROW.
             Hết hành trình mà S4 không trigger → fallback row 1 + warn.
@@ -3120,8 +3229,7 @@ class CartridgeSystem(Node):
             iny_in_valid  = (self.config.iny_scan_valid_min_mm
                              <= iny <=
                              self.config.iny_scan_valid_max_mm)
-            iny_armed_min = iny >= self.config.iny_scan_arm_mm
-            new_armed     = inx_at_target and iny_in_valid and iny_armed_min
+            new_armed     = inx_at_target and iny_in_valid
 
             if self._s4_armed_out and not inx_at_target:
                 inx_now = self._pos(1)
@@ -3258,7 +3366,7 @@ class CartridgeSystem(Node):
         Next: S2A_WAIT_NEW_TRAY.
         """
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.iny_home)
+            ok = self._nb_move(2, self.config.iny_home, vel=200)
             if not ok:
                 self._log_once("S2A_A10_FAIL", "S2A A10: INY 10mm fail")
                 return
@@ -3315,8 +3423,22 @@ class CartridgeSystem(Node):
         Verify cả 2 servo bằng _arrived AND _at_position.
         Timeout fallback: vẫn cho tiếp tục (warn log) — vì OutX/OutY ở "near home"
         thường an toàn cho Servo3.
+        Drive warm-up (FAS quirk): flush stop_motion_task + đợi 1s trước motion đầu.
         Next: S3_CHECK_S17.
         """
+        # ── Drive warm-up gate (FAS firmware quirk) ──────────────────
+        if self._drive_warm_t < 0.0:
+            for sid in list(self.servos):
+                self._stop(sid)
+            self._drive_warm_t = time.time() + 1.0
+            self.get_logger().info("S3: drive warm-up (stop_motion_task + 1s settle)")
+            return
+        if self._drive_warm_t > 0.0:
+            if time.time() < self._drive_warm_t:
+                return
+            self._drive_warm_t = 0.0
+        # ─────────────────────────────────────────────────────────────
+
         if not self._cmd_sent_s3:
             self._pub_cartridge_busy(True)
         cfg = self.config
@@ -3473,8 +3595,22 @@ class CartridgeSystem(Node):
         STATE 4 bước đầu: đảm bảo OutY về `outy_target1` (10mm = safe clearance)
         trước khi OutX di chuyển vào (tránh va chạm 2 trục output).
         Verify _at_position(5, outy_target1) bằng _at_position helper.
+        Drive warm-up (FAS quirk): flush stop_motion_task + đợi 1s trước motion đầu.
         Next: S4_OUTX_TARGET2.
         """
+        # ── Drive warm-up gate (FAS firmware quirk) ──────────────────
+        if self._drive_warm_t < 0.0:
+            for sid in list(self.servos):
+                self._stop(sid)
+            self._drive_warm_t = time.time() + 1.0
+            self.get_logger().info("S4: drive warm-up (stop_motion_task + 1s settle)")
+            return
+        if self._drive_warm_t > 0.0:
+            if time.time() < self._drive_warm_t:
+                return
+            self._drive_warm_t = 0.0
+        # ─────────────────────────────────────────────────────────────
+
         if not self._cmd_sent_s4:
             self._pub_cartridge_busy(True)
         cfg = self.config

@@ -807,7 +807,7 @@ private:
         if (row < 1 || row > 5) return false;
         if (!moveToIndex(0)) return false;
         // MoveJ đến row1new1 (Index 1)
-        if (!moveToIndex(27)) return false;
+        if (!moveToIndex(6)) return false;
         if (!moveToIndex(1)) return false;
         
         // Tính tiến theo row index DỰA TRÊN TRỤC CỦA TAY MÁY (Khay đặt theo góc của tay)
@@ -822,7 +822,7 @@ private:
         if (!moveR(0, 0, -101,3)) return false;
         if (!setDigitalOutput(1, true)) return false;
         if (!moveR(0, 0, 100,3)) return false;
-        if (!moveToIndex(27)) return false;  // ensure safe
+        if (!moveToIndex(6)) return false;  // ensure safe
         if (!moveToIndex(7)) return false;
         if (!moveR(0, 30, 0,5)) return false;
         if (!setDigitalOutput(1, false)) return false;
@@ -834,7 +834,7 @@ private:
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Buffer", row);
         if (row < 1 || row > 5) return false;
         // if (!moveToIndex(6)) return false; // Tạm thời bỏ move đến vị trí an toàn
-        if (!moveToIndex(27)) return false;
+        if (!moveToIndex(6)) return false;
         // MoveJ đến row1new1 (Index 1)
         if (!moveToIndex(1)) return false;
         
@@ -850,7 +850,7 @@ private:
         if (!moveR(0, 0, -101,3)) return false;
         if (!setDigitalOutput(1, true)) return false;
         if (!moveR(0, 0, 100,3)) return false;
-        if (!moveToIndex(27)) return false;  // ensure safe
+        if (!moveToIndex(6)) return false;  // ensure safe
         if (!moveToIndex(8)) return false;
         if (!moveR(0, 0, -40,5)) return false;
         if (!setDigitalOutput(1, false)) return false;

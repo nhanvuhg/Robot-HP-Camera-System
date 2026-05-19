@@ -142,6 +142,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   new_tray_loaded_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   new_trayoutput_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   done_output_tray_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr cartridge_mode_pub_;
 
     // ========================================================================
     // ACTION CLIENT
@@ -684,6 +685,7 @@ void RobotLogicNode::initPublishers()
     new_tray_loaded_pub_  = create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_tray_loaded", rclcpp::QoS(10).reliable());
     done_output_tray_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/done_tray_output", 10);
     new_trayoutput_pub_   = create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_trayoutput_loaded", rclcpp::QoS(10).reliable());
+    cartridge_mode_pub_   = create_publisher<std_msgs::msg::String>("/providesystem/set_operation_mode", 10);
 }
 
 void RobotLogicNode::initServices()
@@ -849,6 +851,13 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
         return;
     }
 
+    // Manual mode (cartridge JOG cũng map sang manual): robot không tự chạy pipeline khi
+    // cartridge phát new_tray_loaded. Operator phải dùng nút manual riêng cho robot.
+    if (manual_mode_.load()) {
+        RCLCPP_WARN(get_logger(), "[TRAY_IN] Manual mode — bỏ qua new_tray_loaded trigger (robot không auto chạy)");
+        return;
+    }
+
     // A new input tray is loaded by the cartridge system
     new_tray_loaded_ = true;
     bool was_waiting = waiting_for_new_input_.load();
@@ -891,6 +900,12 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
 void RobotLogicNode::newTrayOutputCallback(const std_msgs::msg::Bool::SharedPtr msg)
 {
     if (!msg->data) return;
+
+    // Manual mode: bỏ qua trigger từ cartridge — robot không auto chạy ở manual.
+    if (manual_mode_.load()) {
+        RCLCPP_WARN(get_logger(), "[TRAY_OUT] Manual mode — bỏ qua new_trayoutput_loaded trigger");
+        return;
+    }
 
     new_trayoutput_loaded_ = true;
     waiting_for_new_output_ = false;
@@ -1209,6 +1224,11 @@ void RobotLogicNode::startSystemCallback(
         stop_after_single_motion_ = false;
         system_start_time_ = this->now();
 
+        //  Cần 2 kênh digital 1,2 = false Sau đó mới bắt đầu chạy init
+        RCLCPP_INFO(get_logger(), "[INIT] Ensuring Gripper & Picker are OPEN (DO 1 & 2 = False) before init...");
+        setDigitalOutput(1, false);
+        setDigitalOutput(2, false);
+
         // REMOVED: waiting_for_new_input_ = false; (must wait for actual tray)
 
         if (!manual_mode_) {
@@ -1347,20 +1367,36 @@ void RobotLogicNode::pauseSystemCallback(
 
 void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
+    auto sync_msg = std_msgs::msg::String();
+
+    bool was_manual = manual_mode_.load();
     switch (msg->data) {
         case 1:
             manual_mode_ = false;
             use_ai_for_control_ = false;
+            sync_msg.data = "auto";
             RCLCPP_INFO(get_logger(), "[MODE] AUTO");
+            if (was_manual) {
+                new_tray_loaded_ = false;
+                new_trayoutput_loaded_ = false;
+                RCLCPP_INFO(get_logger(), "[MODE→AUTO] Cleared in-flight tray flags — fresh cycle");
+            }
             break;
         case 2:
             manual_mode_ = false;
             use_ai_for_control_ = true;
+            sync_msg.data = "ai";
             RCLCPP_INFO(get_logger(), "[MODE] AI");
+            if (was_manual) {
+                new_tray_loaded_ = false;
+                new_trayoutput_loaded_ = false;
+                RCLCPP_INFO(get_logger(), "[MODE→AI] Cleared in-flight tray flags — fresh cycle");
+            }
             break;
         case 3:
             manual_mode_ = true;
             use_ai_for_control_ = false;
+            sync_msg.data = "manual";
             RCLCPP_INFO(get_logger(), "[MODE] MANUAL");
             {
                 std::lock_guard<std::mutex> lock(row_selection_mutex_);
@@ -1375,6 +1411,12 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
             RCLCPP_ERROR(get_logger(), "[MODE] Invalid: %d", msg->data);
             return;
     }
+
+    if (cartridge_mode_pub_) {
+        cartridge_mode_pub_->publish(sync_msg);
+        RCLCPP_INFO(get_logger(), "[MODE] Synced to Cartridge System: %s", sync_msg.data.c_str());
+    }
+
     notifyStateChange();
 }
 
@@ -1384,14 +1426,24 @@ void RobotLogicNode::cartridgeHomingDoneCallback(const std_msgs::msg::Bool::Shar
         cartridge_is_homed_ = false;
         return;
     }
-    
+
     cartridge_is_homed_ = true;
-    
-    if (system_running_ && !manual_mode_) {
+
+    // Chỉ chain HOME khi:
+    //   - system_running_ = true (user đã nhấn START)
+    //   - !manual_mode_   (auto/ai mode)
+    //   - !system_started_ (chưa bao giờ chạy chain init — đây mới là lần đầu)
+    // → Operator nhấn HOMING thủ công trong manual/jog hoặc giữa cycle KHÔNG kéo
+    //    theo robot home.
+    if (system_running_ && !manual_mode_ && !system_started_) {
         RCLCPP_INFO(get_logger(), "[INIT] Cartridge Homing Done. Executing Robot HOME and starting process.");
         sendMotionAction("HOME");
         system_started_ = true;
         notifyStateChange();
+    } else {
+        RCLCPP_INFO(get_logger(),
+            "[HOMING] Cartridge homed (running=%d manual=%d started=%d) — robot KHÔNG auto chain HOME",
+            system_running_.load(), manual_mode_.load(), system_started_.load());
     }
 }
 

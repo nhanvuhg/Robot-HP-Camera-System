@@ -82,8 +82,7 @@ Trong `_s1_iny_scan` mỗi tick:
 inx_at_target = self._at_position(1, self.config.inx_target2)
 iny_in_valid  = (self.config.iny_scan_valid_min_mm <= iny <=
                  self.config.iny_scan_valid_max_mm)
-iny_armed_min = iny >= self.config.iny_scan_arm_mm
-new_armed     = inx_at_target and iny_in_valid and iny_armed_min
+new_armed     = inx_at_target and iny_in_valid
 
 if self._s4_armed and not inx_at_target:
     self._log_once("S1_SCAN_INX_DRIFT", ...)   # disarm warn
@@ -94,7 +93,6 @@ self._s4_armed = new_armed
 S4 chỉ được "armed" khi **đồng thời**:
 1. InX ở `inx_target2` ± `position_tolerance`
 2. InY ∈ [`iny_scan_valid_min_mm`, `iny_scan_valid_max_mm`]
-3. InY ≥ `iny_scan_arm_mm` (buffer an toàn trên valid_min)
 
 Re-evaluate mỗi tick → tự động disarm nếu InX trôi.
 
