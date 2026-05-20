@@ -220,7 +220,7 @@ private:
     std::atomic<bool> scale_result_pass_{false};
     std::atomic<bool> system_enabled_{true};
     std::atomic<bool> emergency_stop_{false};
-    std::atomic<bool> manual_mode_{false};
+    std::atomic<bool> manual_mode_{true};   // Default = MANUAL (toàn hệ thống) — sync với Python cartridge node
     std::atomic<bool> system_paused_{false};
     std::atomic<bool> use_ai_for_control_{false};
     std::atomic<bool> stored_scale_result_{false};
@@ -292,6 +292,7 @@ private:
     // ========================================================================
     rclcpp::Time system_start_time_{0, 0, RCL_ROS_TIME};
     rclcpp::TimerBase::SharedPtr uptime_timer_;
+    rclcpp::TimerBase::SharedPtr startup_release_timer_;
     std::atomic<int> tray_count_{0};
 
     // ========================================================================
@@ -459,6 +460,19 @@ RobotLogicNode::RobotLogicNode()
     initServices();
 
     state_machine_thread_ = std::thread(&RobotLogicNode::stateMachineLoop, this);
+
+    // Startup safe state: NHẢ cả gripper + picker (đảm bảo không kẹp khay nếu
+    // node restart khi đang giữ). Delay 2s để Python cartridge node kịp lên + subscriber connect.
+    startup_release_timer_ = this->create_wall_timer(
+        std::chrono::seconds(2),
+        [this]() {
+            auto msg = std_msgs::msg::Bool();
+            msg.data = false;  // NHẢ
+            if (gripper_cmd_pub_) gripper_cmd_pub_->publish(msg);
+            if (picker_cmd_pub_)  picker_cmd_pub_->publish(msg);
+            RCLCPP_INFO(get_logger(), "[STARTUP] Released gripper + picker (NHẢ)");
+            startup_release_timer_->cancel();
+        });
 
 
     // Uptime timer
@@ -1226,8 +1240,8 @@ void RobotLogicNode::startSystemCallback(
 
         //  Cần 2 kênh digital 1,2 = false Sau đó mới bắt đầu chạy init
         RCLCPP_INFO(get_logger(), "[INIT] Ensuring Gripper & Picker are OPEN (DO 1 & 2 = False) before init...");
-        setDigitalOutput(1, false);
-        setDigitalOutput(2, false);
+        setDigitalOutput(1, false);  // Gripper NHẢ — safe state trước khi init
+        setDigitalOutput(2, false);  // Picker  NHẢ — safe state trước khi init
 
         // REMOVED: waiting_for_new_input_ = false; (must wait for actual tray)
 
@@ -1329,7 +1343,7 @@ void RobotLogicNode::resetStateCallback(
     fill_done_               = false;
     emergency_stop_          = false;
     system_paused_           = false;
-    manual_mode_             = false;
+    manual_mode_             = true;   // Reset về MANUAL (safe default toàn hệ thống)
     stop_after_single_motion_ = false;
     motion_fail_count_       = 0;
     tray_count_              = 0;

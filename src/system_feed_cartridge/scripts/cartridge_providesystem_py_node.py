@@ -73,7 +73,10 @@ S7_TRAY_AT_ROBOT   = 7
 S9_CYL1_RETRACTED  = 9
 S10_CYL1_EXTENDED  = 10
 # S11/S12 ATV Run/Fault — monitored by vfd_logic_node, not used here
-# S13–S16 reserved
+S13_OUT1_TRAYPOS1  = 13
+S14_OUT2_TRAYPOS1  = 14
+S15_CYL3_RETRACTED = 15
+S16_CYL3_EXTENDED  = 16
 S17_PLATFORM       = 17
 S18_FEED_OK        = 18
 S19_CHECK_TRAY_P2  = 19
@@ -154,6 +157,7 @@ class SystemState(Enum):
     S2A_INY_JOG_OUTPUT    = "s2a_iny_jog_output"
     S2A_INY_TARGETROW    = "s2a_iny_targetrow"
     S2A_WAIT_CYL1_RET     = "s2a_wait_cyl1_ret"
+    S2A_CYL3_EXTEND       = "s2a_cyl3_extend"
     S2A_INY_FINAL      = "s2a_iny_final"
     S2A_WAIT_NEW_TRAY            = "s2a_wait_new_tray"
     S2A_RETRY_SCAN_HOME   = "s2a_retry_scan_home"
@@ -269,6 +273,20 @@ class CartridgeSystem(Node):
         self._robot_connected   = False # True when robot node is actively publishing
         self._s10_off_time       = 0.0
         self._s10_prev           = False
+
+        # Cyl3 safety watchdog state — force retract khi S13+S14 cùng OFF
+        self._cyl3_safety_active    = False
+        self._cyl3_safety_last_fire = 0.0
+
+        # Cyl3 feedback monitor — đối chiếu lệnh extend/retract với S15/S16
+        self._cyl3_expected         = None   # None | "extended" | "retracted"
+        self._cyl3_cmd_time         = 0.0
+        self._cyl3_mismatch_warned  = False
+        self._cyl3_confirmed_logged = False
+
+        # STATE 2 scan helpers
+        self._row1_occupied         = False  # snapshot tại scan start (S16 ON + S6 ON)
+        self._s4s6_mismatch_seen    = False  # S6 ON nhưng S4 ko trigger → fallback row1; sau S2A_COMPLETE sẽ pause
 
         # Homing completion flag (set by bg thread, consumed by main loop)
         self._homing_done_event  = threading.Event()
@@ -463,18 +481,18 @@ class CartridgeSystem(Node):
                 mod = CpxAp(ip_address=ip, cycle_time=0.5)
                 if idx == 1:
                     self.io_module = mod
-                    # Initialize valve states (module 3) to 0V
+                    # Initialize gripper/picker (5/3 valve) về trạng thái NHẢ an toàn:
+                    #   Gripper: ch0=F, ch1=T  (nhả gripper)
+                    #   Picker:  ch2=F, ch3=T  (nhả picker)
+                    # KHÔNG để both off (center) vì 5/3 ở center = không tác động —
+                    # khay có thể vẫn đang kẹp khi node restart.
                     try:
                         if len(mod.modules) > 3:
                             v_mod = mod.modules[3]
-                            if v_mod.is_function_supported("read_channels"):
-                                ch = v_mod.read_channels()
-                                if len(ch) > 1 and (ch[0] or ch[1]):
-                                    v_mod.reset_channel(0)
-                                    v_mod.reset_channel(1)
-                                if len(ch) > 3 and (ch[2] or ch[3]):
-                                    v_mod.reset_channel(2)
-                                    v_mod.reset_channel(3)
+                            if v_mod.is_function_supported("set_channel"):
+                                v_mod.reset_channel(0); v_mod.set_channel(1)  # nhả gripper
+                                v_mod.reset_channel(2); v_mod.set_channel(3)  # nhả picker
+                                self.get_logger().info("Init valves: gripper+picker → NHẢ (safe)")
                     except Exception as ve:
                         self.get_logger().warn(f"Failed to init valves: {ve}")
                 else:
@@ -985,6 +1003,49 @@ class CartridgeSystem(Node):
                 return True
             except Exception as e:
                 self.get_logger().warn(f"Cyl2 retract error: {e}")
+                return False
+        return False
+
+    def _cyl3_set_expected(self, target: str):
+        """Set expected feedback state cho cyl3 monitor (target = 'extended' | 'retracted')."""
+        if self._cyl3_expected != target:
+            self._cyl3_expected         = target
+            self._cyl3_cmd_time         = time.time()
+            self._cyl3_mismatch_warned  = False
+            self._cyl3_confirmed_logged = False
+
+    def _cyl3_extend(self) -> bool:
+        """
+        Đẩy xi lanh 3 ra (EXTEND) — cố định khay tại Tray Pos1 sau khi Cyl1 đã thả.
+        Channel mặc định: extend=6, retract=7 (Module 4 valve CPX 253).
+        Feedback giám sát qua S16_CYL3_EXTENDED (monitor only, không block state).
+        """
+        io = self.io_module
+        if io:
+            try:
+                self._set_do(self._conf('cylinder3_retract_channel', 7), False)
+                self._set_do(self._conf('cylinder3_extend_channel', 6), True)
+                self._cyl3_set_expected("extended")
+                return True
+            except Exception as e:
+                self.get_logger().warn(f"Cyl3 extend IO error: {e}")
+                return False
+        return False
+
+    def _cyl3_retract(self) -> bool:
+        """
+        Thu xi lanh 3 về (RETRACT). Gọi bởi safety watchdog khi S13+S14 cùng OFF.
+        Feedback giám sát qua S15_CYL3_RETRACTED (monitor only, không block state).
+        """
+        io = self.io_module
+        if io:
+            try:
+                self._set_do(self._conf('cylinder3_extend_channel', 6), False)
+                self._set_do(self._conf('cylinder3_retract_channel', 7), True)
+                self._cyl3_set_expected("retracted")
+                return True
+            except Exception as e:
+                self.get_logger().warn(f"Cyl3 retract IO error: {e}")
                 return False
         return False
 
@@ -1505,9 +1566,11 @@ class CartridgeSystem(Node):
 
     def _cb_gripper_cmd(self, msg: Bool):
         """
-        Điều khiển gripper (kẹp) qua IO Module 1 (tự động dò valve module):
-          msg.data=True  → Đóng gripper (set ch1, reset ch0)
-          msg.data=False → Mở gripper (reset cả ch0 và ch1)
+        Điều khiển gripper (kẹp) qua IO Module 1 — valve 5/3, drive cả 2 chiều:
+          msg.data=True  → Gắp (set ch0, reset ch1)
+          msg.data=False → Nhả (reset ch0, set ch1)
+        Khác valve 5/2 cũ: cả 2 trạng thái đều drive 1 coil, KHÔNG để both off
+        (both off = vị trí center, không tác động cylinder).
         Publish trạng thái lên /robot/gripper_status để robot node biết.
         """
         if not self.io_module: return
@@ -1515,13 +1578,13 @@ class CartridgeSystem(Node):
             try:
                 for valve_mod in self.io_module.modules:
                     if valve_mod.is_function_supported("set_channel"):
-                        if msg.data: # Close
+                        if msg.data:  # Gắp
+                            valve_mod.reset_channel(1)
+                            valve_mod.set_channel(0)
+                            self.pub_gripper_status.publish(Bool(data=True))
+                        else:  # Nhả
                             valve_mod.reset_channel(0)
                             valve_mod.set_channel(1)
-                            self.pub_gripper_status.publish(Bool(data=True))
-                        else: # Open
-                            valve_mod.reset_channel(1)
-                            valve_mod.reset_channel(0)
                             self.pub_gripper_status.publish(Bool(data=False))
                         break
             except Exception as e:
@@ -1529,9 +1592,10 @@ class CartridgeSystem(Node):
 
     def _cb_picker_cmd(self, msg: Bool):
         """
-        Điều khiển picker (hút chân không) qua IO Module 1 (tự động dò valve module):
-          msg.data=True  → Kích hoạt picker (set ch3, reset ch2)
-          msg.data=False → Tắt picker (reset cả ch2 và ch3)
+        Điều khiển picker qua IO Module 1 — valve 5/3, drive cả 2 chiều:
+          msg.data=True  → Gắp (set ch2, reset ch3)
+          msg.data=False → Nhả (reset ch2, set ch3)
+        Khác valve 5/2 cũ: cả 2 trạng thái đều drive 1 coil, KHÔNG để both off.
         Publish trạng thái lên /robot/picker_status.
         """
         if not self.io_module: return
@@ -1539,13 +1603,13 @@ class CartridgeSystem(Node):
             try:
                 for valve_mod in self.io_module.modules:
                     if valve_mod.is_function_supported("set_channel"):
-                        if msg.data: # Close
+                        if msg.data:  # Gắp
+                            valve_mod.reset_channel(3)
+                            valve_mod.set_channel(2)
+                            self.pub_picker_status.publish(Bool(data=True))
+                        else:  # Nhả
                             valve_mod.reset_channel(2)
                             valve_mod.set_channel(3)
-                            self.pub_picker_status.publish(Bool(data=True))
-                        else: # Open
-                            valve_mod.reset_channel(3)
-                            valve_mod.reset_channel(2)
                             self.pub_picker_status.publish(Bool(data=False))
                         break
             except Exception as e:
@@ -2049,6 +2113,75 @@ class CartridgeSystem(Node):
         self._last_inx = inx
         self._last_iny = iny
 
+    def _cyl3_monitor(self):
+        """
+        Đối chiếu lệnh cyl3 gần nhất (_cyl3_expected) với feedback S15/S16.
+        - Log INFO 1 lần khi sensor confirm đúng kỳ vọng (S16 ON sau extend / S15 ON sau retract).
+        - Log WARN 1 lần nếu sau 2s vẫn mismatch (sensor không lên / lên nhầm).
+        Chỉ monitor, không block state machine.
+        """
+        if self._cyl3_expected is None:
+            return
+        s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
+        elapsed = time.time() - self._cyl3_cmd_time
+        if self._cyl3_expected == "extended":
+            confirmed = s16 and not s15
+        else:  # "retracted"
+            confirmed = s15 and not s16
+        if confirmed:
+            if not self._cyl3_confirmed_logged:
+                self.get_logger().info(
+                    f"[CYL3] confirmed {self._cyl3_expected.upper()} sau {elapsed:.2f}s"
+                )
+                self._cyl3_confirmed_logged = True
+            self._cyl3_mismatch_warned = False
+        elif elapsed >= 2.0 and not self._cyl3_mismatch_warned:
+            self.get_logger().warn(
+                f"[CYL3] expect {self._cyl3_expected.upper()} nhưng S15={int(s15)} S16={int(s16)} "
+                f"sau {elapsed:.2f}s — kiểm tra cảm biến / khí nén"
+            )
+            self._cyl3_mismatch_warned = True
+
+    def _check_row1_interlock(self):
+        """
+        Pre-check trước khi đặt khay tại row1 output pos1 (chỉ áp dụng row1 — các
+        row khác ở cao hơn, không va với Cyl3).
+        HARD blocks:
+          1. S15 OFF: Cyl3 chưa retract → tray sẽ va vào piston Cyl3.
+          2. S16 ON + S6 OFF: Cyl3 báo extended nhưng không có khay → cơ khí lỗi.
+        Exception (vẫn cho qua): S4 scan không trigger nhưng S6 ON (S6 nhận nhầm/
+        nhiễu) → fallback row1. Case này pass tự nhiên vì sau scan Cyl3 vẫn retract
+        (S16 OFF) nên block #2 không kích hoạt.
+        Returns: (ok: bool, reason: str)
+        """
+        s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
+        if not s15:
+            return False, "S15 OFF (Cyl3 chưa retract)"
+        if s16 and not self.sensor(S6_CHECK_TRAY_P1):
+            return False, "S16 ON + S6 OFF (Cyl3 extended nhưng không có khay)"
+        return True, ""
+
+    def _cyl3_safety_check(self):
+        """
+        Global safety: S13_OUT1_TRAYPOS1 + S14_OUT2_TRAYPOS1 cùng OFF
+        ⇒ không có khay tại Tray Pos1 ⇒ force Cyl3 RETRACT.
+        Chạy mỗi tick, KHÔNG thuộc state nào — có thể override Cyl3 extend ở STATE 2.
+        Edge-trigger log + refresh IO mỗi 1s khi điều kiện vẫn đúng.
+        """
+        s13, s14 = self._snap(S13_OUT1_TRAYPOS1, S14_OUT2_TRAYPOS1)
+        both_off = (not s13) and (not s14)
+        now = time.time()
+        if both_off:
+            if not self._cyl3_safety_active:
+                self._cyl3_safety_active = True
+                self.get_logger().warn("[SAFETY] S13+S14 OFF → force Cyl3 RETRACT")
+            if now - self._cyl3_safety_last_fire >= 1.0:
+                self._cyl3_retract()
+                self._cyl3_safety_last_fire = now
+        elif self._cyl3_safety_active:
+            self._cyl3_safety_active = False
+            self.get_logger().info("[SAFETY] S13/S14 đã ON lại — release Cyl3 retract force")
+
     def _control_loop(self):
         """
         Vòng lặp điều khiển chính, chạy mỗi 50ms (20Hz) qua ROS timer.
@@ -2065,7 +2198,9 @@ class CartridgeSystem(Node):
             self._watchdog_last_tick = time.time()
             if self._system_paused:
                 return
-                
+
+            self._cyl3_safety_check()
+            self._cyl3_monitor()
             self._enforce_danger_zones()
             
             # S18 tracking logic for S3 auto-feed delay
@@ -2260,6 +2395,7 @@ class CartridgeSystem(Node):
         elif s == SystemState.S2A_INY_JOG_OUTPUT:    self._s2a_iny_jog_output()
         elif s == SystemState.S2A_INY_TARGETROW:    self._s2a_iny_targetrow()
         elif s == SystemState.S2A_WAIT_CYL1_RET:          self._s2a_wait_cyl1_ret()
+        elif s == SystemState.S2A_CYL3_EXTEND:           self._s2a_cyl3_extend()
         elif s == SystemState.S2A_INY_FINAL:      self._s2a_iny_final()
         elif s == SystemState.S2A_WAIT_NEW_TRAY:            self._s2a_wait_new_tray()
         elif s == SystemState.S2A_RETRY_SCAN_HOME:   self._s2a_retry_scan_home()
@@ -3218,9 +3354,14 @@ class CartridgeSystem(Node):
             self._step_timeout_in = time.time() + self.config.move_timeout
             self._s4_armed_out    = False
             self._s4_prev_out     = self.sensor(S4_SCAN_STACK_P1)
+            # Snapshot row1 occupancy: nếu Cyl3 đang giữ khay tại row1 (S16 ON + S6 ON)
+            # → loại trừ row1 khỏi detection trong scan này.
+            s16_snap, s6_snap = self._snap(S16_CYL3_EXTENDED, S6_CHECK_TRAY_P1)
+            self._row1_occupied = bool(s16_snap and s6_snap)
             self.get_logger().info(
                 f"[S2A SCAN] InY → {self.config.target_scaninp1:.0f}mm "
-                f"vel={self.config.iny_scan_vel} S6={'ON' if self._s6_snapshot else 'OFF'}"
+                f"vel={self.config.iny_scan_vel} S6={'ON' if self._s6_snapshot else 'OFF'} "
+                f"row1_occupied={self._row1_occupied}"
             )
 
         # ── S6 ON: detect S4 (giống S1 falling-edge + armed-gate) ────
@@ -3250,15 +3391,23 @@ class CartridgeSystem(Node):
                 trigger_pos = self._pos(2) or iny
                 row = self._zone_to_row(trigger_pos, self.config.iny_output_zones)
                 if row is not None:
-                    target_mm = self.config.iny_output_zones[row][2]
-                    self._output_target_pos = target_mm
-                    self._output_row = row
-                    self.get_logger().info(
-                        f"[S2A SCAN] S4 falling edge @ {trigger_pos:.1f}mm → "
-                        f"row{row} ({target_mm:.0f}mm)"
-                    )
-                    self._enter_in(SystemState.S2A_INY_TARGETROW)
-                    return
+                    # Loại trừ row1 nếu đã biết Cyl3 giữ khay tại row1 → tiếp tục scan
+                    if row == 1 and self._row1_occupied:
+                        self._log_once(
+                            "S2A_SCAN_SKIP_ROW1",
+                            f"[S2A SCAN] S4 trigger @ {trigger_pos:.1f}mm trùng row1 đang occupied "
+                            f"→ bỏ qua, tiếp tục scan tìm row 2+"
+                        )
+                    else:
+                        target_mm = self.config.iny_output_zones[row][2]
+                        self._output_target_pos = target_mm
+                        self._output_row = row
+                        self.get_logger().info(
+                            f"[S2A SCAN] S4 falling edge @ {trigger_pos:.1f}mm → "
+                            f"row{row} ({target_mm:.0f}mm)"
+                        )
+                        self._enter_in(SystemState.S2A_INY_TARGETROW)
+                        return
 
         # ── Arrived 970mm: S6 OFF default, hoặc S6 ON fallback ───────
         timed_out = time.time() > self._step_timeout_in
@@ -3267,8 +3416,17 @@ class CartridgeSystem(Node):
             self._stop(2)
             target_mm = self.config.iny_output_zones[1][2]
             if self._s6_snapshot:
+                # S6 ON nhưng S4 ko trigger row nào ≠ row1 → mismatch sensor.
+                # Cho place row1 1 LẦN, sau S2A_COMPLETE sẽ pause để operator kiểm tra S4/S6.
                 self.get_logger().warn(
-                    f"[S2A SCAN] S4 không trigger trong S6=ON → fallback row1 ({target_mm:.0f}mm)"
+                    f"[S2A SCAN] S4 không trigger trong S6=ON → fallback row1 ({target_mm:.0f}mm) "
+                    "— sẽ pause sau khi hoàn tất để kiểm tra S4/S6"
+                )
+                self._s4s6_mismatch_seen = True
+                self._notify(
+                    'warn',
+                    'CẢNH BÁO: S4/S6 mismatch',
+                    'Stack báo có khay (S6 ON) nhưng scan không thấy row nào — sẽ STOP sau lần đặt này để kiểm tra cảm biến S4 hoặc S6.'
                 )
             else:
                 self.get_logger().info(
@@ -3312,9 +3470,17 @@ class CartridgeSystem(Node):
         (thả khay cũ vào output stack tại row trống).
         CAO RỦI RO: verify _at_position(2, target) trước khi nhả — sai vị trí
         = thả khay sai row, có thể đè khay khác hoặc rơi ngoài stack.
+        Pre-check (row1 only): _check_row1_interlock() — chặn nếu Cyl3 chưa retract.
         Next: S2A_WAIT_CYL1_RET.
         """
         if not self._cmd_sent_in:
+            # ROW1 INTERLOCK — chỉ cho phép move khi Cyl3 đã retract (S15 ON)
+            # và không có inconsistent state (S16 ON + S6 OFF).
+            if self._output_row == 1:
+                ok_il, reason = self._check_row1_interlock()
+                if not ok_il:
+                    self._log_once("S2A_ROW1_IL", f"[S2A] BLOCK row1: {reason} — chờ điều kiện")
+                    return
             # Chỉ vào đây qua path S6=OFF (target đã set, chưa gửi move)
             target = self._output_target_pos
             if target <= 0:
@@ -3343,7 +3509,7 @@ class CartridgeSystem(Node):
         """
         STATE 2A bước A9: chờ S9 (Cyl1 Retracted) ON xác nhận đã thả khay vào stack.
         Retry _cyl1_retract() mỗi 3s nếu sensor chưa đúng.
-        Next: S2A_INY_FINAL (đưa InY về home để chuẩn bị thoát khỏi workspace).
+        Next: S2A_CYL3_EXTEND (cố định khay bằng Cyl3 trước khi InY rút).
         """
         cyl1_ret, = self._snap(S9_CYL1_RETRACTED)
         if not self._cmd_sent_in:
@@ -3352,13 +3518,26 @@ class CartridgeSystem(Node):
             self._cmd_sent_in    = True
         if cyl1_ret:
             self.get_logger().info("A9: S9 ON — da tha khay")
-            self._enter_in(SystemState.S2A_INY_FINAL)
+            self._enter_in(SystemState.S2A_CYL3_EXTEND)
             return
         if time.time() > self._cyl_retry_t:
             self.get_logger().info("Retry Cyl1 retract")
             self._cyl1_retract()
             self._cyl_retry_t = time.time() + 3.0
         self._log_once("S2A_S13", "A9: Cho S9 ON")
+
+    def _s2a_cyl3_extend(self):
+        """
+        STATE 2A bước A9b: extend Cyl3 (ch6=ON, ch7=OFF) cố định khay tại Tray Pos1.
+        Pre-condition: S6_CHECK_TRAY_P1 ON (xác nhận khay đã sit).
+        Bắn lệnh extend rồi chuyển NGAY sang S2A_INY_FINAL — InY về home song song với Cyl3 đang đẩy ra.
+        """
+        if not self.sensor(S6_CHECK_TRAY_P1):
+            self._log_once("S2A_A9B_WAIT_S6", "A9b: cho S6 ON truoc khi extend Cyl3")
+            return
+        self._cyl3_extend()
+        self.get_logger().info("[S2A] Cyl3 EXTEND (cố định khay) → InY về home song song")
+        self._enter_in(SystemState.S2A_INY_FINAL)
 
     def _s2a_iny_final(self):
         """
@@ -3408,6 +3587,17 @@ class CartridgeSystem(Node):
             self._pub_cartridge_busy(False)
             self._notify('info', 'STATE 2 COMPLETE', 'Da rut khay ra')
             self._cmd_sent_in = True
+
+        # Nếu lần STATE 2 này dùng fallback row1 do S4/S6 mismatch → PAUSE buộc operator kiểm tra
+        if self._s4s6_mismatch_seen:
+            self._s4s6_mismatch_seen = False  # clear để lần kế tiếp không re-pause
+            self._system_paused = True
+            self.get_logger().warn("[S2A] PAUSE: S4/S6 mismatch — operator phải kiểm tra cảm biến rồi RESUME")
+            self._notify(
+                'error',
+                'STOP: Kiểm tra cảm biến S4/S6',
+                'STATE 2 đã hoàn tất nhưng phát hiện S4/S6 mismatch trong scan — hệ thống PAUSE. Kiểm tra cảm biến S4 (scan stack) hoặc S6 (check tray pos1) rồi nhấn RESUME.'
+            )
 
         self.get_logger().info("State2 done -> IDLE (cho check S123 de chay State 1 cap khay tiep)")
         self._enter_in(SystemState.IDLE)
