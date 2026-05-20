@@ -1519,8 +1519,9 @@ class CartridgeSystem(Node):
         self._homing_abort.set()
         for sid in list(self.servos):
             self._stop(sid)
-        self._cyl1_retract()
-        self._cyl2_retract()
+        # KHÔNG retract Cyl1/Cyl2/Cyl3 khi STOP — giữ nguyên trạng thái valve trên CPX
+        # (tránh thả khay đang kẹp). Operator can thiệp thủ công nếu cần.
+        # Cyl3 safety watchdog (S13+S14 OFF) vẫn chạy độc lập trong _control_loop.
         self._enter(SystemState.IDLE)
         self._enter_in(SystemState.IDLE)
         self._enter_s3(SystemState.IDLE)
@@ -1944,7 +1945,9 @@ class CartridgeSystem(Node):
         """
         Hủy bỏ STATE đang chạy và đưa hệ thống về IDLE an toàn.
         Dùng khi: operator nhấn ABORT_TO_JOG, timeout bước, hoặc lỗi cảm biến.
-        Dừng tất cả servo, thu cylinder, reset mọi cờ state, bật JOG sẵn sàng.
+        Dừng tất cả servo, reset mọi cờ state, bật JOG sẵn sàng.
+        KHÔNG retract Cyl1/Cyl2 — giữ nguyên valve state trên CPX
+        (tránh thả khay đang kẹp; operator can thiệp thủ công).
         Khác với _cb_stop: không chuyển sang MANUAL mode vĩnh viễn.
         """
         self._pub_cartridge_busy(False)
@@ -1953,8 +1956,6 @@ class CartridgeSystem(Node):
         self.get_logger().error(f"S1 ABORT: {reason}")
         self._notify('error', 'Hủy State', reason)
         self._stop(1); self._stop(2); self._stop(3); self._stop(4); self._stop(5)
-        self._cyl1_retract()
-        self._cyl2_retract()
         self._jog_mode = True
         self._state1_enabled = False
         self._s5_retry = 0; self._s1_retry_count = 0; self._cmd_sent_in = False

@@ -766,11 +766,11 @@ private:
             moveToIndex(0);
         }
 
-        // 2. Release Gripper/Picker — safety state khi rollback
-        setDigitalOutput(1, false); // Gripper NHẢ (DO1=false → cartridge ch0=F, ch1=T)
-        setDigitalOutput(2, false); // Picker  NHẢ (DO2=false → cartridge ch2=F, ch3=T)
-        
-        RCLCPP_WARN(get_logger(), "[ROLLBACK] Completed");
+        // 2. KHÔNG reset gripper/picker khi rollback — giữ nguyên trạng thái hiện tại
+        //    (operator nhấn STOP không được làm rơi khay đang kẹp).
+        //    Nếu cần release sau STOP, operator chọn NHẢ trên GUI thủ công.
+
+        RCLCPP_WARN(get_logger(), "[ROLLBACK] Completed (gripper/picker giữ nguyên state)");
     }
 
 
