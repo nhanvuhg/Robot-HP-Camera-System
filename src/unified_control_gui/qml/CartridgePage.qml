@@ -19,8 +19,8 @@
         id: root
         anchors.fill: parent
 
-        readonly property int headerH:  44
-        readonly property int tabbarH:  32
+        readonly property int headerH:  60
+        readonly property int tabbarH:  44
         readonly property int gap:       4
         readonly property int pad:       6
         readonly property int ctrlW:   210
@@ -64,15 +64,15 @@
                 anchors.rightMargin: 12
                 spacing: 0
                 Button {
-                    text: "\u25c0"; Layout.preferredWidth: 30; Layout.preferredHeight: 24
-                    font.pixelSize: 12; font.bold: true; onClicked: stackView.pop()
-                    background: Rectangle { radius: 4; color: "#2a2a50"; border.color: root.cAccent }
+                    text: "\u25c0"; Layout.preferredWidth: 52; Layout.preferredHeight: 42
+                    font.pixelSize: 20; font.bold: true; onClicked: stackView.pop()
+                    background: Rectangle { radius: 6; color: "#2a2a50"; border.color: root.cAccent; border.width: 2 }
                     contentItem: Text { text: parent.text; font: parent.font; color: root.cAccent; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
-                Item { width: 10 }
+                Item { width: 14 }
                 Row { spacing: 0
-                    Text { text: "Cartridge"; color: root.cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1 }
-                    Text { text: " System";   color: root.cText;   font.pixelSize: 18; font.bold: true; font.letterSpacing: 1 }
+                    Text { text: "Cartridge"; color: root.cAccent; font.pixelSize: 26; font.bold: true; font.letterSpacing: 1.5 }
+                    Text { text: " System";   color: root.cText;   font.pixelSize: 26; font.bold: true; font.letterSpacing: 1.5 }
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
@@ -166,6 +166,27 @@
                     background: Rectangle { radius: 4; color: "#3a1a0a"; border.color: root.cOrange; border.width: 1 }
                     contentItem: Text { text: parent.text; font: parent.font; color: root.cOrange;
                         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                }
+                Item { width: 8 }
+
+                // ── Close (X) button — tắt giao diện ──
+                Button {
+                    id: closeBtn
+                    text: "✕"
+                    Layout.preferredWidth: 32; Layout.preferredHeight: 26
+                    font.pixelSize: 14; font.bold: true
+                    onClicked: Qt.quit()
+                    background: Rectangle {
+                        radius: 4
+                        color: closeBtn.hovered ? "#5a0a0a" : "#3a0a0a"
+                        border.color: root.cRed; border.width: 1
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                    }
+                    contentItem: Text { text: parent.text; font: parent.font; color: root.cRed;
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: "Tắt giao diện"
                 }
                 Item { width: 4 }
             }
@@ -357,10 +378,11 @@
                         ListElement { t: "Robot Control";     k: "robot"   }
                     }
                     delegate: Rectangle {
-                        height: root.tabbarH - 2; width: tabLbl.width + 36; y: 1; radius: 6
+                        height: root.tabbarH - 4; width: tabLbl.width + 52; y: 2; radius: 8
                         color: stack.currentIndex === index ? root.cCard : "transparent"
                         border.color: stack.currentIndex === index ? root.cBorder : "transparent"
-                        Text { id: tabLbl; anchors.centerIn: parent; text: model.t; font.pixelSize: 14; font.bold: true
+                        border.width: stack.currentIndex === index ? 1 : 0
+                        Text { id: tabLbl; anchors.centerIn: parent; text: model.t; font.pixelSize: 18; font.bold: true; font.letterSpacing: 0.5
                             color: stack.currentIndex === index ? root.cAccent : root.cDim }
                         MouseArea { anchors.fill: parent; onClicked: stack.currentIndex = index }
                     }
@@ -865,9 +887,10 @@
                     }
 
                     // ─ SENSOR SIGNAL DISPLAY (grid-area: servo, full height) ──
-                    // Hiển thị read-only trạng thái 22 sensor THẬT từ IO module qua topic
-                    // /providesystem/sensors_state (chuỗi 22 bit). Cập nhật real-time, không
-                    // cho click (mode manual vẫn đọc sensor thật, không còn simulation).
+                    // Hiển thị read-only 20 sensor THẬT (S1-S10, S13-S22) từ IO module qua
+                    // topic /providesystem/sensors_state. S11/S12 là VFD status (ATV Run/
+                    // Fault) — monitor bởi vfd_logic_node, không hiển thị ở grid này. Cập
+                    // nhật real-time, không click. Ô được thu nhỏ để fit vừa card.
                     Rectangle {
                         x: parent.width - root.sensorW
                         y: 0; width: root.sensorW; height: root.outerH
@@ -907,9 +930,14 @@
                                         ListElement { sid:6;  slabel:"S6";  sdesc:"Check Tray OutP1" }
                                         ListElement { sid:7;  slabel:"S7";  sdesc:"Khay tại Robot" }
                                         ListElement { sid:8;  slabel:"S8";  sdesc:"[Reserved]" }
-                                        // [CPX 253] Module 3: I2.0–I2.1
+                                        // [CPX 253] Module 3: I2.0–I2.7
+                                        // (S11/S12 ATV Run/Fault — VFD status, không hiển thị ở grid này)
                                         ListElement { sid:9;  slabel:"S9";  sdesc:"Cyl1 Ret" }
                                         ListElement { sid:10; slabel:"S10"; sdesc:"Cyl1 Ext" }
+                                        ListElement { sid:13; slabel:"S13"; sdesc:"OUT1 TrayPos1" }
+                                        ListElement { sid:14; slabel:"S14"; sdesc:"OUT2 TrayPos1" }
+                                        ListElement { sid:15; slabel:"S15"; sdesc:"Cyl3 Ret" }
+                                        ListElement { sid:16; slabel:"S16"; sdesc:"Cyl3 Ext" }
                                         // [CPX 254] Module 2: I3.0–I3.5
                                         ListElement { sid:17; slabel:"S17"; sdesc:"Platform" }
                                         ListElement { sid:18; slabel:"S18"; sdesc:"Feed OK" }
@@ -930,9 +958,9 @@
 
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true          // ← mỗi nút chiếm đều phần chiều cao
-                                        Layout.minimumHeight: 30         // ← không nhỏ hơn 30px
+                                        Layout.minimumHeight: 22         // ← thu nhỏ để fit đủ 22 sensor (S1-S22)
 
-                                        radius: 4
+                                        radius: 3
                                         color: on_ ? "#0a332e" : root.cCard
                                         border.color: on_ ? root.cGreen : root.cBorder
                                         Behavior on color       { ColorAnimation { duration: 150 } }
@@ -940,21 +968,21 @@
                                         HoverHandler { onHoveredChanged: if(!sBtn.on_) sBtn.border.color = hovered ? root.cCyan : root.cBorder }
                                         Column {
                                             anchors.centerIn: parent
-                                            spacing: 1
+                                            spacing: 0
                                             Text {
                                                 text: model.slabel
                                                 color: sBtn.on_ ? root.cGreen : root.cText
-                                                font.pixelSize: 11; font.bold: true
+                                                font.pixelSize: 10; font.bold: true
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
                                             Text {
                                                 text: model.sdesc
-                                                color: root.cDim; font.pixelSize: 8
+                                                color: root.cDim; font.pixelSize: 7
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                                 visible: model.sdesc !== ""
                                             }
                                             Rectangle {
-                                                width: 6; height: 6; radius: 3
+                                                width: 5; height: 5; radius: 2
                                                 color: sBtn.on_ ? root.cGreen : "#134357"
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
@@ -965,7 +993,7 @@
 
                             // ── Chú thích ──
                             Text {
-                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Scan P1 · <b>S5</b> Out Det · <b>S6</b> Check P1 · <b>S7</b> Robot · <b>S8</b> RSV\n<b>S9</b> Cyl1↩ · <b>S10</b> Cyl1↪ · <b>S17</b> Platform · <b>S18</b> Feed OK · <b>S19</b> Check P2 · <b>S20</b> Scan P2\n<b>S21</b> Cyl2↩ · <b>S22</b> Cyl2↪"
+                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Scan P1 · <b>S5</b> Out Det · <b>S6</b> Check P1 · <b>S7</b> Robot · <b>S8</b> RSV\n<b>S9</b> Cyl1↩ · <b>S10</b> Cyl1↪ · <b>S13-S14</b> OUT1/2 P1 · <b>S15</b> Cyl3↩ · <b>S16</b> Cyl3↪\n<b>S17</b> Platform · <b>S18</b> Feed OK · <b>S19</b> Check P2 · <b>S20</b> Scan P2 · <b>S21</b> Cyl2↩ · <b>S22</b> Cyl2↪"
                                 textFormat: Text.RichText; color: root.cDim; font.pixelSize: 8
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                             }
