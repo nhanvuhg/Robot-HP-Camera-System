@@ -61,6 +61,9 @@ public slots:
     Q_INVOKABLE void simulateDoneTrayOutput();
     void confirmOutput();
 
+    // Cylinder manual control (MANUAL + IDLE only) — cyl1: extend/retract, cyl2: extend/retract
+    Q_INVOKABLE void cylinderCmd(int cylId, bool extend);
+
     // Config
     void getConfig();
     void saveConfig(const QString &key, const QString &jsonData);
@@ -87,6 +90,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr set_mode_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr goto_state_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr set_target_row_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr cyl_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr reset_faults_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr get_config_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr update_config_pub_;

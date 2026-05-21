@@ -359,6 +359,7 @@ class CartridgeSystem(Node):
         self.create_subscription(String, '/providesystem/update_config',     self._cb_update_config,      qos)
         self.create_subscription(String, '/providesystem/get_config',        self._cb_get_config,         qos)
         self.create_subscription(String, '/providesystem/set_target_row',   self._cb_set_target_row,     qos)
+        self.create_subscription(String, '/providesystem/cyl_cmd',           self._cb_cyl_cmd,            qos)
 
         self._connect_hardware()
 
@@ -1658,6 +1659,53 @@ class CartridgeSystem(Node):
             except Exception as e:
                 self.get_logger().error(f"Picker cmd error: {e}")
 
+    def _cb_cyl_cmd(self, msg: String):
+        """
+        Điều khiển cylinder 1/2 thủ công từ GUI qua /providesystem/cyl_cmd.
+        Định dạng: "<cyl_id> <extend|retract>"  ví dụ "1 extend", "2 retract".
+
+        Tái sử dụng các hàm _cyl1_extend/_cyl1_retract/_cyl2_extend/_cyl2_retract
+        sẵn có (drive 2 channel valve: 1 set + 1 reset như gripper/picker).
+
+        Chỉ cho phép trong MANUAL mode + state IDLE/ERROR + không có state machine
+        nào đang chạy — tránh xung đột với logic STATE 1/2/3/4 đang điều khiển
+        cylinder theo chu trình.
+        """
+        parts = msg.data.strip().split()
+        if len(parts) < 2:
+            return
+
+        if self.operation_mode != 'manual':
+            self._notify('warn', 'Cylinder bi khoa', 'Chuyen MANUAL mode de dieu khien')
+            return
+        if (self.state not in (SystemState.IDLE, SystemState.ERROR)
+                or self.state_in != SystemState.IDLE
+                or self.state_s3 != SystemState.IDLE
+                or self.state_s4 != SystemState.IDLE):
+            self._notify('warn', 'Cylinder bi khoa', 'Dang chay — nhan STOP truoc')
+            return
+
+        try:
+            cid = int(parts[0])
+            act = parts[1].lower()
+        except Exception as e:
+            self.get_logger().warn(f"[CYL] parse error: {e}")
+            return
+
+        try:
+            if cid == 1 and act == 'extend':
+                self._cyl1_extend()
+            elif cid == 1 and act == 'retract':
+                self._cyl1_retract()
+            elif cid == 2 and act == 'extend':
+                self._cyl2_extend()
+            elif cid == 2 and act == 'retract':
+                self._cyl2_retract()
+            else:
+                self.get_logger().warn(f"[CYL] unknown cmd: {msg.data}")
+        except Exception as e:
+            self.get_logger().error(f"[CYL] exception cid={cid} act={act}: {e}")
+
     def _cb_gui_confirm(self, msg: String):
         """
         Nhận xác nhận từ operator qua GUI (topic /providesystem/gui_confirm).
@@ -2197,6 +2245,8 @@ class CartridgeSystem(Node):
         (S16 OFF) nên block #2 không kích hoạt.
         Returns: (ok: bool, reason: str)
         """
+        if not self._conf('cyl3_present', True):
+            return True, ""
         s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
         if not s15:
             return False, "S15 OFF (Cyl3 chưa retract)"
@@ -2211,6 +2261,8 @@ class CartridgeSystem(Node):
         Chạy mỗi tick, KHÔNG thuộc state nào — có thể override Cyl3 extend ở STATE 2.
         Edge-trigger log + refresh IO mỗi 1s khi điều kiện vẫn đúng.
         """
+        if not self._conf('cyl3_present', True):
+            return
         s13, s14 = self._snap(S13_OUT1_TRAYPOS1, S14_OUT2_TRAYPOS1)
         both_off = (not s13) and (not s14)
         now = time.time()
@@ -3574,7 +3626,12 @@ class CartridgeSystem(Node):
         STATE 2A bước A9b: extend Cyl3 (ch6=ON, ch7=OFF) cố định khay tại Tray Pos1.
         Pre-condition: S6_CHECK_TRAY_P1 ON (xác nhận khay đã sit).
         Bắn lệnh extend rồi chuyển NGAY sang S2A_INY_FINAL — InY về home song song với Cyl3 đang đẩy ra.
+        Nếu cyl3_present=False (hardware chưa đấu) → skip thẳng sang S2A_INY_FINAL.
         """
+        if not self._conf('cyl3_present', True):
+            self.get_logger().info("[S2A] Cyl3 disabled (cyl3_present=false) → skip extend, vào S2A_INY_FINAL")
+            self._enter_in(SystemState.S2A_INY_FINAL)
+            return
         if not self.sensor(S6_CHECK_TRAY_P1):
             self._log_once("S2A_A9B_WAIT_S6", "A9b: cho S6 ON truoc khi extend Cyl3")
             return

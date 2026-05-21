@@ -32,6 +32,7 @@ class SystemConfig(BaseModel):
     cylinder1_retract_channel: int = 4
     cylinder2_extend_channel: int = 9
     cylinder2_retract_channel: int = 8
+    cyl3_present: bool = True
 
     # Limits & Timing
     servo_limits: Dict[int, float]

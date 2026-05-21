@@ -23,9 +23,9 @@
         readonly property int tabbarH:  44
         readonly property int gap:       4
         readonly property int pad:       6
-        readonly property int ctrlW:   210
+        readonly property int ctrlW:   245   // rộng hơn để chứa title font 14
         readonly property int sensorW: 250
-        readonly property real rowRatio: 3.0 / (3.0 + 2.5)
+        readonly property real rowRatio: 5.0 / (5.0 + 1.6)   // top:log = 5:1.6 → log nhỏ hơn nữa
 
         property int gridH:   height - headerH - tabbarH
         property int outerW:  width  - pad * 2
@@ -429,7 +429,7 @@
 
                                 Text {
                                     text: "MODE SELECTION"; color: root.cAccent
-                                    font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5
+                                    font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
                                 }
 
                                 // ── Dropdown Mode Selector ──────────
@@ -589,7 +589,7 @@
 
                                 Text {
                                     text: "SYSTEM CONTROL"; color: root.cAccent
-                                    font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5
+                                    font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
                                 }
 
                                 // Hàng 1: START / STOP / PAUSE
@@ -632,7 +632,7 @@
 
                                 Text {
                                     text: "STATE NAVIGATION"; color: root.cAccent
-                                    font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5
+                                    font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
                                 }
 
                                 // Grid 2 cột × 4 hàng
@@ -668,6 +668,84 @@
                                 }
                             }
                         }
+
+                        // ── Control Cylinder ──────────────────────
+                        // Điều khiển valve Cyl1 / Cyl2 thủ công (chỉ MANUAL + IDLE).
+                        // Tái dùng logic _cyl{1,2}_{extend,retract} ở backend qua topic
+                        // /providesystem/cyl_cmd ("1 extend" | "1 retract" | "2 ...").
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true          // ← chia đều 1/4
+                            color: root.cBg2; border.color: root.cBorder; radius: 6
+                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                            ColumnLayout {
+                                anchors.fill: parent; anchors.margins: 8
+                                spacing: 4
+                                // Chỉ enable trong MANUAL mode (không phải JOG/AUTO)
+                                property bool cylEnabled: cartridgeController.currentMode === "manual"
+                                enabled: cylEnabled
+                                opacity: cylEnabled ? 1.0 : 0.35
+                                Behavior on opacity { NumberAnimation { duration: 200 } }
+
+                                Text {
+                                    text: "CONTROL CYLINDER"; color: root.cAccent
+                                    font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
+                                }
+
+                                // Grid 2 cyl × 2 action (Extend / Retract)
+                                GridLayout {
+                                    Layout.fillWidth: true; Layout.fillHeight: true
+                                    columns: 3; columnSpacing: 4; rowSpacing: 4
+
+                                    // ── Cyl1 row ──
+                                    Text {
+                                        text: "Cyl1"; color: root.cCyan
+                                        font.pixelSize: 12; font.bold: true
+                                        Layout.preferredWidth: 38
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    CBtn {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        lbl: "EXTEND"
+                                        bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
+                                        isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'
+                                        onClicked: cartridgeController.cylinderCmd(1, true)
+                                    }
+                                    CBtn {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        lbl: "RETRACT"
+                                        bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
+                                        isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'
+                                        onClicked: cartridgeController.cylinderCmd(1, false)
+                                    }
+
+                                    // ── Cyl2 row ──
+                                    Text {
+                                        text: "Cyl2"; color: root.cCyan
+                                        font.pixelSize: 12; font.bold: true
+                                        Layout.preferredWidth: 38
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    CBtn {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        lbl: "EXTEND"
+                                        bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
+                                        isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'
+                                        onClicked: cartridgeController.cylinderCmd(2, true)
+                                    }
+                                    CBtn {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        lbl: "RETRACT"
+                                        bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
+                                        isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'
+                                        onClicked: cartridgeController.cylinderCmd(2, false)
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // ─ CENTER COL ────────────────────────────────
@@ -688,7 +766,7 @@
                                     Text { text: "TARGET ROW"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
                                     Row { spacing: 4
                                         Repeater { model: [10,9,8,7,6,5,4,3,2,1]
-                                            delegate: CBtn { lbl: "R"+modelData; padV: 4; padH: 10; fontSize: 11; bg: root.cCard; bc: root.cBorder; tc: root.cText; onClicked: cartridgeController.setTargetRow(modelData) }
+                                            delegate: CBtn { lbl: "R"+modelData; padV: 4; padH: 10; fontSize: 11; bg: root.cCard; bc: root.cBorder; tc: root.cText; onClicked: { cartridgeController.setTargetRow(modelData); robotController.selectRow(modelData) } }
                                         }
                                     }
                                 }

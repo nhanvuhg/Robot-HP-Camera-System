@@ -11,8 +11,12 @@ cylinder1_extend_channel: 4
 cylinder1_retract_channel: 5
 cylinder3_extend_channel: 6
 cylinder3_retract_channel: 7
-cylinder2_retract_channel: 8  
+cylinder2_retract_channel: 8
 cylinder2_extend_channel: 9
+
+# Cyl3 hardware toggle — true = bật full safety (S15/S16 interlock + S13/S14 watchdog + Cyl3 extend step)
+# false = bypass row1 interlock + skip Cyl3 extend (chỉ dùng khi hardware Cyl3 chưa đấu nối)
+cyl3_present: true
 
 # Velocity (m/s) — synced with FAS
 fas_position_velocity: 0.05   # Fixed velocity for position moves (m/s) — match FAS setting
