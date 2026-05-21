@@ -68,6 +68,7 @@ public slots:
     // System control
     void enableSystem(bool enable);
     void stopAndResetRobot();  // ResetRobot → ClearError → EnableRobot → mode 4
+    void softStopAndManual();  // Soft STOP: Pause Dobot + cancel motion + switch MANUAL (keep state)
     void startSystem(bool start);
     void emergencyStop(bool stop);
     void setManualMode(bool enable);
@@ -158,6 +159,7 @@ private:
     rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedPtr speed_factor_client_;
     rclcpp::Client<dobot_msgs_v3::srv::GetErrorID>::SharedPtr get_error_id_client_;
     rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr reset_state_client_;
+    rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr soft_stop_to_manual_client_;
     
     // Publishers
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr camera_select_pub_;

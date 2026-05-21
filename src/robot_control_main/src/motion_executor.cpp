@@ -152,6 +152,9 @@ private:
     std::vector<double> safe_pose_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     
     std::atomic<bool> motion_in_progress_{false};
+    // Abort flag — set bởi handle_cancel (STOP), check trong tất cả motion helpers
+    // để thoát NGAY khi STOP thay vì chạy hết sequence.
+    std::atomic<bool> abort_motion_{false};
 
     int current_fail_slot_{1};
 
@@ -318,6 +321,7 @@ private:
     // MOTION PRIMITIVES
     // ========================================================================
     bool moveToIndex(size_t index, int speed_override = -1) {
+        if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveToIndex] aborted"); return false; }
         if (index >= joint_sequences_.size()) {
             RCLCPP_ERROR(get_logger(), "[MOTION] Invalid index: %zu (max: %zu)", 
                          index, joint_sequences_.size() - 1);
@@ -350,6 +354,7 @@ private:
     }
 
     bool moveR(double dx, double dy, double dz, int speed_override = -1) {
+        if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveR] aborted"); return false; }
         if (!prepareLinearMotion(speed_override)) {
             RCLCPP_ERROR(get_logger(), "[moveR] Prepare failed");
             return false;
@@ -395,6 +400,7 @@ private:
 
 
     bool moveJ_Absolute(const std::vector<double>& pose) {
+        if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveJ_Absolute] aborted"); return false; }
         if (pose.size() < 6) return false;
         
         if (!prepareJointMotion()) {
@@ -421,6 +427,7 @@ private:
     }
 
     bool moveL_Absolute(const std::vector<double>& pose) {
+        if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveL_Absolute] aborted"); return false; }
         if (pose.size() < 6) return false;
         
         if (!prepareLinearMotion()) {
@@ -448,6 +455,7 @@ private:
 
 
     bool setDigitalOutput(int index, bool status) {
+        if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[setDigitalOutput] aborted"); return false; }
         // Publish to ROS topics first for the Festo Gripper Node
         if (index == 1 && pub_gripper_) {
             auto msg = std_msgs::msg::Bool();
@@ -513,6 +521,11 @@ private:
 
         const int max_attempts = 100; // 10 seconds max
         for (int i = 0; i < max_attempts; ++i) {
+            // Thoát ngay nếu STOP/cancel — không chờ thêm
+            if (shouldAbort()) {
+                RCLCPP_WARN(get_logger(), "[SYNC] aborted (STOP) — return false");
+                return false;
+            }
             auto req = std::make_shared<RobotMode::Request>();
             auto future = robot_mode_client_->async_send_request(req);
             if (future.wait_for(1s) != std::future_status::ready) {
@@ -572,6 +585,28 @@ private:
 
         return pose;
     }
+
+    // Wait (delay) — chèn vào giữa các motion command, vd:
+    //   moveToIndex(5);
+    //   wait(2.0);            // chờ 2 giây
+    //   moveR(0, 0, -30);
+    // Interruptible: thoát sớm khi rclcpp shutdown. Returns false nếu bị shutdown.
+    bool wait(double seconds) {
+        if (seconds <= 0.0) return true;
+        if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[wait] aborted at start"); return false; }
+        RCLCPP_INFO(get_logger(), "[MOTION] wait %.2fs", seconds);
+        auto deadline = std::chrono::steady_clock::now()
+                      + std::chrono::milliseconds(static_cast<int>(seconds * 1000));
+        while (std::chrono::steady_clock::now() < deadline) {
+            if (shouldAbort()) {
+                RCLCPP_WARN(get_logger(), "[wait] aborted mid-sleep");
+                return false;
+            }
+            rclcpp::sleep_for(std::chrono::milliseconds(50));
+        }
+        return true;
+    }
+
 
     bool prepareLinearMotion(int speed_override = -1) {
         int spd = (speed_override > 0) ? speed_override : current_speed_ratio_;  // Use system or override speed
@@ -643,8 +678,10 @@ private:
     rclcpp_action::CancelResponse handle_cancel(
         const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
     {
-        RCLCPP_WARN(get_logger(), "[ACTION] Received request to cancel goal");
-        
+        RCLCPP_WARN(get_logger(), "[ACTION] Received request to cancel goal — set abort flag");
+        // Set abort flag NGAY — motion helpers đang chạy sẽ thoát ở check tiếp theo.
+        abort_motion_.store(true);
+
         // Safety: If rollback is allowed, execute it
         if (goal_handle->get_goal()->allow_rollback) {
             rollbackSafe();
@@ -660,9 +697,17 @@ private:
         std::thread{std::bind(&MotionExecutorNode::executeAction, this, std::placeholders::_1), goal_handle}.detach();
     }
 
+    // Helper: motion helpers gọi để check có cần thoát ngay không.
+    // True = ROS shutdown HOẶC handle_cancel đã set abort_motion_ (STOP).
+    bool shouldAbort() const {
+        return abort_motion_.load() || !rclcpp::ok();
+    }
+
     void executeAction(const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
     {
     RCLCPP_INFO(get_logger(), "[ACTION] Executing motion goal...");
+    // Reset abort flag mỗi lần goal mới — flag chỉ giữ trong scope của 1 goal.
+    abort_motion_.store(false);
 
     // ✅ Chỉ clear error khi robot đang ở mode lỗi (mode 9)
     {
@@ -784,6 +829,7 @@ private:
 
     // Hàm di chuyển theo trục chuẩn của mặt bàn (Base/User 0)
     bool moveBase(double dx, double dy, double dz) {
+        if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveBase] aborted"); return false; }
         if (!prepareLinearMotion()) return false;
         auto current_pose = getCurrentPose();
         if (current_pose.size() < 6) return false;
@@ -821,12 +867,19 @@ private:
         // --- INPUT ROW → CHAMBER: Gripper bốc khay từ input stack rồi nhả vào chamber ---
         if (!moveR(0, 0, -101,3)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Gripper GẮP — kẹp khay tại input row
-        if (!moveR(0, 0, 100,3)) return false;
-        if (!moveToIndex(6)) return false;  // ensure safe
+        if (!wait(1.0)) return false;
+        if (!moveR(0, 0, 200,3)) return false;
+        if (!moveToIndex(27)) return false;
+        if (!moveToIndex(28)) return false;
+        if (!moveToIndex(29)) return false;  
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 30, 0,5)) return false;
+        if (!moveR(0, 100, 0,5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Gripper NHẢ — thả khay vào chamber
-        if (!moveR(0, -30, 0,5)) return false;
+        if (!wait(2.0)) return false;
+        if (!moveR(0, -150, 1,5)) return false;
+        if (!moveToIndex(29)) return false;
+        if (!moveToIndex(28)) return false;
+        if (!moveToIndex(27)) return false;
         return true;
     }
 
@@ -834,7 +887,7 @@ private:
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Buffer", row);
         if (row < 1 || row > 5) return false;
         // if (!moveToIndex(6)) return false; // Tạm thời bỏ move đến vị trí an toàn
-        if (!moveToIndex(6)) return false;
+        if (!moveToIndex(27)) return false;
         // MoveJ đến row1new1 (Index 1)
         if (!moveToIndex(1)) return false;
         
@@ -849,12 +902,15 @@ private:
         // --- INPUT ROW → BUFFER: Gripper bốc khay từ input stack rồi nhả vào buffer ---
         if (!moveR(0, 0, -101,3)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Gripper GẮP — kẹp khay tại input row
-        if (!moveR(0, 0, 100,3)) return false;
-        if (!moveToIndex(6)) return false;  // ensure safe
+        if (!wait(1.0)) return false;
+        if (!moveR(0, 0, 200,3)) return false;
+        if (!moveToIndex(27)) return false;
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 0, -40,5)) return false;
+        if (!moveR(0, 0, -49,5)) return false;
+        if (!wait(1.0)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Gripper NHẢ — thả khay vào buffer
-        if (!moveR(0, 0, 40,5)) return false;
+        if (!moveR(0, 0, 49,5)) return false;
+        if (!wait(1.0)) return false;
         if (!moveToIndex(0)) return false;
         return true;
     }
@@ -862,12 +918,14 @@ private:
     bool executeChamberScale() {
         RCLCPP_INFO(get_logger(), "[MOTION] Chamber → Scale");
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 40, 0,5)) return false;
+        if (!moveR(0, 100, 0)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Gripper GẮP — kẹp khay tại chamber
-        if (!moveR(0, -40, 0,5)) return false;
+         if (!wait(1.0)) return false;
+        if (!moveR(0, -100, 3,5)) return false;
         if (!moveToIndex(9)) return false;
         if (!moveR(0, 0, -30,5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Gripper NHẢ — thả khay lên scale
+        if (!wait(1.0)) return false;
         if (!moveR(0, 0, 30,5)) return false;
         return true;
     }
@@ -913,14 +971,19 @@ private:
     bool executeBufferChamber() {
         RCLCPP_INFO(get_logger(), "[MOTION] Buffer → Chamber");
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 0, -30,5)) return false;
+        if (!moveR(0, 0, -49,5)) return false;
         if (!setDigitalOutput(2, true)) return false;   // Picker GẮP — kẹp khay tại buffer
-        if (!moveR(0, 0, 30,5)) return false;
+        if (!moveR(0, 0, 80,5)) return false;
+        if (!moveToIndex(28)) return false;
+        if (!moveToIndex(29)) return false;  
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 30, 0,5)) return false;
-        if (!setDigitalOutput(2, false)) return false;  // Picker NHẢ — thả khay vào chamber
-        if (!moveR(0, -30, 0,5)) return false;
-        if (!moveToIndex(0)) return false;
+        if (!moveR(0, 100, 0,5)) return false;
+        if (!setDigitalOutput(1, false)) return false;  // Gripper NHẢ — thả khay vào chamber
+        if (!wait(2.0)) return false;
+        if (!moveR(0, -150, 1,5)) return false;
+        if (!moveToIndex(29)) return false;
+        if (!moveToIndex(28)) return false;
+        if (!moveToIndex(27)) return false;
         return true;
     }
 };

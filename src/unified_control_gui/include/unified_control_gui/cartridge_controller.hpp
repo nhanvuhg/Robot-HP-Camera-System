@@ -52,6 +52,7 @@ public slots:
     void setTargetRow(int row);
     void startSystem();
     void stopSystem();
+    void softStop();          // Soft STOP — keep state + CPX, only switch to MANUAL
     void pauseSystem();
     void hmiResume();
     void resetFaults();
@@ -92,6 +93,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   hmi_resume_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   start_button_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   stop_button_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   soft_stop_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   pause_button_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   confirm_button_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   done_tray_input_pub_;

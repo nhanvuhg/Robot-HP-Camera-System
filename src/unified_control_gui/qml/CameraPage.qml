@@ -12,9 +12,10 @@ Item {
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
 
     // Tính từ systemStatus — chặn đổi mode khi robot đang chạy
+    // MANUAL được coi là "rảnh" (không busy) — robot chỉ chờ lệnh thủ công, cho phép đổi mode.
     property bool robotBusy: {
         var s = (robotController.systemStatus || "").toLowerCase()
-        return s !== "" && s !== "idle" && s !== "ready" && s !== "unknown"
+        return s !== "" && s !== "idle" && s !== "ready" && s !== "unknown" && s !== "manual"
     }
 
     // Unlock row selection khi process idle/done
@@ -412,7 +413,7 @@ Item {
                             scale: stopResetMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#FF6600"; font.pixelSize: 18; font.bold: true }
-                            MouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.stopAndResetRobot() } }
+                            MouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.softStop() } }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 46; radius: 5; color: enMA.pressed ? Qt.darker("#0a2a1a", 1.2) : "#0a2a1a"; border.color: "#10b981"; border.width: 2

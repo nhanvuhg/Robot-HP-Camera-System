@@ -339,6 +339,7 @@ class CartridgeSystem(Node):
         # ROS Subscribers
         self.create_subscription(Bool,   '/system/start_button',             self._cb_start,              qos)
         self.create_subscription(Bool,   '/system/stop_button',              self._cb_stop,               qos)
+        self.create_subscription(Bool,   '/system/soft_stop',                self._cb_soft_stop,          qos)
         self.create_subscription(Bool,   '/system/pause_button',             self._cb_pause,              qos)
         self.create_subscription(Bool,   '/robot/motion_busy',               self._cb_motion_busy,          qos)
         self.create_subscription(Bool,   '/robot/done_tray_output',          self._cb_done_tray_output,     qos)
@@ -1553,6 +1554,47 @@ class CartridgeSystem(Node):
         self._sync_mode_jog()
         self.get_logger().info('[STOP] STOP — JOG sẵn sàng (cần re-home trước STATE)')
         self._notify('warn', 'STOP', 'Dừng hệ thống — Cần HOMING trước khi chạy STATE')
+
+    def _cb_soft_stop(self, msg: Bool):
+        """
+        Soft STOP từ /system/soft_stop — dừng motion NGAY, đưa hệ thống về MANUAL
+        nhưng GIỮ NGUYÊN trạng thái CPX, zero_offset, và mọi flag tracking.
+        Khác _cb_stop:
+          - KHÔNG clear zero_offset (không buộc re-home)
+          - KHÔNG reset trigger flags (_input_tray_done, _s4_trigger, ...)
+          - KHÔNG touch cylinder/gripper/picker valve (giữ nguyên CPX)
+        Dùng cho nút STOP nhẹ trên CameraPage — operator muốn pause workflow để
+        kiểm tra mà không mất tracking.
+        """
+        if not msg.data:
+            return
+        # Stop motion ngay
+        self._homing_abort.set()
+        for sid in list(self.servos):
+            self._stop(sid)
+
+        # Reset state machine về IDLE để không tự advance
+        # (giữ zero_offset, không clear tracking flags)
+        self._enter(SystemState.IDLE)
+        self._enter_in(SystemState.IDLE)
+        self._enter_s3(SystemState.IDLE)
+        self._enter_s4(SystemState.IDLE)
+
+        self._system_paused  = False
+        self._system_running = False
+        self._motion_busy    = False
+        self._state1_enabled = False
+
+        # Switch sang MANUAL mode + jog ready (giống _cb_stop)
+        self.operation_mode = 'manual'
+        self._jog_mode = True
+        self._sync_mode_jog()
+        robot_msg = Int32()
+        robot_msg.data = 3
+        self.pub_robot_mode.publish(robot_msg)
+
+        self.get_logger().info("[SOFT_STOP] Dừng motion, giữ nguyên state + CPX, chuyển MANUAL")
+        self._notify('warn', 'SOFT STOP', 'Dừng motion — giữ nguyên trạng thái + CPX')
 
     def _cb_pause(self, msg: Bool):
         """

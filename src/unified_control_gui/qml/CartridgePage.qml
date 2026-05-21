@@ -1168,7 +1168,8 @@
             Item {
                 id: page3Root
                 property string currentMode: cartridgeController.currentMode  // bind to system mode
-                property bool manualEnabled: robotController.systemStatus === "IDLE" || robotController.systemStatus === "UNKNOWN" || robotController.systemStatus === ""
+                // MANUAL controls (JOG) chỉ enable khi robot rảnh — "MANUAL" và "IDLE" đều coi là rảnh.
+                property bool manualEnabled: robotController.systemStatus === "IDLE" || robotController.systemStatus === "MANUAL" || robotController.systemStatus === "UNKNOWN" || robotController.systemStatus === ""
                 property real stepValue: 1.0
                 property int speedVal: robotController.speedRatio
                 property bool rowLocked: false

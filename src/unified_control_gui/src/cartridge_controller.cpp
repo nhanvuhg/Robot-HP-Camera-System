@@ -17,6 +17,7 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
     get_config_pub_       = node_->create_publisher<std_msgs::msg::String>("/providesystem/get_config", qos);
     start_button_pub_     = node_->create_publisher<std_msgs::msg::Bool>("/system/start_button", qos);
     stop_button_pub_      = node_->create_publisher<std_msgs::msg::Bool>("/system/stop_button", qos);
+    soft_stop_pub_        = node_->create_publisher<std_msgs::msg::Bool>("/system/soft_stop", qos);
     pause_button_pub_     = node_->create_publisher<std_msgs::msg::Bool>("/system/pause_button", qos);
     gui_confirm_pub_      = node_->create_publisher<std_msgs::msg::String>("/providesystem/gui_confirm", qos);
     set_target_row_pub_   = node_->create_publisher<std_msgs::msg::String>("/providesystem/set_target_row", qos);
@@ -189,6 +190,13 @@ void CartridgeController::stopSystem()
 {
     publishBool(stop_button_pub_, true);
     addLog("System STOP", "err");
+}
+
+void CartridgeController::softStop()
+{
+    // Soft STOP: dừng motion + chuyển MANUAL, GIỮ NGUYÊN state + CPX
+    publishBool(soft_stop_pub_, true);
+    addLog("Soft STOP (keep state)", "warn");
 }
 
 void CartridgeController::pauseSystem()
