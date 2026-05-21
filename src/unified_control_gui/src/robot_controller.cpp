@@ -39,6 +39,7 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     speed_factor_client_ = node_->create_client<dobot_msgs_v3::srv::SpeedFactor>("/nova5/dobot_bringup/SpeedFactor");
     get_error_id_client_ = node_->create_client<dobot_msgs_v3::srv::GetErrorID>("/nova5/dobot_bringup/GetErrorID");
     reset_state_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/reset_state");
+    soft_stop_to_manual_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/soft_stop_to_manual");
 
     // Create publishers
     camera_select_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/command_camera", 10);
@@ -232,6 +233,44 @@ void RobotController::stopAndResetRobot()
                     qDebug() << "Robot re-enabled — ready for new commands";
                 });
             });
+    });
+}
+
+void RobotController::softStopAndManual()
+{
+    qDebug() << "Soft Stop & Switch to MANUAL (keep state + CPX)";
+
+    // 1. Pause Dobot ngay → robot motion ngừng vật lý
+    auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
+    if (pause_client_ && pause_client_->service_is_ready()) {
+        pause_client_->async_send_request(pauseReq);
+    }
+
+    // 1b. ResetRobot: clear motion buffer để Dobot accept lệnh manual mới (MovJ, JointMovJ)
+    //     Nếu chỉ Pause thì robot ở paused state, các lệnh motion sau sẽ bị reject.
+    auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
+    if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
+        reset_robot_client_->async_send_request(resetRobotReq);
+    }
+
+    // 2. Gọi /robot/soft_stop_to_manual: cancel motion action + manual mode, giữ state
+    auto req = std::make_shared<std_srvs::srv::SetBool::Request>();
+    req->data = true;
+    if (soft_stop_to_manual_client_ && soft_stop_to_manual_client_->service_is_ready()) {
+        soft_stop_to_manual_client_->async_send_request(req,
+            [this](rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture f) {
+                try { qDebug() << "Soft stop:" << f.get()->message.c_str(); } catch (...) {}
+            });
+    } else {
+        qWarning() << "/robot/soft_stop_to_manual not available";
+    }
+
+    // 3. ClearError sau 300ms (drive có thể vào error mode khi pause giữa motion)
+    QTimer::singleShot(300, this, [this]() {
+        auto clearReq = std::make_shared<dobot_msgs_v3::srv::ClearError::Request>();
+        if (clear_error_client_ && clear_error_client_->service_is_ready()) {
+            clear_error_client_->async_send_request(clearReq);
+        }
     });
 }
 

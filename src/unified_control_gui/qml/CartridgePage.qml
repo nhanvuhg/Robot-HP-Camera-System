@@ -1168,7 +1168,8 @@
             Item {
                 id: page3Root
                 property string currentMode: cartridgeController.currentMode  // bind to system mode
-                property bool manualEnabled: robotController.systemStatus === "IDLE" || robotController.systemStatus === "UNKNOWN" || robotController.systemStatus === ""
+                // MANUAL controls (JOG) chỉ enable khi robot rảnh — "MANUAL" và "IDLE" đều coi là rảnh.
+                property bool manualEnabled: robotController.systemStatus === "IDLE" || robotController.systemStatus === "MANUAL" || robotController.systemStatus === "UNKNOWN" || robotController.systemStatus === ""
                 property real stepValue: 1.0
                 property int speedVal: robotController.speedRatio
                 property bool rowLocked: false
@@ -1582,46 +1583,46 @@
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
-                                        // Gripper DO1
+                                        // Gripper DO1 — valve 5/3: GẮP (ch0=T,ch1=F) / NHẢ (ch0=F,ch1=T)
                                         Text { text: "GRIPPER (DO1)"; color: root.cDim; font.pixelSize: 9; font.bold: true }
-                                        Row { 
+                                        Row {
                                             id: rowGripper
-                                            property bool isOn: false
+                                            property bool isOn: false  // false = NHẢ (startup safe state)
                                             spacing: 4; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 4) / 2; height: 34; radius: 4
                                                 color: rowGripper.isOn ? "#0a332e" : root.cCard
                                                 border.color: rowGripper.isOn ? root.cGreen : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "ON"; color: rowGripper.isOn ? root.cGreen : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "GẮP"; color: rowGripper.isOn ? root.cGreen : root.cDim; font.pixelSize: 12; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, true); rowGripper.isOn = true } }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 4) / 2; height: 34; radius: 4
                                                 color: !rowGripper.isOn ? "#1a3a5a" : root.cCard
                                                 border.color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "OFF"; color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 12; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, false); rowGripper.isOn = false } }
                                             }
                                         }
 
-                                        // Picker DO2
+                                        // Picker DO2 — valve 5/3: GẮP (ch2=T,ch3=F) / NHẢ (ch2=F,ch3=T)
                                         Text { text: "PICKER (DO2)"; color: root.cDim; font.pixelSize: 9; font.bold: true }
-                                        Row { 
+                                        Row {
                                             id: rowPicker
-                                            property bool isOn: false
+                                            property bool isOn: false  // false = NHẢ (startup safe state)
                                             spacing: 4; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 4) / 2; height: 34; radius: 4
                                                 color: rowPicker.isOn ? "#0a332e" : root.cCard
                                                 border.color: rowPicker.isOn ? root.cGreen : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "ON"; color: rowPicker.isOn ? root.cGreen : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "GẮP"; color: rowPicker.isOn ? root.cGreen : root.cDim; font.pixelSize: 12; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, true); rowPicker.isOn = true } }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 4) / 2; height: 34; radius: 4
                                                 color: !rowPicker.isOn ? "#1a3a5a" : root.cCard
                                                 border.color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "OFF"; color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 12; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, false); rowPicker.isOn = false } }
                                             }
                                         }

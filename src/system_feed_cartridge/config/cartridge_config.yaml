@@ -9,6 +9,8 @@ io_ip: 192.168.27.253
 io_ip_2: 192.168.27.254
 cylinder1_extend_channel: 4
 cylinder1_retract_channel: 5
+cylinder3_extend_channel: 6
+cylinder3_retract_channel: 7
 cylinder2_retract_channel: 8  
 cylinder2_extend_channel: 9
 
@@ -361,48 +363,48 @@ sensors:
     active: true
 
   - id: 13
-    name: S13_RESERVED
-    gui_label: "[Reserved]"
+    name: S13_OUT1_TRAYPOS1
+    gui_label: "OUT1 Tray Pos1"
     cpx_ip: "192.168.27.253"
     cpx_channel: "I2.4"
-    desc: "chưa sử dụng"
+    desc: "Công tắc hành trình OUT1 tại Tray Pos 1 (Omron D4C-1201, pin plunger, 1NO+1NC SPDT, wired NO)"
     pos: pos1
-    role: unused
+    role: limit
     used_in: []
-    active: false
+    active: true
 
   - id: 14
-    name: S14_RESERVED
-    gui_label: "[Reserved]"
+    name: S14_OUT2_TRAYPOS1
+    gui_label: "OUT2 Tray Pos1"
     cpx_ip: "192.168.27.253"
     cpx_channel: "I2.5"
-    desc: "chưa sử dụng"
+    desc: "Công tắc hành trình OUT2 tại Tray Pos 1 (Omron D4C-1201, pin plunger, 1NO+1NC SPDT, wired NO)"
     pos: pos1
-    role: unused
+    role: limit
     used_in: []
-    active: false
+    active: true
 
   - id: 15
-    name: S15_RESERVED
-    gui_label: "[Reserved]"
+    name: S15_CYL3_RETRACTED
+    gui_label: "Cyl3 Retracted"
     cpx_ip: "192.168.27.253"
     cpx_channel: "I2.6"
-    desc: "chưa sử dụng"
+    desc: "Feedback xác nhận Cyl3 đã rút về"
     pos: pos1
-    role: unused
+    role: feedback
     used_in: []
-    active: false
+    active: true
 
   - id: 16
-    name: S16_RESERVED
-    gui_label: "[Reserved]"
+    name: S16_CYL3_EXTENDED
+    gui_label: "Cyl3 Extended"
     cpx_ip: "192.168.27.253"
     cpx_channel: "I2.7"
-    desc: "chưa sử dụng"
+    desc: "Feedback xác nhận Cyl3 đã đẩy ra"
     pos: pos1
-    role: unused
+    role: feedback
     used_in: []
-    active: false
+    active: true
 
   # [CPX 254] MODULE 2: I3.0 -> I3.7
   - id: 17

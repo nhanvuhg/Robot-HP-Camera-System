@@ -161,6 +161,7 @@ private:
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr pause_system_service_;
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_manual_mode_service_;
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_ai_mode_service_;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr soft_stop_service_;
 
     // ========================================================================
     // CLIENTS (dobot driver)
@@ -220,7 +221,7 @@ private:
     std::atomic<bool> scale_result_pass_{false};
     std::atomic<bool> system_enabled_{true};
     std::atomic<bool> emergency_stop_{false};
-    std::atomic<bool> manual_mode_{false};
+    std::atomic<bool> manual_mode_{true};   // Default = MANUAL (toàn hệ thống) — sync với Python cartridge node
     std::atomic<bool> system_paused_{false};
     std::atomic<bool> use_ai_for_control_{false};
     std::atomic<bool> stored_scale_result_{false};
@@ -292,6 +293,7 @@ private:
     // ========================================================================
     rclcpp::Time system_start_time_{0, 0, RCL_ROS_TIME};
     rclcpp::TimerBase::SharedPtr uptime_timer_;
+    rclcpp::TimerBase::SharedPtr startup_release_timer_;
     std::atomic<int> tray_count_{0};
 
     // ========================================================================
@@ -459,6 +461,19 @@ RobotLogicNode::RobotLogicNode()
     initServices();
 
     state_machine_thread_ = std::thread(&RobotLogicNode::stateMachineLoop, this);
+
+    // Startup safe state: NHẢ cả gripper + picker (đảm bảo không kẹp khay nếu
+    // node restart khi đang giữ). Delay 2s để Python cartridge node kịp lên + subscriber connect.
+    startup_release_timer_ = this->create_wall_timer(
+        std::chrono::seconds(2),
+        [this]() {
+            auto msg = std_msgs::msg::Bool();
+            msg.data = false;  // NHẢ
+            if (gripper_cmd_pub_) gripper_cmd_pub_->publish(msg);
+            if (picker_cmd_pub_)  picker_cmd_pub_->publish(msg);
+            RCLCPP_INFO(get_logger(), "[STARTUP] Released gripper + picker (NHẢ)");
+            startup_release_timer_->cancel();
+        });
 
 
     // Uptime timer
@@ -743,6 +758,32 @@ void RobotLogicNode::initServices()
         },
         rmw_qos_profile_services_default, callback_group_reentrant_);
 
+    soft_stop_service_ = create_service<std_srvs::srv::SetBool>(
+        "/robot/soft_stop_to_manual",
+        [this](const std_srvs::srv::SetBool::Request::SharedPtr /*req*/,
+               std_srvs::srv::SetBool::Response::SharedPtr res) {
+            // Soft STOP: cancel motion goals NGAY + chuyển MANUAL + reset state machine về IDLE
+            // GIỮ NGUYÊN: row tracking, slot, chamber/buffer flags (data state)
+            // Reset current_state_=IDLE để GUI nhận "robotBusy=false" → unlock mode buttons.
+            RCLCPP_WARN(get_logger(), "[SOFT_STOP] Cancel motion + state=IDLE + switch MANUAL (keep data)");
+            if (motion_action_client_) {
+                motion_action_client_->async_cancel_all_goals();
+            }
+            current_state_   = SystemState::IDLE;
+            system_running_  = false;
+            system_started_  = false;
+            manual_mode_     = true;
+            use_ai_for_control_ = false;
+            // Sync mode về cartridge node
+            auto sync_msg = std_msgs::msg::String();
+            sync_msg.data = "manual";
+            if (cartridge_mode_pub_) cartridge_mode_pub_->publish(sync_msg);
+            notifyStateChange();   // publish /robot/system_status để GUI unlock mode buttons
+            res->success = true;
+            res->message = "Soft stop OK — motion cancelled, state=IDLE, mode=MANUAL, data preserved";
+        },
+        rmw_qos_profile_services_default, callback_group_reentrant_);
+
     set_ai_mode_service_ = create_service<std_srvs::srv::SetBool>(
         "/robot/set_ai_mode",
         [this](const std_srvs::srv::SetBool::Request::SharedPtr req,
@@ -851,17 +892,19 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
         return;
     }
 
-    // Manual mode (cartridge JOG cũng map sang manual): robot không tự chạy pipeline khi
-    // cartridge phát new_tray_loaded. Operator phải dùng nút manual riêng cho robot.
-    if (manual_mode_.load()) {
-        RCLCPP_WARN(get_logger(), "[TRAY_IN] Manual mode — bỏ qua new_tray_loaded trigger (robot không auto chạy)");
-        return;
-    }
-
-    // A new input tray is loaded by the cartridge system
+    // A new input tray is loaded by the cartridge system — LUÔN track flag
+    // (kể cả trong manual mode) để operator chuyển sang AUTO/AI rồi PICK_INPUT
+    // vẫn pick được. Manual mode chỉ chặn AUTO-START pipeline, không chặn data tracking.
     new_tray_loaded_ = true;
     bool was_waiting = waiting_for_new_input_.load();
     waiting_for_new_input_ = false;
+
+    // Manual mode: tracking đã set, nhưng không auto-trigger pipeline.
+    // Operator phải nhấn PICK_INPUT (đã được handle bởi feed_chamber_signal_).
+    if (manual_mode_.load()) {
+        RCLCPP_INFO(get_logger(), "[TRAY_IN] new_tray_loaded=true (manual mode — chờ PICK_INPUT thủ công)");
+        return;
+    }
 
     bool should_reset_to_1 = true;
     
@@ -1226,8 +1269,8 @@ void RobotLogicNode::startSystemCallback(
 
         //  Cần 2 kênh digital 1,2 = false Sau đó mới bắt đầu chạy init
         RCLCPP_INFO(get_logger(), "[INIT] Ensuring Gripper & Picker are OPEN (DO 1 & 2 = False) before init...");
-        setDigitalOutput(1, false);
-        setDigitalOutput(2, false);
+        setDigitalOutput(1, false);  // Gripper NHẢ — safe state trước khi init
+        setDigitalOutput(2, false);  // Picker  NHẢ — safe state trước khi init
 
         // REMOVED: waiting_for_new_input_ = false; (must wait for actual tray)
 
@@ -1294,6 +1337,13 @@ void RobotLogicNode::resetStateCallback(
 {
     RCLCPP_INFO(get_logger(), "[RESET] 🔄 Full state reset...");
 
+    // Cancel mọi motion action goal đang chạy NGAY để motion_executor thoát loop
+    // và không tiếp tục thực hiện các bước còn lại trong sequence.
+    if (motion_action_client_) {
+        motion_action_client_->async_cancel_all_goals();
+        RCLCPP_INFO(get_logger(), "[RESET] Cancelled all in-flight motion goals");
+    }
+
     auto clear_req = std::make_shared<ClearError::Request>();
     callService<ClearError>(clear_error_client_, clear_req, "ClearError");
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -1329,7 +1379,7 @@ void RobotLogicNode::resetStateCallback(
     fill_done_               = false;
     emergency_stop_          = false;
     system_paused_           = false;
-    manual_mode_             = false;
+    manual_mode_             = true;   // Reset về MANUAL (safe default toàn hệ thống)
     stop_after_single_motion_ = false;
     motion_fail_count_       = 0;
     tray_count_              = 0;
@@ -1375,23 +1425,13 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
             manual_mode_ = false;
             use_ai_for_control_ = false;
             sync_msg.data = "auto";
-            RCLCPP_INFO(get_logger(), "[MODE] AUTO");
-            if (was_manual) {
-                new_tray_loaded_ = false;
-                new_trayoutput_loaded_ = false;
-                RCLCPP_INFO(get_logger(), "[MODE→AUTO] Cleared in-flight tray flags — fresh cycle");
-            }
+            RCLCPP_INFO(get_logger(), "[MODE] AUTO (giữ nguyên new_tray_loaded — tray vẫn còn vật lý)");
             break;
         case 2:
             manual_mode_ = false;
             use_ai_for_control_ = true;
             sync_msg.data = "ai";
-            RCLCPP_INFO(get_logger(), "[MODE] AI");
-            if (was_manual) {
-                new_tray_loaded_ = false;
-                new_trayoutput_loaded_ = false;
-                RCLCPP_INFO(get_logger(), "[MODE→AI] Cleared in-flight tray flags — fresh cycle");
-            }
+            RCLCPP_INFO(get_logger(), "[MODE] AI (giữ nguyên new_tray_loaded — tray vẫn còn vật lý)");
             break;
         case 3:
             manual_mode_ = true;
