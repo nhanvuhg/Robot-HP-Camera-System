@@ -206,6 +206,10 @@ class CartridgeSystem(Node):
         self._servo_lock        = threading.Lock()
         self.servos: dict       = {}
         self.zero_offset: dict  = {}
+        # Cache trạng thái ready_for_motion mỗi servo để skip Modbus query lặp lại
+        # trong các lệnh JOG/move liên tiếp. Invalidate khi STOP hoặc fault.
+        self._ready_until: dict = {}     # sid -> expiry timestamp
+        self._ready_ttl         = 3.0    # giây — drive thường giữ ready nếu không có lỗi
         self.io_module          = None
         self.io_module_2        = None
         self._io_sensor_cache: list = []
@@ -835,6 +839,8 @@ class CartridgeSystem(Node):
         """
         Dừng ngay servo (stop_motion_task) và reset flag đang di chuyển.
         Dùng khi nhấn STOP, ABORT, hoặc timeout bước.
+        KHÔNG clear ready cache — stop_motion_task chỉ halt current task,
+        drive vẫn enabled+ready, lần JOG kế tiếp phải mượt không re-check.
         """
         mot = self.servos.get(servo_id)
         if mot:
@@ -887,12 +893,20 @@ class CartridgeSystem(Node):
           2. enable_powerstage() — bật nguồn stage
           3. Chờ ready_for_motion() = True trong timeout giây
         Lock được giữ ngắn nhất có thể để STOP có thể acquire _servo_lock ngay.
+
+        Fast path: cache ready_until[sid] — nếu confirm ready trong vòng _ready_ttl
+        giây trước, skip toàn bộ Modbus query (giảm 500ms→<50ms latency cho JOG liên tiếp).
         """
+        now = time.time()
+        if now < self._ready_until.get(servo_id, 0.0):
+            return
+
         if hasattr(mot, 'ready_for_motion'):
             acquired = self._servo_lock.acquire(timeout=0.1)
             if acquired:
                 try:
                     if mot.ready_for_motion():
+                        self._ready_until[servo_id] = now + self._ready_ttl
                         return
                 except Exception:
                     pass
@@ -918,6 +932,7 @@ class CartridgeSystem(Node):
                 finally:
                     self._servo_lock.release()
                 if ready:
+                    self._ready_until[servo_id] = time.time() + self._ready_ttl
                     return
             time.sleep(0.05)
         self.get_logger().warn(f"S{servo_id}: drive not ready after {timeout}s")
@@ -1822,6 +1837,7 @@ class CartridgeSystem(Node):
                     mot = self.servos.get(sid)
                     if mot:
                         mot.acknowledge_faults()
+                        self._ready_until.pop(sid, None)
                         self.get_logger().info(f"Acknowledge faults cho Servo {sid} (như FAS)")
                 except Exception as e:
                     self.get_logger().warn(f"Lỗi khi clear servo: {e}")

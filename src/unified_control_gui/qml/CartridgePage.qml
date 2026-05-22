@@ -683,7 +683,7 @@
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
                                 // Chỉ enable trong MANUAL mode (không phải JOG/AUTO)
-                                property bool cylEnabled: cartridgeController.currentMode === "manual"
+                                property bool cylEnabled: cartridgeController.currentMode === "jog"
                                 enabled: cylEnabled
                                 opacity: cylEnabled ? 1.0 : 0.35
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
