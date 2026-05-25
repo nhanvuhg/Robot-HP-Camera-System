@@ -1282,6 +1282,52 @@ class CartridgeSystem(Node):
         except Exception:
             pass
 
+    # ── Activity log helpers ──────────────────────────────────────
+
+    def _sensor_label(self, sid: int) -> str:
+        """Trả về 'S6 (Check Tray OutP1)' từ config sensors[].gui_label.
+        Cache lazy ở lần gọi đầu. Fallback 'S<sid>' nếu không có trong config.
+        """
+        if not hasattr(self, '_sensor_label_cache') or self._sensor_label_cache is None:
+            self._sensor_label_cache = {}
+            for s in (getattr(self.config, 'sensors', []) or []):
+                lbl = getattr(s, 'gui_label', None) or getattr(s, 'name', None)
+                if lbl:
+                    self._sensor_label_cache[s.id] = lbl
+        lbl = self._sensor_label_cache.get(sid)
+        return f"S{sid} ({lbl})" if lbl else f"S{sid}"
+
+    def _notify_step(self, level: str, state: str, step: str, issue: str,
+                     check=None, action=None, enum_name: str = ""):
+        """Notify dạng structured cho state machine — giúp operator biết chính xác
+        đang ở đâu + cần kiểm tra/làm gì.
+
+        Args:
+          level     : 'info' | 'warn' | 'error'
+          state     : tên state operator-facing, vd 'STATE 2A', 'HOMING', 'STATE 1'
+          step      : tên bước/sub-step, vd 'A2 InX→505.5', 'pre-flight', '' nếu N/A
+          issue     : mô tả ngắn vấn đề
+          check     : list[str] những thứ cần kiểm tra (sensor, valve, drive...)
+          action    : list[str] các bước operator cần làm (nhấn STOP, retract manual...)
+          enum_name : optional SystemState.name để dev/log archaeologist trace
+
+        Format:
+          title  = '<state> • <step>'      (hoặc chỉ '<state>' nếu step rỗng)
+          detail = '<issue>'
+                 + ' | Step: <enum_name>'  (nếu có)
+                 + ' | Kiểm tra: a, b, c'  (nếu có)
+                 + ' | Tiếp: x → y'        (nếu có)
+        """
+        title = f"{state} • {step}" if step else state
+        parts = [issue]
+        if enum_name:
+            parts.append(f"Step: {enum_name}")
+        if check:
+            parts.append("Kiểm tra: " + ", ".join(check))
+        if action:
+            parts.append("Tiếp: " + " → ".join(action))
+        self._notify(level, title, " | ".join(parts))
+
     def _log_once(self, key: str, msg: str):
         """
         Log một message chỉ một lần trong mỗi trạng thái (dùng key làm ID).
@@ -1557,8 +1603,15 @@ class CartridgeSystem(Node):
                             self.get_logger().error(
                                 f"  {name}: homing TIMEOUT ({self.config.homing_timeout}s) — NOT referenced"
                             )
-                            self._notify('error', f'{name} home FAIL',
-                                         'Timeout — drive khong home duoc. Check FAS Referencing tab.')
+                            self._notify_step('error', 'HOMING', f'{name} (S{sid})',
+                                f'TIMEOUT {self.config.homing_timeout}s — drive không trả referenced=True',
+                                enum_name='HOMING_RUNNING',
+                                check=[f'FAS Referencing tab method (Encoder/REF cam/Torque)',
+                                       'REF cam wiring + position',
+                                       f'PNU 11340 (homing velocity) trên drive S{sid}',
+                                       'cơ khí trục có bị kẹt không'],
+                                action=['Mở FAS Editor → tab Referencing → test home thủ công',
+                                        'STOP rồi HOMING lại sau khi fix'])
                             return False
 
                     with self._servo_lock:
@@ -1574,9 +1627,16 @@ class CartridgeSystem(Node):
                                 f"  {name}: NOT referenced + no motion (Δ={delta_mm:.2f}mm) "
                                 f"→ HOMING FAIL. Check FAS: Referencing tab method/velocity/REF-cam."
                             )
-                            self._notify('error', f'{name} home FAIL',
-                                         f'Drive khong di chuyen va khong referenced (delta={delta_mm:.2f}mm). '
-                                         f'Check FAS Referencing tab.')
+                            self._notify_step('error', 'HOMING', f'{name} (S{sid})',
+                                f'Drive KHÔNG di chuyển (Δ={delta_mm:.2f}mm) và không referenced',
+                                enum_name='HOMING_RUNNING',
+                                check=['FAS Referencing tab method có đúng không',
+                                       'REF cam có wire OK không',
+                                       'drive có fault không (FAS Diagnostic)',
+                                       f'PNU 11340 velocity ≠ 0 trên S{sid}'],
+                                action=['FAS Editor → Referencing tab → test',
+                                        'Acknowledge faults trên drive',
+                                        'STOP rồi HOMING lại'])
                             return False
                         self.get_logger().warn(
                             f"  {name}: moved only {delta_mm:.2f}mm but drive says referenced — "
@@ -1589,7 +1649,14 @@ class CartridgeSystem(Node):
 
             except Exception as e:
                 self.get_logger().error(f"  {name} home exception: {e}")
-                self._notify('error', f'{name} home FAIL', str(e))
+                self._notify_step('error', 'HOMING', f'{name} (S{sid}) exception',
+                    f'Python exception: {str(e)[:80]}',
+                    check=['cáp Modbus servo còn cắm không',
+                           'drive có cấp điện 24V không',
+                           'log cartridge_node.log cho full traceback'],
+                    action=['Check kết nối network 192.168.27.x',
+                            'Restart node nếu cần',
+                            'Báo dev nếu exception lặp lại'])
                 return False
 
         return True
@@ -1827,13 +1894,18 @@ class CartridgeSystem(Node):
             return
 
         if self.operation_mode != 'manual':
-            self._notify('warn', 'Cylinder bi khoa', 'Chuyen MANUAL mode de dieu khien')
+            self._notify_step('warn', 'Cylinder', 'manual cmd',
+                'Cylinder lock — chỉ điều khiển được trong MANUAL/JOG mode',
+                action=['Chuyển GUI sang MANUAL', 'Vào JOG mode (homing xong)'])
             return
         if (self.state not in (SystemState.IDLE, SystemState.ERROR)
                 or self.state_in != SystemState.IDLE
                 or self.state_s3 != SystemState.IDLE
                 or self.state_s4 != SystemState.IDLE):
-            self._notify('warn', 'Cylinder bi khoa', 'Dang chay — nhan STOP truoc')
+            self._notify_step('warn', 'Cylinder', 'manual cmd',
+                f'Đang chạy state ({self.state_in.name}/{self.state_s3.name}/{self.state_s4.name}) — Cylinder bị khóa',
+                enum_name=f'in={self.state_in.name} s3={self.state_s3.name} s4={self.state_s4.name}',
+                action=['Nhấn STOP', 'Đợi state machine về IDLE rồi điều khiển Cyl'])
             return
 
         try:
@@ -1988,13 +2060,18 @@ class CartridgeSystem(Node):
             return
 
         if self.operation_mode != 'manual':
-            self._notify('warn', 'JOG bi khoa', 'Chuyen MANUAL mode de JOG')
+            self._notify_step('warn', 'JOG', 'cmd',
+                'JOG lock — chỉ chạy được trong MANUAL mode',
+                action=['Chuyển GUI sang MANUAL', 'Vào JOG mode'])
             return
         if (self.state not in (SystemState.IDLE, SystemState.ERROR)
                 or self.state_in != SystemState.IDLE
                 or self.state_s3 != SystemState.IDLE
                 or self.state_s4 != SystemState.IDLE):
-            self._notify('warn', 'JOG bi khoa', 'Dang chay — nhan STOP truoc')
+            self._notify_step('warn', 'JOG', 'cmd',
+                f'Đang chạy state — JOG bị khóa để tránh xung đột motion',
+                enum_name=f'in={self.state_in.name} s3={self.state_s3.name} s4={self.state_s4.name}',
+                action=['Nhấn STOP', 'Đợi state machine về IDLE rồi JOG'])
             return
         
         if len(parts) < 2:
@@ -2076,15 +2153,20 @@ class CartridgeSystem(Node):
         # ── STATE 1: chỉ cho MANUAL, operator nhấn tay ──────────
         if cmd in ('STATE1', 'STATE_1', 'S1'):
             if self.operation_mode != 'manual':
-                self._notify('warn', 'STATE1 manual only',
-                             'Trong AUTO/AI mode hệ thống tự trigger STATE1')
+                self._notify_step('warn', 'STATE 1', 'trigger',
+                    'Chỉ kích thủ công ở MANUAL mode',
+                    action=['Chuyển GUI sang MANUAL', 'Nhấn STATE 1 lại'])
                 return
             if self.state_in not in (SystemState.IDLE,):
-                self._notify('warn', 'Không thể vào STATE 1',
-                             f'{self.state_in.name} đang chạy — STOP trước')
+                self._notify_step('warn', 'STATE 1', 'trigger',
+                    f'{self.state_in.name} đang chạy — không thể vào STATE 1',
+                    enum_name=self.state_in.name,
+                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'])
                 return
             if not self.zero_offset:
-                self._notify('warn', 'Chua home', 'Nhấn HOMING trước')
+                self._notify_step('warn', 'STATE 1', 'trigger',
+                    'Chưa homing — không biết vị trí 0 của servo',
+                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 1'])
                 return
             if self._motion_busy:
                 self.get_logger().warn("Robot đang báo bận (topic motion_busy), vẫn cho phép chạy MANUAL...")
@@ -2097,16 +2179,27 @@ class CartridgeSystem(Node):
 
             if not (has_tray and place_ok and cyl1_ret_ok and cyl1_ext_ok):
                 reasons = []
+                check = []
+                action = []
                 if not has_tray:
-                    reasons.append('S1/S2/S3 OFF (không có khay trên belt)')
+                    reasons.append(f"{self._sensor_label(1)}/{self._sensor_label(2)}/{self._sensor_label(3)} OFF (belt rỗng)")
+                    check.append('khay trên belt input')
+                    action.append('Đặt khay lên belt')
                 if not place_ok:
-                    reasons.append('S7 ON (vị trí cấp đang có khay)')
+                    reasons.append(f"{self._sensor_label(7)} ON (đã có khay ở Robot)")
+                    check.append(f'{self._sensor_label(7)} có nhiễu không')
+                    action.append('Đợi robot lấy khay xong / chạy STATE 2 trước')
                 if not cyl1_ret_ok:
-                    reasons.append('S9 OFF (Cyl1 chưa retract)')
+                    reasons.append(f"{self._sensor_label(9)} OFF (Cyl1 chưa retract)")
+                    check.append('van Cyl1, áp khí, dây S9')
+                    action.append('JOG → Cyl1 RETRACT manual')
                 if not cyl1_ext_ok:
-                    reasons.append('S10 ON (Cyl1 đang extend)')
-                self._notify('warn', 'STATE1: Điều kiện chưa đủ',
-                             ' | '.join(reasons))
+                    reasons.append(f"{self._sensor_label(10)} ON (Cyl1 đang extend)")
+                    check.append('van Cyl1, dây S10')
+                    action.append('JOG → Cyl1 RETRACT manual')
+                self._notify_step('warn', 'STATE 1', 'pre-flight',
+                    'Điều kiện chưa đủ: ' + '; '.join(reasons),
+                    check=check, action=action)
                 return
             self._jog_mode = False
             self._cmd_sent_in = False
@@ -2119,18 +2212,26 @@ class CartridgeSystem(Node):
         # ── STATE 2: trong MANUAL operator có thể kích trực tiếp ─
         if cmd in ('STATE2', 'STATE_2', 'S2', 'STATE2A', 'S2A'):
             if self.operation_mode != 'manual':
-                self._notify('warn', 'goto_state S2: manual only', '')
+                self._notify_step('warn', 'STATE 2', 'trigger',
+                    'Chỉ kích thủ công ở MANUAL mode',
+                    action=['Chuyển GUI sang MANUAL', 'Nhấn STATE 2 lại'])
                 return
             if self.state_in not in (SystemState.IDLE, SystemState.S1_COMPLETE):
-                self._notify('warn', 'Không thể vào STATE 2',
-                             f'{self.state_in.name} đang chạy — STOP trước')
+                self._notify_step('warn', 'STATE 2', 'trigger',
+                    f'{self.state_in.name} đang chạy — không thể vào STATE 2',
+                    enum_name=self.state_in.name,
+                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'])
                 return
             if not self.zero_offset:
-                self._notify('warn', 'Chua home', 'Nhấn HOMING trước')
+                self._notify_step('warn', 'STATE 2', 'trigger',
+                    'Chưa homing — không biết vị trí 0 của servo',
+                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 2'])
                 return
             if not self.sensor(S7_TRAY_AT_ROBOT):
-                self._notify('warn', 'S7 OFF',
-                             'Cần có khay tại vị trí robot (S7 ON) trước khi vào State 2')
+                self._notify_step('warn', 'STATE 2', 'pre-flight',
+                    f'{self._sensor_label(7)} OFF — chưa có khay ở vị trí robot',
+                    check=[f'khay đã được robot đưa về Pos1 chưa', f'{self._sensor_label(7)} có nhiễu / lệch không'],
+                    action=['Đợi robot đưa khay về', 'Hoặc đặt khay manual vào vị trí Pos1', 'Sau đó STATE 2 lại'])
                 return
             self._input_tray_done = False
             self._jog_mode = False
@@ -2143,24 +2244,33 @@ class CartridgeSystem(Node):
         # ── STATE 3: chỉ cho MANUAL, operator nhấn nút (AUTO tự trigger qua _can_start_s3) ──────────
         if cmd in ('STATE3', 'STATE_3', 'S3'):
             if not self._conf('output_stack_present', True):
-                self._notify('warn', 'STATE3 disabled',
-                             'output_stack_present=false — cụm Servo3/CPX 254 chưa lắp')
+                self._notify_step('warn', 'STATE 3', 'trigger',
+                    'STATE 3 disabled — cụm Servo3/OutX/OutY/CPX 254 chưa lắp',
+                    check=['YAML cartridge_config.yaml output_stack_present flag'],
+                    action=['Khi lắp xong Pos2: đổi output_stack_present: false → true', 'Restart node'])
                 return
             if self.operation_mode != 'manual':
-                self._notify('warn', 'STATE3 manual only',
-                             'Trong AUTO/AI mode hệ thống tự trigger STATE3')
+                self._notify_step('warn', 'STATE 3', 'trigger',
+                    'Chỉ kích thủ công ở MANUAL mode',
+                    action=['Chuyển GUI sang MANUAL', 'Nhấn STATE 3 lại'])
                 return
             if self.state_s3 not in (SystemState.IDLE,):
-                self._notify('warn', 'Không thể vào STATE 3',
-                             f'{self.state_s3.name} đang chạy — STOP trước')
+                self._notify_step('warn', 'STATE 3', 'trigger',
+                    f'{self.state_s3.name} đang chạy — không thể vào STATE 3',
+                    enum_name=self.state_s3.name,
+                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'])
                 return
             if not self.zero_offset:
-                self._notify('warn', 'Chua home', 'Nhấn HOMING trước')
+                self._notify_step('warn', 'STATE 3', 'trigger',
+                    'Chưa homing — không biết vị trí 0 của servo',
+                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 3'])
                 return
             # Check sensor THẬT — STATE3 chỉ chạy khi vị trí cấp output đang trống
             if self.sensor(S18_FEED_OK):
-                self._notify('warn', 'STATE3: Điều kiện chưa đủ',
-                             'S18 ON (vị trí cấp output đang có khay) — cần S18 OFF')
+                self._notify_step('warn', 'STATE 3', 'pre-flight',
+                    f'{self._sensor_label(18)} ON — vị trí cấp output đang có khay, cần trống',
+                    check=[f'khay ở Platform có thật không', f'{self._sensor_label(18)} có nhiễu không'],
+                    action=['Đợi robot lấy khay khỏi Platform', 'Hoặc bốc khay manual', 'Sau đó STATE 3 lại'])
                 return
             self._jog_mode = False
             self._drive_warm_t = -1.0  # FAS drive warm-up
@@ -2172,19 +2282,26 @@ class CartridgeSystem(Node):
         # ── STATE 4: chỉ cho MANUAL, operator nhấn nút (AUTO tự trigger khi _s4_trigger=True) ──────────
         if cmd in ('STATE4', 'STATE_4', 'S4'):
             if not self._conf('output_stack_present', True):
-                self._notify('warn', 'STATE4 disabled',
-                             'output_stack_present=false — cụm OutX/OutY/CPX 254 chưa lắp')
+                self._notify_step('warn', 'STATE 4', 'trigger',
+                    'STATE 4 disabled — cụm OutX/OutY/CPX 254 chưa lắp',
+                    check=['YAML cartridge_config.yaml output_stack_present flag'],
+                    action=['Khi lắp xong Pos2: đổi output_stack_present: false → true', 'Restart node'])
                 return
             if self.operation_mode != 'manual':
-                self._notify('warn', 'STATE4 manual only',
-                             'Trong AUTO/AI mode hệ thống tự trigger STATE4 (qua /robot/done_tray_output)')
+                self._notify_step('warn', 'STATE 4', 'trigger',
+                    'Chỉ kích thủ công ở MANUAL mode (AUTO trigger qua /robot/done_tray_output)',
+                    action=['Chuyển GUI sang MANUAL', 'Nhấn STATE 4 lại'])
                 return
             if self.state_s4 not in (SystemState.IDLE,):
-                self._notify('warn', 'Không thể vào STATE 4',
-                             f'{self.state_s4.name} đang chạy — STOP trước')
+                self._notify_step('warn', 'STATE 4', 'trigger',
+                    f'{self.state_s4.name} đang chạy — không thể vào STATE 4',
+                    enum_name=self.state_s4.name,
+                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'])
                 return
             if not self.zero_offset:
-                self._notify('warn', 'Chua home', 'Nhấn HOMING trước')
+                self._notify_step('warn', 'STATE 4', 'trigger',
+                    'Chưa homing — không biết vị trí 0 của servo',
+                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 4'])
                 return
             self._jog_mode = False
             self._drive_warm_t = -1.0  # FAS drive warm-up
@@ -2522,7 +2639,14 @@ class CartridgeSystem(Node):
         except Exception as e:
             tb = traceback.format_exc()
             self.get_logger().error(f"CRITICAL LOGIC ERROR (Control Loop Killed): {e}\n{tb}")
-            self._notify('error', 'Lỗi Logic Hệ Thống!', f'Node treo do: {str(e)[:50]}... Xem log để biết chi tiết.')
+            self._notify_step('error', 'SYSTEM', 'control_loop crash',
+                f'Python exception trong vòng lặp 20Hz: {str(e)[:80]}',
+                check=['log cartridge_node.log cho full traceback',
+                       f'state hiện tại: global={self.state.name} in={self.state_in.name}'],
+                action=['Hệ thống tự chuyển ERROR state',
+                        'STOP để reset',
+                        'Restart node nếu lặp lại',
+                        'Báo dev với traceback từ log'])
             # Transition to ERROR state to ensure safe stop
             if self.state != SystemState.ERROR:
                 self._enter(SystemState.ERROR)
@@ -2615,7 +2739,13 @@ class CartridgeSystem(Node):
         gap = time.time() - self._watchdog_last_tick
         if gap > 3.0:
             self.get_logger().error(f"WATCHDOG: loop silent {gap:.1f}s!")
-            self._notify('error', 'Loop treo!', f'{gap:.1f}s khong tick')
+            self._notify_step('error', 'SYSTEM', 'watchdog',
+                f'Control loop không tick suốt {gap:.1f}s (mong đợi 50ms/tick)',
+                check=['Modbus có timeout/hang không (network spike, drive offline)',
+                       'thread trong code có stuck không',
+                       'log có warning Modbus retry không'],
+                action=['Theo dõi log, đợi loop tự khôi phục',
+                        'Nếu lặp lại: STOP + restart node'])
 
     # ══════════════════════════════════════════════════════════════
     # State Dispatcher
@@ -2971,7 +3101,11 @@ class CartridgeSystem(Node):
             if self._cyl1_warn_t == 0:
                 self._cyl1_warn_t = time.time()
             elif time.time() - self._cyl1_warn_t >= 5.0:
-                self._notify('warn', 'S3 ON nhưng S9 OFF', 'Cyl1 chưa retract')
+                self._notify_step('warn', 'STATE 1', 'wait Cyl1 retract',
+                    f'{self._sensor_label(3)} ON (khay đến cuối belt) nhưng {self._sensor_label(9)} OFF >5s',
+                    enum_name='S1_*',
+                    check=['van Cyl1 retract', 'áp khí', f'dây {self._sensor_label(9)}'],
+                    action=['JOG → Cyl1 RETRACT manual', 'Hoặc kiểm tra van solenoid'])
                 self._cyl1_warn_t = time.time()
             self._log_once("S1_WAIT_S13", "S3 ON, chờ S9 ON")
 
@@ -3177,7 +3311,12 @@ class CartridgeSystem(Node):
                 self.get_logger().warn(f"S5 OFF lan 1 tai row {self._current_row} — thu lai lan 2")
             else:
                 self.get_logger().warn(f"S5 OFF 2 lan tai row {self._current_row} — reset")
-                self._notify('warn', 'S5 OFF 2 lan', f'Row {self._current_row} — reset')
+                self._notify_step('warn', 'STATE 1', f'check {self._sensor_label(5)} (row {self._current_row})',
+                    f'{self._sensor_label(5)} OFF 2 lần tại row {self._current_row} — khay không xác nhận tới vị trí cấp',
+                    check=[f'{self._sensor_label(5)} thẳng hàng/sạch không',
+                           'khay đã được đẩy hết bằng Cyl1 chưa',
+                           'cơ khí kẹp khay'],
+                    action=['Hệ thống tự fallback retract Cyl1', 'Nếu lặp lại: STOP rồi kiểm tra sensor S5'])
                 self._s5_retry = 0
                 self._enter_in(SystemState.S1_FALLBACK_RETRACT)
 
@@ -3234,8 +3373,12 @@ class CartridgeSystem(Node):
         self._step_timeout_in  = time.time() + self.config.move_timeout
         self._gui_confirmed = False
         self._enter_in(SystemState.S1_WAIT_GUI_CONFIRM)
-        self._notify('error', 'Kiem tra S4/S5!',
-                     'Cam bien khong phat hien khay. Kiem tra va nhan XAC NHAN.')
+        self._notify_step('error', 'STATE 1', f'wait {self._sensor_label(4)}/{self._sensor_label(5)}',
+            f'Cảm biến không phát hiện khay — kẹt/lỗi sensor',
+            check=[f'{self._sensor_label(4)} (scan stack) sạch + thẳng hàng',
+                   f'{self._sensor_label(5)} (output detect) đúng vị trí',
+                   'cơ khí stack có lệch khay không'],
+            action=['Khắc phục cơ khí/sensor', 'Nhấn XÁC NHẬN trên GUI để tiếp tục', 'Hoặc STOP để abort'])
 
     def _s1_wait_gui_confirm(self):
         """
@@ -3263,7 +3406,11 @@ class CartridgeSystem(Node):
         """
         if not (self.sensor(S1_BELT_START) or self.sensor(S2_BELT_MID) or self.sensor(S3_BELT_END)):
             self._log_once("S1_NO_TRAY", "Het khay — S1/S2/S3 OFF")
-            self._notify('warn', 'Het khay', 'Nap khay roi nhan START')
+            self._notify_step('warn', 'STATE 1', 'wait input tray',
+                f'Belt input rỗng: {self._sensor_label(1)} + {self._sensor_label(2)} + {self._sensor_label(3)} đều OFF',
+                check=['còn khay nào trên belt không',
+                       f'{self._sensor_label(1)}/{self._sensor_label(2)}/{self._sensor_label(3)} có nhiễu / lệch không'],
+                action=['Nạp khay lên belt input', 'Hệ thống tự tiếp tục khi sensor ON'])
             return
         inx = self._pos(1)
         if inx is None:
@@ -3450,7 +3597,12 @@ class CartridgeSystem(Node):
             elapsed = time.time() - self._tray_robot_check_start
             if elapsed >= TRAY_ROBOT_CHECK_TIMEOUT_S:
                 self.get_logger().error(f"S7 OFF sau {TRAY_ROBOT_CHECK_TIMEOUT_S:.0f}s — caution")
-                self._notify('warn', 'S7 OFF sau timeout', 'Kiem tra lai S7.')
+                self._notify_step('warn', 'STATE 1', 'verify tray at robot',
+                    f'{self._sensor_label(7)} OFF sau {TRAY_ROBOT_CHECK_TIMEOUT_S:.0f}s — khay không xác nhận tại Robot',
+                    check=[f'khay có thật ở vị trí Robot không',
+                           f'{self._sensor_label(7)} thẳng hàng + sạch',
+                           'cơ khí đẩy khay (Cyl1) hoạt động đủ chưa'],
+                    action=['Đẩy khay manual nếu cần', 'Kiểm tra wiring S7', 'Hệ thống quay về IDLE để retry'])
                 self.pub_new_tray.publish(Bool(data=True))
                 self._state1_enabled = False
                 self._enter_in(SystemState.IDLE)
@@ -3586,7 +3738,11 @@ class CartridgeSystem(Node):
             return
         if not self.sensor(S9_CYL1_RETRACTED):
             self._log_once("S2A_S13_ILK", "INTERLOCK S2: S9=OFF -> INX bi khoa")
-            self._notify('warn', 'S9 chua ON', 'Cyl1 chua retract')
+            self._notify_step('warn', 'STATE 2A', 'A2 InX→505.5',
+                f'INTERLOCK: {self._sensor_label(9)} OFF (Cyl1 chưa retract) — InX bị khóa',
+                enum_name='S2A_INX_MOVE_POS_PICK',
+                check=['van Cyl1 retract', 'áp khí', f'dây {self._sensor_label(9)}', f'có thể đồng thời {self._sensor_label(10)} ON?'],
+                action=['JOG → Cyl1 RETRACT manual đến khi S9 ON', 'Hoặc STOP rồi check cơ khí/van'])
             return
         if not self._cmd_sent_in:
             ok = self._nb_move(1, self.config.inx_target2, vel=200)
