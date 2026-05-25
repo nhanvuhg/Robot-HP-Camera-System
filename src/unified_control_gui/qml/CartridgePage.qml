@@ -525,7 +525,7 @@
 
                                         // AUTO
                                         Rectangle {
-                                            width: parent.width; height: 32; radius: 5
+                                            width: parent.width; height: 42; radius: 5
                                             color: "#0d3d2e"; border.color: root.cGreen; border.width: 1
                                             HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.85 : 1.0 }
                                             MouseArea {
@@ -538,18 +538,18 @@
                                             Row {
                                                 anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
                                                 spacing: 8
-                                                Text { text: "●"; color: root.cGreen; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                                Text { text: "●"; color: root.cGreen; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
                                                 Column {
                                                     anchors.verticalCenter: parent.verticalCenter
-                                                    Text { text: "AUTO"; color: root.cGreen; font.pixelSize: 11; font.bold: true }
-                                                    Text { text: "Tự động"; color: root.cDim; font.pixelSize: 8 }
+                                                    Text { text: "AUTO"; color: root.cGreen; font.pixelSize: 15; font.bold: true }
+                                                    Text { text: "Tự động"; color: root.cDim; font.pixelSize: 11 }
                                                 }
                                             }
                                         }
 
                                         // MANUAL
                                         Rectangle {
-                                            width: parent.width; height: 32; radius: 5
+                                            width: parent.width; height: 42; radius: 5
                                             color: "#051a1a"; border.color: "#5cf4f1"; border.width: 1
                                             HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.85 : 1.0 }
                                             MouseArea {
@@ -562,11 +562,11 @@
                                             Row {
                                                 anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
                                                 spacing: 8
-                                                Text { text: "●"; color: "#5cf4f1"; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                                                Text { text: "●"; color: "#5cf4f1"; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
                                                 Column {
                                                     anchors.verticalCenter: parent.verticalCenter
-                                                    Text { text: "MANUAL"; color: "#5cf4f1"; font.pixelSize: 11; font.bold: true }
-                                                    Text { text: "Trực tiếp"; color: root.cDim; font.pixelSize: 8 }
+                                                    Text { text: "MANUAL"; color: "#5cf4f1"; font.pixelSize: 15; font.bold: true }
+                                                    Text { text: "Trực tiếp"; color: root.cDim; font.pixelSize: 11 }
                                                 }
                                             }
                                         }
