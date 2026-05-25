@@ -404,15 +404,18 @@
                     id: pageGrid
                     anchors { fill: parent; margins: root.pad }
 
-                    // ─ CTRL COL ──────────────────────────────────
-                    ColumnLayout {
-                        x: 0; y: 0; width: root.ctrlW; height: root.topH
+                    // ─ TOP CARDS ROW ─────────────────────────────
+                    RowLayout {
+                        id: topCardsRow
+                        x: 0; y: 0
+                        width: parent.width - root.sensorW - root.gap
+                        height: 180
                         spacing: root.gap
 
                         // ── Mode Selection ──────────────────────
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.fillHeight: true          // ← chia đều 1/3
+                            Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
                             HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
 
@@ -569,13 +572,12 @@
                                     }
                                 }
                             }
-
                         }
 
                         // ── System Control ───────────────────────
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.fillHeight: true          // ← chia đều 1/3
+                            Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
                             HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
 
@@ -583,8 +585,8 @@
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
                                 // Không cho chạy khi chưa chọn mode
-                                enabled: !parent.parent.parent.modeIsIdle
-                                opacity: parent.parent.parent.modeIsIdle ? 0.35 : 1.0
+                                enabled: !modeSelCol.modeIsIdle
+                                opacity: modeSelCol.modeIsIdle ? 0.35 : 1.0
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
@@ -610,15 +612,13 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Resume";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
                                 }
-
-
                             }
                         }
 
                         // ── State Navigation ─────────────────────
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.fillHeight: true          // ← chia đều 1/3
+                            Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
                             HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
 
@@ -626,8 +626,8 @@
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
                                 // Không cho chạy khi chưa chọn mode
-                                enabled: !parent.parent.parent.modeIsIdle
-                                opacity: parent.parent.parent.modeIsIdle ? 0.35 : 1.0
+                                enabled: !modeSelCol.modeIsIdle
+                                opacity: modeSelCol.modeIsIdle ? 0.35 : 1.0
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
@@ -675,7 +675,7 @@
                         // /providesystem/cyl_cmd ("1 extend" | "1 retract" | "2 ...").
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.fillHeight: true          // ← chia đều 1/4
+                            Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
                             HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
 
@@ -771,177 +771,153 @@
                         }
                     }
 
-                    // ─ CENTER COL ────────────────────────────────
-                    Item {
-                        x: root.ctrlW + root.gap; y: 0
-                        width: root.centerW; height: root.topH
+                    // ─ SERVO CONTROL AREA ────────────────────────
+                    Rectangle {
+                        x: 0
+                        y: topCardsRow.height + root.gap
+                        width: parent.width - root.sensorW - root.gap
+                        height: root.topH - topCardsRow.height - root.gap
+                        color: root.cBg2; border.color: root.cBorder; radius: 6; clip: true
+                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
 
                         Column {
-                            anchors.fill: parent; spacing: root.gap
+                            anchors.fill: parent
+                            anchors.margins: 8
+                            spacing: 4
 
-                            // Target Row
-                            Rectangle {
-                                width: parent.width; height: trCol.implicitHeight + 10
-                                color: root.cBg2; border.color: root.cBorder; radius: 6
-                                HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
-                                Column { id: trCol; anchors { fill: parent; margins: 8 }
-                                spacing: 4
-                                    Text { text: "TARGET ROW"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
-                                    Row { spacing: 4
-                                        Repeater { model: [10,9,8,7,6,5,4,3,2,1]
-                                            delegate: CBtn { lbl: "R"+modelData; padV: 4; padH: 10; fontSize: 11; bg: root.cCard; bc: root.cBorder; tc: root.cText; onClicked: { cartridgeController.setTargetRow(modelData); robotController.selectRow(modelData) } }
+                            Row { width: parent.width; height: 20; spacing: 6
+                                Text { text: "SERVO CONTROL"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5; anchors.verticalCenter: parent.verticalCenter }
+                                // hidden data source — syncs jogVelMms from FAS PNU via _jog_vel topic
+                                Item {
+                                    id: velDisplay
+                                    visible: false; width: 0; height: 0
+                                    property int jogVelMms: 30
+                                    Connections {
+                                        target: cartridgeController
+                                        function onServoPositionsChanged() {
+                                            try {
+                                                var d = JSON.parse(cartridgeController.servoPositions)
+                                                if (d["_jog_vel"] !== undefined)
+                                                    velDisplay.jogVelMms = Math.round(Number(d["_jog_vel"]) * 1000)
+                                            } catch(e) {}
                                         }
                                     }
                                 }
                             }
 
-                            // Servo Control (flex:1 → fills remaining)
-                            Rectangle {
+                            // 5 servo cards horizontal
+                            Row {
+                                id: servoRow
                                 width: parent.width
-                                height: parent.height - (trCol.implicitHeight + 10) - root.gap
-                                color: root.cBg2; border.color: root.cBorder; radius: 6; clip: true
-                                HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                                height: parent.height - 20 - 4
+                                spacing: root.gap
+                                property bool jogAllowed: cartridgeController.currentMode === "jog"
 
-                                Column {
-                                    anchors.fill: parent
-                                    anchors.margins: 8
-                                    spacing: 4
-
-                                    Row { width: parent.width; height: 20; spacing: 6
-                                        Text { text: "SERVO CONTROL"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5; anchors.verticalCenter: parent.verticalCenter }
-                                        // hidden data source — syncs jogVelMms from FAS PNU via _jog_vel topic
-                                        Item {
-                                            id: velDisplay
-                                            visible: false; width: 0; height: 0
-                                            property int jogVelMms: 30
-                                            Connections {
-                                                target: cartridgeController
-                                                function onServoPositionsChanged() {
-                                                    try {
-                                                        var d = JSON.parse(cartridgeController.servoPositions)
-                                                        if (d["_jog_vel"] !== undefined)
-                                                            velDisplay.jogVelMms = Math.round(Number(d["_jog_vel"]) * 1000)
-                                                    } catch(e) {}
-                                                }
+                                Repeater {
+                                    model: ListModel {
+                                        ListElement { sid: 1; sname: "InX";     sdesc: "Trục X đầu vào" }
+                                        ListElement { sid: 2; sname: "InY";     sdesc: "Trục Y đầu vào" }
+                                        ListElement { sid: 3; sname: "PutTray"; sdesc: "Đẩy khay" }
+                                        ListElement { sid: 4; sname: "OutX";    sdesc: "Trục X đầu ra" }
+                                        ListElement { sid: 5; sname: "OutY";    sdesc: "Trục Y đầu ra" }
+                                    }
+                                    delegate: Rectangle {
+                                        id: cardItem
+                                        property int jogVelMms: 30
+                                        Connections {
+                                            target: cartridgeController
+                                            function onServoPositionsChanged() {
+                                                try {
+                                                    var fv = JSON.parse(cartridgeController.servoPositions)["_fas_vel"]
+                                                    if (fv && fv[String(model.sid)] !== undefined)
+                                                        cardItem.jogVelMms = Math.round(Number(fv[String(model.sid)]) * 1000)
+                                                } catch(e) {}
                                             }
                                         }
-                                    }
+                                        width: Math.floor((servoRow.width - 4*root.gap) / 5)
+                                        height: servoRow.height
+                                        color: root.cCard; border.color: root.cBorder; radius: 4; clip: true
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
 
-                                    // 5 servo cards horizontal
-                                    Row {
-                                        id: servoRow
-                                        width: parent.width
-                                        height: parent.height - 20 - 4
-                                        spacing: root.gap
-                                        property bool jogAllowed: cartridgeController.currentMode === "jog"
+                                        Column {
+                                            anchors.fill: parent
+                                            anchors.margins: 6
+                                            spacing: 6; width: parent.width - 12
 
-                                        Repeater {
-                                            model: ListModel {
-                                                ListElement { sid: 1; sname: "InX";     sdesc: "Trục X đầu vào" }
-                                                ListElement { sid: 2; sname: "InY";     sdesc: "Trục Y đầu vào" }
-                                                ListElement { sid: 3; sname: "PutTray"; sdesc: "Đẩy khay" }
-                                                ListElement { sid: 4; sname: "OutX";    sdesc: "Trục X đầu ra" }
-                                                ListElement { sid: 5; sname: "OutY";    sdesc: "Trục Y đầu ra" }
+                                            // header: name + desc
+                                            Column { width: parent.width; spacing: 2
+                                                Text { text: "S"+model.sid+": "+model.sname; color: root.cCyan; font.pixelSize: 14; font.bold: true; width: parent.width; horizontalAlignment: Text.AlignHCenter }
+                                                Text { text: model.sdesc; color: root.cDim; font.pixelSize: 11; width: parent.width; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
                                             }
-                                            delegate: Rectangle {
-                                                id: cardItem
-                                                property int jogVelMms: 30
+
+                                            // position display — direct connect + deadband
+                                            Text {
+                                                id: posText
+                                                width: parent.width; horizontalAlignment: Text.AlignHCenter
+                                                text: "--"
+                                                color: root.cYellow; font.pixelSize: 22; font.bold: true
+                                                property real lastVal: -99999
                                                 Connections {
                                                     target: cartridgeController
                                                     function onServoPositionsChanged() {
                                                         try {
-                                                            var fv = JSON.parse(cartridgeController.servoPositions)["_fas_vel"]
-                                                            if (fv && fv[String(model.sid)] !== undefined)
-                                                                cardItem.jogVelMms = Math.round(Number(fv[String(model.sid)]) * 1000)
-                                                        } catch(e) {}
-                                                    }
-                                                }
-                                                width: Math.floor((servoRow.width - 4*root.gap) / 5)
-                                                height: servoRow.height
-                                                color: root.cCard; border.color: root.cBorder; radius: 4; clip: true
-                                                HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                                                            var p = JSON.parse(cartridgeController.servoPositions)[model.sid]
+                                                            if (p !== undefined && p !== null) {
+                                                                 var v = Number(p)
+                                                                 if (Math.abs(v - posText.lastVal) >= 0.05) {
+                                                                     posText.lastVal = v
+                                                                     posText.text = v.toFixed(1) + " mm"
+                                                                 }
+                                                             }
+                                                         } catch(e) {}
+                                                     }
+                                                 }
+                                             }
 
-                                                Column {
-                                                    anchors.fill: parent
-                                                    anchors.margins: 6
-                                                    spacing: 6; width: parent.width - 12
+                                             // JOG velocity from FAS (read-only)
+                                             Row {
+                                                 width: parent.width; spacing: 4
+                                                 anchors.horizontalCenter: parent.horizontalCenter
+                                                 Text { text: "Vel:"; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                                                 Text {
+                                                     id: velText
+                                                     text: cardItem.jogVelMms > 0 ? (cardItem.jogVelMms / 1000.0).toFixed(3) + " m/s" : "–"
+                                                     color: root.cCyan
+                                                     font.pixelSize: 11; font.bold: true; font.family: "monospace"
+                                                     anchors.verticalCenter: parent.verticalCenter
+                                                 }
+                                             }
 
-                                                    // header: name + desc
-                                                    Column { width: parent.width; spacing: 2
-                                                        Text { text: "S"+model.sid+": "+model.sname; color: root.cCyan; font.pixelSize: 14; font.bold: true; width: parent.width; horizontalAlignment: Text.AlignHCenter }
-                                                        Text { text: model.sdesc; color: root.cDim; font.pixelSize: 11; width: parent.width; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
-                                                    }
+                                             // − STOP + (jog hoặc manual mode)
+                                             Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
+                                                 CBtn { lbl:"−"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
+                                                     onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-", cardItem.jogVelMms) }
+                                                     onReleased: cartridgeController.jogStop(model.sid) }
+                                                 CBtn { lbl:"STOP"; padV:10; padH:8; fontSize:14; bg:"#4d1a1a"; bc:root.cRed; tc:root.cRed; onClicked: cartridgeController.jogStop(model.sid) }
+                                                 CBtn { lbl:"+"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
+                                                     onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+", cardItem.jogVelMms) }
+                                                     onReleased: cartridgeController.jogStop(model.sid) }
+                                             }
 
-                                                    // position display — direct connect + deadband
-                                                    Text {
-                                                        id: posText
-                                                        width: parent.width; horizontalAlignment: Text.AlignHCenter
-                                                        text: "--"
-                                                        color: root.cYellow; font.pixelSize: 22; font.bold: true
-                                                        property real lastVal: -99999
-                                                        Connections {
-                                                            target: cartridgeController
-                                                            function onServoPositionsChanged() {
-                                                                try {
-                                                                    var p = JSON.parse(cartridgeController.servoPositions)[model.sid]
-                                                                    if (p !== undefined && p !== null) {
-                                                                        var v = Number(p)
-                                                                        if (Math.abs(v - posText.lastVal) >= 0.05) {
-                                                                            posText.lastVal = v
-                                                                            posText.text = v.toFixed(1) + " mm"
-                                                                        }
-                                                                    }
-                                                                } catch(e) {}
-                                                            }
-                                                        }
-                                                    }
+                                             // HOMING (jog hoặc manual mode)
+                                             CBtn { lbl:"HOMING"; w:parent.width; padV:12; padH:12; fontSize:16; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
 
-                                                    // JOG velocity from FAS (read-only)
-                                                    Row {
-                                                        width: parent.width; spacing: 4
-                                                        anchors.horizontalCenter: parent.horizontalCenter
-                                                        Text { text: "Vel:"; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
-                                                        Text {
-                                                            id: velText
-                                                            text: cardItem.jogVelMms > 0 ? (cardItem.jogVelMms / 1000.0).toFixed(3) + " m/s" : "–"
-                                                            color: root.cCyan
-                                                            font.pixelSize: 11; font.bold: true; font.family: "monospace"
-                                                            anchors.verticalCenter: parent.verticalCenter
-                                                        }
-                                                    }
+                                             // CLEAR (always available)
+                                             CBtn { lbl:"CLEAR"; w:parent.width; padV:12; padH:12; fontSize:16; bg:"#4d3a0a"; bc:root.cOrange; tc:root.cOrange; onClicked: cartridgeController.clearServo(model.sid) }
 
-                                                    // − STOP + (jog hoặc manual mode)
-                                                    Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
-                                                        CBtn { lbl:"−"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
-                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-", cardItem.jogVelMms) }
-                                                            onReleased: cartridgeController.jogStop(model.sid) }
-                                                        CBtn { lbl:"STOP"; padV:10; padH:8; fontSize:14; bg:"#4d1a1a"; bc:root.cRed; tc:root.cRed; onClicked: cartridgeController.jogStop(model.sid) }
-                                                        CBtn { lbl:"+"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
-                                                            onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+", cardItem.jogVelMms) }
-                                                            onReleased: cartridgeController.jogStop(model.sid) }
-                                                    }
-
-                                                    // HOMING (jog hoặc manual mode)
-                                                    CBtn { lbl:"HOMING"; w:parent.width; padV:12; padH:12; fontSize:16; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
-
-                                                    // CLEAR (always available)
-                                                    CBtn { lbl:"CLEAR"; w:parent.width; padV:12; padH:12; fontSize:16; bg:"#4d3a0a"; bc:root.cOrange; tc:root.cOrange; onClicked: cartridgeController.clearServo(model.sid) }
-
-                                                    // pos-row (jog mode required)
-                                                    Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
-                                                        Rectangle { width:72; height:34; radius:6; color:root.cBg; border.color:root.cBorder
-                                                            TextInput { id:posIn; anchors.fill: parent; anchors.margins: 4; text:"0.0"; font.pixelSize:15; color:root.cText; horizontalAlignment:TextInput.AlignHCenter; verticalAlignment:TextInput.AlignVCenter } }
-                                                        Text { text:"mm"; color:root.cDim; font.pixelSize:12; anchors.verticalCenter:parent.verticalCenter; rightPadding:2 }
-                                                        CBtn { lbl:"RUN"; padV:10; padH:14; fontSize:16; bg:root.cAccent; bc:root.cAccent; tc:"#fff"; active:servoRow.isJog
-                                                            onClicked: { if(servoRow.isJog) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } } }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                                             // pos-row (jog mode required)
+                                             Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
+                                                 Rectangle { width:72; height:34; radius:6; color:root.cBg; border.color:root.cBorder
+                                                     TextInput { id:posIn; anchors.fill: parent; anchors.margins: 4; text:"0.0"; font.pixelSize:15; color:root.cText; horizontalAlignment:TextInput.AlignHCenter; verticalAlignment:TextInput.AlignVCenter } }
+                                                 Text { text:"mm"; color:root.cDim; font.pixelSize:12; anchors.verticalCenter:parent.verticalCenter; rightPadding:2 }
+                                                 CBtn { lbl:"RUN"; padV:10; padH:14; fontSize:16; bg:root.cAccent; bc:root.cAccent; tc:"#fff"; active:servoRow.isJog
+                                                     onClicked: { if(servoRow.isJog) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } } }
+                                             }
+                                         }
+                                     }
+                                 }
+                             }
+                         }
                     }
 
                     // ─ LOG AREA ──────────────────────────────────

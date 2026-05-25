@@ -560,14 +560,15 @@ class CartridgeSystem(Node):
 
     def _init_cyl3_state(self):
         """
-        Smart Cyl3 init khi CPX 253 vừa connect — đưa Cyl3 về trạng thái khớp
-        với khay thực tế tại Tray Pos1, tránh va chạm khi STATE 2/3 chạy lần đầu.
+        Smart Cyl3 init khi CPX 253 vừa connect — đồng bộ Cyl3 với cảm biến khay
+        theo policy `S6 ON ↔ S16 ON` (tray detect mirror Cyl3 extended).
 
         Logic:
-          • S6 ON (có khay) + S15 ON (Cyl3 đang retract) → EXTEND để cố định khay.
-          • S6 OFF (không khay) → RETRACT để chừa chỗ cho khay sắp hạ.
-          • Case khác (S6 ON + S15 OFF): giữ nguyên — có thể Cyl3 đang extended (S16 ON)
-            hoặc unknown state (cả 2 sensor OFF) — không tự động override khi unsure.
+          • S6 ON  → EXTEND ngay (giữ khay) — bất kể S15/S16 hiện tại.
+          • S6 OFF → RETRACT (chừa chỗ cho khay sắp hạ).
+
+        Sau init, _cyl3_safety_check (mỗi tick control loop) tiếp tục đồng bộ
+        runtime — operator thao tác khay là Cyl3 tự update.
 
         Chỉ chạy nếu cyl3_present=true. Đọc sensor TRỰC TIẾP từ io_module (cache
         _io_bg_loop chưa start tại thời điểm này).
@@ -589,29 +590,21 @@ class CartridgeSystem(Node):
                 )
                 return
 
-            s6  = bool(channels[5])    # S6_CHECK_TRAY_P1 (sid=6 → index 5)
-            s15 = bool(channels[14])   # S15_CYL3_RETRACTED (sid=15 → index 14)
-            s16 = bool(channels[15])   # S16_CYL3_EXTENDED (sid=16 → index 15)
+            s6  = bool(channels[5])    # S6_CHECK_TRAY_P1
+            s15 = bool(channels[14])   # S15_CYL3_RETRACTED
+            s16 = bool(channels[15])   # S16_CYL3_EXTENDED
             sensor_str = f"S6={'ON' if s6 else 'OFF'} S15={'ON' if s15 else 'OFF'} S16={'ON' if s16 else 'OFF'}"
 
-            if s6 and s15:
+            if s6:
                 self.get_logger().info(
-                    f"[INIT-CYL3] {sensor_str} → có khay + cyl3 retract → EXTEND giữ khay"
+                    f"[INIT-CYL3] {sensor_str} → S6 ON (có khay) → EXTEND giữ khay"
                 )
                 self._cyl3_extend()
-            elif not s6:
+            else:
                 self.get_logger().info(
-                    f"[INIT-CYL3] {sensor_str} → không có khay → RETRACT chừa chỗ cho khay hạ"
+                    f"[INIT-CYL3] {sensor_str} → S6 OFF (không khay) → RETRACT chừa chỗ"
                 )
                 self._cyl3_retract()
-            else:
-                # S6 ON + S15 OFF: giữ nguyên (có thể đang extended hoặc unknown)
-                self.get_logger().info(
-                    f"[INIT-CYL3] {sensor_str} → giữ nguyên trạng thái Cyl3"
-                )
-                # Set expected state để monitor không cảnh báo false trong vài giây đầu
-                if s16:
-                    self._cyl3_set_expected("extended")
         except Exception as e:
             self.get_logger().warn(f"[INIT-CYL3] exception: {e}")
 
