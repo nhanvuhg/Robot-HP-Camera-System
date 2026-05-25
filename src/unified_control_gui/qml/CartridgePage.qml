@@ -496,7 +496,7 @@
                                                     if (m === "jog")    return root.cOrange
                                                     return root.cDim
                                                 }
-                                                font.pixelSize: 12; font.bold: !modeSelCol.modeIsIdle
+                                                font.pixelSize: 20; font.bold: !modeSelCol.modeIsIdle
                                                 anchors.verticalCenter: parent.verticalCenter
                                             }
                                         }
@@ -1047,7 +1047,7 @@
 
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true          // ← mỗi nút chiếm đều phần chiều cao
-                                        Layout.minimumHeight: 22         // ← thu nhỏ để fit đủ 22 sensor (S1-S22)
+                                        Layout.minimumHeight: 28         // ← thu nhỏ để fit đủ 22 sensor (S1-S22)
 
                                         radius: 3
                                         color: on_ ? "#0a332e" : root.cCard
@@ -1066,7 +1066,7 @@
                                             }
                                             Text {
                                                 text: model.sdesc
-                                                color: root.cDim; font.pixelSize: 7
+                                                color: root.cDim; font.pixelSize: 13
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                                 visible: model.sdesc !== ""
                                             }
@@ -1083,7 +1083,7 @@
                             // ── Chú thích ──
                             Text {
                                 text: "<b>S1-S3</b> Conveyor · <b>S4</b> Scan P1 · <b>S5</b> Out Det · <b>S6</b> Check P1 · <b>S7</b> Robot · <b>S8</b> RSV\n<b>S9</b> Cyl1↩ · <b>S10</b> Cyl1↪ · <b>S13-S14</b> OUT1/2 P1 · <b>S15</b> Cyl3↩ · <b>S16</b> Cyl3↪\n<b>S17</b> Platform · <b>S18</b> Feed OK · <b>S19</b> Check P2 · <b>S20</b> Scan P2 · <b>S21</b> Cyl2↩ · <b>S22</b> Cyl2↪"
-                                textFormat: Text.RichText; color: root.cDim; font.pixelSize: 8
+                                textFormat: Text.RichText; color: root.cDim; font.pixelSize: 14
                                 Layout.fillWidth: true; wrapMode: Text.WordWrap
                             }
                         }
