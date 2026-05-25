@@ -521,7 +521,11 @@ class CartridgeSystem(Node):
         """
         for attempt in range(1, 4):
             try:
-                mod = CpxAp(ip_address=ip, cycle_time=0.5)
+                # cycle_time=None → tắt IOThread background của CpxAp (mặc định
+                # refresh diagnosis_status mỗi 10ms). Chúng ta không dùng diagnosis
+                # → tiết kiệm ~100 Modbus calls/s/module, nhường socket cho
+                # _io_bg_loop read_channels và state machine write_channels.
+                mod = CpxAp(ip_address=ip, cycle_time=None)
                 if idx == 1:
                     self.io_module = mod
                     # Initialize gripper/picker (5/3 valve) về trạng thái NHẢ an toàn:
@@ -779,14 +783,14 @@ class CartridgeSystem(Node):
         """Reconnect IO Module 1 sau 5s delay (tránh flood nếu lỗi liên tục)."""
         time.sleep(5.0)
         try:
-            self.io_module = CpxAp(ip_address=self.config.io_ip)
+            self.io_module = CpxAp(ip_address=self.config.io_ip, cycle_time=None)
         except Exception: pass
 
     def _reconnect_io2(self):
         """Reconnect IO Module 2 sau 5s delay."""
         time.sleep(5.0)
         try:
-            self.io_module_2 = CpxAp(ip_address=getattr(self.config, 'io_ip_2', "192.168.27.254"))
+            self.io_module_2 = CpxAp(ip_address=getattr(self.config, 'io_ip_2', "192.168.27.254"), cycle_time=None)
         except Exception: pass
 
     # ── Sensor read ───────────────────────────────────────────────
