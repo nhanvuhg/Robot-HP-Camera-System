@@ -2,6 +2,32 @@
 """
 Cartridge Loading System — ROS 2 + festo-edcon
 
+═══════════════════════════════════════════════════════════════════════════════
+HARDWARE INSTALL STATUS (đọc trước khi sửa code)
+═══════════════════════════════════════════════════════════════════════════════
+Cụm Pos1 (đã lắp, production):
+  • Servo S1=InX (192.168.27.248), S2=InY (192.168.27.249)
+  • CPX 253 (192.168.27.253) — sensor S1-S16, valve Cyl1/Cyl2/Cyl3
+  • Cyl3 piston + sensor S13-S16
+  → STATE 1, STATE 2A chạy đầy đủ với interlock Cyl3.
+
+Cụm Pos2 (đang chờ lắp đặt):
+  • Servo S3=Servo3/Platform (192.168.27.250)
+  • Servo S4=OutX (192.168.27.251), S5=OutY (192.168.27.252)
+  • CPX 254 (192.168.27.254) — sensor S17-S22
+  → STATE 3, STATE 4 hiện DISABLED qua flag `output_stack_present: false`
+    trong cartridge_config.yaml.
+
+→ Khi user nói "đã lắp servo 3/4/5" / "đã lắp CPX 254" / "đã lắp xong cụm
+  Pos2/output" → đổi YAML `output_stack_present: false → true` và restart.
+  Không cần sửa code. Các check `_can_start_s3/s4`, manual STATE3/4 button,
+  `_s2a_cyl3_extend` sẽ tự active khi flag=true.
+
+→ Tương tự: nếu Cyl3 piston tháo ra (vd để service), đổi
+  `cyl3_present: true → false` — workflow STATE 2 vẫn chạy nhưng skip step
+  cố định khay Cyl3.
+═══════════════════════════════════════════════════════════════════════════════
+
 AUTO/AI mode: Đọc sensor thực từ IO module, tự động trigger STATE 1/2/3/4 khi
               đủ điều kiện cảm biến.
 MANUAL mode : Đọc sensor THẬT (giống AUTO — không còn simulation từ v8).
@@ -206,6 +232,13 @@ class CartridgeSystem(Node):
         self._servo_lock        = threading.Lock()
         self.servos: dict       = {}
         self.zero_offset: dict  = {}
+        # Cache trạng thái ready_for_motion mỗi servo để skip Modbus query lặp lại
+        # trong các lệnh JOG/move liên tiếp. Invalidate khi STOP hoặc fault.
+        self._ready_until: dict = {}     # sid -> expiry timestamp
+        self._ready_ttl         = 3.0    # giây — drive thường giữ ready nếu không có lỗi
+        # Cache vị trí (mm) lần đọc gần nhất — dùng cho _publish_positions khi lock
+        # bận để fallback giá trị thay vì miss frame và GUI nhấp nháy "--".
+        self._pos_cache: dict   = {}     # sid -> mm
         self.io_module          = None
         self.io_module_2        = None
         self._io_sensor_cache: list = []
@@ -217,6 +250,12 @@ class CartridgeSystem(Node):
         # Motion flags
         self._inx_moving = False
         self._iny_moving = False
+        # Timestamp lệnh motion gần nhất per-servo (sid → time.time()).
+        # Dùng cho _publish_positions: nếu servo idle > _idle_skip_modbus_s thì
+        # skip Modbus read, reuse cache. Giảm lock contention khi servo không hoạt động.
+        # Cập nhật bởi _jog, _nb_move, _home_all.
+        self._servo_motion_t: dict = {}
+        self._idle_skip_modbus_s    = 2.0   # giây — sau motion command này thì còn đọc tươi
         # Drive warm-up gate sau referencing_task (FAS firmware quirk):
         #   -1.0 = pending flush; 0.0 = done; >0.0 = đang chờ settle (timestamp)
         # Khi drive vừa làm xong homing, lệnh position_task đầu tiên có thể bị
@@ -246,6 +285,10 @@ class CartridgeSystem(Node):
 
         # STATE 2A runtime
         self._s6_snapshot       = False
+        self._s13_snapshot      = False
+        self._s14_snapshot      = False
+        self._s15_snapshot      = False
+        self._s16_snapshot      = False
         self._output_row        = 0
         self._output_target_pos = 0.0
         self._s4_armed_out      = False
@@ -359,6 +402,7 @@ class CartridgeSystem(Node):
         self.create_subscription(String, '/providesystem/update_config',     self._cb_update_config,      qos)
         self.create_subscription(String, '/providesystem/get_config',        self._cb_get_config,         qos)
         self.create_subscription(String, '/providesystem/set_target_row',   self._cb_set_target_row,     qos)
+        self.create_subscription(String, '/providesystem/cyl_cmd',           self._cb_cyl_cmd,            qos)
 
         self._connect_hardware()
 
@@ -472,14 +516,20 @@ class CartridgeSystem(Node):
     def _connect_io(self, idx: int, ip: str):
         """
         Kết nối đến IO Module Festo CPX-AP qua EtherNet/IP (tối đa 3 lần thử).
-        idx=1 → Module chính (S1–S16, valve cylinder 1/2, gripper, picker)
+        idx=1 → Module chính (S1–S16, valve cylinder 1/2/3, gripper, picker)
         idx=2 → Module phụ output side (S17–S24)
-        Khi kết nối Module 1 thành công: reset tất cả valve về 0V để đảm bảo
-        trạng thái an toàn (cylinder retracted) ngay khi khởi động node.
+        Khi kết nối Module 1 thành công:
+          1. Reset gripper + picker về trạng thái NHẢ an toàn (5/3 valve, ch0-3).
+          2. Smart init Cyl3 theo sensor thực tế S6/S15/S16 (nếu cyl3_present=true).
+          Cyl1/Cyl2 GIỮ NGUYÊN state (không reset — RULE 16 chốt workflow Pos1).
         """
         for attempt in range(1, 4):
             try:
-                mod = CpxAp(ip_address=ip, cycle_time=0.5)
+                # cycle_time=None → tắt IOThread background của CpxAp (mặc định
+                # refresh diagnosis_status mỗi 10ms). Chúng ta không dùng diagnosis
+                # → tiết kiệm ~100 Modbus calls/s/module, nhường socket cho
+                # _io_bg_loop read_channels và state machine write_channels.
+                mod = CpxAp(ip_address=ip, cycle_time=None)
                 if idx == 1:
                     self.io_module = mod
                     # Initialize gripper/picker (5/3 valve) về trạng thái NHẢ an toàn:
@@ -496,6 +546,8 @@ class CartridgeSystem(Node):
                                 self.get_logger().info("Init valves: gripper+picker → NHẢ (safe)")
                     except Exception as ve:
                         self.get_logger().warn(f"Failed to init valves: {ve}")
+                    # Smart init Cyl3 dựa trên sensor thực tế (S6 tray + S15/S16 feedback)
+                    self._init_cyl3_state()
                 else:
                     self.io_module_2 = mod
                 self.get_logger().info(f"IO {idx} {ip} OK")
@@ -505,6 +557,63 @@ class CartridgeSystem(Node):
                 if attempt < 3:
                     time.sleep(3.0)
         self.get_logger().error(f"IO {idx} module failed — sensor reads will be False")
+
+    def _init_cyl3_state(self):
+        """
+        Smart Cyl3 init khi CPX 253 vừa connect — đưa Cyl3 về trạng thái khớp
+        với khay thực tế tại Tray Pos1, tránh va chạm khi STATE 2/3 chạy lần đầu.
+
+        Logic:
+          • S6 ON (có khay) + S15 ON (Cyl3 đang retract) → EXTEND để cố định khay.
+          • S6 OFF (không khay) → RETRACT để chừa chỗ cho khay sắp hạ.
+          • Case khác (S6 ON + S15 OFF): giữ nguyên — có thể Cyl3 đang extended (S16 ON)
+            hoặc unknown state (cả 2 sensor OFF) — không tự động override khi unsure.
+
+        Chỉ chạy nếu cyl3_present=true. Đọc sensor TRỰC TIẾP từ io_module (cache
+        _io_bg_loop chưa start tại thời điểm này).
+        """
+        if not self._conf('cyl3_present', True):
+            return
+        if not self.io_module:
+            return
+        try:
+            channels = []
+            for sub in self.io_module.modules:
+                if sub.is_function_supported("read_channels"):
+                    ch = sub.read_channels()
+                    if isinstance(ch, list):
+                        channels.extend(ch)
+            if len(channels) < 16:
+                self.get_logger().warn(
+                    f"[INIT-CYL3] Sensor read trả {len(channels)} channel (< 16) — skip smart init"
+                )
+                return
+
+            s6  = bool(channels[5])    # S6_CHECK_TRAY_P1 (sid=6 → index 5)
+            s15 = bool(channels[14])   # S15_CYL3_RETRACTED (sid=15 → index 14)
+            s16 = bool(channels[15])   # S16_CYL3_EXTENDED (sid=16 → index 15)
+            sensor_str = f"S6={'ON' if s6 else 'OFF'} S15={'ON' if s15 else 'OFF'} S16={'ON' if s16 else 'OFF'}"
+
+            if s6 and s15:
+                self.get_logger().info(
+                    f"[INIT-CYL3] {sensor_str} → có khay + cyl3 retract → EXTEND giữ khay"
+                )
+                self._cyl3_extend()
+            elif not s6:
+                self.get_logger().info(
+                    f"[INIT-CYL3] {sensor_str} → không có khay → RETRACT chừa chỗ cho khay hạ"
+                )
+                self._cyl3_retract()
+            else:
+                # S6 ON + S15 OFF: giữ nguyên (có thể đang extended hoặc unknown)
+                self.get_logger().info(
+                    f"[INIT-CYL3] {sensor_str} → giữ nguyên trạng thái Cyl3"
+                )
+                # Set expected state để monitor không cảnh báo false trong vài giây đầu
+                if s16:
+                    self._cyl3_set_expected("extended")
+        except Exception as e:
+            self.get_logger().warn(f"[INIT-CYL3] exception: {e}")
 
     def _connect_servo(self, sid: int, ip: str, attempts: int = 5) -> bool:
         """
@@ -678,14 +787,14 @@ class CartridgeSystem(Node):
         """Reconnect IO Module 1 sau 5s delay (tránh flood nếu lỗi liên tục)."""
         time.sleep(5.0)
         try:
-            self.io_module = CpxAp(ip_address=self.config.io_ip)
+            self.io_module = CpxAp(ip_address=self.config.io_ip, cycle_time=None)
         except Exception: pass
 
     def _reconnect_io2(self):
         """Reconnect IO Module 2 sau 5s delay."""
         time.sleep(5.0)
         try:
-            self.io_module_2 = CpxAp(ip_address=getattr(self.config, 'io_ip_2', "192.168.27.254"))
+            self.io_module_2 = CpxAp(ip_address=getattr(self.config, 'io_ip_2', "192.168.27.254"), cycle_time=None)
         except Exception: pass
 
     # ── Sensor read ───────────────────────────────────────────────
@@ -774,7 +883,9 @@ class CartridgeSystem(Node):
                     mot.configure_continuous_update(False)
             if servo_id == 1: self._inx_moving = True
             elif servo_id == 2: self._iny_moving = True
-            setattr(self, f'_ignore_arrived_{servo_id}', time.time() + 0.5)
+            now = time.time()
+            setattr(self, f'_ignore_arrived_{servo_id}', now + 0.5)
+            self._servo_motion_t[servo_id] = now  # cho _publish_positions đọc tươi
             return True
         except Exception as e:
             self.get_logger().error(f"S{servo_id} nb_move error: {e}")
@@ -834,6 +945,8 @@ class CartridgeSystem(Node):
         """
         Dừng ngay servo (stop_motion_task) và reset flag đang di chuyển.
         Dùng khi nhấn STOP, ABORT, hoặc timeout bước.
+        KHÔNG clear ready cache — stop_motion_task chỉ halt current task,
+        drive vẫn enabled+ready, lần JOG kế tiếp phải mượt không re-check.
         """
         mot = self.servos.get(servo_id)
         if mot:
@@ -845,11 +958,28 @@ class CartridgeSystem(Node):
         if servo_id == 1: self._inx_moving = False
         if servo_id == 2: self._iny_moving = False
 
+    def _pos_cached(self, servo_id: int) -> Optional[float]:
+        """
+        Đọc vị trí cached (mm) — KHÔNG gọi Modbus, KHÔNG cần _servo_lock.
+        Dùng cho hot path control_loop (20Hz) để tránh chiếm lock liên tục,
+        nhường lock cho JOG/STOP/state machine motion commands.
+
+        Cache update mỗi ~100ms bởi _positions_bg_loop._publish_positions().
+        Trả None nếu cache chưa populate (lần đầu sau startup, trước khi
+        _positions_bg_loop tick đầu tiên hoàn tất).
+
+        ⚠️ KHÔNG dùng cho _at_position() / _arrived() — các check đó cần
+        giá trị tươi để verify servo settle đúng vị trí trước sub-state nguy hiểm.
+        """
+        return self._pos_cache.get(servo_id)
+
     def _pos(self, servo_id: int) -> Optional[float]:
         """
         Đọc vị trí hiện tại của servo (mm, tính từ zero_offset sau homing).
         Công thức: (encoder_counts - zero_offset) / COUNTS_PER_MM
         Trả về 0.0 nếu servo không kết nối, None nếu có lỗi đọc.
+        Đồng thời update _pos_cache để các caller cached (vd _enforce_danger_zones)
+        có dữ liệu tươi hơn ngay sau khi _pos() thực sự được gọi.
         """
         mot = self.servos.get(servo_id)
         if not mot:
@@ -857,7 +987,9 @@ class CartridgeSystem(Node):
         try:
             with self._servo_lock:
                 counts = mot.current_position()
-            return (counts - self.zero_offset.get(servo_id, 0)) / COUNTS_PER_MM
+            mm = (counts - self.zero_offset.get(servo_id, 0)) / COUNTS_PER_MM
+            self._pos_cache[servo_id] = round(mm, 2)
+            return mm
         except Exception as e:
             self.get_logger().warn(f"S{servo_id} _pos() error: {e}")
             return None
@@ -872,6 +1004,8 @@ class CartridgeSystem(Node):
         if not mot:
             return
 
+        # Đánh dấu motion timestamp để _publish_positions biết đọc tươi
+        self._servo_motion_t[servo_id] = time.time()
         try:
             self._ensure_ready(mot, servo_id)
             with self._servo_lock:
@@ -886,12 +1020,20 @@ class CartridgeSystem(Node):
           2. enable_powerstage() — bật nguồn stage
           3. Chờ ready_for_motion() = True trong timeout giây
         Lock được giữ ngắn nhất có thể để STOP có thể acquire _servo_lock ngay.
+
+        Fast path: cache ready_until[sid] — nếu confirm ready trong vòng _ready_ttl
+        giây trước, skip toàn bộ Modbus query (giảm 500ms→<50ms latency cho JOG liên tiếp).
         """
+        now = time.time()
+        if now < self._ready_until.get(servo_id, 0.0):
+            return
+
         if hasattr(mot, 'ready_for_motion'):
             acquired = self._servo_lock.acquire(timeout=0.1)
             if acquired:
                 try:
                     if mot.ready_for_motion():
+                        self._ready_until[servo_id] = now + self._ready_ttl
                         return
                 except Exception:
                     pass
@@ -917,6 +1059,7 @@ class CartridgeSystem(Node):
                 finally:
                     self._servo_lock.release()
                 if ready:
+                    self._ready_until[servo_id] = time.time() + self._ready_ttl
                     return
             time.sleep(0.05)
         self.get_logger().warn(f"S{servo_id}: drive not ready after {timeout}s")
@@ -1223,11 +1366,14 @@ class CartridgeSystem(Node):
     def _can_start_s3(self) -> bool:
         """
         Điều kiện để auto-trigger STATE 3 (chỉ AUTO/AI mode):
+          - output_stack_present=True (hardware Servo3 + CPX 254 đã lắp)
           - Đã homing và robot không bận
           - S18_FEED_OK=OFF (vị trí feed đang trống)
           - S18 đã OFF liên tục ít nhất 5 giây (debounce — tránh trigger ngay sau khi
             robot lấy khay, đợi hệ thống ổn định trước khi cấp khay mới)
         """
+        if not self._conf('output_stack_present', True):
+            return False
         if self.operation_mode not in ['auto', 'ai'] or self._motion_busy:
             return False
             
@@ -1246,12 +1392,15 @@ class CartridgeSystem(Node):
     def _can_start_s4(self) -> bool:
         """
         Điều kiện để **auto-trigger** STATE 4 (chỉ AUTO/AI mode — thay khay output):
+          - output_stack_present=True (hardware OutX/OutY + CPX 254 đã lắp)
           - operation_mode in ['auto', 'ai'] (MANUAL không auto-chain — operator phải nhấn STATE4)
           - Đã homing
           - _s4_trigger=True (set bởi robot qua /robot/done_tray_output)
           - S18_FEED_OK=ON (có khay ở vị trí feed — đảm bảo output tray đang được dùng)
           - Robot không báo bận
         """
+        if not self._conf('output_stack_present', True):
+            return False
         if self.operation_mode not in ['auto', 'ai']:
             return False
         return bool(self.zero_offset) and self._s4_trigger and self.sensor(S18_FEED_OK) and not self._motion_busy
@@ -1355,6 +1504,9 @@ class CartridgeSystem(Node):
 
             try:
                 self._ensure_ready(mot, sid, timeout=5.0)
+
+                # Đánh dấu motion timestamp để _publish_positions đọc tươi trong khi homing
+                self._servo_motion_t[sid] = time.time()
 
                 with self._servo_lock:
                     current_pos = mot.current_position()
@@ -1658,6 +1810,61 @@ class CartridgeSystem(Node):
             except Exception as e:
                 self.get_logger().error(f"Picker cmd error: {e}")
 
+    def _cb_cyl_cmd(self, msg: String):
+        """
+        Điều khiển cylinder 1/2/3 thủ công từ GUI qua /providesystem/cyl_cmd.
+        Định dạng: "<cyl_id> <extend|retract>"  ví dụ "1 extend", "3 retract".
+
+        Tái sử dụng _cyl1/_cyl2/_cyl3 extend/retract (drive 2 channel valve:
+        1 set + 1 reset như gripper/picker). Cyl3 chỉ chạy khi cyl3_present=True.
+
+        Chỉ cho phép trong MANUAL mode + state IDLE/ERROR + không có state machine
+        nào đang chạy — tránh xung đột với logic STATE 1/2/3/4 đang điều khiển
+        cylinder theo chu trình.
+        """
+        parts = msg.data.strip().split()
+        if len(parts) < 2:
+            return
+
+        if self.operation_mode != 'manual':
+            self._notify('warn', 'Cylinder bi khoa', 'Chuyen MANUAL mode de dieu khien')
+            return
+        if (self.state not in (SystemState.IDLE, SystemState.ERROR)
+                or self.state_in != SystemState.IDLE
+                or self.state_s3 != SystemState.IDLE
+                or self.state_s4 != SystemState.IDLE):
+            self._notify('warn', 'Cylinder bi khoa', 'Dang chay — nhan STOP truoc')
+            return
+
+        try:
+            cid = int(parts[0])
+            act = parts[1].lower()
+        except Exception as e:
+            self.get_logger().warn(f"[CYL] parse error: {e}")
+            return
+
+        try:
+            if cid == 1 and act == 'extend':
+                self._cyl1_extend()
+            elif cid == 1 and act == 'retract':
+                self._cyl1_retract()
+            elif cid == 2 and act == 'extend':
+                self._cyl2_extend()
+            elif cid == 2 and act == 'retract':
+                self._cyl2_retract()
+            elif cid == 3 and act in ('extend', 'retract'):
+                if not self._conf('cyl3_present', True):
+                    self._notify('warn', 'Cyl3 disabled', 'cyl3_present=false trong config')
+                    return
+                if act == 'extend':
+                    self._cyl3_extend()
+                else:
+                    self._cyl3_retract()
+            else:
+                self.get_logger().warn(f"[CYL] unknown cmd: {msg.data}")
+        except Exception as e:
+            self.get_logger().error(f"[CYL] exception cid={cid} act={act}: {e}")
+
     def _cb_gui_confirm(self, msg: String):
         """
         Nhận xác nhận từ operator qua GUI (topic /providesystem/gui_confirm).
@@ -1774,6 +1981,7 @@ class CartridgeSystem(Node):
                     mot = self.servos.get(sid)
                     if mot:
                         mot.acknowledge_faults()
+                        self._ready_until.pop(sid, None)
                         self.get_logger().info(f"Acknowledge faults cho Servo {sid} (như FAS)")
                 except Exception as e:
                     self.get_logger().warn(f"Lỗi khi clear servo: {e}")
@@ -1934,6 +2142,10 @@ class CartridgeSystem(Node):
 
         # ── STATE 3: chỉ cho MANUAL, operator nhấn nút (AUTO tự trigger qua _can_start_s3) ──────────
         if cmd in ('STATE3', 'STATE_3', 'S3'):
+            if not self._conf('output_stack_present', True):
+                self._notify('warn', 'STATE3 disabled',
+                             'output_stack_present=false — cụm Servo3/CPX 254 chưa lắp')
+                return
             if self.operation_mode != 'manual':
                 self._notify('warn', 'STATE3 manual only',
                              'Trong AUTO/AI mode hệ thống tự trigger STATE3')
@@ -1959,6 +2171,10 @@ class CartridgeSystem(Node):
 
         # ── STATE 4: chỉ cho MANUAL, operator nhấn nút (AUTO tự trigger khi _s4_trigger=True) ──────────
         if cmd in ('STATE4', 'STATE_4', 'S4'):
+            if not self._conf('output_stack_present', True):
+                self._notify('warn', 'STATE4 disabled',
+                             'output_stack_present=false — cụm OutX/OutY/CPX 254 chưa lắp')
+                return
             if self.operation_mode != 'manual':
                 self._notify('warn', 'STATE4 manual only',
                              'Trong AUTO/AI mode hệ thống tự trigger STATE4 (qua /robot/done_tray_output)')
@@ -2118,8 +2334,12 @@ class CartridgeSystem(Node):
 
 
     def _enforce_danger_zones(self):
-        inx = self._pos(1)
-        iny = self._pos(2)
+        # Hot path 20Hz — dùng cached position để KHÔNG chiếm _servo_lock mỗi tick.
+        # Trade-off: ~100ms staleness chấp nhận được cho danger zone wide envelope
+        # (min/max threshold), không phải precision check như _at_position.
+        # Nếu cache chưa có (lần đầu sau startup) → skip tick này.
+        inx = self._pos_cached(1)
+        iny = self._pos_cached(2)
         if inx is None or iny is None: return
         
         danger_min = getattr(self.config, 'inx_danger_zone_min', 80.0)
@@ -2197,6 +2417,8 @@ class CartridgeSystem(Node):
         (S16 OFF) nên block #2 không kích hoạt.
         Returns: (ok: bool, reason: str)
         """
+        if not self._conf('cyl3_present', True):
+            return True, ""
         s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
         if not s15:
             return False, "S15 OFF (Cyl3 chưa retract)"
@@ -2208,9 +2430,25 @@ class CartridgeSystem(Node):
         """
         Global safety: S13_OUT1_TRAYPOS1 + S14_OUT2_TRAYPOS1 cùng OFF
         ⇒ không có khay tại Tray Pos1 ⇒ force Cyl3 RETRACT.
-        Chạy mỗi tick, KHÔNG thuộc state nào — có thể override Cyl3 extend ở STATE 2.
-        Edge-trigger log + refresh IO mỗi 1s khi điều kiện vẫn đúng.
+        Chạy mỗi tick. Edge-trigger log + refresh IO mỗi 1s khi điều kiện vẫn đúng.
+
+        LOCK-OUT trong STATE 2A:
+        Khi đã trigger STATE 2 (state_in ∈ S2A_*), watchdog này bị disable. Mục đích:
+        operator KHÔNG được phép lấy khay output ra giữa chu trình STATE 2 — Cyl3
+        phải giữ chặt khay cho đến khi S2A hoàn tất + Cyl3 extend khay mới ở A9b.
+        Ngoài STATE 2A (IDLE, S1_*, STATE 3/4) watchdog hoạt động bình thường, cho
+        phép operator lấy khay output bất kỳ lúc nào.
         """
+        if not self._conf('cyl3_present', True):
+            return
+        # Lock-out trong STATE 2A
+        if self.state_in.name.startswith('S2A_'):
+            if self._cyl3_safety_active:
+                self._cyl3_safety_active = False
+                self.get_logger().info(
+                    "[SAFETY] Đang ở STATE 2A — disable S13/S14 watchdog (giữ Cyl3 cố định khay)"
+                )
+            return
         s13, s14 = self._snap(S13_OUT1_TRAYPOS1, S14_OUT2_TRAYPOS1)
         both_off = (not s13) and (not s14)
         now = time.time()
@@ -2305,7 +2543,7 @@ class CartridgeSystem(Node):
 
     def _positions_bg_loop(self):
         """
-        Thread nền publish vị trí servo mỗi 500ms lên /providesystem/servo_positions.
+        Thread nền publish vị trí servo mỗi 100ms (10Hz) lên /providesystem/servo_positions.
         Chạy tách biệt khỏi control loop để Modbus read latency không block 20Hz timer.
         Dừng khi _pos_thread_stop=True (set bởi destroy_node).
         """
@@ -2314,18 +2552,50 @@ class CartridgeSystem(Node):
                 self._publish_positions()
             except Exception as e:
                 self.get_logger().warn(f"[pos_bg] {e}")
-            time.sleep(0.5)
+            time.sleep(0.1)
 
     def _publish_positions(self):
         """Đọc vị trí tất cả servo và publish JSON lên /providesystem/servo_positions.
         JSON chứa {sid: mm, _jog_vel: m/s, _fas_vel: {sid: m/s}}.
-        GUI dùng để hiển thị vị trí live và tốc độ JOG hiện tại."""
+        GUI dùng để hiển thị vị trí live và tốc độ JOG hiện tại.
+
+        Tối ưu hot path:
+        1. Per-servo: nếu time.time() - _servo_motion_t[sid] > _idle_skip_modbus_s
+           (mặc định 2s) → servo idle lâu → SKIP Modbus, reuse cache. Giảm lock
+           contention khi không có hoạt động → JOG cold press grab lock nhanh.
+        2. Khi servo active (JOG/move/home) → đọc tươi Modbus mỗi cycle.
+        3. Try-acquire 50ms — nếu lock vẫn bận (state machine giữ) → fallback cache.
+
+        Mục đích: KHÔNG bao giờ chặn JOG vì publish positions, và tự động giảm
+        Modbus traffic khi hệ thống idle để JOG cold press phản hồi tức thì.
+        """
         try:
             pos = {}
-            for sid in self.servos:
-                p = self._pos(sid)
+            now = time.time()
+            idle_skip = self._idle_skip_modbus_s
+            for sid, mot in self.servos.items():
+                cached = self._pos_cache.get(sid)
+                # ── (1) Idle skip: servo không có motion command gần đây → reuse cache
+                last_motion = self._servo_motion_t.get(sid, 0.0)
+                if now - last_motion > idle_skip and cached is not None:
+                    pos[str(sid)] = cached
+                    continue
+                # ── (2/3) Đọc tươi (try-acquire) hoặc fallback cache nếu lock busy
+                if not self._servo_lock.acquire(timeout=0.05):
+                    if cached is not None:
+                        pos[str(sid)] = cached
+                    continue
+                try:
+                    counts = mot.current_position()
+                    p = (counts - self.zero_offset.get(sid, 0)) / COUNTS_PER_MM
+                except Exception:
+                    p = cached
+                finally:
+                    self._servo_lock.release()
                 if p is not None:
-                    pos[str(sid)] = round(p, 2)
+                    val = round(p, 2)
+                    pos[str(sid)] = val
+                    self._pos_cache[sid] = val
             data = pos.copy()
             data['_jog_vel'] = self._jog_velocity_ms
             if self._fas_jog_vel:
@@ -3192,12 +3462,79 @@ class CartridgeSystem(Node):
     # STATE 2: Thay khay Input  (giữ nguyên logic gốc)
     # ══════════════════════════════════════════════════════════════
 
+    def _s2a_preflight_scan(self):
+        """
+        Snapshot toàn bộ sensor liên quan tại thời điểm trigger STATE 2A (gọi từ A1).
+        Log structured + set các snapshot cho workflow sau dùng:
+          • _s6_snapshot       — S6 (tray at outP1) → quyết định path scan ở A7
+          • _s13_snapshot      — S13 limit switch tại Pos1 (output)
+          • _s14_snapshot      — S14 limit switch tại Pos1 (output)
+          • _s15_snapshot      — S15 (Cyl3 retracted) — informational
+          • _s16_snapshot      — S16 (Cyl3 extended) — informational
+
+        Cyl1 sensor (S9/S10) đọc nhưng KHÔNG snapshot — workflow sau dùng live (state
+        machine kích extend/retract liên tục, snapshot sẽ stale ngay).
+
+        Cảnh báo (không block) khi sensor state không khớp expected:
+          • Cyl1 unknown (S9 OFF + S10 OFF) hoặc xung đột (S9 ON + S10 ON)
+          • Cyl3 unknown (S15 OFF + S16 OFF) hoặc xung đột
+        """
+        s6, s7 = self._snap(S6_CHECK_TRAY_P1, S7_TRAY_AT_ROBOT)
+        s9, s10 = self._snap(S9_CYL1_RETRACTED, S10_CYL1_EXTENDED)
+        s13, s14 = self._snap(S13_OUT1_TRAYPOS1, S14_OUT2_TRAYPOS1)
+        s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
+        inx = self._pos_cached(1)
+        iny = self._pos_cached(2)
+        inx_str = f"{inx:.1f}mm" if inx is not None else "?"
+        iny_str = f"{iny:.1f}mm" if iny is not None else "?"
+
+        # Lưu snapshot dùng cho workflow sau
+        self._s6_snapshot  = s6
+        self._s13_snapshot = s13
+        self._s14_snapshot = s14
+        self._s15_snapshot = s15
+        self._s16_snapshot = s16
+
+        self.get_logger().info(
+            f"[S2A PRE-FLIGHT] S6={int(s6)} S7={int(s7)} "
+            f"| Cyl1 S9={int(s9)} S10={int(s10)} "
+            f"| Cyl3 S15={int(s15)} S16={int(s16)} "
+            f"| OutLim S13={int(s13)} S14={int(s14)} "
+            f"| InX={inx_str} InY={iny_str}"
+        )
+        self.get_logger().info(
+            f"[S2A PRE-FLIGHT] decision: S6={s6} → "
+            f"{'jog do S4' if s6 else 'thẳng row1'}"
+        )
+
+        # Sanity warnings (không block — chỉ log để operator biết)
+        if s9 and s10:
+            self.get_logger().warn(
+                "[S2A PRE-FLIGHT] Cyl1 CONFLICT: S9+S10 cùng ON — cảm biến/cơ khí lỗi"
+            )
+        elif not s9 and not s10:
+            self.get_logger().warn(
+                "[S2A PRE-FLIGHT] Cyl1 UNKNOWN: S9+S10 cùng OFF — piston ở giữa hành trình"
+            )
+        if s15 and s16:
+            self.get_logger().warn(
+                "[S2A PRE-FLIGHT] Cyl3 CONFLICT: S15+S16 cùng ON — cảm biến/cơ khí lỗi"
+            )
+        elif not s15 and not s16:
+            self.get_logger().warn(
+                "[S2A PRE-FLIGHT] Cyl3 UNKNOWN: S15+S16 cùng OFF — piston ở giữa hành trình"
+            )
+
     def _s2a_check_interlock(self):
         """
         STATE 2A bước A1 (entry point): chuẩn bị state cho luồng thay khay input.
 
         Pre-condition: state_in vừa chuyển từ IDLE → S2A_CHECK_INTERLOCK (qua nút
         STATE 2 trong manual hoặc qua _can_start_s2a trong auto).
+
+        Khi vào A1 (first tick) gọi `_s2a_preflight_scan()` để snapshot toàn bộ
+        sensor liên quan + log structured. Snapshots dùng cho workflow sau:
+        S6 cho A7 path decision, S13-S16 cho monitor/debug.
 
         Drive warm-up (FAS firmware quirk): tương tự _s1_confirm_safe — sau homing
         (referencing_task) drive accept position_task nhưng không chuyển động vật lý.
@@ -3220,14 +3557,10 @@ class CartridgeSystem(Node):
 
         if not self._cmd_sent_in:
             self._pub_cartridge_busy(True)
-            self._s6_snapshot       = self.sensor(S6_CHECK_TRAY_P1)
+            self._s2a_preflight_scan()
             self._s4_armed_out      = False
             self._output_row        = 0
             self._output_target_pos = 0.0
-            self.get_logger().info(
-                f"S2 Step1: S6={self._s6_snapshot} "
-                f"({'jog do S4' if self._s6_snapshot else 'thang row1'})"
-            )
             self._cmd_sent_in = True
         if self._iny_safe():
             self._enter_in(SystemState.S2A_INX_MOVE_POS_PICK)
@@ -3278,7 +3611,7 @@ class CartridgeSystem(Node):
         Next: S2A_WAIT_CYL_EXT (chờ S10 ON xác nhận Cyl1 đã extended).
         """
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.iny_target2)
+            ok = self._nb_move(2, self.config.iny_target2, vel=150)
             if not ok:
                 self._log_once("S2A_A3_FAIL", "S2A A3: INY 87mm fail")
                 return
@@ -3322,7 +3655,7 @@ class CartridgeSystem(Node):
         Next: S2A_INX_PLACE_TRAY_OUT_POS1 (đưa InX ra vị trí output stack).
         """
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.iny_home)
+            ok = self._nb_move(2, self.config.iny_home, vel=150)
             if not ok:
                 self._log_once("S2A_A5_FAIL", "S2A A5: INY 10mm fail")
                 return
@@ -3389,6 +3722,16 @@ class CartridgeSystem(Node):
             return
 
         if not self._cmd_sent_in:
+            # REFRESH S6 trước khi quyết định path scan — A1 snapshot có thể stale
+            # (A1 → A7 cách ~5-10s, hardware có thể đổi nếu STATE 2A vừa bắt đầu).
+            # Trong STATE 2A đã có lock-out S13/S14 watchdog → S6 chỉ đổi nếu sensor
+            # nhiễu / hardware fault. Refresh để placement decision dùng giá trị thật.
+            fresh_s6 = self.sensor(S6_CHECK_TRAY_P1)
+            if fresh_s6 != self._s6_snapshot:
+                self.get_logger().info(
+                    f"[S2A SCAN] S6 thay đổi từ A1: {self._s6_snapshot}→{fresh_s6} — refresh"
+                )
+                self._s6_snapshot = fresh_s6
             ok = self._nb_move(2, self.config.target_scaninp1, vel=self.config.iny_scan_vel)
             if not ok:
                 self._log_once("S2A_SCAN_FAIL", "S2A scan: nb_move fail")
@@ -3574,7 +3917,12 @@ class CartridgeSystem(Node):
         STATE 2A bước A9b: extend Cyl3 (ch6=ON, ch7=OFF) cố định khay tại Tray Pos1.
         Pre-condition: S6_CHECK_TRAY_P1 ON (xác nhận khay đã sit).
         Bắn lệnh extend rồi chuyển NGAY sang S2A_INY_FINAL — InY về home song song với Cyl3 đang đẩy ra.
+        Nếu cyl3_present=False (hardware chưa đấu) → skip thẳng sang S2A_INY_FINAL.
         """
+        if not self._conf('cyl3_present', True):
+            self.get_logger().info("[S2A] Cyl3 disabled (cyl3_present=false) → skip extend, vào S2A_INY_FINAL")
+            self._enter_in(SystemState.S2A_INY_FINAL)
+            return
         if not self.sensor(S6_CHECK_TRAY_P1):
             self._log_once("S2A_A9B_WAIT_S6", "A9b: cho S6 ON truoc khi extend Cyl3")
             return
@@ -3611,7 +3959,7 @@ class CartridgeSystem(Node):
             self._log_once("S2A_INX20", "A11: Cho INY safe")
             return
         if not self._cmd_sent_in:
-            ok = self._nb_move(1, self.config.inx_safe)
+            ok = self._nb_move(1, self.config.inx_safe, vel=200)
             if not ok:
                 self._log_once("S2A_A11_FAIL", "S2A A11: INX safe fail")
                 return

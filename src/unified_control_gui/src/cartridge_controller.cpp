@@ -21,6 +21,7 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
     pause_button_pub_     = node_->create_publisher<std_msgs::msg::Bool>("/system/pause_button", qos);
     gui_confirm_pub_      = node_->create_publisher<std_msgs::msg::String>("/providesystem/gui_confirm", qos);
     set_target_row_pub_   = node_->create_publisher<std_msgs::msg::String>("/providesystem/set_target_row", qos);
+    cyl_cmd_pub_          = node_->create_publisher<std_msgs::msg::String>("/providesystem/cyl_cmd", qos);
 
     // ── Simulate robot signals (nút STATE 2 / STATE 4 trong GUI) ─
     done_tray_input_pub_  = node_->create_publisher<std_msgs::msg::Bool>("/robot/done_tray_input", qos);
@@ -242,6 +243,15 @@ void CartridgeController::confirmOutput()
 {
     // Giữ để tương thích QML cũ
     simulateDoneTrayOutput();
+}
+
+// ── Cylinder manual control ───────────────────────────────────────
+
+void CartridgeController::cylinderCmd(int cylId, bool extend)
+{
+    QString cmd = QString("%1 %2").arg(cylId).arg(extend ? "extend" : "retract");
+    publishString(cyl_cmd_pub_, cmd);
+    addLog(QString("Cyl%1 %2").arg(cylId).arg(extend ? "EXTEND" : "RETRACT"), "info");
 }
 
 // ── Config ────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ Item {
     id: cameraPageRoot
 
     property string currentTime: Qt.formatDateTime(new Date(), "yyyy-MM-dd hh:mm:ss")
-    property bool rowLocked: (robotController.systemStatus || "").toUpperCase() === "INIT_LOAD_CHAMBER_DIRECT"
+    property bool rowLocked: (robotController.systemStatus || "").toUpperCase() === "INIT_LOAD_CHAMBER_DIRECT" && robotController.selectedRow >= 1
     property bool modeLocked: false
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
 

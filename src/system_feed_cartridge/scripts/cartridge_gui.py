@@ -970,9 +970,71 @@ function clSv(id) {
 }
 function mvSv(id) {
   if(mode!=='jog'){ toast('🔒 JOG mode required','wn'); return; }
-  const pos=parseFloat(document.getElementById('pi'+id)?.value);
-  if(isNaN(pos)){ toast('❌ Invalid pos','er'); return; }
-  api('/api/move_servo',{cmd:id+':'+pos});
+  const inp=document.getElementById('pi'+id);
+  const raw=(inp?.value||'').trim();
+  if(!raw){ toast('❌ Chưa nhập vị trí','er'); return; }
+  const pos=parseFloat(raw);
+  if(isNaN(pos)){ toast('❌ Vị trí không hợp lệ: '+raw,'er'); return; }
+  if(pos<-1000||pos>1000){ toast('❌ Vượt giới hạn (-1000..1000mm)','er'); return; }
+  const sname=(SERVOS.find(x=>x.id===id)?.name)||('S'+id);
+  fetch('/api/jog',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({cmd:id+' move '+pos.toFixed(2)})});
+  log('RUN S'+id+' '+sname+' → '+pos.toFixed(2)+' mm','in');
+  toast('▶ Move '+sname+' → '+pos.toFixed(2)+' mm','ok');
+}
+
+// ─── Numpad ─────────────────────────────────────────────
+let _npTargetId=null;
+function openNumpad(id) {
+  if(mode!=='jog'){ toast('🔒 JOG mode required','wn'); return; }
+  _npTargetId=id;
+  const sname=(SERVOS.find(x=>x.id===id)?.name)||('S'+id);
+  const cur=document.getElementById('pi'+id)?.value||'';
+  const live=document.getElementById('sp'+id)?.textContent||'-- mm';
+  document.getElementById('npTitle').textContent='S'+id+' · '+sname;
+  document.getElementById('npCur').textContent=live;
+  document.getElementById('npDisp').textContent=cur||'0';
+  document.getElementById('numpadModal').style.display='flex';
+}
+function closeNumpad() {
+  document.getElementById('numpadModal').style.display='none';
+  _npTargetId=null;
+}
+function npKey(k) {
+  const el=document.getElementById('npDisp');
+  let v=el.textContent;
+  if(v==='0'&&k!=='.') v='';
+  if(k==='.'&&v.includes('.')) return;
+  if(v.length>=10) return;
+  el.textContent=v+k;
+}
+function npBack() {
+  const el=document.getElementById('npDisp');
+  const v=el.textContent;
+  el.textContent=(v.length<=1)?'0':v.slice(0,-1);
+}
+function npClear() { document.getElementById('npDisp').textContent='0'; }
+function npSign() {
+  const el=document.getElementById('npDisp');
+  let v=el.textContent;
+  if(v==='0') return;
+  el.textContent=v.startsWith('-')?v.slice(1):'-'+v;
+}
+function npOk() {
+  if(_npTargetId===null) return;
+  const v=document.getElementById('npDisp').textContent;
+  const n=parseFloat(v);
+  if(isNaN(n)){ toast('❌ Giá trị không hợp lệ','er'); return; }
+  const inp=document.getElementById('pi'+_npTargetId);
+  if(inp) inp.value=n.toFixed(2);
+  log('Numpad S'+_npTargetId+' set '+n.toFixed(2)+' mm','in');
+  closeNumpad();
+}
+function npRunNow() {
+  if(_npTargetId===null) return;
+  const id=_npTargetId;
+  npOk();
+  if(document.getElementById('pi'+id)?.value) mvSv(id);
 }
 
 // ─── Config ─────────────────────────────────────────────
@@ -1059,9 +1121,12 @@ function buildServos() {
       <div class="sfw"><button class="btn g jb" onclick="hSv(${s.id})">HOMING</button></div>
       <div class="sfw"><button class="btn o jb" onclick="clSv(${s.id})">CLEAR</button></div>
       <div class="pr">
-        <input type="number" class="pi" id="pi${s.id}" placeholder="0.0" step="0.1">
+        <input type="text" class="pi" id="pi${s.id}" placeholder="0.0"
+          readonly inputmode="none"
+          onclick="openNumpad(${s.id})"
+          style="cursor:pointer;caret-color:transparent">
         <span style="font-size:9px;color:var(--dim)">mm</span>
-        <button class="btn ac jb" onclick="mvSv(${s.id})" style="padding:5px 12px;font-size:15px">GO</button>
+        <button class="btn ac jb" onclick="mvSv(${s.id})" style="padding:5px 12px;font-size:15px">RUN</button>
       </div>`;
     list.appendChild(d);
   });
@@ -1243,6 +1308,57 @@ log('GUI v5 ready — chọn mode để bắt đầu','ok');
       <button class="btn"   style="flex:1;padding:7px;font-size:12px"
         onclick="closeVelModal()">Hủy</button>
     </div>
+  </div>
+</div>
+
+<!-- ════ Numpad Modal (move servo to position) ════ -->
+<style>
+.npk{padding:14px 0;font-size:18px;font-weight:700;background:var(--card);
+  border:1px solid var(--border);border-radius:6px;color:var(--text);
+  cursor:pointer;font-family:inherit;user-select:none;transition:background .08s;}
+.npk:hover{background:#0a2640;}
+.npk:active{background:#134357;}
+.npk.op{background:#1a1428;border-color:var(--purple);color:var(--purple);}
+.npk.ok{background:#0a2e22;border-color:var(--green);color:var(--green);}
+.npk.cn{background:#3a1a0a;border-color:var(--orange);color:var(--orange);}
+.npk.go{background:#082030;border-color:var(--cyan);color:var(--cyan);}
+</style>
+<div id="numpadModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);
+  z-index:950;align-items:center;justify-content:center"
+  onclick="if(event.target===this)closeNumpad()">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;
+    padding:18px 20px;min-width:300px;box-shadow:0 8px 32px #000a">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">
+        Nhập vị trí · <span id="npTitle" style="color:var(--cyan)">--</span>
+      </div>
+      <div style="font-size:10px;color:var(--dim)">live: <span id="npCur" style="color:var(--green);font-family:monospace">--</span></div>
+    </div>
+    <div id="npDisp" style="background:#000a;border:1px solid var(--border);
+      border-radius:6px;padding:12px 14px;margin-bottom:10px;text-align:right;
+      font-size:26px;font-weight:700;font-family:'JetBrains Mono',monospace;
+      color:var(--green);min-height:36px;letter-spacing:1px">0</div>
+    <div style="font-size:9px;color:var(--dim);text-align:right;margin:-6px 4px 10px 0">mm</div>
+    <div style="display:grid;grid-template-columns:repeat(4,60px);gap:6px">
+      <button class="npk" onclick="npKey('7')">7</button>
+      <button class="npk" onclick="npKey('8')">8</button>
+      <button class="npk" onclick="npKey('9')">9</button>
+      <button class="npk op" onclick="npBack()">←</button>
+      <button class="npk" onclick="npKey('4')">4</button>
+      <button class="npk" onclick="npKey('5')">5</button>
+      <button class="npk" onclick="npKey('6')">6</button>
+      <button class="npk op" onclick="npClear()">C</button>
+      <button class="npk" onclick="npKey('1')">1</button>
+      <button class="npk" onclick="npKey('2')">2</button>
+      <button class="npk" onclick="npKey('3')">3</button>
+      <button class="npk op" onclick="npSign()">±</button>
+      <button class="npk" onclick="npKey('0')">0</button>
+      <button class="npk" onclick="npKey('.')">.</button>
+      <button class="npk cn" onclick="closeNumpad()">Hủy</button>
+      <button class="npk ok" onclick="npOk()">OK</button>
+    </div>
+    <button class="npk go" style="width:100%;margin-top:8px;padding:12px 0;font-size:14px"
+      onclick="npRunNow()">▶ OK + RUN ngay</button>
   </div>
 </div>
 </body>
