@@ -2426,10 +2426,24 @@ class CartridgeSystem(Node):
         """
         Global safety: S13_OUT1_TRAYPOS1 + S14_OUT2_TRAYPOS1 cùng OFF
         ⇒ không có khay tại Tray Pos1 ⇒ force Cyl3 RETRACT.
-        Chạy mỗi tick, KHÔNG thuộc state nào — có thể override Cyl3 extend ở STATE 2.
-        Edge-trigger log + refresh IO mỗi 1s khi điều kiện vẫn đúng.
+        Chạy mỗi tick. Edge-trigger log + refresh IO mỗi 1s khi điều kiện vẫn đúng.
+
+        LOCK-OUT trong STATE 2A:
+        Khi đã trigger STATE 2 (state_in ∈ S2A_*), watchdog này bị disable. Mục đích:
+        operator KHÔNG được phép lấy khay output ra giữa chu trình STATE 2 — Cyl3
+        phải giữ chặt khay cho đến khi S2A hoàn tất + Cyl3 extend khay mới ở A9b.
+        Ngoài STATE 2A (IDLE, S1_*, STATE 3/4) watchdog hoạt động bình thường, cho
+        phép operator lấy khay output bất kỳ lúc nào.
         """
         if not self._conf('cyl3_present', True):
+            return
+        # Lock-out trong STATE 2A
+        if self.state_in.name.startswith('S2A_'):
+            if self._cyl3_safety_active:
+                self._cyl3_safety_active = False
+                self.get_logger().info(
+                    "[SAFETY] Đang ở STATE 2A — disable S13/S14 watchdog (giữ Cyl3 cố định khay)"
+                )
             return
         s13, s14 = self._snap(S13_OUT1_TRAYPOS1, S14_OUT2_TRAYPOS1)
         both_off = (not s13) and (not s14)
@@ -3641,6 +3655,16 @@ class CartridgeSystem(Node):
             return
 
         if not self._cmd_sent_in:
+            # REFRESH S6 trước khi quyết định path scan — A1 snapshot có thể stale
+            # (A1 → A7 cách ~5-10s, hardware có thể đổi nếu STATE 2A vừa bắt đầu).
+            # Trong STATE 2A đã có lock-out S13/S14 watchdog → S6 chỉ đổi nếu sensor
+            # nhiễu / hardware fault. Refresh để placement decision dùng giá trị thật.
+            fresh_s6 = self.sensor(S6_CHECK_TRAY_P1)
+            if fresh_s6 != self._s6_snapshot:
+                self.get_logger().info(
+                    f"[S2A SCAN] S6 thay đổi từ A1: {self._s6_snapshot}→{fresh_s6} — refresh"
+                )
+                self._s6_snapshot = fresh_s6
             ok = self._nb_move(2, self.config.target_scaninp1, vel=self.config.iny_scan_vel)
             if not ok:
                 self._log_once("S2A_SCAN_FAIL", "S2A scan: nb_move fail")
