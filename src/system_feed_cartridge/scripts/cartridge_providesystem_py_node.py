@@ -942,11 +942,28 @@ class CartridgeSystem(Node):
         if servo_id == 1: self._inx_moving = False
         if servo_id == 2: self._iny_moving = False
 
+    def _pos_cached(self, servo_id: int) -> Optional[float]:
+        """
+        Đọc vị trí cached (mm) — KHÔNG gọi Modbus, KHÔNG cần _servo_lock.
+        Dùng cho hot path control_loop (20Hz) để tránh chiếm lock liên tục,
+        nhường lock cho JOG/STOP/state machine motion commands.
+
+        Cache update mỗi ~100ms bởi _positions_bg_loop._publish_positions().
+        Trả None nếu cache chưa populate (lần đầu sau startup, trước khi
+        _positions_bg_loop tick đầu tiên hoàn tất).
+
+        ⚠️ KHÔNG dùng cho _at_position() / _arrived() — các check đó cần
+        giá trị tươi để verify servo settle đúng vị trí trước sub-state nguy hiểm.
+        """
+        return self._pos_cache.get(servo_id)
+
     def _pos(self, servo_id: int) -> Optional[float]:
         """
         Đọc vị trí hiện tại của servo (mm, tính từ zero_offset sau homing).
         Công thức: (encoder_counts - zero_offset) / COUNTS_PER_MM
         Trả về 0.0 nếu servo không kết nối, None nếu có lỗi đọc.
+        Đồng thời update _pos_cache để các caller cached (vd _enforce_danger_zones)
+        có dữ liệu tươi hơn ngay sau khi _pos() thực sự được gọi.
         """
         mot = self.servos.get(servo_id)
         if not mot:
@@ -954,7 +971,9 @@ class CartridgeSystem(Node):
         try:
             with self._servo_lock:
                 counts = mot.current_position()
-            return (counts - self.zero_offset.get(servo_id, 0)) / COUNTS_PER_MM
+            mm = (counts - self.zero_offset.get(servo_id, 0)) / COUNTS_PER_MM
+            self._pos_cache[servo_id] = round(mm, 2)
+            return mm
         except Exception as e:
             self.get_logger().warn(f"S{servo_id} _pos() error: {e}")
             return None
@@ -2294,8 +2313,12 @@ class CartridgeSystem(Node):
 
 
     def _enforce_danger_zones(self):
-        inx = self._pos(1)
-        iny = self._pos(2)
+        # Hot path 20Hz — dùng cached position để KHÔNG chiếm _servo_lock mỗi tick.
+        # Trade-off: ~100ms staleness chấp nhận được cho danger zone wide envelope
+        # (min/max threshold), không phải precision check như _at_position.
+        # Nếu cache chưa có (lần đầu sau startup) → skip tick này.
+        inx = self._pos_cached(1)
+        iny = self._pos_cached(2)
         if inx is None or iny is None: return
         
         danger_min = getattr(self.config, 'inx_danger_zone_min', 80.0)
