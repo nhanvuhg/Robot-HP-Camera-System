@@ -409,7 +409,7 @@
                         id: topCardsRow
                         x: 0; y: 0
                         width: parent.width - root.sensorW - root.gap
-                        height: 180
+                        height: 260
                         spacing: root.gap
 
                         // ── Mode Selection ──────────────────────
@@ -713,8 +713,8 @@
                                         Layout.fillWidth: true; Layout.fillHeight: true
                                         spacing: 4
                                         Text {
-                                            text: "Cyl 1"; color: root.cCyan
-                                            font.pixelSize: 12; font.bold: true; Layout.alignment: Qt.AlignHCenter
+                                            text: "CYLINDER INY"; color: root.cCyan
+                                            font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter
                                         }
                                         CBtn {
                                             Layout.fillWidth: true; Layout.fillHeight: true
@@ -737,8 +737,8 @@
                                         Layout.fillWidth: true; Layout.fillHeight: true
                                         spacing: 4
                                         Text {
-                                            text: "Cyl 2"; color: root.cCyan
-                                            font.pixelSize: 12; font.bold: true; Layout.alignment: Qt.AlignHCenter
+                                            text: "CYLINDER OUTY"; color: root.cCyan
+                                            font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter
                                         }
                                         CBtn {
                                             Layout.fillWidth: true; Layout.fillHeight: true
@@ -761,8 +761,8 @@
                                         Layout.fillWidth: true; Layout.fillHeight: true
                                         spacing: 4
                                         Text {
-                                            text: "Cyl 3"; color: root.cCyan
-                                            font.pixelSize: 12; font.bold: true; Layout.alignment: Qt.AlignHCenter
+                                            text: "CYLINDER HOLDTRAY"; color: root.cCyan
+                                            font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter
                                         }
                                         CBtn {
                                             Layout.fillWidth: true; Layout.fillHeight: true
