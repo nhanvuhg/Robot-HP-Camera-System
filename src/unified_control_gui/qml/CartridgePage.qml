@@ -596,19 +596,39 @@
                                     font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // 2x2 Square Grid for 4 buttons
-                                GridLayout {
-                                    Layout.fillWidth: true; Layout.fillHeight: true
-                                    columns: 2; columnSpacing: 4; rowSpacing: 4
-                                    CBtn {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        lbl: "START"
-                                        bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
-                                        onClicked: cartridgeController.startSystem()
+                                // 2 Rows, Column 1 (START/STOP) is wider than Column 2 (RESUME/PAUSE)
+                                ColumnLayout {
+                                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
+                                    RowLayout {
+                                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
+                                        CBtn {
+                                            Layout.preferredWidth: parent.width * 0.58
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            lbl: "START"
+                                            bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
+                                            onClicked: cartridgeController.startSystem()
+                                        }
+                                        CBtn {
+                                            Layout.preferredWidth: parent.width * 0.38
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            lbl: "RESUME"
+                                            bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
+                                            onClicked: cartridgeController.hmiResume()
+                                        }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "RESUME"; bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
+                                    RowLayout {
+                                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
+                                        CBtn {
+                                            Layout.preferredWidth: parent.width * 0.58
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            lbl: "STOP"
+                                            bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                                        CBtn {
+                                            Layout.preferredWidth: parent.width * 0.38
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            lbl: "PAUSE"
+                                            bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
+                                    }
                                 }
                             }
                         }
@@ -882,27 +902,27 @@
 
                                              // − STOP + (jog hoặc manual mode)
                                              Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
-                                                 CBtn { lbl:"−"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
+                                                 CBtn { lbl:"−"; padV:10; padH:16; fontSize: 22; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
                                                      onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-", cardItem.jogVelMms) }
                                                      onReleased: cartridgeController.jogStop(model.sid) }
-                                                 CBtn { lbl:"STOP"; padV:10; padH:8; fontSize:14; bg:"#4d1a1a"; bc:root.cRed; tc:root.cRed; onClicked: cartridgeController.jogStop(model.sid) }
-                                                 CBtn { lbl:"+"; padV:10; padH:16; fontSize:18; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
+                                                 CBtn { lbl:"STOP"; padV:10; padH:8; fontSize: 18; bg:"#4d1a1a"; bc:root.cRed; tc:root.cRed; onClicked: cartridgeController.jogStop(model.sid) }
+                                                 CBtn { lbl:"+"; padV:10; padH:16; fontSize: 22; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
                                                      onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+", cardItem.jogVelMms) }
                                                      onReleased: cartridgeController.jogStop(model.sid) }
                                              }
 
                                              // HOMING (jog hoặc manual mode)
-                                             CBtn { lbl:"HOMING"; w:parent.width; padV:12; padH:12; fontSize:16; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
+                                             CBtn { lbl:"HOMING"; w:parent.width; padV:12; padH:12; fontSize: 20; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
 
                                              // CLEAR (always available)
-                                             CBtn { lbl:"CLEAR"; w:parent.width; padV:12; padH:12; fontSize:16; bg:"#4d3a0a"; bc:root.cOrange; tc:root.cOrange; onClicked: cartridgeController.clearServo(model.sid) }
+                                             CBtn { lbl:"CLEAR"; w:parent.width; padV:12; padH:12; fontSize: 20; bg:"#4d3a0a"; bc:root.cOrange; tc:root.cOrange; onClicked: cartridgeController.clearServo(model.sid) }
 
                                              // pos-row (jog mode required)
                                              Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
                                                  Rectangle { width:72; height:34; radius:6; color:root.cBg; border.color:root.cBorder
                                                      TextInput { id:posIn; anchors.fill: parent; anchors.margins: 4; text:"0.0"; font.pixelSize:15; color:root.cText; horizontalAlignment:TextInput.AlignHCenter; verticalAlignment:TextInput.AlignVCenter } }
                                                  Text { text:"mm"; color:root.cDim; font.pixelSize:12; anchors.verticalCenter:parent.verticalCenter; rightPadding:2 }
-                                                 CBtn { lbl:"RUN"; padV:10; padH:14; fontSize:16; bg:root.cAccent; bc:root.cAccent; tc:"#fff"; active:servoRow.isJog
+                                                 CBtn { lbl:"RUN"; padV:10; padH:14; fontSize: 20; bg:root.cAccent; bc:root.cAccent; tc:"#fff"; active:servoRow.isJog
                                                      onClicked: { if(servoRow.isJog) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } } }
                                              }
                                          }
@@ -927,7 +947,7 @@
                             RowLayout { width: parent.width; height: 18
                                 Text { text: "LOG ACTIVITY"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; padV:4; padH:10; fontSize:11; bg:root.cCard; bc:root.cBorder; tc:root.cText; onClicked: cartridgeController.clearLog() }
+                                CBtn { lbl:"Clear"; padV:4; padH:10; fontSize: 15; bg:root.cCard; bc:root.cBorder; tc:root.cText; onClicked: cartridgeController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 18 - 4
@@ -1208,7 +1228,7 @@
                             }
 
                             Row { spacing: 6; topPadding: 6
-                                CBtn { lbl:"Save All"; padV:8; padH:18; fontSize:13; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                                CBtn { lbl:"Save All"; padV:8; padH:18; fontSize: 17; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
                                     onClicked: {
                                         for (var i = 0; i < servoRepeater2.count; i++) {
                                             var item = servoRepeater2.itemAt(i)
@@ -1217,7 +1237,7 @@
                                         }
                                     }
                                 }
-                                CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize:13; bg:root.cCard; bc:root.cBorder; tc:root.cText; onClicked: page2Root.reloadConfig() }
+                                CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize: 17; bg:root.cCard; bc:root.cBorder; tc:root.cText; onClicked: page2Root.reloadConfig() }
                             }
                         }
                     }
@@ -1236,7 +1256,7 @@
                                 width: parent.width; height: 18
                                 Text { text: "CONFIG LOG"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; padV:3; padH:8; fontSize:10; bg:root.cCard; bc:root.cBorder; tc:root.cDim; onClicked: cartridgeController.clearLog() }
+                                CBtn { lbl:"Clear"; padV:3; padH:8; fontSize: 14; bg:root.cCard; bc:root.cBorder; tc:root.cDim; onClicked: cartridgeController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 22
@@ -1929,7 +1949,7 @@
                                 width: parent.width; height: 18
                                 Text { text: "ROBOT LOG"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; padV:3; padH:8; fontSize:10; bg:root.cCard; bc:root.cBorder; tc:root.cDim; onClicked: robotController.clearLog() }
+                                CBtn { lbl:"Clear"; padV:3; padH:8; fontSize: 14; bg:root.cCard; bc:root.cBorder; tc:root.cDim; onClicked: robotController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 22
@@ -1968,7 +1988,7 @@
             property bool  active: true
             property int   padV: 6
             property int   padH: 12
-            property int   fontSize: 12
+            property int   fontSize: 16
             property int   w: 0
             property bool  _pressed: false
             property bool  _hovered: false
@@ -2129,7 +2149,7 @@
                 }
 
                 Row { spacing: 6; topPadding: 8
-                    CBtn { lbl:"Save"; padV:8; padH:18; fontSize:13; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                    CBtn { lbl:"Save"; padV:8; padH:18; fontSize: 17; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
                         onClicked: {
                             var positions = {}
                             for (var i = 0; i < cfgRepeater.count; i++) {
@@ -2139,7 +2159,7 @@
                             cartridgeController.saveConfig(cfgCard.configKey, JSON.stringify(positions))
                         }
                     }
-                    CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize:13; bg:root.cCard; bc:root.cBorder; tc:root.cText
+                    CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize: 17; bg:root.cCard; bc:root.cBorder; tc:root.cText
                         onClicked: page2Root.reloadConfig()
                     }
                 }
@@ -2208,7 +2228,7 @@
                 }
 
                 Row { spacing: 6; topPadding: 8
-                    CBtn { lbl:"Save"; padV:8; padH:18; fontSize:13; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                    CBtn { lbl:"Save"; padV:8; padH:18; fontSize: 17; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
                         onClicked: {
                             var positions = {}
                             for (var i = 0; i < cfgZoneRepeater.count; i++) {
@@ -2223,7 +2243,7 @@
                             cartridgeController.saveConfig(cfgZoneCard.configKey, JSON.stringify(positions))
                         }
                     }
-                    CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize:13; bg:root.cCard; bc:root.cBorder; tc:root.cText
+                    CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize: 17; bg:root.cCard; bc:root.cBorder; tc:root.cText
                         onClicked: page2Root.reloadConfig()
                     }
                 }
