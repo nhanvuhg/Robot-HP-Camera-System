@@ -285,6 +285,10 @@ class CartridgeSystem(Node):
 
         # STATE 2A runtime
         self._s6_snapshot       = False
+        self._s13_snapshot      = False
+        self._s14_snapshot      = False
+        self._s15_snapshot      = False
+        self._s16_snapshot      = False
         self._output_row        = 0
         self._output_target_pos = 0.0
         self._s4_armed_out      = False
@@ -3458,12 +3462,79 @@ class CartridgeSystem(Node):
     # STATE 2: Thay khay Input  (giữ nguyên logic gốc)
     # ══════════════════════════════════════════════════════════════
 
+    def _s2a_preflight_scan(self):
+        """
+        Snapshot toàn bộ sensor liên quan tại thời điểm trigger STATE 2A (gọi từ A1).
+        Log structured + set các snapshot cho workflow sau dùng:
+          • _s6_snapshot       — S6 (tray at outP1) → quyết định path scan ở A7
+          • _s13_snapshot      — S13 limit switch tại Pos1 (output)
+          • _s14_snapshot      — S14 limit switch tại Pos1 (output)
+          • _s15_snapshot      — S15 (Cyl3 retracted) — informational
+          • _s16_snapshot      — S16 (Cyl3 extended) — informational
+
+        Cyl1 sensor (S9/S10) đọc nhưng KHÔNG snapshot — workflow sau dùng live (state
+        machine kích extend/retract liên tục, snapshot sẽ stale ngay).
+
+        Cảnh báo (không block) khi sensor state không khớp expected:
+          • Cyl1 unknown (S9 OFF + S10 OFF) hoặc xung đột (S9 ON + S10 ON)
+          • Cyl3 unknown (S15 OFF + S16 OFF) hoặc xung đột
+        """
+        s6, s7 = self._snap(S6_CHECK_TRAY_P1, S7_TRAY_AT_ROBOT)
+        s9, s10 = self._snap(S9_CYL1_RETRACTED, S10_CYL1_EXTENDED)
+        s13, s14 = self._snap(S13_OUT1_TRAYPOS1, S14_OUT2_TRAYPOS1)
+        s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
+        inx = self._pos_cached(1)
+        iny = self._pos_cached(2)
+        inx_str = f"{inx:.1f}mm" if inx is not None else "?"
+        iny_str = f"{iny:.1f}mm" if iny is not None else "?"
+
+        # Lưu snapshot dùng cho workflow sau
+        self._s6_snapshot  = s6
+        self._s13_snapshot = s13
+        self._s14_snapshot = s14
+        self._s15_snapshot = s15
+        self._s16_snapshot = s16
+
+        self.get_logger().info(
+            f"[S2A PRE-FLIGHT] S6={int(s6)} S7={int(s7)} "
+            f"| Cyl1 S9={int(s9)} S10={int(s10)} "
+            f"| Cyl3 S15={int(s15)} S16={int(s16)} "
+            f"| OutLim S13={int(s13)} S14={int(s14)} "
+            f"| InX={inx_str} InY={iny_str}"
+        )
+        self.get_logger().info(
+            f"[S2A PRE-FLIGHT] decision: S6={s6} → "
+            f"{'jog do S4' if s6 else 'thẳng row1'}"
+        )
+
+        # Sanity warnings (không block — chỉ log để operator biết)
+        if s9 and s10:
+            self.get_logger().warn(
+                "[S2A PRE-FLIGHT] Cyl1 CONFLICT: S9+S10 cùng ON — cảm biến/cơ khí lỗi"
+            )
+        elif not s9 and not s10:
+            self.get_logger().warn(
+                "[S2A PRE-FLIGHT] Cyl1 UNKNOWN: S9+S10 cùng OFF — piston ở giữa hành trình"
+            )
+        if s15 and s16:
+            self.get_logger().warn(
+                "[S2A PRE-FLIGHT] Cyl3 CONFLICT: S15+S16 cùng ON — cảm biến/cơ khí lỗi"
+            )
+        elif not s15 and not s16:
+            self.get_logger().warn(
+                "[S2A PRE-FLIGHT] Cyl3 UNKNOWN: S15+S16 cùng OFF — piston ở giữa hành trình"
+            )
+
     def _s2a_check_interlock(self):
         """
         STATE 2A bước A1 (entry point): chuẩn bị state cho luồng thay khay input.
 
         Pre-condition: state_in vừa chuyển từ IDLE → S2A_CHECK_INTERLOCK (qua nút
         STATE 2 trong manual hoặc qua _can_start_s2a trong auto).
+
+        Khi vào A1 (first tick) gọi `_s2a_preflight_scan()` để snapshot toàn bộ
+        sensor liên quan + log structured. Snapshots dùng cho workflow sau:
+        S6 cho A7 path decision, S13-S16 cho monitor/debug.
 
         Drive warm-up (FAS firmware quirk): tương tự _s1_confirm_safe — sau homing
         (referencing_task) drive accept position_task nhưng không chuyển động vật lý.
@@ -3486,14 +3557,10 @@ class CartridgeSystem(Node):
 
         if not self._cmd_sent_in:
             self._pub_cartridge_busy(True)
-            self._s6_snapshot       = self.sensor(S6_CHECK_TRAY_P1)
+            self._s2a_preflight_scan()
             self._s4_armed_out      = False
             self._output_row        = 0
             self._output_target_pos = 0.0
-            self.get_logger().info(
-                f"S2 Step1: S6={self._s6_snapshot} "
-                f"({'jog do S4' if self._s6_snapshot else 'thang row1'})"
-            )
             self._cmd_sent_in = True
         if self._iny_safe():
             self._enter_in(SystemState.S2A_INX_MOVE_POS_PICK)
@@ -3544,7 +3611,7 @@ class CartridgeSystem(Node):
         Next: S2A_WAIT_CYL_EXT (chờ S10 ON xác nhận Cyl1 đã extended).
         """
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.iny_target2)
+            ok = self._nb_move(2, self.config.iny_target2, vel=150)
             if not ok:
                 self._log_once("S2A_A3_FAIL", "S2A A3: INY 87mm fail")
                 return
@@ -3588,7 +3655,7 @@ class CartridgeSystem(Node):
         Next: S2A_INX_PLACE_TRAY_OUT_POS1 (đưa InX ra vị trí output stack).
         """
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.iny_home)
+            ok = self._nb_move(2, self.config.iny_home, vel=150)
             if not ok:
                 self._log_once("S2A_A5_FAIL", "S2A A5: INY 10mm fail")
                 return
@@ -3892,7 +3959,7 @@ class CartridgeSystem(Node):
             self._log_once("S2A_INX20", "A11: Cho INY safe")
             return
         if not self._cmd_sent_in:
-            ok = self._nb_move(1, self.config.inx_safe)
+            ok = self._nb_move(1, self.config.inx_safe, vel=200)
             if not ok:
                 self._log_once("S2A_A11_FAIL", "S2A A11: INX safe fail")
                 return
