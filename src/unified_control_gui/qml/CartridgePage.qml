@@ -858,8 +858,8 @@
 
                                             // header: name + desc
                                             Column { width: parent.width; spacing: 2
-                                                Text { text: "S"+model.sid+": "+model.sname; color: root.cCyan; font.pixelSize: 14; font.bold: true; width: parent.width; horizontalAlignment: Text.AlignHCenter }
-                                                Text { text: model.sdesc; color: root.cDim; font.pixelSize: 11; width: parent.width; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
+                                                Text { text: "S"+model.sid+": "+model.sname; color: root.cCyan; font.pixelSize: 20; font.bold: true; width: parent.width; horizontalAlignment: Text.AlignHCenter }
+                                                Text { text: model.sdesc; color: root.cDim; font.pixelSize: 17; width: parent.width; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
                                             }
 
                                             // position display — direct connect + deadband
@@ -890,12 +890,12 @@
                                              Row {
                                                  width: parent.width; spacing: 4
                                                  anchors.horizontalCenter: parent.horizontalCenter
-                                                 Text { text: "Vel:"; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
+                                                 Text { text: "Vel:"; color: root.cDim; font.pixelSize: 16; anchors.verticalCenter: parent.verticalCenter }
                                                  Text {
                                                      id: velText
                                                      text: cardItem.jogVelMms > 0 ? (cardItem.jogVelMms / 1000.0).toFixed(3) + " m/s" : "–"
                                                      color: root.cCyan
-                                                     font.pixelSize: 11; font.bold: true; font.family: "monospace"
+                                                     font.pixelSize: 17; font.bold: true; font.family: "monospace"
                                                      anchors.verticalCenter: parent.verticalCenter
                                                  }
                                              }
@@ -1078,13 +1078,6 @@
                                         }
                                     }
                                 }
-                            }
-
-                            // ── Chú thích ──
-                            Text {
-                                text: "<b>S1-S3</b> Conveyor · <b>S4</b> Scan P1 · <b>S5</b> Out Det · <b>S6</b> Check P1 · <b>S7</b> Robot · <b>S8</b> RSV\n<b>S9</b> Cyl1↩ · <b>S10</b> Cyl1↪ · <b>S13-S14</b> OUT1/2 P1 · <b>S15</b> Cyl3↩ · <b>S16</b> Cyl3↪\n<b>S17</b> Platform · <b>S18</b> Feed OK · <b>S19</b> Check P2 · <b>S20</b> Scan P2 · <b>S21</b> Cyl2↩ · <b>S22</b> Cyl2↪"
-                                textFormat: Text.RichText; color: root.cDim; font.pixelSize: 14
-                                Layout.fillWidth: true; wrapMode: Text.WordWrap
                             }
                         }
                     }
