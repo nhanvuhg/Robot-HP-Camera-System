@@ -250,6 +250,12 @@ class CartridgeSystem(Node):
         # Motion flags
         self._inx_moving = False
         self._iny_moving = False
+        # Timestamp lệnh motion gần nhất per-servo (sid → time.time()).
+        # Dùng cho _publish_positions: nếu servo idle > _idle_skip_modbus_s thì
+        # skip Modbus read, reuse cache. Giảm lock contention khi servo không hoạt động.
+        # Cập nhật bởi _jog, _nb_move, _home_all.
+        self._servo_motion_t: dict = {}
+        self._idle_skip_modbus_s    = 2.0   # giây — sau motion command này thì còn đọc tươi
         # Drive warm-up gate sau referencing_task (FAS firmware quirk):
         #   -1.0 = pending flush; 0.0 = done; >0.0 = đang chờ settle (timestamp)
         # Khi drive vừa làm xong homing, lệnh position_task đầu tiên có thể bị
@@ -869,7 +875,9 @@ class CartridgeSystem(Node):
                     mot.configure_continuous_update(False)
             if servo_id == 1: self._inx_moving = True
             elif servo_id == 2: self._iny_moving = True
-            setattr(self, f'_ignore_arrived_{servo_id}', time.time() + 0.5)
+            now = time.time()
+            setattr(self, f'_ignore_arrived_{servo_id}', now + 0.5)
+            self._servo_motion_t[servo_id] = now  # cho _publish_positions đọc tươi
             return True
         except Exception as e:
             self.get_logger().error(f"S{servo_id} nb_move error: {e}")
@@ -988,6 +996,8 @@ class CartridgeSystem(Node):
         if not mot:
             return
 
+        # Đánh dấu motion timestamp để _publish_positions biết đọc tươi
+        self._servo_motion_t[servo_id] = time.time()
         try:
             self._ensure_ready(mot, servo_id)
             with self._servo_lock:
@@ -1486,6 +1496,9 @@ class CartridgeSystem(Node):
 
             try:
                 self._ensure_ready(mot, sid, timeout=5.0)
+
+                # Đánh dấu motion timestamp để _publish_positions đọc tươi trong khi homing
+                self._servo_motion_t[sid] = time.time()
 
                 with self._servo_lock:
                     current_pos = mot.current_position()
@@ -2524,16 +2537,28 @@ class CartridgeSystem(Node):
         JSON chứa {sid: mm, _jog_vel: m/s, _fas_vel: {sid: m/s}}.
         GUI dùng để hiển thị vị trí live và tốc độ JOG hiện tại.
 
-        Dùng try-acquire(timeout=50ms) per servo — nếu lock đang bận (JOG/STOP/state
-        machine đang dùng Modbus) thì fallback dùng giá trị cache lần đọc trước,
-        bỏ qua servo đó cycle này. Mục đích: KHÔNG bao giờ chặn JOG vì publish positions.
-        50ms đủ rộng để bắt được lock giữa các thao tác Modbus ngắn (5-20ms),
-        nhưng vẫn release ngay khi JOG/STOP cần preempt.
+        Tối ưu hot path:
+        1. Per-servo: nếu time.time() - _servo_motion_t[sid] > _idle_skip_modbus_s
+           (mặc định 2s) → servo idle lâu → SKIP Modbus, reuse cache. Giảm lock
+           contention khi không có hoạt động → JOG cold press grab lock nhanh.
+        2. Khi servo active (JOG/move/home) → đọc tươi Modbus mỗi cycle.
+        3. Try-acquire 50ms — nếu lock vẫn bận (state machine giữ) → fallback cache.
+
+        Mục đích: KHÔNG bao giờ chặn JOG vì publish positions, và tự động giảm
+        Modbus traffic khi hệ thống idle để JOG cold press phản hồi tức thì.
         """
         try:
             pos = {}
+            now = time.time()
+            idle_skip = self._idle_skip_modbus_s
             for sid, mot in self.servos.items():
                 cached = self._pos_cache.get(sid)
+                # ── (1) Idle skip: servo không có motion command gần đây → reuse cache
+                last_motion = self._servo_motion_t.get(sid, 0.0)
+                if now - last_motion > idle_skip and cached is not None:
+                    pos[str(sid)] = cached
+                    continue
+                # ── (2/3) Đọc tươi (try-acquire) hoặc fallback cache nếu lock busy
                 if not self._servo_lock.acquire(timeout=0.05):
                     if cached is not None:
                         pos[str(sid)] = cached
