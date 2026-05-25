@@ -414,6 +414,7 @@
 
                         // ── Mode Selection ──────────────────────
                         Rectangle {
+                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.166
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
@@ -485,8 +486,8 @@
                                                     var m = cartridgeController.currentMode
                                                     if (m === "auto")   return "AUTO"
                                                     if (m === "manual") return "MANUAL"
-                                                    if (m === "jog")    return "MANUAL (JOG)"
-                                                    return "Chọn chế độ..."
+                                                    if (m === "jog")    return "MAN_JOG"
+                                                    return "Chọn..."
                                                 }
                                                 color: {
                                                     var m = cartridgeController.currentMode
@@ -541,7 +542,7 @@
                                                 Column {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     Text { text: "AUTO"; color: root.cGreen; font.pixelSize: 11; font.bold: true }
-                                                    Text { text: "Camera / Robot tín hiệu"; color: root.cDim; font.pixelSize: 8 }
+                                                    Text { text: "Tự động"; color: root.cDim; font.pixelSize: 8 }
                                                 }
                                             }
                                         }
@@ -565,7 +566,7 @@
                                                 Column {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     Text { text: "MANUAL"; color: "#5cf4f1"; font.pixelSize: 11; font.bold: true }
-                                                    Text { text: "Điều khiển tay trực tiếp"; color: root.cDim; font.pixelSize: 8 }
+                                                    Text { text: "Trực tiếp"; color: root.cDim; font.pixelSize: 8 }
                                                 }
                                             }
                                         }
@@ -576,6 +577,7 @@
 
                         // ── System Control ───────────────────────
                         Rectangle {
+                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.277
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
@@ -594,9 +596,10 @@
                                     font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // Hàng 1: START / STOP / PAUSE
-                                RowLayout {
-                                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
+                                // 2x2 Square Grid for 4 buttons
+                                GridLayout {
+                                    Layout.fillWidth: true; Layout.fillHeight: true
+                                    columns: 2; columnSpacing: 4; rowSpacing: 4
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true
                                         lbl: "START"
@@ -605,18 +608,14 @@
                                     }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
-                                }
-
-                                // Hàng 2: RESUME
-                                RowLayout {
-                                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "Resume";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "RESUME"; bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
                                 }
                             }
                         }
 
                         // ── State Navigation ─────────────────────
                         Rectangle {
+                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.277
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
@@ -635,45 +634,38 @@
                                     font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // Grid 2 cột × 4 hàng
+                                // 3 columns x 2 rows square grid
                                 GridLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true
-                                    columns: 2; columnSpacing: 4; rowSpacing: 4
+                                    columns: 3; columnSpacing: 4; rowSpacing: 4
 
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   blinking: cartridgeController.uiHint === "press_homing"; onClicked: cartridgeController.gotoState("HOMING") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nKhay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nKhay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
+
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true
-                                        // JOG mode → button "STATE MODE" (thoát JOG về manual).
-                                        // Manual mode → button "STOP STATE" (abort state đang chạy về JOG).
                                         lbl: cartridgeController.currentMode === "jog" ? "STATE MODE" : "STOP STATE"
                                         bg: cartridgeController.currentMode === "jog" ? "#0a332e" : "#4d1a1a"
                                         bc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
                                         tc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
                                         onClicked: {
                                             if (cartridgeController.currentMode === "jog") {
-                                                // Thoát JOG → manual mode (clear _jog_mode ở backend)
                                                 cartridgeController.setMode("manual")
                                             } else {
                                                 cartridgeController.gotoState("ABORT_TO_JOG")
                                             }
                                         }
                                     }
-                                    // 4 STATE buttons: chỉ enable trong MANUAL (AUTO/AI: hệ thống tự lo via _can_start_*; JOG: khóa)
-                                    // Tất cả đều gọi gotoState → backend _cb_goto_state check sensor THẬT (S7/S18/zero_offset)
-                                    // rồi enter state tương ứng. KHÔNG dùng simulateDone* vì manual đã gate _can_start_s2a/s4.
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nNạp khay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nThay khay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.gotoState("STATE2") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nCấp khay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nThay khay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.gotoState("STATE4") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nKhay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.gotoState("STATE2") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nKhay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.gotoState("STATE4") }
                                 }
                             }
                         }
 
                         // ── Control Cylinder ──────────────────────
-                        // Điều khiển valve Cyl1 / Cyl2 thủ công (chỉ MANUAL + IDLE).
-                        // Tái dùng logic _cyl{1,2}_{extend,retract} ở backend qua topic
-                        // /providesystem/cyl_cmd ("1 extend" | "1 retract" | "2 ...").
                         Rectangle {
+                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.277
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
@@ -682,7 +674,6 @@
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
-                                // Chỉ enable trong MANUAL mode (không phải JOG/AUTO)
                                 property bool cylEnabled: cartridgeController.currentMode === "jog"
                                 enabled: cylEnabled
                                 opacity: cylEnabled ? 1.0 : 0.35
@@ -693,84 +684,85 @@
                                     font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // Grid 2 cyl × 2 action (Extend / Retract)
-                                GridLayout {
+                                RowLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true
-                                    columns: 3; columnSpacing: 4; rowSpacing: 4
+                                    spacing: 6
 
-                                    // ── Cyl1 row ──
-                                    Text {
-                                        text: "Cyl1"; color: root.cCyan
-                                        font.pixelSize: 12; font.bold: true
-                                        Layout.preferredWidth: 38
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                    CBtn {
+                                    // Cyl1 Column
+                                    ColumnLayout {
                                         Layout.fillWidth: true; Layout.fillHeight: true
-                                        lbl: "EXTEND"
-                                        bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
-                                        isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'
-                                        onClicked: cartridgeController.cylinderCmd(1, true)
-                                    }
-                                    CBtn {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        lbl: "RETRACT"
-                                        bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
-                                        isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'
-                                        onClicked: cartridgeController.cylinderCmd(1, false)
-                                    }
-
-                                    // ── Cyl2 row ──
-                                    Text {
-                                        text: "Cyl2"; color: root.cCyan
-                                        font.pixelSize: 12; font.bold: true
-                                        Layout.preferredWidth: 38
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                    CBtn {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        lbl: "EXTEND"
-                                        bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
-                                        isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'
-                                        onClicked: cartridgeController.cylinderCmd(2, true)
-                                    }
-                                    CBtn {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        lbl: "RETRACT"
-                                        bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
-                                        isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'
-                                        onClicked: cartridgeController.cylinderCmd(2, false)
+                                        spacing: 4
+                                        Text {
+                                            text: "Cyl 1"; color: root.cCyan
+                                            font.pixelSize: 12; font.bold: true; Layout.alignment: Qt.AlignHCenter
+                                        }
+                                        CBtn {
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            lbl: "EXTEND"
+                                            bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
+                                            isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'
+                                            onClicked: cartridgeController.cylinderCmd(1, true)
+                                        }
+                                        CBtn {
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            lbl: "RETRACT"
+                                            bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
+                                            isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'
+                                            onClicked: cartridgeController.cylinderCmd(1, false)
+                                        }
                                     }
 
-                                    // ── Cyl3 row ──
-                                    Text {
-                                        text: "Cyl3"; color: root.cCyan
-                                        font.pixelSize: 12; font.bold: true
-                                        Layout.preferredWidth: 38
-                                        horizontalAlignment: Text.AlignHCenter
-                                        verticalAlignment: Text.AlignVCenter
-                                    }
-                                    CBtn {
+                                    // Cyl2 Column
+                                    ColumnLayout {
                                         Layout.fillWidth: true; Layout.fillHeight: true
-                                        lbl: "EXTEND"
-                                        bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
-                                        isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'
-                                        onClicked: cartridgeController.cylinderCmd(3, true)
+                                        spacing: 4
+                                        Text {
+                                            text: "Cyl 2"; color: root.cCyan
+                                            font.pixelSize: 12; font.bold: true; Layout.alignment: Qt.AlignHCenter
+                                        }
+                                        CBtn {
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            lbl: "EXTEND"
+                                            bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
+                                            isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'
+                                            onClicked: cartridgeController.cylinderCmd(2, true)
+                                        }
+                                        CBtn {
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            lbl: "RETRACT"
+                                            bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
+                                            isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'
+                                            onClicked: cartridgeController.cylinderCmd(2, false)
+                                        }
                                     }
-                                    CBtn {
+
+                                    // Cyl3 Column
+                                    ColumnLayout {
                                         Layout.fillWidth: true; Layout.fillHeight: true
-                                        lbl: "RETRACT"
-                                        bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
-                                        isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'
-                                        onClicked: cartridgeController.cylinderCmd(3, false)
+                                        spacing: 4
+                                        Text {
+                                            text: "Cyl 3"; color: root.cCyan
+                                            font.pixelSize: 12; font.bold: true; Layout.alignment: Qt.AlignHCenter
+                                        }
+                                        CBtn {
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            lbl: "EXTEND"
+                                            bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
+                                            isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'
+                                            onClicked: cartridgeController.cylinderCmd(3, true)
+                                        }
+                                        CBtn {
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            lbl: "RETRACT"
+                                            bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
+                                            isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'
+                                            onClicked: cartridgeController.cylinderCmd(3, false)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-
                     // ─ SERVO CONTROL AREA ────────────────────────
                     Rectangle {
                         x: 0
