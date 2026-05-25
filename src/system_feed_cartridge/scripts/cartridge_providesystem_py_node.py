@@ -1265,10 +1265,12 @@ class CartridgeSystem(Node):
         except Exception:
             return default
 
-    def _notify(self, level: str, title: str, detail: str = ""):
+    def _notify(self, level: str, title: str, detail: str = "", hint: str = ""):
         """
         Gửi thông báo đến GUI qua topic /providesystem/gui_notify (JSON).
         level: 'info' | 'warn' | 'error' | 'silent_ok'
+        hint : optional UI hint cho GUI animation (vd 'press_homing', 'press_stop',
+               'switch_manual'). GUI subscribe và blink button tương ứng.
         Throttle 0.5s/title để không flood GUI với cùng một thông báo lặp lại.
         """
         now = time.time()
@@ -1277,7 +1279,10 @@ class CartridgeSystem(Node):
         self._notify_throttle[title] = now
         try:
             msg = String()
-            msg.data = json.dumps({"level": level, "title": title, "detail": detail})
+            payload = {"level": level, "title": title, "detail": detail}
+            if hint:
+                payload["hint"] = hint
+            msg.data = json.dumps(payload)
             self.pub_gui_notify.publish(msg)
         except Exception:
             pass
@@ -1298,7 +1303,7 @@ class CartridgeSystem(Node):
         return f"S{sid} ({lbl})" if lbl else f"S{sid}"
 
     def _notify_step(self, level: str, state: str, step: str, issue: str,
-                     check=None, action=None, enum_name: str = ""):
+                     check=None, action=None, enum_name: str = "", hint: str = ""):
         """Notify dạng structured cho state machine — giúp operator biết chính xác
         đang ở đâu + cần kiểm tra/làm gì.
 
@@ -1310,6 +1315,8 @@ class CartridgeSystem(Node):
           check     : list[str] những thứ cần kiểm tra (sensor, valve, drive...)
           action    : list[str] các bước operator cần làm (nhấn STOP, retract manual...)
           enum_name : optional SystemState.name để dev/log archaeologist trace
+          hint      : optional UI hint cho GUI animation (vd 'press_homing',
+                      'press_stop', 'switch_manual') — GUI sẽ blink button tương ứng
 
         Format:
           title  = '<state> • <step>'      (hoặc chỉ '<state>' nếu step rỗng)
@@ -1326,7 +1333,7 @@ class CartridgeSystem(Node):
             parts.append("Kiểm tra: " + ", ".join(check))
         if action:
             parts.append("Tiếp: " + " → ".join(action))
-        self._notify(level, title, " | ".join(parts))
+        self._notify(level, title, " | ".join(parts), hint=hint)
 
     def _log_once(self, key: str, msg: str):
         """
@@ -2161,12 +2168,14 @@ class CartridgeSystem(Node):
                 self._notify_step('warn', 'STATE 1', 'trigger',
                     f'{self.state_in.name} đang chạy — không thể vào STATE 1',
                     enum_name=self.state_in.name,
-                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'])
+                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'],
+                    hint='press_stop')
                 return
             if not self.zero_offset:
                 self._notify_step('warn', 'STATE 1', 'trigger',
                     'Chưa homing — không biết vị trí 0 của servo',
-                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 1'])
+                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 1'],
+                    hint='press_homing')
                 return
             if self._motion_busy:
                 self.get_logger().warn("Robot đang báo bận (topic motion_busy), vẫn cho phép chạy MANUAL...")
@@ -2220,12 +2229,14 @@ class CartridgeSystem(Node):
                 self._notify_step('warn', 'STATE 2', 'trigger',
                     f'{self.state_in.name} đang chạy — không thể vào STATE 2',
                     enum_name=self.state_in.name,
-                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'])
+                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'],
+                    hint='press_stop')
                 return
             if not self.zero_offset:
                 self._notify_step('warn', 'STATE 2', 'trigger',
                     'Chưa homing — không biết vị trí 0 của servo',
-                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 2'])
+                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 2'],
+                    hint='press_homing')
                 return
             if not self.sensor(S7_TRAY_AT_ROBOT):
                 self._notify_step('warn', 'STATE 2', 'pre-flight',
@@ -2258,12 +2269,14 @@ class CartridgeSystem(Node):
                 self._notify_step('warn', 'STATE 3', 'trigger',
                     f'{self.state_s3.name} đang chạy — không thể vào STATE 3',
                     enum_name=self.state_s3.name,
-                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'])
+                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'],
+                    hint='press_stop')
                 return
             if not self.zero_offset:
                 self._notify_step('warn', 'STATE 3', 'trigger',
                     'Chưa homing — không biết vị trí 0 của servo',
-                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 3'])
+                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 3'],
+                    hint='press_homing')
                 return
             # Check sensor THẬT — STATE3 chỉ chạy khi vị trí cấp output đang trống
             if self.sensor(S18_FEED_OK):
@@ -2296,12 +2309,14 @@ class CartridgeSystem(Node):
                 self._notify_step('warn', 'STATE 4', 'trigger',
                     f'{self.state_s4.name} đang chạy — không thể vào STATE 4',
                     enum_name=self.state_s4.name,
-                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'])
+                    action=['Nhấn STOP', 'Đợi state hiện tại kết thúc rồi retry'],
+                    hint='press_stop')
                 return
             if not self.zero_offset:
                 self._notify_step('warn', 'STATE 4', 'trigger',
                     'Chưa homing — không biết vị trí 0 của servo',
-                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 4'])
+                    action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 4'],
+                    hint='press_homing')
                 return
             self._jog_mode = False
             self._drive_warm_t = -1.0  # FAS drive warm-up

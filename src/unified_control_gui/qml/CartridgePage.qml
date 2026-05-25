@@ -601,7 +601,7 @@
                                         bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
                                         onClicked: cartridgeController.startSystem()
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
                                 }
 
@@ -640,7 +640,7 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   onClicked: cartridgeController.gotoState("HOMING") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   blinking: cartridgeController.uiHint === "press_homing"; onClicked: cartridgeController.gotoState("HOMING") }
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true
                                         // JOG mode → button "STATE MODE" (thoát JOG về manual).
@@ -2005,6 +2005,9 @@
             property bool  _pressed: false
             property bool  _hovered: false
             property bool  isSelected: false
+            // Khi blinking=true: viền + nền nhấp nháy thu hút sự chú ý (vd hint từ
+            // node Python qua uiHint). Auto-stop khi blinking=false. Animation 600ms/chu kỳ.
+            property bool  blinking: false
 
             signal clicked(); signal pressed(); signal released()
 
@@ -2040,6 +2043,25 @@
                 border.color: cbr._pressed ? Qt.rgba(cbr.bc.r, cbr.bc.g, cbr.bc.b, 0.4) : "transparent"
                 border.width: 3; z: -1
                 Behavior on border.color { ColorAnimation { duration: 100 } }
+            }
+
+            // Blink overlay khi blinking=true (UI hint từ node Python)
+            Rectangle {
+                id: blinkOverlay
+                anchors.fill: parent; anchors.margins: -3
+                radius: parent.radius + 3
+                color: "transparent"
+                border.color: root.cAccent
+                border.width: 4
+                opacity: 0
+                visible: cbr.blinking
+                z: 2
+                SequentialAnimation on opacity {
+                    loops: Animation.Infinite
+                    running: cbr.blinking
+                    NumberAnimation { to: 1.0; duration: 350; easing.type: Easing.InOutQuad }
+                    NumberAnimation { to: 0.2; duration: 350; easing.type: Easing.InOutQuad }
+                }
             }
 
             // Inner shadow to simulate physically sunken pressed state

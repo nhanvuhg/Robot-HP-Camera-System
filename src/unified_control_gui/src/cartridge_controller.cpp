@@ -9,6 +9,17 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
 {
     auto qos = rclcpp::QoS(10);
 
+    // ── UI hint auto-clear timer (5s sau khi set) ────────────────
+    ui_hint_timer_ = new QTimer(this);
+    ui_hint_timer_->setSingleShot(true);
+    ui_hint_timer_->setInterval(5000);
+    connect(ui_hint_timer_, &QTimer::timeout, this, [this]() {
+        if (!ui_hint_.isEmpty()) {
+            ui_hint_.clear();
+            emit uiHintChanged();
+        }
+    });
+
     // ── Publishers ───────────────────────────────────────────────
     jog_pub_              = node_->create_publisher<std_msgs::msg::String>("/providesystem/jog_cmd", qos);
     set_mode_pub_         = node_->create_publisher<std_msgs::msg::String>("/providesystem/set_operation_mode", qos);
@@ -69,11 +80,18 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
                 QString level   = obj.value("level").toString("info");
                 QString title   = obj.value("title").toString();
                 QString detail  = obj.value("detail").toString();
+                QString hint    = obj.value("hint").toString();
                 QString logMsg  = detail.isEmpty() ? title : title + " — " + detail;
                 QString type    = (level == "error" || level == "warn") ? "err" : (level == "ok" || level == "silent_ok") ? "ok" : "info";
                 addLog(logMsg, type);
                 if (!level.startsWith("silent")) {
                     emit notificationReceived();
+                }
+                // UI hint: blink button tương ứng trong 5s
+                if (!hint.isEmpty() && hint != ui_hint_) {
+                    ui_hint_ = hint;
+                    emit uiHintChanged();
+                    if (ui_hint_timer_) ui_hint_timer_->start();
                 }
             } else {
                 addLog(last_notification_, "info");

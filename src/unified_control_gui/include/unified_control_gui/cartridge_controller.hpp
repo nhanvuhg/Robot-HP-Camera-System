@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QJsonDocument>
@@ -24,6 +25,7 @@ class CartridgeController : public QObject
     Q_PROPERTY(QVariantList logEntries  READ logEntries       NOTIFY logEntriesChanged)
     Q_PROPERTY(QString sensorState      READ sensorState      NOTIFY sensorStateChanged)
     Q_PROPERTY(QString stateOut         READ stateOut         NOTIFY systemStateChanged)
+    Q_PROPERTY(QString uiHint           READ uiHint           NOTIFY uiHintChanged)
 
 public:
     explicit CartridgeController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -36,6 +38,7 @@ public:
     QVariantList logEntries()  const { return log_entries_; }
     QString sensorState()      const { return sensor_state_; }
     QString stateOut()         const { return state_out_; }
+    QString uiHint()           const { return ui_hint_; }
 
 public slots:
     // Servo control
@@ -79,6 +82,7 @@ signals:
     void notificationReceived();
     void logEntriesChanged();
     void sensorStateChanged();
+    void uiHintChanged();
 
 private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr gui_confirm_pub_;
@@ -121,6 +125,8 @@ private:
     QString last_notification_;
     QVariantList log_entries_;
     QString sensor_state_{"000000000000000000"};
+    QString ui_hint_;                // 'press_homing' | 'press_stop' | 'switch_manual' | ''
+    QTimer* ui_hint_timer_{nullptr}; // auto-clear hint sau 5s
 
     void publishString(rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub, const QString &data);
     void publishBool(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub, bool value);
