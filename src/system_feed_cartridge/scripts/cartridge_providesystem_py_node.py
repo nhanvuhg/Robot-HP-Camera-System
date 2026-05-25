@@ -2,6 +2,32 @@
 """
 Cartridge Loading System — ROS 2 + festo-edcon
 
+═══════════════════════════════════════════════════════════════════════════════
+HARDWARE INSTALL STATUS (đọc trước khi sửa code)
+═══════════════════════════════════════════════════════════════════════════════
+Cụm Pos1 (đã lắp, production):
+  • Servo S1=InX (192.168.27.248), S2=InY (192.168.27.249)
+  • CPX 253 (192.168.27.253) — sensor S1-S16, valve Cyl1/Cyl2/Cyl3
+  • Cyl3 piston + sensor S13-S16
+  → STATE 1, STATE 2A chạy đầy đủ với interlock Cyl3.
+
+Cụm Pos2 (đang chờ lắp đặt):
+  • Servo S3=Servo3/Platform (192.168.27.250)
+  • Servo S4=OutX (192.168.27.251), S5=OutY (192.168.27.252)
+  • CPX 254 (192.168.27.254) — sensor S17-S22
+  → STATE 3, STATE 4 hiện DISABLED qua flag `output_stack_present: false`
+    trong cartridge_config.yaml.
+
+→ Khi user nói "đã lắp servo 3/4/5" / "đã lắp CPX 254" / "đã lắp xong cụm
+  Pos2/output" → đổi YAML `output_stack_present: false → true` và restart.
+  Không cần sửa code. Các check `_can_start_s3/s4`, manual STATE3/4 button,
+  `_s2a_cyl3_extend` sẽ tự active khi flag=true.
+
+→ Tương tự: nếu Cyl3 piston tháo ra (vd để service), đổi
+  `cyl3_present: true → false` — workflow STATE 2 vẫn chạy nhưng skip step
+  cố định khay Cyl3.
+═══════════════════════════════════════════════════════════════════════════════
+
 AUTO/AI mode: Đọc sensor thực từ IO module, tự động trigger STATE 1/2/3/4 khi
               đủ điều kiện cảm biến.
 MANUAL mode : Đọc sensor THẬT (giống AUTO — không còn simulation từ v8).
