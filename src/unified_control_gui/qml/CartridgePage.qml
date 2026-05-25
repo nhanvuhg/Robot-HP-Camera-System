@@ -743,6 +743,29 @@
                                         isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'
                                         onClicked: cartridgeController.cylinderCmd(2, false)
                                     }
+
+                                    // ── Cyl3 row ──
+                                    Text {
+                                        text: "Cyl3"; color: root.cCyan
+                                        font.pixelSize: 12; font.bold: true
+                                        Layout.preferredWidth: 38
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    CBtn {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        lbl: "EXTEND"
+                                        bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
+                                        isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'
+                                        onClicked: cartridgeController.cylinderCmd(3, true)
+                                    }
+                                    CBtn {
+                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        lbl: "RETRACT"
+                                        bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
+                                        isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'
+                                        onClicked: cartridgeController.cylinderCmd(3, false)
+                                    }
                                 }
                             }
                         }

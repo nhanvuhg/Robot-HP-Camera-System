@@ -33,6 +33,10 @@ class SystemConfig(BaseModel):
     cylinder2_extend_channel: int = 9
     cylinder2_retract_channel: int = 8
     cyl3_present: bool = True
+    # Cụm output stack (Servo3 Platform + OutX/OutY + CPX 254 sensors S17-S22).
+    # Đặt false khi hardware chưa lắp — STATE 3/4 auto-trigger bị disable và manual
+    # button STATE 3/4 cũng bị khóa. STATE 1/2 (input Pos1) độc lập, không ảnh hưởng.
+    output_stack_present: bool = True
 
     # Limits & Timing
     servo_limits: Dict[int, float]

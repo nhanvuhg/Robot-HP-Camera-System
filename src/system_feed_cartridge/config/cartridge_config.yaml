@@ -18,6 +18,10 @@ cylinder2_extend_channel: 9
 # false = bypass row1 interlock + skip Cyl3 extend (chỉ dùng khi hardware Cyl3 chưa đấu nối)
 cyl3_present: true
 
+# Cụm output stack toggle — true = bật STATE 3/4 (cần Servo3+OutX+OutY+CPX 254 lắp đủ)
+# false = disable auto-trigger và khóa nút manual STATE 3/4. STATE 1/2 (Pos1) không bị ảnh hưởng.
+output_stack_present: false
+
 # Velocity (m/s) — synced with FAS
 fas_position_velocity: 0.05   # Fixed velocity for position moves (m/s) — match FAS setting
 jog_velocity: 0.05            # Default JOG velocity (m/s)

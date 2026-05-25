@@ -210,6 +210,9 @@ class CartridgeSystem(Node):
         # trong các lệnh JOG/move liên tiếp. Invalidate khi STOP hoặc fault.
         self._ready_until: dict = {}     # sid -> expiry timestamp
         self._ready_ttl         = 3.0    # giây — drive thường giữ ready nếu không có lỗi
+        # Cache vị trí (mm) lần đọc gần nhất — dùng cho _publish_positions khi lock
+        # bận để fallback giá trị thay vì miss frame và GUI nhấp nháy "--".
+        self._pos_cache: dict   = {}     # sid -> mm
         self.io_module          = None
         self.io_module_2        = None
         self._io_sensor_cache: list = []
@@ -1239,11 +1242,14 @@ class CartridgeSystem(Node):
     def _can_start_s3(self) -> bool:
         """
         Điều kiện để auto-trigger STATE 3 (chỉ AUTO/AI mode):
+          - output_stack_present=True (hardware Servo3 + CPX 254 đã lắp)
           - Đã homing và robot không bận
           - S18_FEED_OK=OFF (vị trí feed đang trống)
           - S18 đã OFF liên tục ít nhất 5 giây (debounce — tránh trigger ngay sau khi
             robot lấy khay, đợi hệ thống ổn định trước khi cấp khay mới)
         """
+        if not self._conf('output_stack_present', True):
+            return False
         if self.operation_mode not in ['auto', 'ai'] or self._motion_busy:
             return False
             
@@ -1262,12 +1268,15 @@ class CartridgeSystem(Node):
     def _can_start_s4(self) -> bool:
         """
         Điều kiện để **auto-trigger** STATE 4 (chỉ AUTO/AI mode — thay khay output):
+          - output_stack_present=True (hardware OutX/OutY + CPX 254 đã lắp)
           - operation_mode in ['auto', 'ai'] (MANUAL không auto-chain — operator phải nhấn STATE4)
           - Đã homing
           - _s4_trigger=True (set bởi robot qua /robot/done_tray_output)
           - S18_FEED_OK=ON (có khay ở vị trí feed — đảm bảo output tray đang được dùng)
           - Robot không báo bận
         """
+        if not self._conf('output_stack_present', True):
+            return False
         if self.operation_mode not in ['auto', 'ai']:
             return False
         return bool(self.zero_offset) and self._s4_trigger and self.sensor(S18_FEED_OK) and not self._motion_busy
@@ -1676,11 +1685,11 @@ class CartridgeSystem(Node):
 
     def _cb_cyl_cmd(self, msg: String):
         """
-        Điều khiển cylinder 1/2 thủ công từ GUI qua /providesystem/cyl_cmd.
-        Định dạng: "<cyl_id> <extend|retract>"  ví dụ "1 extend", "2 retract".
+        Điều khiển cylinder 1/2/3 thủ công từ GUI qua /providesystem/cyl_cmd.
+        Định dạng: "<cyl_id> <extend|retract>"  ví dụ "1 extend", "3 retract".
 
-        Tái sử dụng các hàm _cyl1_extend/_cyl1_retract/_cyl2_extend/_cyl2_retract
-        sẵn có (drive 2 channel valve: 1 set + 1 reset như gripper/picker).
+        Tái sử dụng _cyl1/_cyl2/_cyl3 extend/retract (drive 2 channel valve:
+        1 set + 1 reset như gripper/picker). Cyl3 chỉ chạy khi cyl3_present=True.
 
         Chỉ cho phép trong MANUAL mode + state IDLE/ERROR + không có state machine
         nào đang chạy — tránh xung đột với logic STATE 1/2/3/4 đang điều khiển
@@ -1716,6 +1725,14 @@ class CartridgeSystem(Node):
                 self._cyl2_extend()
             elif cid == 2 and act == 'retract':
                 self._cyl2_retract()
+            elif cid == 3 and act in ('extend', 'retract'):
+                if not self._conf('cyl3_present', True):
+                    self._notify('warn', 'Cyl3 disabled', 'cyl3_present=false trong config')
+                    return
+                if act == 'extend':
+                    self._cyl3_extend()
+                else:
+                    self._cyl3_retract()
             else:
                 self.get_logger().warn(f"[CYL] unknown cmd: {msg.data}")
         except Exception as e:
@@ -1998,6 +2015,10 @@ class CartridgeSystem(Node):
 
         # ── STATE 3: chỉ cho MANUAL, operator nhấn nút (AUTO tự trigger qua _can_start_s3) ──────────
         if cmd in ('STATE3', 'STATE_3', 'S3'):
+            if not self._conf('output_stack_present', True):
+                self._notify('warn', 'STATE3 disabled',
+                             'output_stack_present=false — cụm Servo3/CPX 254 chưa lắp')
+                return
             if self.operation_mode != 'manual':
                 self._notify('warn', 'STATE3 manual only',
                              'Trong AUTO/AI mode hệ thống tự trigger STATE3')
@@ -2023,6 +2044,10 @@ class CartridgeSystem(Node):
 
         # ── STATE 4: chỉ cho MANUAL, operator nhấn nút (AUTO tự trigger khi _s4_trigger=True) ──────────
         if cmd in ('STATE4', 'STATE_4', 'S4'):
+            if not self._conf('output_stack_present', True):
+                self._notify('warn', 'STATE4 disabled',
+                             'output_stack_present=false — cụm OutX/OutY/CPX 254 chưa lắp')
+                return
             if self.operation_mode != 'manual':
                 self._notify('warn', 'STATE4 manual only',
                              'Trong AUTO/AI mode hệ thống tự trigger STATE4 (qua /robot/done_tray_output)')
@@ -2373,7 +2398,7 @@ class CartridgeSystem(Node):
 
     def _positions_bg_loop(self):
         """
-        Thread nền publish vị trí servo mỗi 500ms lên /providesystem/servo_positions.
+        Thread nền publish vị trí servo mỗi 100ms (10Hz) lên /providesystem/servo_positions.
         Chạy tách biệt khỏi control loop để Modbus read latency không block 20Hz timer.
         Dừng khi _pos_thread_stop=True (set bởi destroy_node).
         """
@@ -2382,18 +2407,38 @@ class CartridgeSystem(Node):
                 self._publish_positions()
             except Exception as e:
                 self.get_logger().warn(f"[pos_bg] {e}")
-            time.sleep(0.5)
+            time.sleep(0.1)
 
     def _publish_positions(self):
         """Đọc vị trí tất cả servo và publish JSON lên /providesystem/servo_positions.
         JSON chứa {sid: mm, _jog_vel: m/s, _fas_vel: {sid: m/s}}.
-        GUI dùng để hiển thị vị trí live và tốc độ JOG hiện tại."""
+        GUI dùng để hiển thị vị trí live và tốc độ JOG hiện tại.
+
+        Dùng try-acquire(timeout=50ms) per servo — nếu lock đang bận (JOG/STOP/state
+        machine đang dùng Modbus) thì fallback dùng giá trị cache lần đọc trước,
+        bỏ qua servo đó cycle này. Mục đích: KHÔNG bao giờ chặn JOG vì publish positions.
+        50ms đủ rộng để bắt được lock giữa các thao tác Modbus ngắn (5-20ms),
+        nhưng vẫn release ngay khi JOG/STOP cần preempt.
+        """
         try:
             pos = {}
-            for sid in self.servos:
-                p = self._pos(sid)
+            for sid, mot in self.servos.items():
+                cached = self._pos_cache.get(sid)
+                if not self._servo_lock.acquire(timeout=0.05):
+                    if cached is not None:
+                        pos[str(sid)] = cached
+                    continue
+                try:
+                    counts = mot.current_position()
+                    p = (counts - self.zero_offset.get(sid, 0)) / COUNTS_PER_MM
+                except Exception:
+                    p = cached
+                finally:
+                    self._servo_lock.release()
                 if p is not None:
-                    pos[str(sid)] = round(p, 2)
+                    val = round(p, 2)
+                    pos[str(sid)] = val
+                    self._pos_cache[sid] = val
             data = pos.copy()
             data['_jog_vel'] = self._jog_velocity_ms
             if self._fas_jog_vel:

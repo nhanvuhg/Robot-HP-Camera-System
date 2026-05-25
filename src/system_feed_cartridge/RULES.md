@@ -400,6 +400,110 @@ Chi tiết đầy đủ ở [`cartridge_config.yaml`](config/cartridge_config.ya
 
 ---
 
+## RULE 16 — STATE 1 / STATE 2 (Pos1) workflow ĐÃ CHỐT — không refactor logic core
+
+### WHY
+STATE 1 (cấp khay input) + STATE 2A (thay khay vào robot) đã chạy thực tế ổn định trên hardware production (Pos1: S1=InX, S2=InY, Cyl1, Cyl3, CPX 253 sensors S1-S16). Mọi thay đổi vào logic core 2 state này phải có lý do nghiệp vụ rõ ràng + test đầy đủ — không refactor "đẹp code" hoặc "tối ưu hiệu năng" mà đụng vào dispatcher / transition.
+
+### HOW
+Vùng code được khoanh "đã chốt":
+- `_dispatch_input()` và toàn bộ sub-state handler `_s1_*`, `_s2a_*`
+- `_can_start_s1()`, `_can_start_s2a()` — điều kiện auto-trigger
+- `_s2a_cyl3_extend()` + `_check_row1_interlock()` + `_cyl3_safety_check()` — interlock chuỗi Cyl3
+- Pattern `_arrived(N) and _at_position(N, TARGET)` đã có ở mọi sub-state move (RULE 1)
+
+Thay đổi cho phép (không cần update rule này):
+- Sửa lỗi bug rõ ràng (false-positive sensor, off-by-one)
+- Thêm log/diagnostic
+- Thêm sensor monitor không ảnh hưởng transition
+
+Thay đổi BẮT BUỘC phải tag `rule-change: state1-2` + test 5 chu kỳ:
+- Đổi thứ tự sub-state
+- Đổi điều kiện vào sub-state mới
+- Đổi vận tốc move trong sub-state
+- Đổi sensor trigger logic
+
+### RỦI RO
+- Refactor không cần thiết → break workflow đã chạy ổn → mất thời gian debug + downtime sản xuất.
+- "Cải thiện" mà không test đủ → regression im lặng chỉ phát hiện sau khi sản xuất chạy.
+
+---
+
+## RULE 17 — CPX 253 và CPX 254 PHẢI độc lập runtime
+
+### WHY
+2 IO module Festo CPX-AP nằm trên cùng subnet nhưng phục vụ 2 cụm thiết bị khác nhau:
+- **CPX 253** (192.168.27.253) — sensor S1-S16, valve Cyl1/Cyl2/Cyl3, gripper, picker. Phục vụ **Pos1 = STATE 1/2**.
+- **CPX 254** (192.168.27.254) — sensor S17-S22 (Platform, FeedOk, OutP2, Cyl2_output). Phục vụ **Pos2 = STATE 3/4**.
+
+Lắp đặt thực tế tuần tự: Pos1 chạy production trước, Pos2 lắp sau. Một module fail/offline KHÔNG được kéo theo module kia.
+
+### HOW
+Đã implement trong `_io_bg_loop`:
+- 2 nhánh try/except riêng cho module 1 và 2
+- Cache riêng: `_io_sensor_cache` vs `_io_sensor_cache_2`
+- Ready flag riêng: `_io_ready` vs `_io_ready_2`
+- Reconnect thread độc lập: `_reconnect_io1()` / `_reconnect_io2()`
+
+Sensor lookup `_sensor_raw` chia theo sid:
+- sid 1-16 → module 1
+- sid 17+ → module 2
+
+### RỦI RO
+- Gộp 2 cache vào 1 → CPX 254 fail kéo CPX 253 đứng → Pos1 production stop oan.
+- Reconnect chung 1 thread → 1 module retry block module kia.
+- Sensor lookup không chia rõ → đọc nhầm cache → false sensor reading.
+
+---
+
+## RULE 18 — Hardware presence flag (`*_present`) là CONTRACT, không bypass
+
+### WHY
+2 flag YAML/config gate workflow theo hardware đã lắp:
+- `cyl3_present` — Cyl3 piston + sensor S13-S16 (trên CPX 253)
+- `output_stack_present` — cụm Pos2: Servo3 + OutX/OutY + CPX 254
+
+Khi flag=false, code phải đảm bảo workflow tương ứng KHÔNG chạy — kể cả ở manual button hay auto-trigger. Đây là contract giữa hardware lắp đặt và logic.
+
+### HOW
+Mỗi flag check ở 3 chỗ:
+1. **Auto-trigger gate**: `_can_start_s2a` / `_can_start_s3` / `_can_start_s4` return False ngay khi flag=false
+2. **Workflow step gate**: `_s2a_cyl3_extend` skip sang state kế nếu `cyl3_present=false`
+3. **Manual button gate**: `_cb_goto_state` STATE3/STATE4 reject với notify rõ ràng khi flag=false
+
+Khi thêm hardware mới có flag tương tự (vd `gripper_2_present`, `pos3_present`):
+- Add field vào `SystemConfig` (`config.py`)
+- Default `True`
+- Document trong YAML với comment khi nào set false
+- Gate ở cả 3 chỗ trên
+
+### RỦI RO
+- Bỏ check ở 1 trong 3 chỗ → command bay xuống hardware chưa lắp → no-op silent → state machine kẹt.
+- Hardcode flag = True trong code → YAML override không hiệu lực → operator không thể disable khi cần debug.
+- Đặt flag ở runtime detect (vd "nếu CPX không connect thì false") thay vì static config → behavior nhảy theo network state, khó reproduce bug.
+
+---
+
+## RULE 19 — Position publish ≥ 10Hz, KHÔNG block bởi state machine
+
+### WHY
+GUI hiển thị vị trí servo real-time để operator giám sát. Publish rate quá chậm (< 5Hz) làm GUI nhìn "đứng" sau homing/move, gây hiểu lầm "node treo". Publish loop chia sẻ `_servo_lock` với state machine Modbus calls — nếu publish chiếm lock lâu, JOG/STOP bị block.
+
+### HOW
+`_positions_bg_loop` chạy thread riêng `time.sleep(0.1)` (10Hz). `_publish_positions` dùng `_servo_lock.acquire(timeout=0.05)`:
+- Nếu lock free → đọc thật từ Modbus
+- Nếu lock busy (state machine đang dùng) → fallback `_pos_cache` (giá trị lần đọc trước), continue tới servo kế
+
+Cache update mỗi lần đọc thành công. JOG/STOP có 50ms preempt window → không bao giờ chờ publish.
+
+### RỦI RO
+- Giảm rate xuống 2Hz (500ms) → GUI thấy 0.0mm chậm ~1s sau homing → user tưởng treo.
+- Bỏ try-acquire, dùng `with self._servo_lock` → publish có thể giữ lock 100-500ms (Modbus timeout) → JOG bấm bị delay perceptible.
+- Bỏ cache fallback → publish skip servo này cycle → JSON thiếu key → GUI hiển thị "--" thay vì giá trị cũ.
+- Đẩy lên 50Hz (20ms) → Modbus read 5-20ms × 2 servo ≥ cycle → spam lock, không còn window cho JOG.
+
+---
+
 ## Quy trình thay đổi rule
 
 Nếu phải đổi một trong các rule trên:
@@ -412,3 +516,4 @@ Nếu phải đổi một trong các rule trên:
 ---
 
 *Created: 2026-05-16 — first version after blocking-fix-v2 series of changes.*
+*Updated: 2026-05-25 — added RULE 16 (chốt STATE 1/2), 17 (CPX độc lập), 18 (presence flags), 19 (position publish 10Hz).*
