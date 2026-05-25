@@ -506,10 +506,12 @@ class CartridgeSystem(Node):
     def _connect_io(self, idx: int, ip: str):
         """
         Kết nối đến IO Module Festo CPX-AP qua EtherNet/IP (tối đa 3 lần thử).
-        idx=1 → Module chính (S1–S16, valve cylinder 1/2, gripper, picker)
+        idx=1 → Module chính (S1–S16, valve cylinder 1/2/3, gripper, picker)
         idx=2 → Module phụ output side (S17–S24)
-        Khi kết nối Module 1 thành công: reset tất cả valve về 0V để đảm bảo
-        trạng thái an toàn (cylinder retracted) ngay khi khởi động node.
+        Khi kết nối Module 1 thành công:
+          1. Reset gripper + picker về trạng thái NHẢ an toàn (5/3 valve, ch0-3).
+          2. Smart init Cyl3 theo sensor thực tế S6/S15/S16 (nếu cyl3_present=true).
+          Cyl1/Cyl2 GIỮ NGUYÊN state (không reset — RULE 16 chốt workflow Pos1).
         """
         for attempt in range(1, 4):
             try:
@@ -530,6 +532,8 @@ class CartridgeSystem(Node):
                                 self.get_logger().info("Init valves: gripper+picker → NHẢ (safe)")
                     except Exception as ve:
                         self.get_logger().warn(f"Failed to init valves: {ve}")
+                    # Smart init Cyl3 dựa trên sensor thực tế (S6 tray + S15/S16 feedback)
+                    self._init_cyl3_state()
                 else:
                     self.io_module_2 = mod
                 self.get_logger().info(f"IO {idx} {ip} OK")
@@ -539,6 +543,63 @@ class CartridgeSystem(Node):
                 if attempt < 3:
                     time.sleep(3.0)
         self.get_logger().error(f"IO {idx} module failed — sensor reads will be False")
+
+    def _init_cyl3_state(self):
+        """
+        Smart Cyl3 init khi CPX 253 vừa connect — đưa Cyl3 về trạng thái khớp
+        với khay thực tế tại Tray Pos1, tránh va chạm khi STATE 2/3 chạy lần đầu.
+
+        Logic:
+          • S6 ON (có khay) + S15 ON (Cyl3 đang retract) → EXTEND để cố định khay.
+          • S6 OFF (không khay) → RETRACT để chừa chỗ cho khay sắp hạ.
+          • Case khác (S6 ON + S15 OFF): giữ nguyên — có thể Cyl3 đang extended (S16 ON)
+            hoặc unknown state (cả 2 sensor OFF) — không tự động override khi unsure.
+
+        Chỉ chạy nếu cyl3_present=true. Đọc sensor TRỰC TIẾP từ io_module (cache
+        _io_bg_loop chưa start tại thời điểm này).
+        """
+        if not self._conf('cyl3_present', True):
+            return
+        if not self.io_module:
+            return
+        try:
+            channels = []
+            for sub in self.io_module.modules:
+                if sub.is_function_supported("read_channels"):
+                    ch = sub.read_channels()
+                    if isinstance(ch, list):
+                        channels.extend(ch)
+            if len(channels) < 16:
+                self.get_logger().warn(
+                    f"[INIT-CYL3] Sensor read trả {len(channels)} channel (< 16) — skip smart init"
+                )
+                return
+
+            s6  = bool(channels[5])    # S6_CHECK_TRAY_P1 (sid=6 → index 5)
+            s15 = bool(channels[14])   # S15_CYL3_RETRACTED (sid=15 → index 14)
+            s16 = bool(channels[15])   # S16_CYL3_EXTENDED (sid=16 → index 15)
+            sensor_str = f"S6={'ON' if s6 else 'OFF'} S15={'ON' if s15 else 'OFF'} S16={'ON' if s16 else 'OFF'}"
+
+            if s6 and s15:
+                self.get_logger().info(
+                    f"[INIT-CYL3] {sensor_str} → có khay + cyl3 retract → EXTEND giữ khay"
+                )
+                self._cyl3_extend()
+            elif not s6:
+                self.get_logger().info(
+                    f"[INIT-CYL3] {sensor_str} → không có khay → RETRACT chừa chỗ cho khay hạ"
+                )
+                self._cyl3_retract()
+            else:
+                # S6 ON + S15 OFF: giữ nguyên (có thể đang extended hoặc unknown)
+                self.get_logger().info(
+                    f"[INIT-CYL3] {sensor_str} → giữ nguyên trạng thái Cyl3"
+                )
+                # Set expected state để monitor không cảnh báo false trong vài giây đầu
+                if s16:
+                    self._cyl3_set_expected("extended")
+        except Exception as e:
+            self.get_logger().warn(f"[INIT-CYL3] exception: {e}")
 
     def _connect_servo(self, sid: int, ip: str, attempts: int = 5) -> bool:
         """
