@@ -318,7 +318,8 @@ class CartridgeSystem(Node):
         self._s10_prev           = False
 
         # Cyl3 safety watchdog state — force retract khi S13+S14 cùng OFF
-        self._cyl3_safety_active    = False
+        # State của _cyl3_safety_check: '' | 'extending' | 'extended' | 'retracting' | 'retracted'
+        self._cyl3_safety_active    = ''
         self._cyl3_safety_last_fire = 0.0
 
         # Cyl3 feedback monitor — đối chiếu lệnh extend/retract với S15/S16
@@ -2553,40 +2554,67 @@ class CartridgeSystem(Node):
 
     def _cyl3_safety_check(self):
         """
-        Global safety: S13_OUT1_TRAYPOS1 + S14_OUT2_TRAYPOS1 cùng OFF
-        ⇒ không có khay tại Tray Pos1 ⇒ force Cyl3 RETRACT.
-        Chạy mỗi tick. Edge-trigger log + refresh IO mỗi 1s khi điều kiện vẫn đúng.
+        Đồng bộ Cyl3 với cảm biến khay theo policy `S6 ON ↔ S16 ON`:
+          • S6 ON  → ép Cyl3 EXTEND (giữ khay)
+          • S6 OFF → ép Cyl3 RETRACT (chừa chỗ)
+
+        Chạy mỗi tick (50ms). Edge-trigger log + refresh lệnh 1s khi sensor + actuator
+        chưa khớp (S6 ON nhưng S16 OFF, hoặc S6 OFF nhưng S15 OFF). Khi đã khớp
+        (S6 ON+S16 ON hoặc S6 OFF+S15 ON) → không gửi lệnh nữa, chỉ log 1 lần.
 
         LOCK-OUT trong STATE 2A:
-        Khi đã trigger STATE 2 (state_in ∈ S2A_*), watchdog này bị disable. Mục đích:
-        operator KHÔNG được phép lấy khay output ra giữa chu trình STATE 2 — Cyl3
-        phải giữ chặt khay cho đến khi S2A hoàn tất + Cyl3 extend khay mới ở A9b.
-        Ngoài STATE 2A (IDLE, S1_*, STATE 3/4) watchdog hoạt động bình thường, cho
-        phép operator lấy khay output bất kỳ lúc nào.
+        Khi state_in ∈ S2A_*, sync này bị disable — state machine quản lý Cyl3
+        theo workflow (extend ở A9b, không retract giữa chừng). Operator không lấy
+        được khay output giữa chu trình STATE 2.
+        Ngoài STATE 2A (IDLE/S1_*/STATE 3/4) sync hoạt động liên tục.
+
+        _cyl3_safety_active: '' | 'extending' | 'extended' | 'retracting' | 'retracted'
         """
         if not self._conf('cyl3_present', True):
             return
         # Lock-out trong STATE 2A
         if self.state_in.name.startswith('S2A_'):
             if self._cyl3_safety_active:
-                self._cyl3_safety_active = False
+                self._cyl3_safety_active = ''
                 self.get_logger().info(
-                    "[SAFETY] Đang ở STATE 2A — disable S13/S14 watchdog (giữ Cyl3 cố định khay)"
+                    "[CYL3-SYNC] Đang ở STATE 2A — disable S6 mirror, state machine quản lý Cyl3"
                 )
             return
-        s13, s14 = self._snap(S13_OUT1_TRAYPOS1, S14_OUT2_TRAYPOS1)
-        both_off = (not s13) and (not s14)
+
+        s6 = self.sensor(S6_CHECK_TRAY_P1)
+        s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
         now = time.time()
-        if both_off:
-            if not self._cyl3_safety_active:
-                self._cyl3_safety_active = True
-                self.get_logger().warn("[SAFETY] S13+S14 OFF → force Cyl3 RETRACT")
+
+        if s6:
+            # S6 ON → cần Cyl3 EXTENDED
+            if s16:
+                # Đã extended → done, idle
+                if self._cyl3_safety_active != 'extended':
+                    if self._cyl3_safety_active == 'extending':
+                        self.get_logger().info("[CYL3-SYNC] Cyl3 đã extended (S16 ON) — khay được giữ")
+                    self._cyl3_safety_active = 'extended'
+                return
+            # Cần extend
+            if self._cyl3_safety_active != 'extending':
+                self._cyl3_safety_active = 'extending'
+                self.get_logger().info("[CYL3-SYNC] S6 ON (có khay) → Cyl3 EXTEND")
+            if now - self._cyl3_safety_last_fire >= 1.0:
+                self._cyl3_extend()
+                self._cyl3_safety_last_fire = now
+        else:
+            # S6 OFF → cần Cyl3 RETRACTED
+            if s15:
+                if self._cyl3_safety_active != 'retracted':
+                    if self._cyl3_safety_active == 'retracting':
+                        self.get_logger().info("[CYL3-SYNC] Cyl3 đã retracted (S15 ON) — đường thông")
+                    self._cyl3_safety_active = 'retracted'
+                return
+            if self._cyl3_safety_active != 'retracting':
+                self._cyl3_safety_active = 'retracting'
+                self.get_logger().warn("[CYL3-SYNC] S6 OFF (không khay) → Cyl3 RETRACT chừa chỗ")
             if now - self._cyl3_safety_last_fire >= 1.0:
                 self._cyl3_retract()
                 self._cyl3_safety_last_fire = now
-        elif self._cyl3_safety_active:
-            self._cyl3_safety_active = False
-            self.get_logger().info("[SAFETY] S13/S14 đã ON lại — release Cyl3 retract force")
 
     def _control_loop(self):
         """
