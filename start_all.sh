@@ -278,6 +278,21 @@ else
 fi
 
 # ══════════════════════════════════════════
+# [7b] VFD Logic Node — Pi5 (đọc S1/S2/S3, publish /vfd/cmd_run)
+# ══════════════════════════════════════════
+LOG_VFD_LOGIC="$LOG_DIR/vfd_logic_node.log"
+VFD_LOGIC_PY="$WS/install/unified_control_gui/lib/unified_control_gui/vfd_logic_node.py"
+echo "  [7b]  📊 VFD Logic Node (S1/S2/S3 → /vfd/cmd_run)..."
+if [ -x "$VFD_LOGIC_PY" ]; then
+    python3 "$VFD_LOGIC_PY" > "$LOG_VFD_LOGIC" 2>&1 &
+    PID_VFD_LOGIC=$!
+    echo "        PID=$PID_VFD_LOGIC  Log: $LOG_VFD_LOGIC"
+    echo "$PID_VFD_LOGIC" >> "$PIDFILE"
+else
+    echo "        ⚠️  $VFD_LOGIC_PY không tồn tại — chạy: colcon build --packages-select unified_control_gui"
+fi
+
+# ══════════════════════════════════════════
 # [8] RS485 BUS NODE — RevPi A (Loadcell + VFD)
 # ══════════════════════════════════════════
 REVPI_HOST="${REVPI_HOST:-revpi-a}"

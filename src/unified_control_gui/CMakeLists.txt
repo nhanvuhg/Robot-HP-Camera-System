@@ -75,4 +75,9 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(PROGRAMS
+  scripts/vfd_logic_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()

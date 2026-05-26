@@ -264,7 +264,8 @@ public:
       "/vfd/cmd_run", 10,
       [this](const std_msgs::msg::Bool::SharedPtr msg) {
         if (msg->data && !running_) {
-            // Start motor
+            // Force ref_hz mỗi lần start để chắc tần số đúng dù ai có đổi qua HMI/Modbus
+            write_reg(REG_LFR_, static_cast<int>(ref_hz_ * ref_scale_), slave_id_);
             write_reg(REG_CMD_, 0x0007, slave_id_); // Switch On
             rclcpp::sleep_for(50ms);
             write_reg(REG_CMD_, CMD_RUN_FWD_, slave_id_); // Enable Operation
@@ -273,7 +274,8 @@ public:
             write_reg(REG_CMD_, CMD_ENABLE_, slave_id_); // Ready to switch on
         }
         running_ = msg->data;
-        RCLCPP_INFO(get_logger(), "[VFD] cmd_run = %s", running_ ? "START" : "STOP");
+        RCLCPP_INFO(get_logger(), "[VFD] cmd_run = %s @ %.1f Hz",
+                    running_ ? "START" : "STOP", ref_hz_);
       });
 
     sub_vfd_freq_ = create_subscription<std_msgs::msg::Float32>(
