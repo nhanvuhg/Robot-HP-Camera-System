@@ -577,7 +577,7 @@
 
                         // ── System Control ───────────────────────
                         Rectangle {
-                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.277
+                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.208
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
@@ -596,42 +596,22 @@
                                     font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // 2 Rows, columns are exactly equal in size for perfect balance
-                                ColumnLayout {
-                                    Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
-                                    RowLayout {
-                                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
-                                        CBtn {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            lbl: "START"
-                                            bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
-                                            onClicked: cartridgeController.startSystem()
-                                        }
-                                        CBtn {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            lbl: "RESUME"
-                                            bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
-                                            onClicked: cartridgeController.hmiResume()
-                                        }
-                                    }
-                                    RowLayout {
-                                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
-                                        CBtn {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            lbl: "STOP"
-                                            bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
-                                        CBtn {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            lbl: "PAUSE"
-                                            bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
-                                    }
+                                // 2 columns x 2 rows — same GridLayout structure as other cards
+                                GridLayout {
+                                    Layout.fillWidth: true; Layout.fillHeight: true
+                                    columns: 2; columnSpacing: 4; rowSpacing: 4
+
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.startSystem() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
                                 }
                             }
                         }
 
                         // ── State Navigation ─────────────────────
                         Rectangle {
-                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.277
+                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.313
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
@@ -655,12 +635,12 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 3; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   blinking: cartridgeController.uiHint === "press_homing"; onClicked: cartridgeController.gotoState("HOMING") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 1\nKhay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 3\nKhay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   blinking: cartridgeController.uiHint === "press_homing"; onClicked: cartridgeController.gotoState("HOMING") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 1\nKhay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 3\nKhay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
 
                                     CBtn {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
+                                        Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
                                         lbl: cartridgeController.currentMode === "jog" ? "STATE MODE" : "STOP STATE"
                                         bg: cartridgeController.currentMode === "jog" ? "#0a332e" : "#4d1a1a"
                                         bc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
@@ -673,15 +653,15 @@
                                             }
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 2\nKhay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.gotoState("STATE2") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; lbl: "STATE 4\nKhay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.gotoState("STATE4") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nKhay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.gotoState("STATE2") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 4\nKhay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.gotoState("STATE4") }
                                 }
                             }
                         }
 
                         // ── Control Cylinder ──────────────────────
                         Rectangle {
-                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.277
+                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.313
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
@@ -700,81 +680,18 @@
                                     font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                RowLayout {
+                                // 3 columns x 2 rows — same GridLayout structure as State Navigation
+                                GridLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true
-                                    spacing: 6
+                                    columns: 3; columnSpacing: 4; rowSpacing: 4
 
-                                    // Cyl1 Column
-                                    ColumnLayout {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        spacing: 4
-                                        Text {
-                                            text: "CYLINDER INY"; color: root.cCyan
-                                            font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter
-                                        }
-                                        CBtn {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            lbl: "EXTEND"
-                                            bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
-                                            isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'
-                                            onClicked: cartridgeController.cylinderCmd(1, true)
-                                        }
-                                        CBtn {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            lbl: "RETRACT"
-                                            bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
-                                            isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'
-                                            onClicked: cartridgeController.cylinderCmd(1, false)
-                                        }
-                                    }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nEXTEND";  bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; onClicked: cartridgeController.cylinderCmd(1, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nEXTEND"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; onClicked: cartridgeController.cylinderCmd(2, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nEXTEND"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; onClicked: cartridgeController.cylinderCmd(3, true) }
 
-                                    // Cyl2 Column
-                                    ColumnLayout {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        spacing: 4
-                                        Text {
-                                            text: "CYLINDER OUTY"; color: root.cCyan
-                                            font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter
-                                        }
-                                        CBtn {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            lbl: "EXTEND"
-                                            bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
-                                            isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'
-                                            onClicked: cartridgeController.cylinderCmd(2, true)
-                                        }
-                                        CBtn {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            lbl: "RETRACT"
-                                            bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
-                                            isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'
-                                            onClicked: cartridgeController.cylinderCmd(2, false)
-                                        }
-                                    }
-
-                                    // Cyl3 Column
-                                    ColumnLayout {
-                                        Layout.fillWidth: true; Layout.fillHeight: true
-                                        spacing: 4
-                                        Text {
-                                            text: "CYLINDER HOLDTRAY"; color: root.cCyan
-                                            font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter
-                                        }
-                                        CBtn {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            lbl: "EXTEND"
-                                            bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent
-                                            isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'
-                                            onClicked: cartridgeController.cylinderCmd(3, true)
-                                        }
-                                        CBtn {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
-                                            lbl: "RETRACT"
-                                            bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen
-                                            isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'
-                                            onClicked: cartridgeController.cylinderCmd(3, false)
-                                        }
-                                    }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nRETRACT";  bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nRETRACT"; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nRETRACT"; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
                                 }
                             }
                         }
@@ -1988,8 +1905,8 @@
 
             signal clicked(); signal pressed(); signal released()
 
-            width:  w > 0 ? w : cbrT.width + padH * 2
-            height: cbrT.height + padV * 2
+            implicitWidth:  w > 0 ? w : cbrT.implicitWidth + padH * 2
+            implicitHeight: cbrT.implicitHeight + padV * 2
             radius: 4
             color: {
                 if (!active) return bg
