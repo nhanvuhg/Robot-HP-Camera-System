@@ -63,84 +63,75 @@ echo "🚀 Full System — Cartridge + Robot Launcher"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# ─── Check for duplicate processes ───
-EXISTING=$(ps aux | grep -E "(cartridge_providesystem_py|robot_logic_node|dobot_bringup|gripper_festo|dual_csi_camera|yolo_ros_hailort|unified_control_gui)" | grep -v -E "(grep|tail|start_all)" | wc -l || true)
-if [ "${EXISTING:-0}" -gt 0 ]; then
-    echo "⚠️  WARNING: Found $EXISTING existing process(es)! Tự động dọn dẹp..."
-    pkill -9 -f "cartridge_providesystem_py" 2>/dev/null || true
-    pkill -9 -f "cartridge_gui.py" 2>/dev/null || true
-    pkill -9 -f "unified_control_gui/unified_control_gui" 2>/dev/null || true
-    pkill -9 -f "robot_logic_node" 2>/dev/null || true
-    pkill -9 -f "motion_executor" 2>/dev/null || true
-    pkill -9 -f "dobot_bringup" 2>/dev/null || true
-    pkill -9 -f "gripper_festo_node" 2>/dev/null || true
-    pkill -9 -f "dual_csi_camera" 2>/dev/null || true
-    pkill -9 -f "yolo_ros_hailort" 2>/dev/null || true
-    pkill -9 -f "component_container" 2>/dev/null || true
-    sleep 2
-fi
-
-# ─── Kill old processes bằng PID file (tránh pkill nhầm) ───
+# ─── Cleanup process cũ (gộp 3 vòng pkill thành 1) ───
 PIDFILE="/tmp/cartridge_system.pid"
-echo "🔍 Killing old processes..."
+NODE_PATTERNS=(
+    "cartridge_providesystem_py"
+    "cartridge_gui.py"
+    "unified_control_gui/unified_control_gui"
+    "robot_logic_node"
+    "motion_executor"
+    "dobot_bringup"
+    "gripper_festo_node"
+    "dual_csi_camera"
+    "yolo_ros_hailort"
+    "component_container"
+)
 
-if [ -f "$PIDFILE" ]; then
-    OLD_PIDS=$(cat "$PIDFILE" 2>/dev/null || true)
-    for pid in $OLD_PIDS; do
-        if kill -0 "$pid" 2>/dev/null; then
-            echo "   ⏹️  Stopping PID=$pid"
-            kill -TERM "$pid" 2>/dev/null || true
+NEED_CLEANUP=0
+for p in "${NODE_PATTERNS[@]}"; do
+    if pgrep -f "$p" >/dev/null 2>&1; then NEED_CLEANUP=1; break; fi
+done
+[ -f "$PIDFILE" ] && NEED_CLEANUP=1
+
+if [ "$NEED_CLEANUP" -eq 1 ]; then
+    echo "🔍 Cleanup process cũ..."
+    # Bước 1: TERM theo PIDFILE (graceful, có thời gian flush log/đóng socket)
+    if [ -f "$PIDFILE" ]; then
+        OLD_PIDS=$(cat "$PIDFILE" 2>/dev/null || true)
+        for pid in $OLD_PIDS; do
+            kill -0 "$pid" 2>/dev/null && kill -TERM "$pid" 2>/dev/null || true
+        done
+        sleep 1
+        for pid in $OLD_PIDS; do
+            kill -9 "$pid" 2>/dev/null || true
+        done
+        rm -f "$PIDFILE"
+    fi
+    # Bước 2: pkill -9 thẳng các pattern (catch-all cho process không có trong PIDFILE)
+    for p in "${NODE_PATTERNS[@]}"; do
+        pkill -9 -f "$p" 2>/dev/null || true
+    done
+    pkill -9 -f "192.168.27" 2>/dev/null || true
+    fuser -k 29999/tcp 2>/dev/null || true
+    sleep 1
+
+    # Đợi process chính chết (giảm 12s → 4s — pkill -9 thường < 1s)
+    _wait=0
+    while pgrep -f "cartridge_providesystem_py" >/dev/null 2>&1; do
+        if [ $_wait -ge 4 ]; then
+            echo "⚠️  Process vẫn còn sau 4s — tiếp tục"
+            break
         fi
+        sleep 1
+        _wait=$((_wait + 1))
     done
-    sleep 2
-    for pid in $OLD_PIDS; do
-        kill -9 "$pid" 2>/dev/null || true
+
+    # Đợi TCP đến servo/IO :502 đóng (giảm 30s → 5s — TIME_WAIT trên local
+    # KHÔNG block outbound mới vì port destination khác, chỉ cosmetic).
+    _wait=0
+    while ss -tn state established 2>/dev/null | grep -qE "192\.168\.27\.(24[89]|25[0-3]):502"; do
+        if [ $_wait -ge 5 ]; then
+            break
+        fi
+        sleep 1
+        _wait=$((_wait + 1))
     done
-    rm -f "$PIDFILE"
+
+    echo "✅ Clean slate"
+else
+    echo "✅ No old processes — skip cleanup"
 fi
-
-# Fallback pkill — also kill any scripts holding Dobot ports
-# Kill any Python scripts holding Dobot dashboard/motion ports
-pkill -9 -f "192.168.27" 2>/dev/null || true
-fuser -k 29999/tcp 2>/dev/null || true
-pkill -9 -f "cartridge_providesystem_py" 2>/dev/null || true
-pkill -9 -f "cartridge_gui.py" 2>/dev/null || true
-pkill -9 -f "unified_control_gui/unified_control_gui" 2>/dev/null || true
-pkill -9 -f "robot_logic_node" 2>/dev/null || true
-pkill -9 -f "motion_executor" 2>/dev/null || true
-pkill -9 -f "dobot_bringup" 2>/dev/null || true
-pkill -9 -f "gripper_festo_node" 2>/dev/null || true
-pkill -9 -f "dual_csi_camera" 2>/dev/null || true
-pkill -9 -f "yolo_ros_hailort" 2>/dev/null || true
-sleep 1
-
-# Chờ đến khi process cũ kết thúc (tối đa 12s)
-_wait=0
-while pgrep -f "cartridge_providesystem_py" > /dev/null 2>&1; do
-    if [ $_wait -ge 12 ]; then
-        echo "⚠️  Process vẫn còn sau 12s — force kill lần 2"
-        pkill -9 -f "cartridge_providesystem_py" 2>/dev/null || true
-        sleep 2
-        break
-    fi
-    echo "   ⏳ Đợi process cũ kết thúc... ($_wait s)"
-    sleep 1
-    _wait=$((_wait + 1))
-done
-
-# Chờ TCP connections đến servo/IO đóng hết (tối đa 30s)
-_wait=0
-while ss -tn state established | grep -qE "192\.168\.27\.(24[89]|25[0-3]):502"; do
-    if [ $_wait -ge 30 ]; then
-        echo "⚠️  TCP connections vẫn còn sau 30s — tiếp tục"
-        break
-    fi
-    echo "   ⏳ Đợi TCP connections đóng... ($_wait s)"
-    sleep 1
-    _wait=$((_wait + 1))
-done
-
-echo "✅ Clean slate"
 echo ""
 
 # ── PIDs ──
@@ -193,7 +184,7 @@ echo "  [1/7] 🔧 Cartridge Provide System Node..."
 PID_PROVIDE=$!
 echo "        PID=$PID_PROVIDE  Log: $LOG_PROVIDE"
 echo "$PID_PROVIDE" > "$PIDFILE"
-sleep 3
+sleep 2
 
 # ══════════════════════════════════════════
 # ROBOT SYSTEM
