@@ -174,6 +174,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr scale_result_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr speed_ratio_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr system_start_pub_;  // /system/start_button — shared with cartridge
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr system_pause_pub_;  // /system/pause_button — sync sang cartridge
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr system_resume_pub_; // /system/resume_button — sync sang cartridge
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ignore_scale_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr gripper_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr picker_cmd_pub_;

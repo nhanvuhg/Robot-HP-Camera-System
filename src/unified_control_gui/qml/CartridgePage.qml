@@ -2,6 +2,8 @@
     import QtQuick.Controls 2.15
     import QtQuick.Layouts 1.15
 
+    // NOTE: "cartridge systems" refers strictly to this "ROS2 - CARTRIDGE PROVISION SYSTEM" page (CartridgePage.qml).
+
     // ─── CSS VARIABLES (from cartridge_gui.py) ──────────────────────────────────
     // --bg:       #0c0c1d   page background
     // --bg2:      #1a1a35   card background
@@ -19,7 +21,7 @@
         id: root
         anchors.fill: parent
 
-        readonly property int headerH:  60
+        readonly property int headerH:  70
         readonly property int tabbarH:  44
         readonly property int gap:       4
         readonly property int pad:       6
@@ -62,58 +64,62 @@
                 anchors.fill: parent
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
-                spacing: 0
+                spacing: 8
                 Button {
-                    text: "\u25c0"; Layout.preferredWidth: 52; Layout.preferredHeight: 42
-                    font.pixelSize: 20; font.bold: true; onClicked: stackView.pop()
-                    background: Rectangle { radius: 6; color: "#2a2a50"; border.color: root.cAccent; border.width: 2 }
-                    contentItem: Text { text: parent.text; font: parent.font; color: root.cAccent; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    id: backBtn
+                    Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    onClicked: stackView.pop()
+                    background: Rectangle { radius: 6; color: "transparent"; border.color: "#134357"; border.width: 2 }
+                    contentItem: Image {
+                        source: "qrc:/icons/qml/icons/reply_arrow.svg"
+                        width: 24; height: 24
+                        anchors.centerIn: parent
+                        fillMode: Image.PreserveAspectFit; smooth: true
+                    }
                 }
-                Item { width: 14 }
-                Row { spacing: 0
-                    Text { text: "Cartridge"; color: root.cAccent; font.pixelSize: 26; font.bold: true; font.letterSpacing: 1.5 }
-                    Text { text: " System";   color: root.cText;   font.pixelSize: 26; font.bold: true; font.letterSpacing: 1.5 }
+                Item { width: 6 }
+                Text {
+                    text: "ROS2 - CARTRIDGE PROVISION SYSTEM"
+                    color: "#6cf"
+                    font.pixelSize: 24; font.bold: true; font.letterSpacing: 1.5
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
                     id: stateBadge
-                    Layout.preferredHeight: 28; radius: 8
-                    Layout.preferredWidth: sbRow.implicitWidth + 22
-                    color: root.cBg
-                    border.color: {
-                        var s = cartridgeController.systemState.toUpperCase()
-                        if (s.indexOf("ERROR") !== -1) return root.cRed
-                        if (s === "IDLE" || s === "UNKNOWN" || s === "") return root.cOrange
-                        return root.cGreen
-                    }
-                    Behavior on border.color { ColorAnimation { duration: 200 } }
-                    Row { id: sbRow; anchors.centerIn: parent; spacing: 8
+                    Layout.preferredHeight: 50; radius: 6
+                    Layout.preferredWidth: sbRow.implicitWidth + 24
+                    color: "transparent"; border.color: "#134357"; border.width: 2
+                    Row {
+                        id: sbRow
+                        anchors.centerIn: parent; spacing: 8
                         Rectangle {
                             id: stateDot
                             width: 9; height: 9; radius: 4.5
                             anchors.verticalCenter: parent.verticalCenter
-                            color: stateBadge.border.color
-                            Behavior on color { ColorAnimation { duration: 200 } }
+                            color: {
+                                var s = cartridgeController.systemState.toUpperCase()
+                                if (s.indexOf("ERROR") !== -1) return root.cRed
+                                if (s === "IDLE" || s === "UNKNOWN" || s === "") return root.cOrange
+                                return root.cGreen
+                            }
                             SequentialAnimation on opacity { loops: Animation.Infinite
                                 NumberAnimation { to: 0.35; duration: 900 }
-                                NumberAnimation { to: 1.0;  duration: 900 } }
+                                NumberAnimation { to: 1.0;  duration: 900 }
+                            }
                         }
-                        Text { text: cartridgeController.systemState.replace(/\|/g, "    •    "); color: root.cText
+                        Text {
+                            text: cartridgeController.systemState.toUpperCase().replace(/\|/g, "   •   ")
+                            color: "#6cf"
                             font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
-                            anchors.verticalCenter: parent.verticalCenter }
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
                     }
                 }
-                Item { width: 10 }
+                Item { width: 4 }
                 Rectangle {
-                    Layout.preferredHeight: 28; radius: 6
-                    Layout.preferredWidth: hmRow.implicitWidth + 16
-                    color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? "#2a1a00"
-                         : (cartridgeController.systemState === "idle" && cartridgeController.currentMode !== "") ? "#0a2a0a"
-                         : "#081e29"
-                    border.color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? root.cOrange
-                                : (cartridgeController.systemState === "idle" && cartridgeController.currentMode !== "") ? root.cGreen
-                                : root.cBorder
-                    border.width: 1
+                    Layout.preferredHeight: 50; radius: 6
+                    Layout.preferredWidth: hmRow.implicitWidth + 24
+                    color: "transparent"; border.color: "#134357"; border.width: 2
                     Row {
                         id: hmRow
                         anchors.centerIn: parent; spacing: 6
@@ -121,22 +127,18 @@
                             text: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? "⟳ HOMING..."
                                 : (cartridgeController.currentMode !== "" && cartridgeController.systemState === "idle") ? "✓ HOMED"
                                 : "○ NOT HOMED"
-                            color: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? root.cOrange
-                                 : (cartridgeController.currentMode !== "" && cartridgeController.systemState === "idle") ? root.cGreen
-                                 : root.cDim
-                            font.pixelSize: 11; font.bold: true
+                            color: "#6cf"
+                            font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
                         }
                     }
                 }
-                Item { Layout.fillWidth: true }
+                Item { width: 4 }
                 Rectangle {
-                    id: modePill; Layout.preferredHeight: 28; radius: 20
+                    id: modePill; Layout.preferredHeight: 50; radius: 6
                     property string m: cartridgeController.currentMode
                     property bool isIdle: m === "idle" || m === ""
                     Layout.preferredWidth: mpLbl.implicitWidth + 26
-                    color: isIdle ? "#2a1a00" : m === "auto" ? "#0a332e" : m === "jog" ? "#332e0a" : "#051a25"
-                    border.color: isIdle ? "#ffd740" : m === "auto" ? root.cGreen : m === "jog" ? root.cOrange : "#5cf4f1"
-                    border.width: isIdle ? 2 : 1
+                    color: "transparent"; border.color: "#134357"; border.width: 2
 
                     // Nhấp nháy khi chưa chọn mode
                     SequentialAnimation on opacity {
@@ -150,40 +152,45 @@
                         id: mpLbl
                         anchors.centerIn: parent
                         text: modePill.isIdle ? "⚠  SELECT MODE" : modePill.m.toUpperCase()
-                        color: modePill.isIdle ? "#ffd740" : modePill.border.color
-                        font.pixelSize: modePill.isIdle ? 12 : 13
-                        font.bold: true; font.letterSpacing: 1
+                        color: "#6cf"
+                        font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
                     }
                 }
-
-                // ── Reset Faults button trong header ──
-                Item { width: 8 }
+                Item { width: 4 }
                 Button {
-                    text: "🔄 Faults"
-                    Layout.preferredHeight: 26
-                    font.pixelSize: 11; font.bold: true
+                    id: faultsBtn
+                    text: "CLEAR ERROR"
+                    Layout.preferredWidth: 130; Layout.preferredHeight: 50
+                    font.pixelSize: 13; font.bold: true
                     onClicked: cartridgeController.resetFaults()
-                    background: Rectangle { radius: 4; color: "#3a1a0a"; border.color: root.cOrange; border.width: 1 }
-                    contentItem: Text { text: parent.text; font: parent.font; color: root.cOrange;
-                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                }
-                Item { width: 8 }
-
-                // ── Close (X) button — tắt giao diện ──
-                Button {
-                    id: closeBtn
-                    text: "✕"
-                    Layout.preferredWidth: 32; Layout.preferredHeight: 26
-                    font.pixelSize: 14; font.bold: true
-                    onClicked: Qt.quit()
                     background: Rectangle {
-                        radius: 4
-                        color: closeBtn.hovered ? "#5a0a0a" : "#3a0a0a"
-                        border.color: root.cRed; border.width: 1
+                        radius: 6
+                        color: faultsBtn.hovered ? "#332e0a" : "transparent"
+                        border.color: "#ffd740"; border.width: 2
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
-                    contentItem: Text { text: parent.text; font: parent.font; color: root.cRed;
-                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    contentItem: Text {
+                        text: parent.text; font: parent.font; color: "#ffd740"
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    }
+                }
+                Item { width: 4 }
+                Button {
+                    id: closeBtn
+                    Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    onClicked: Qt.quit()
+                    background: Rectangle {
+                        radius: 6
+                        color: closeBtn.hovered ? "#5a0a0a" : "transparent"
+                        border.color: "#134357"; border.width: 2
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                    }
+                    contentItem: Image {
+                        source: "qrc:/icons/qml/icons/power_settings.svg"
+                        width: 24; height: 24
+                        anchors.centerIn: parent
+                        fillMode: Image.PreserveAspectFit; smooth: true
+                    }
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
                     ToolTip.text: "Tắt giao diện"
@@ -432,8 +439,8 @@
                                 }
 
                                 Text {
-                                    text: "MODE SELECTION"; color: root.cAccent
-                                    font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
+                                    text: "MODE SELECTION"; color: "#6cf"
+                                    font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
                                 // ── Dropdown Mode Selector ──────────
@@ -592,8 +599,8 @@
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
-                                    text: "SYSTEM CONTROL"; color: root.cAccent
-                                    font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
+                                    text: "SYSTEM CONTROL"; color: "#6cf"
+                                    font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
                                 // 2 columns x 2 rows — same GridLayout structure as other cards
@@ -602,7 +609,7 @@
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.startSystem() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.hmiResume() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.resumeSystem() }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
                                 }
@@ -626,8 +633,8 @@
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
-                                    text: "STATE NAVIGATION"; color: root.cAccent
-                                    font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
+                                    text: "STATE NAVIGATION"; color: "#6cf"
+                                    font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
                                 // 3 columns x 2 rows square grid
@@ -676,8 +683,8 @@
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
-                                    text: "CONTROL CYLINDER"; color: root.cAccent
-                                    font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
+                                    text: "CONTROL CYLINDER"; color: "#6cf"
+                                    font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
                                 // 3 columns x 2 rows — same GridLayout structure as State Navigation
@@ -710,8 +717,8 @@
                             anchors.margins: 8
                             spacing: 4
 
-                            Row { width: parent.width; height: 20; spacing: 6
-                                Text { text: "SERVO CONTROL"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5; anchors.verticalCenter: parent.verticalCenter }
+                            Row { width: parent.width; height: 24; spacing: 6
+                                Text { text: "SERVO CONTROL"; color: "#6cf"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5; anchors.verticalCenter: parent.verticalCenter }
                                 // hidden data source — syncs jogVelMms from FAS PNU via _jog_vel topic
                                 Item {
                                     id: velDisplay
@@ -797,48 +804,152 @@
                                                          } catch(e) {}
                                                      }
                                                  }
-                                             }
+                                            }
 
-                                             // JOG velocity from FAS (read-only)
-                                             Row {
-                                                 width: parent.width; spacing: 4
-                                                 anchors.horizontalCenter: parent.horizontalCenter
-                                                 Text { text: "Vel:"; color: root.cDim; font.pixelSize: 16; anchors.verticalCenter: parent.verticalCenter }
-                                                 Text {
-                                                     id: velText
-                                                     text: cardItem.jogVelMms > 0 ? (cardItem.jogVelMms / 1000.0).toFixed(3) + " m/s" : "–"
-                                                     color: root.cCyan
-                                                     font.pixelSize: 17; font.bold: true; font.family: "monospace"
-                                                     anchors.verticalCenter: parent.verticalCenter
-                                                 }
-                                             }
+                                            // VELOCITY Row (aligned to left label)
+                                            RowLayout {
+                                                width: parent.width
+                                                spacing: 8
+                                                Text {
+                                                    text: "VELOCITY"
+                                                    color: root.cDim
+                                                    font.pixelSize: 16
+                                                    font.bold: true
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    Layout.preferredWidth: 82
+                                                }
+                                                Rectangle {
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 42
+                                                    radius: 6
+                                                    color: "#081e29"; border.color: root.cBorder; border.width: 1
+                                                    Text {
+                                                        id: velText
+                                                        anchors.centerIn: parent
+                                                        text: cardItem.jogVelMms > 0 ? (cardItem.jogVelMms / 1000.0).toFixed(3) + " m/s" : "–"
+                                                        color: root.cCyan
+                                                        font.pixelSize: 16; font.bold: true; font.family: "monospace"
+                                                    }
+                                                }
+                                            }
 
-                                             // − STOP + (jog hoặc manual mode)
-                                             Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
-                                                 CBtn { lbl:"−"; padV:10; padH:16; fontSize: 22; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
-                                                     onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-", cardItem.jogVelMms) }
-                                                     onReleased: cartridgeController.jogStop(model.sid) }
-                                                 CBtn { lbl:"STOP"; padV:10; padH:8; fontSize: 18; bg:"#4d1a1a"; bc:root.cRed; tc:root.cRed; onClicked: cartridgeController.jogStop(model.sid) }
-                                                 CBtn { lbl:"+"; padV:10; padH:16; fontSize: 22; bg:root.cCard; bc:root.cBorder; tc:root.cText; active: servoRow.jogAllowed
-                                                     onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+", cardItem.jogVelMms) }
-                                                     onReleased: cartridgeController.jogStop(model.sid) }
-                                             }
+                                            // JOG Row (with - and + buttons, right-aligned and spanning width)
+                                            RowLayout {
+                                                width: parent.width
+                                                spacing: 8
+                                                Text {
+                                                    text: "JOG"
+                                                    color: root.cDim
+                                                    font.pixelSize: 16
+                                                    font.bold: true
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    Layout.preferredWidth: 82
+                                                }
+                                                RowLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 8
+                                                    CBtn {
+                                                        iconSource: "qrc:/icons/qml/icons/jog_neg.png"
+                                                        Layout.fillWidth: true; Layout.preferredWidth: 1
+                                                        Layout.preferredHeight: 42
+                                                        padV: 9; padH: 0; fontSize: 20
+                                                       bg: "#0a243a"; bc: "#6cf"; tc: "#6cf"
+                                                        active: servoRow.jogAllowed
+                                                        onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-", cardItem.jogVelMms) }
+                                                        onReleased: cartridgeController.jogStop(model.sid)
+                                                    }
+                                                    CBtn {
+                                                        iconSource: "qrc:/icons/qml/icons/jog_plus.png"
+                                                        Layout.fillWidth: true; Layout.preferredWidth: 1
+                                                        Layout.preferredHeight: 42
+                                                        padV: 9; padH: 0; fontSize: 20
+                                                        bg: "#0a243a"; bc: "#6cf"; tc: "#6cf"
+                                                        active: servoRow.jogAllowed
+                                                        onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+", cardItem.jogVelMms) }
+                                                        onReleased: cartridgeController.jogStop(model.sid)
+                                                    }
+                                                }
+                                            }
 
-                                             // HOMING (jog hoặc manual mode)
-                                             CBtn { lbl:"HOMING"; w:parent.width; padV:12; padH:12; fontSize: 20; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
+                                            // HOMING & CLEAR combined side-by-side to save vertical space
+                                            Row {
+                                                spacing: 6
+                                                width: parent.width
+                                                CBtn { lbl:"HOMING"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
+                                                CBtn { lbl:"CLEAR"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:"#4d3a0a"; bc:root.cOrange; tc:root.cOrange; onClicked: cartridgeController.clearServo(model.sid) }
+                                            }
 
-                                             // CLEAR (always available)
-                                             CBtn { lbl:"CLEAR"; w:parent.width; padV:12; padH:12; fontSize: 20; bg:"#4d3a0a"; bc:root.cOrange; tc:root.cOrange; onClicked: cartridgeController.clearServo(model.sid) }
+                                            // TARGET POSITION Row (with input & RUN button)
+                                            RowLayout {
+                                                width: parent.width
+                                                spacing: 8
+                                                Text {
+                                                    text: "TARGET\nPOSITION"
+                                                    color: root.cDim
+                                                    font.pixelSize: 11
+                                                    font.bold: true
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    Layout.preferredWidth: 82
+                                                }
+                                                RowLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 4
+                                                    Rectangle {
+                                                        Layout.fillWidth: true
+                                                        Layout.preferredHeight: 42
+                                                        radius: 6
+                                                        color: "#081e29"; border.color: "#6cf"; border.width: 2
+                                                        TextInput {
+                                                            id: posIn
+                                                            anchors.fill: parent; anchors.margins: 4
+                                                            text: "0.0"; font.pixelSize: 20; font.bold: true; font.family: "monospace"
+                                                            color: "#6cf"
+                                                            horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter
+                                                        }
+                                                    }
+                                                    Text { 
+                                                        text: "mm"
+                                                        color: "#6cf"
+                                                        font.pixelSize: 15
+                                                        font.bold: true
+                                                        Layout.alignment: Qt.AlignBottom
+                                                        Layout.preferredWidth: 24
+                                                        horizontalAlignment: Text.AlignHCenter 
+                                                    }
+                                                    CBtn {
+                                                        lbl: "RUN"
+                                                        Layout.preferredWidth: 80
+                                                        Layout.preferredHeight: 42
+                                                        padV: 0; fontSize: 16
+                                                        bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; active: servoRow.jogAllowed
+                                                        onClicked: { if(servoRow.jogAllowed) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } }
+                                                    }
+                                                }
+                                            }
 
-                                             // pos-row (jog mode required)
-                                             Row { spacing: 4; anchors.horizontalCenter: parent.horizontalCenter
-                                                 Rectangle { width:72; height:34; radius:6; color:root.cBg; border.color:root.cBorder
-                                                     TextInput { id:posIn; anchors.fill: parent; anchors.margins: 4; text:"0.0"; font.pixelSize:15; color:root.cText; horizontalAlignment:TextInput.AlignHCenter; verticalAlignment:TextInput.AlignVCenter } }
-                                                 Text { text:"mm"; color:root.cDim; font.pixelSize:12; anchors.verticalCenter:parent.verticalCenter; rightPadding:2 }
-                                                 CBtn { lbl:"RUN"; padV:10; padH:14; fontSize: 20; bg:root.cAccent; bc:root.cAccent; tc:"#fff"; active:servoRow.isJog
-                                                     onClicked: { if(servoRow.isJog) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } } }
-                                             }
-                                         }
+                                            // Limits display
+                                            Text {
+                                                text: model.sid === 1 ? "Min: -322 | Max: 560" : (model.sid === 2 ? "Min: -80 | Max: 1025" : "")
+                                                color: "#94a3b8"
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                                width: parent.width
+                                                horizontalAlignment: Text.AlignHCenter
+                                                visible: model.sid === 1 || model.sid === 2
+                                            }
+
+                                            // STOP button (full width safety button at bottom)
+                                            CBtn {
+                                                lbl: "STOP"
+                                                w: parent.width; h: 42
+                                                padV: 9
+                                                fontSize: 18
+                                                bg: "#4d1a1a"
+                                                bc: root.cRed
+                                                tc: root.cRed
+                                                onClicked: cartridgeController.jogStop(model.sid)
+                                            }
+                                        }
                                      }
                                  }
                              }
@@ -857,8 +968,8 @@
                             anchors.fill: parent
                             anchors.margins: 8
                             spacing: 4
-                            RowLayout { width: parent.width; height: 18
-                                Text { text: "LOG ACTIVITY"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
+                            RowLayout { width: parent.width; height: 24
+                                Text { text: "LOG ACTIVITY"; color: "#6cf"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
                                 CBtn { lbl:"Clear"; padV:4; padH:10; fontSize: 15; bg:root.cCard; bc:root.cBorder; tc:root.cText; onClicked: cartridgeController.clearLog() }
                             }
@@ -888,7 +999,7 @@
                         }
                     }
 
-                    // ─ SENSOR SIGNAL DISPLAY (grid-area: servo, full height) ──
+                    // ─ SENSOR SIGNALS (grid-area: servo, full height) ──
                     // Hiển thị read-only 20 sensor THẬT (S1-S10, S13-S22) từ IO module qua
                     // topic /providesystem/sensors_state. S11/S12 là VFD status (ATV Run/
                     // Fault) — monitor bởi vfd_logic_node, không hiển thị ở grid này. Cập
@@ -906,8 +1017,8 @@
 
                             // ── Tiêu đề ──
                             Text {
-                                text: "SENSOR SIGNAL DISPLAY"
-                                color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5
+                                text: "SENSOR SIGNAL"
+                                color: "#6cf"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                             }
 
                             // ── Status label ──
@@ -919,7 +1030,7 @@
                                 Layout.fillHeight: true      // ← KEY: chiếm hết không gian còn lại
                                 columns: 2
                                 columnSpacing: 4
-                                rowSpacing: 3
+                                rowSpacing: 2
 
                                 Repeater {
                                     model: ListModel {
@@ -960,7 +1071,7 @@
 
                                         Layout.fillWidth: true
                                         Layout.fillHeight: true          // ← mỗi nút chiếm đều phần chiều cao
-                                        Layout.minimumHeight: 28         // ← thu nhỏ để fit đủ 22 sensor (S1-S22)
+                                        Layout.minimumHeight: 20         // ← thu nhỏ để fit đủ 20 sensor
 
                                         radius: 3
                                         color: on_ ? "#0a332e" : root.cCard
@@ -974,17 +1085,17 @@
                                             Text {
                                                 text: model.slabel
                                                 color: sBtn.on_ ? root.cGreen : root.cText
-                                                font.pixelSize: 10; font.bold: true
+                                                font.pixelSize: 13; font.bold: true
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
                                             Text {
                                                 text: model.sdesc
-                                                color: root.cDim; font.pixelSize: 13
+                                                color: root.cDim; font.pixelSize: 10
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                                 visible: model.sdesc !== ""
                                             }
                                             Rectangle {
-                                                width: 5; height: 5; radius: 2
+                                                width: 4; height: 4; radius: 2
                                                 color: sBtn.on_ ? root.cGreen : "#134357"
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
@@ -1888,6 +1999,7 @@
         component CBtn: Rectangle {
             id: cbr
             property string lbl: ""
+            property string iconSource: ""
             property color bg:   root.cCard
             property color bc:   root.cBorder
             property color tc:   root.cText
@@ -1896,6 +2008,7 @@
             property int   padH: 12
             property int   fontSize: 16
             property int   w: 0
+            property int   h: 0
             property bool  _pressed: false
             property bool  _hovered: false
             property bool  isSelected: false
@@ -1906,7 +2019,7 @@
             signal clicked(); signal pressed(); signal released()
 
             implicitWidth:  w > 0 ? w : cbrT.implicitWidth + padH * 2
-            implicitHeight: cbrT.implicitHeight + padV * 2
+            implicitHeight: h > 0 ? h : cbrT.implicitHeight + padV * 2
             radius: 4
             color: {
                 if (!active) return bg
@@ -1973,6 +2086,17 @@
                 font.pixelSize: cbr.fontSize; font.bold: true; font.capitalization: Font.AllUppercase
                 anchors.verticalCenterOffset: (cbr.isSelected || cbr._pressed) ? 2 : 0
                 Behavior on color { ColorAnimation { duration: 80 } }
+                visible: cbr.iconSource === ""
+            }
+
+            Image {
+                id: cbrImg
+                anchors.centerIn: parent
+                source: cbr.iconSource
+                width: cbr.fontSize * 1.5; height: cbr.fontSize * 1.5
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                visible: cbr.iconSource !== ""
             }
 
             MouseArea { anchors.fill: parent; hoverEnabled: true

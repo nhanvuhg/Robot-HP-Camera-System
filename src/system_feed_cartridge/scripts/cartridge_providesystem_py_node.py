@@ -353,7 +353,8 @@ class CartridgeSystem(Node):
         self._input_tray_done     = False
         self._state1_enabled = False
         self._gui_confirmed  = False
-        self._system_paused  = False
+        self._system_paused  = False  # True = đã halt thực sự (graceful PAUSE đã promote)
+        self._pause_pending  = False  # True = user bấm PAUSE, chờ ranh giới state để promote
         self._input_trays_empty_debounce_count = 0
 
         # Watchdog
@@ -385,6 +386,7 @@ class CartridgeSystem(Node):
         self.create_subscription(Bool,   '/system/stop_button',              self._cb_stop,               qos)
         self.create_subscription(Bool,   '/system/soft_stop',                self._cb_soft_stop,          qos)
         self.create_subscription(Bool,   '/system/pause_button',             self._cb_pause,              qos)
+        self.create_subscription(Bool,   '/system/resume_button',            self._cb_resume,             qos)
         self.create_subscription(Bool,   '/robot/motion_busy',               self._cb_motion_busy,          qos)
         self.create_subscription(Bool,   '/robot/done_tray_output',          self._cb_done_tray_output,     qos)
         self.create_subscription(Bool,   '/robot/done_tray_input',           self._cb_done_tray_input,      qos)
@@ -1695,6 +1697,7 @@ class CartridgeSystem(Node):
 
         self._homing_abort.clear()
         self._system_paused = False
+        self._pause_pending = False
         self._system_running = True
         self._inx_moving = self._iny_moving = False
         self._state1_enabled = (self.operation_mode in ['auto', 'ai'])
@@ -1748,6 +1751,7 @@ class CartridgeSystem(Node):
         self._enter_s3(SystemState.IDLE)
         self._enter_s4(SystemState.IDLE)
         self._system_paused  = False
+        self._pause_pending  = False
         self._system_running = False
         self._input_tray_done = False
         self._motion_busy = False
@@ -1801,6 +1805,7 @@ class CartridgeSystem(Node):
         self._enter_s4(SystemState.IDLE)
 
         self._system_paused  = False
+        self._pause_pending  = False
         self._system_running = False
         self._motion_busy    = False
         self._state1_enabled = False
@@ -1818,14 +1823,64 @@ class CartridgeSystem(Node):
 
     def _cb_pause(self, msg: Bool):
         """
-        Tạm dừng vòng lặp điều khiển (_system_paused=True).
-        Vòng lặp trả về ngay mà không xử lý state nào.
-        RESUME: nhấn START để tiếp tục (xóa _system_paused).
+        Graceful PAUSE: set _pause_pending=True; chỉ thực sự halt khi
+        toàn bộ sub-chain (state_in / state_s3 / state_s4) về IDLE
+        và global không trong HOMING/HOMING_RUNNING. State đang chạy
+        (vd STATE 2 cấp khay) chạy nốt rồi mới halt.
+        RESUME: bấm nút RESUME (topic /system/resume_button).
         """
         if not msg.data:
             return
+        if self._system_paused or self._pause_pending:
+            return  # idempotent
+        self._pause_pending = True
+        if self._can_pause_now():
+            # Tại ranh giới ngay lập tức → promote luôn để feedback nhanh.
+            self._promote_pause()
+        else:
+            self._notify('warn', 'PAUSE pending',
+                         'Hệ thống sẽ tạm dừng khi state hiện tại hoàn tất')
+
+    def _cb_resume(self, msg: Bool):
+        """
+        RESUME: clear cả _system_paused lẫn _pause_pending → state machine
+        tiếp tục dispatch như bình thường. State machine sẽ tự pick up
+        từ IDLE → auto-trigger STATE kế tiếp nếu đủ điều kiện.
+        """
+        if not msg.data:
+            return
+        if not (self._system_paused or self._pause_pending):
+            return  # nothing to resume
+        was_pending = self._pause_pending and not self._system_paused
+        self._system_paused = False
+        self._pause_pending = False
+        # Refresh heartbeat để tránh false-positive timeout ngay sau khi resume
+        # (pause lâu → _robot_last_seen stale → heartbeat check sẽ fire ngay).
+        if self._robot_last_seen > 0:
+            self._robot_last_seen = time.time()
+        if was_pending:
+            self._notify('info', 'RESUMED', 'Hủy PAUSE pending')
+        else:
+            self._notify('info', 'RESUMED', 'Tiếp tục state hiện tại')
+
+    def _can_pause_now(self) -> bool:
+        """
+        True khi an toàn promote _pause_pending → _system_paused:
+          - Không trong HOMING/HOMING_RUNNING (per user: chạy nốt homing rồi mới halt)
+          - Cả 3 sub-chain về IDLE (state hiện tại đã hoàn tất)
+        ERROR vẫn cho pause (no-op thực tế vì state machine không dispatch).
+        """
+        if self.state in (SystemState.HOMING, SystemState.HOMING_RUNNING):
+            return False
+        return (self.state_in == SystemState.IDLE
+                and self.state_s3 == SystemState.IDLE
+                and self.state_s4 == SystemState.IDLE)
+
+    def _promote_pause(self):
+        """Promote _pause_pending → _system_paused và notify operator."""
         self._system_paused = True
-        self._notify('warn', 'PAUSE', 'Nhan RESUME de tiep tuc')
+        self._pause_pending = False
+        self._notify('warn', 'PAUSED', 'Hệ thống đã tạm dừng — nhấn RESUME để tiếp tục')
 
     def _cb_gripper_cmd(self, msg: Bool):
         """
@@ -2111,6 +2166,20 @@ class CartridgeSystem(Node):
             elif d == '-':    self._jog(sid, False)
             elif d == 'move':
                 pos = float(parts[2]) if len(parts) > 2 else 0.0
+                if sid == 1:
+                    min_val = -322.0
+                    max_val = 560.0
+                    if pos < min_val or pos > max_val:
+                        self.get_logger().error(f"[JOG] S1 (InX) move rejected: {pos} exceeds limits [{min_val}, {max_val}]")
+                        self._notify('error', 'LỖI GIỚI HẠN', f'Trục S1 (InX) vượt giới hạn [{min_val}, {max_val}] mm (Nhập: {pos})')
+                        return
+                elif sid == 2:
+                    min_val = -80.0
+                    max_val = 1025.0
+                    if pos < min_val or pos > max_val:
+                        self.get_logger().error(f"[JOG] S2 (InY) move rejected: {pos} exceeds limits [{min_val}, {max_val}]")
+                        self._notify('error', 'LỖI GIỚI HẠN', f'Trục S2 (InY) vượt giới hạn [{min_val}, {max_val}] mm (Nhập: {pos})')
+                        return
                 self._nb_move(sid, pos)
         except Exception as e:
             self.get_logger().error(f"[JOG] exception: {e}")
@@ -2645,14 +2714,17 @@ class CartridgeSystem(Node):
             self._s10_prev = feed_ok
             
             # ── Robot heartbeat timeout ──
-            # Nếu robot node chưa bao giờ publish hoặc đã ngắt > 5s → tự xả khóa
-            if self._robot_connected and self._robot_last_seen > 0:
-                if time.time() - self._robot_last_seen > 5.0:
-                    self._robot_connected = False
+            # Nếu robot node chưa bao giờ publish hoặc đã ngắt > 5s → tự xả khóa.
+            # FREEZE khi _system_paused: operator có thể pause lâu để fix vật lý,
+            # không được tự release lock vì "heartbeat chậm".
+            if not self._system_paused:
+                if self._robot_connected and self._robot_last_seen > 0:
+                    if time.time() - self._robot_last_seen > 5.0:
+                        self._robot_connected = False
+                        self._motion_busy = False
+                        self.get_logger().warn("[ROBOT] Robot node timeout (>5s) — interlock RELEASED, cartridge runs standalone")
+                elif not self._robot_connected and self._motion_busy:
                     self._motion_busy = False
-                    self.get_logger().warn("[ROBOT] Robot node timeout (>5s) — interlock RELEASED, cartridge runs standalone")
-            elif not self._robot_connected and self._motion_busy:
-                self._motion_busy = False
 
 
             self._process_state()
@@ -2800,6 +2872,12 @@ class CartridgeSystem(Node):
         Ba dispatcher chạy độc lập, tránh xung đột qua interlock cảm biến.
         """
         s = self.state
+        # Graceful PAUSE: nếu user đã yêu cầu pause và state hiện tại đã hoàn tất
+        # (mọi sub-chain về IDLE và không trong HOMING), promote ngay tại đây
+        # TRƯỚC khi dispatcher kéo chain mới từ IDLE.
+        if self._pause_pending and self._can_pause_now():
+            self._promote_pause()
+            return
         if s == SystemState.HOMING:           self._do_homing(); return
         if s == SystemState.HOMING_RUNNING:
             # Check if bg homing thread finished (Bug #6 fix: state transition on main thread)

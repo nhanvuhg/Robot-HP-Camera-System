@@ -54,6 +54,8 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     scale_result_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/scale/result", 10);
     speed_ratio_pub_ = node_->create_publisher<std_msgs::msg::Int32>("/robot/speed_ratio", rclcpp::QoS(10).reliable().transient_local());
     system_start_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/start_button", 10);  // shared with cartridge
+    system_pause_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/pause_button", 10);  // sync sang cartridge
+    system_resume_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/resume_button", 10); // sync sang cartridge
     ignore_scale_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/ignore_scale", 10);
     gripper_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
     picker_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
@@ -703,16 +705,26 @@ void RobotController::setDigitalOutput(int index, bool status)
 
 void RobotController::pauseRobot()
 {
-    qDebug() << "PauseRobot -> /robot/pause_system true";
-    // Gọi service pause của state machine (dừng arm + block state transitions)
+    qDebug() << "PauseRobot -> /robot/pause_system true + /system/pause_button";
+    // Graceful PAUSE: robot dừng tại ranh giới motion goal hiện tại.
+    // Đồng thời publish /system/pause_button để cartridge cũng pause graceful.
     callServiceAsync(pause_system_client_, true);
+    if (system_pause_pub_) {
+        std_msgs::msg::Bool m;
+        m.data = true;
+        system_pause_pub_->publish(m);
+    }
 }
 
 void RobotController::resumeRobot()
 {
-    qDebug() << "ResumeRobot -> /robot/pause_system false";
-    // Gọi service resume của state machine (ResetRobot + unblock state transitions)
+    qDebug() << "ResumeRobot -> /robot/pause_system false + /system/resume_button";
     callServiceAsync(pause_system_client_, false);
+    if (system_resume_pub_) {
+        std_msgs::msg::Bool m;
+        m.data = true;
+        system_resume_pub_->publish(m);
+    }
 }
 
 

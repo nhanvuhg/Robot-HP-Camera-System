@@ -12,6 +12,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/bool.hpp"
+#include "std_srvs/srv/set_bool.hpp"
 #include <memory>
 
 class CartridgeController : public QObject
@@ -56,8 +57,9 @@ public slots:
     void startSystem();
     void stopSystem();
     void softStop();          // Soft STOP — keep state + CPX, only switch to MANUAL
-    void pauseSystem();
-    void hmiResume();
+    void pauseSystem();    // Graceful: cartridge + robot dừng tại ranh giới state
+    void resumeSystem();   // Resume cả cartridge + robot, tiếp tục state hiện tại
+    void hmiResume();      // Legacy no-op (giữ để tương thích QML cũ)
     void resetFaults();
     void abortToJog();
     Q_INVOKABLE void simulateDoneTrayInput();
@@ -103,6 +105,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   stop_button_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   soft_stop_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   pause_button_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   resume_button_pub_;
+    rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr   robot_pause_client_;  // /robot/pause_system (sync)
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   confirm_button_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   done_tray_input_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   done_tray_output_pub_;

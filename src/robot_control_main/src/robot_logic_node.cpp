@@ -222,7 +222,8 @@ private:
     std::atomic<bool> system_enabled_{true};
     std::atomic<bool> emergency_stop_{false};
     std::atomic<bool> manual_mode_{true};   // Default = MANUAL (toàn hệ thống) — sync với Python cartridge node
-    std::atomic<bool> system_paused_{false};
+    std::atomic<bool> system_paused_{false};    // Active PAUSE: state machine không transition mới
+    std::atomic<bool> pause_requested_{false};  // Pending PAUSE: chờ motion goal hiện tại xong rồi promote
     std::atomic<bool> use_ai_for_control_{false};
     std::atomic<bool> stored_scale_result_{false};
     std::atomic<bool> stop_after_single_motion_{false};
@@ -1300,6 +1301,7 @@ void RobotLogicNode::emergencyStopCallback(
         emergency_stop_ = true;
         system_enabled_ = false;
         system_paused_  = false;
+        pause_requested_ = false;
         system_running_ = false;
         system_started_ = false;
         current_state_  = SystemState::IDLE;
@@ -1379,6 +1381,7 @@ void RobotLogicNode::resetStateCallback(
     fill_done_               = false;
     emergency_stop_          = false;
     system_paused_           = false;
+    pause_requested_         = false;
     manual_mode_             = true;   // Reset về MANUAL (safe default toàn hệ thống)
     stop_after_single_motion_ = false;
     motion_fail_count_       = 0;
@@ -1398,17 +1401,52 @@ void RobotLogicNode::pauseSystemCallback(
     std::shared_ptr<std_srvs::srv::SetBool::Response> response)
 {
     if (request->data) {
-        system_paused_ = true;
-        RCLCPP_WARN(get_logger(), "[PAUSE] ⏸ Soft PAUSE");
-        publishSystemStatus("PAUSED");
-        response->success = true;
-        response->message = "System PAUSED";
+        // Graceful PAUSE: nếu motion đang trong flight → đặt cờ pending,
+        // chờ motion goal hiện tại hoàn tất rồi mới promote → halt tại
+        // ranh giới motion (handleCurrentState lo promote).
+        if (system_paused_ || pause_requested_) {
+            response->success = true;
+            response->message = "Already paused (or pending)";
+            return;
+        }
+        pause_requested_ = true;
+        if (!motion_in_progress_) {
+            // Không có motion → promote ngay để feedback nhanh
+            system_paused_   = true;
+            pause_requested_ = false;
+            RCLCPP_WARN(get_logger(), "[PAUSE] ⏸ Paused (motion idle)");
+            publishSystemStatus("PAUSED");
+            response->success = true;
+            response->message = "System PAUSED";
+        } else {
+            RCLCPP_WARN(get_logger(),
+                "[PAUSE] ⏸ Pending — wait for motion '%s' to finish",
+                getMotionCmd().c_str());
+            publishSystemStatus("PAUSING");
+            response->success = true;
+            response->message = "PAUSE pending — waiting for motion to finish";
+        }
     } else {
+        // RESUME: clear cả 2 cờ. Reset các timestamp state-wait để pause
+        // dài không gây false-positive timeout ngay sau resume. Motion
+        // watchdog (motion_started_at_) cũng reset vì motion đang chạy
+        // (nếu có) thực sự đã tiêu thụ "now - motion_started_at_" trong
+        // pause window — không công bằng nếu vẫn tính.
         motion_fail_count_ = 0;
         if (!motion_in_progress_ && !motion_result_ && !getMotionCmd().empty())
             clearMotionCmd();
-        system_paused_ = false;
-        RCLCPP_INFO(get_logger(), "[RESUME] ▶ RESUMED");
+        bool was_paused  = system_paused_;
+        bool was_pending = pause_requested_;
+        system_paused_   = false;
+        pause_requested_ = false;
+        auto now = this->now();
+        motion_started_at_   = now;
+        wait_tray_start_time_ = now;
+        scale_wait_start_    = now;
+        if (was_paused || was_pending) {
+            RCLCPP_INFO(get_logger(), "[RESUME] ▶ %s — timers refreshed",
+                was_pending ? "Cancelled pending PAUSE" : "Resumed from PAUSED");
+        }
         notifyStateChange();
         response->success = true;
         response->message = "System RESUMED";
@@ -1522,8 +1560,24 @@ void RobotLogicNode::handleCurrentState()
         publishSystemStatus("EMERGENCY_STOP");
         return;
     }
+    // Graceful PAUSE: nếu user đã yêu cầu pause và motion goal hiện tại đã xong
+    // → promote thành active PAUSE để halt hẳn ranh giới state.
+    if (pause_requested_ && !motion_in_progress_) {
+        system_paused_   = true;
+        pause_requested_ = false;
+        RCLCPP_WARN(get_logger(),
+            "[PAUSE] ⏸ Promoted to active (motion goal complete)");
+        publishSystemStatus("PAUSED");
+        return;
+    }
     if (system_paused_) {
         publishSystemStatus("PAUSED");
+        return;
+    }
+    // PAUSE pending + motion vẫn trong flight → để motion chạy nốt
+    // qua result callback, nhưng KHÔNG transition state mới.
+    if (pause_requested_) {
+        publishSystemStatus("PAUSING");
         return;
     }
     if (!system_enabled_ && current_state_ != SystemState::IDLE) {

@@ -30,6 +30,8 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
     stop_button_pub_      = node_->create_publisher<std_msgs::msg::Bool>("/system/stop_button", qos);
     soft_stop_pub_        = node_->create_publisher<std_msgs::msg::Bool>("/system/soft_stop", qos);
     pause_button_pub_     = node_->create_publisher<std_msgs::msg::Bool>("/system/pause_button", qos);
+    resume_button_pub_    = node_->create_publisher<std_msgs::msg::Bool>("/system/resume_button", qos);
+    robot_pause_client_   = node_->create_client<std_srvs::srv::SetBool>("/robot/pause_system");
     gui_confirm_pub_      = node_->create_publisher<std_msgs::msg::String>("/providesystem/gui_confirm", qos);
     set_target_row_pub_   = node_->create_publisher<std_msgs::msg::String>("/providesystem/set_target_row", qos);
     cyl_cmd_pub_          = node_->create_publisher<std_msgs::msg::String>("/providesystem/cyl_cmd", qos);
@@ -170,6 +172,22 @@ void CartridgeController::clearServo(int id)
 
 void CartridgeController::moveServo(int id, double position)
 {
+    if (id == 1) {
+        double min_val = -322.0;
+        double max_val = 560.0;
+        if (position < min_val || position > max_val) {
+            addLog(QString("LỖI: Trục S1 (InX) vượt giới hạn [%2, %3] mm (Nhập: %1)").arg(position).arg(min_val).arg(max_val), "err");
+            return;
+        }
+    } else if (id == 2) {
+        double min_val = -80.0;
+        double max_val = 1025.0;
+        if (position < min_val || position > max_val) {
+            addLog(QString("LỖI: Trục S2 (InY) vượt giới hạn [%2, %3] mm (Nhập: %1)").arg(position).arg(min_val).arg(max_val), "err");
+            return;
+        }
+    }
+
     publishString(jog_pub_, QString("%1 move %2").arg(id).arg(position));
     addLog(QString("Move S%1 → %2mm").arg(id).arg(position), "ok");
 }
@@ -220,14 +238,37 @@ void CartridgeController::softStop()
 
 void CartridgeController::pauseSystem()
 {
+    // Sync 2 chiều: cartridge dừng tại ranh giới state, robot dừng tại
+    // ranh giới motion goal — cả 2 graceful, không halt giữa chừng.
     publishBool(pause_button_pub_, true);
-    addLog("System PAUSE", "info");
+    if (robot_pause_client_ && robot_pause_client_->service_is_ready()) {
+        auto req = std::make_shared<std_srvs::srv::SetBool::Request>();
+        req->data = true;
+        robot_pause_client_->async_send_request(req);
+        addLog("PAUSE → cartridge + robot (graceful)", "info");
+    } else {
+        addLog("PAUSE → cartridge (robot pause service offline)", "warn");
+    }
+}
+
+void CartridgeController::resumeSystem()
+{
+    // RESUME cả cartridge + robot. State machine tự pick up từ trạng thái đang giữ.
+    publishBool(resume_button_pub_, true);
+    if (robot_pause_client_ && robot_pause_client_->service_is_ready()) {
+        auto req = std::make_shared<std_srvs::srv::SetBool::Request>();
+        req->data = false;
+        robot_pause_client_->async_send_request(req);
+        addLog("RESUME → cartridge + robot", "ok");
+    } else {
+        addLog("RESUME → cartridge (robot pause service offline)", "warn");
+    }
 }
 
 void CartridgeController::hmiResume()
 {
-    // Không dùng trong v8, giữ để tương thích
-    addLog("HMI Resume (no-op in v8)", "info");
+    // Legacy no-op — giữ để các QML chưa update không crash. New code dùng resumeSystem().
+    addLog("HMI Resume (legacy no-op)", "info");
 }
 
 void CartridgeController::resetFaults()
