@@ -596,20 +596,18 @@
                                     font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // 2 Rows, Column 1 (START/STOP) is wider than Column 2 (RESUME/PAUSE)
+                                // 2 Rows, columns are exactly equal in size for perfect balance
                                 ColumnLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
                                     RowLayout {
                                         Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
                                         CBtn {
-                                            Layout.preferredWidth: parent.width * 0.58
                                             Layout.fillWidth: true; Layout.fillHeight: true
                                             lbl: "START"
                                             bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
                                             onClicked: cartridgeController.startSystem()
                                         }
                                         CBtn {
-                                            Layout.preferredWidth: parent.width * 0.38
                                             Layout.fillWidth: true; Layout.fillHeight: true
                                             lbl: "RESUME"
                                             bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen
@@ -619,12 +617,10 @@
                                     RowLayout {
                                         Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4
                                         CBtn {
-                                            Layout.preferredWidth: parent.width * 0.58
                                             Layout.fillWidth: true; Layout.fillHeight: true
                                             lbl: "STOP"
                                             bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
                                         CBtn {
-                                            Layout.preferredWidth: parent.width * 0.38
                                             Layout.fillWidth: true; Layout.fillHeight: true
                                             lbl: "PAUSE"
                                             bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
