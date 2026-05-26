@@ -2115,20 +2115,34 @@ class CartridgeSystem(Node):
                     self.get_logger().warn(f"Lỗi khi clear servo: {e}")
             return
 
-        if self.operation_mode != 'manual':
+        # Mọi lệnh JOG (kể cả RUN/target position, home thủ công, +/-) bắt buộc ở
+        # JOG sub-mode (operation_mode == 'manual' AND _jog_mode == True). QML đã
+        # gate `jogAllowed = currentMode === "jog"`; backend re-validate để tránh
+        # client khác publish trực tiếp /providesystem/jog_cmd trong MANUAL state.
+        if self.operation_mode != 'manual' or not getattr(self, '_jog_mode', False):
             self._notify_step('warn', 'JOG', 'cmd',
-                'JOG lock — chỉ chạy được trong MANUAL mode',
-                action=['Chuyển GUI sang MANUAL', 'Vào JOG mode'])
+                'JOG lock — chỉ chạy được trong JOG sub-mode',
+                action=['Chuyển sang MANUAL', 'Bấm nút JOG'])
             return
-        if (self.state not in (SystemState.IDLE, SystemState.ERROR)
-                or self.state_in != SystemState.IDLE
-                or self.state_s3 != SystemState.IDLE
-                or self.state_s4 != SystemState.IDLE):
-            self._notify_step('warn', 'JOG', 'cmd',
-                f'Đang chạy state — JOG bị khóa để tránh xung đột motion',
-                enum_name=f'in={self.state_in.name} s3={self.state_s3.name} s4={self.state_s4.name}',
-                action=['Nhấn STOP', 'Đợi state machine về IDLE rồi JOG'])
-            return
+
+        # 'move' = TARGET POSITION RUN: chức năng phụ kỹ thuật, hoàn toàn ĐỘC LẬP
+        # với state machine. Không check state_in/s3/s4, không check HOMING_RUNNING,
+        # không trigger state transition. Chỉ gate bởi JOG sub-mode (đã check ở trên)
+        # và servo đã homed (_nb_move tự reject nếu thiếu).
+        is_move = (len(parts) >= 3 and parts[1].lower() == 'move')
+
+        if not is_move:
+            # JOG +/-, stop, home: vẫn cần interlock vì là continuous motion
+            # / homing thread, dễ xung đột với state machine nếu đang chạy.
+            if (self.state not in (SystemState.IDLE, SystemState.ERROR)
+                    or self.state_in != SystemState.IDLE
+                    or self.state_s3 != SystemState.IDLE
+                    or self.state_s4 != SystemState.IDLE):
+                self._notify_step('warn', 'JOG', 'cmd',
+                    f'Đang chạy state — JOG bị khóa để tránh xung đột motion',
+                    enum_name=f'in={self.state_in.name} s3={self.state_s3.name} s4={self.state_s4.name}',
+                    action=['Nhấn STOP', 'Đợi state machine về IDLE rồi JOG'])
+                return
         
         if len(parts) < 2:
             return
