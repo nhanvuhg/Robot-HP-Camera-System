@@ -380,12 +380,17 @@ class CartridgeSystem(Node):
         self.pub_input_trays_empty = self.create_publisher(Bool, '/cartridge/input_trays_empty', qos)
         self.pub_current_mode   = self.create_publisher(String, '/providesystem/current_mode', qos)        
         self.pub_robot_mode     = self.create_publisher(Int32, '/robot/set_mode', qos)
-        self.pub_homing_done    = self.create_publisher(Bool, '/cartridge/homing_done', qos)
         self.pub_vfd_run        = self.create_publisher(Bool,   '/vfd/cmd_run', qos)
         self._vfd_current_cmd   = False
 
         qos_latching = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_config_data    = self.create_publisher(String, '/providesystem/config_data', qos_latching)
+        # homing_done dùng QoS latching để subscriber (vfd_logic_node) start sau
+        # nhận được last state (True nếu đã homing xong). Default state = False
+        # ngay khi node init → vfd_logic biết phải gate AUTO cho tới khi user
+        # nhấn START → homing → publish True.
+        self.pub_homing_done    = self.create_publisher(Bool, '/cartridge/homing_done', qos_latching)
+        self._publish_homing_done(False)
 
         # ROS Subscribers
         self.create_subscription(Bool,   '/system/start_button',             self._cb_start,              qos)
@@ -1224,6 +1229,7 @@ class CartridgeSystem(Node):
             self._guide_logged.clear()
         if next_state == SystemState.ERROR and self.zero_offset:
             self.zero_offset.clear()
+            self._publish_homing_done(False)  # gate vfd_logic AUTO chờ re-home
             self.get_logger().warn("[ERROR] Cleared zero_offset — cần re-home sau khi recovery")
         self.state = next_state
 
@@ -1795,6 +1801,7 @@ class CartridgeSystem(Node):
         # HOMING; manual chờ operator nhấn nút HOMING).
         if self.zero_offset:
             self.zero_offset.clear()
+            self._publish_homing_done(False)  # gate vfd_logic AUTO chờ re-home
             self.get_logger().info("[STOP] Cleared zero_offset — START lần sau sẽ phải re-home")
 
         # Chuyển về MANUAL mode
@@ -2061,6 +2068,7 @@ class CartridgeSystem(Node):
             return
         if self.zero_offset:
             self.zero_offset.clear()
+            self._publish_homing_done(False)  # gate vfd_logic AUTO chờ re-home
             self.get_logger().info(
                 f"[MODE {old_mode.upper()}→{new_mode.upper()}] Cleared zero_offset — cần re-home"
             )
@@ -2250,6 +2258,7 @@ class CartridgeSystem(Node):
                 # loop chưa consume (state đã về IDLE).
                 self._homing_done_event.clear()
                 self.zero_offset.clear()
+                self._publish_homing_done(False)  # vfd_logic gate AUTO chờ homing mới xong
                 self._inx_moving = self._iny_moving = False
                 self._enter(SystemState.HOMING)
             return
@@ -2821,6 +2830,15 @@ class CartridgeSystem(Node):
         combined = f"{self.state.value}|{self.state_in.value}|{s_out}"
         msg = String(); msg.data = combined; self.pub_state.publish(msg)
 
+    def _publish_homing_done(self, done: bool):
+        """Publish trạng thái homing (latching) lên /cartridge/homing_done.
+        Subscriber chính là vfd_logic_node: gate AUTO/AI để băng tải chỉ chạy
+        sau khi user nhấn START → homing xong. Gọi True khi homing thành công,
+        False khi reset (init, clear zero_offset do STOP/mode-switch/ERROR)."""
+        if getattr(self, 'pub_homing_done', None) is None:
+            return  # init order guard — gọi từ __init__ trước khi publisher tạo xong
+        msg = Bool(); msg.data = bool(done); self.pub_homing_done.publish(msg)
+
     def _positions_bg_loop(self):
         """
         Thread nền publish vị trí servo mỗi 100ms (10Hz) lên /providesystem/servo_positions.
@@ -2933,9 +2951,7 @@ class CartridgeSystem(Node):
                 self._homing_done_event.clear()
                 if self._homing_result:
                     self.get_logger().info("Homing complete (main thread transition)")
-                    msg = Bool()
-                    msg.data = True
-                    self.pub_homing_done.publish(msg)
+                    self._publish_homing_done(True)
                     # Manual mode: KHÔNG auto-set _jog_mode — giữ nguyên label "manual"
                     # để user chủ động chọn STATE chạy. JOG chỉ kích hoạt khi STOP state.
                     if self.operation_mode == 'manual':

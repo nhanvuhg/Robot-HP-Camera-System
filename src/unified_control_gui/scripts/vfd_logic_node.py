@@ -28,6 +28,7 @@ Output:
 """
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import Bool, Int32, String
 
 
@@ -46,11 +47,18 @@ class VfdLogicNode(Node):
             String, '/system_state', self.state_cb, 10)
         self.create_subscription(
             Int32, '/robot/set_mode', self.mode_cb, 10)
+        # homing_done: cartridge publish latching (True khi homing xong, False
+        # ở init + khi clear zero_offset do STOP/mode-switch/ERROR). QoS phải
+        # match TRANSIENT_LOCAL để start sau vẫn nhận state cuối.
+        latching = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(
+            Bool, '/cartridge/homing_done', self.homing_cb, latching)
 
         self.s1_state = False
         self.s2_state = False
         self.s3_state = False
         self.in_state1 = False        # state_in startswith 's1_' (cartridge đang ở STATE 1)
+        self.cartridge_homed = False  # False cho tới khi cartridge publish homing_done=True
         self.op_mode = self.MODE_MANUAL  # default — match cartridge default
         self.current_cmd = False
 
@@ -58,7 +66,15 @@ class VfdLogicNode(Node):
         self.create_timer(0.5, self._heartbeat)
 
         self.get_logger().info(
-            "VFD Logic Node started — AUTO/AI: sensor liên tục; MANUAL: gate STATE 1")
+            "VFD Logic Node started — AUTO/AI: gate by homing+S1/S2; MANUAL: gate STATE 1")
+
+    def homing_cb(self, msg):
+        if msg.data == self.cartridge_homed:
+            return
+        self.cartridge_homed = msg.data
+        self.get_logger().info(
+            f"Cartridge homed = {self.cartridge_homed} → {'enable' if self.cartridge_homed else 'BLOCK'} sensor check")
+        self.evaluate_logic()
 
     def mode_cb(self, msg):
         if msg.data == self.op_mode:
@@ -109,15 +125,20 @@ class VfdLogicNode(Node):
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # ⚠️  CRITICAL ZONE — đọc memory feedback_critical_code_zones.md trước khi sửa.
     # INVARIANT (user rule):
-    #   - AUTO/AI: check S1/S2 LIÊN TỤC, KHÔNG cần state_in='s1_*'
+    #   - AUTO/AI: PHẢI cartridge_homed=True (user nhấn START → homing xong)
+    #     RỒI mới check S1/S2 LIÊN TỤC. Chưa homing → STOP dù S1/S2 ON.
     #   - MANUAL: GIỮ gate in_state1 (chỉ chạy khi user nhấn nút STATE 1)
     #   - S3 luôn ưu tiên STOP; cả 3 ON → vẫn STOP
-    # Đừng unify 2 mode hoặc bỏ subscribe /robot/set_mode.
+    # Đừng unify 2 mode hoặc bỏ subscribe /robot/set_mode hoặc bỏ
+    # subscription /cartridge/homing_done.
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def evaluate_logic(self):
         if self.op_mode in (self.MODE_AUTO, self.MODE_AI):
-            new_cmd, reason = self._sensor_decision()
-            reason = f"{self._mode_name(self.op_mode)} {reason}"
+            if not self.cartridge_homed:
+                new_cmd, reason = False, f"{self._mode_name(self.op_mode)} chưa homing (chờ START)"
+            else:
+                new_cmd, sub = self._sensor_decision()
+                reason = f"{self._mode_name(self.op_mode)} {sub}"
         elif self.op_mode == self.MODE_MANUAL:
             if not self.in_state1:
                 new_cmd, reason = False, "MANUAL gate CLOSED (not STATE 1)"
