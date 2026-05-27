@@ -3,7 +3,7 @@
 <package format="3">
   <name>com_rs485</name>
   <version>1.0.0</version>
-  <description>RS485 bus node for RevPi A: Modbus RTU loadcell + VFD control</description>
+  <description>RS485 bus node for RevPi A: Modbus RTU ATV320 VFD control</description>
   <maintainer email="vjetstore.com@gmail.com">pi</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,7 +11,6 @@
 
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
-  <depend>std_srvs</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

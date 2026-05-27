@@ -14,5 +14,8 @@
     <file>qml/icons/schedule.svg</file>
     <file>qml/icons/settings.svg</file>
     <file>qml/icons/stop-mini-line.svg</file>
+    <file>qml/icons/reply_arrow.svg</file>
+    <file>qml/icons/jog_plus.png</file>
+    <file>qml/icons/jog_neg.png</file>
   </qresource>
 </RCC>

@@ -1204,7 +1204,7 @@ void RobotLogicNode::commandRowCallback(const std_msgs::msg::Int32::SharedPtr ms
         selected_input_row_ = row;
         row_full_[row - 1] = true;
     }
-    if (!use_ai_for_control_ && !manual_mode_) {
+    if (!use_ai_for_control_) {
         current_auto_row_ = row;
     }
     operator_explicitly_set_row_ = true;
