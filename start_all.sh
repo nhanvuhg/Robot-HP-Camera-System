@@ -30,19 +30,15 @@ if [ -z "${XAUTHORITY:-}" ]; then
 fi
 echo "🖥️  Display: DISPLAY=$DISPLAY  XAUTHORITY=${XAUTHORITY:-<not set>}"
 
-# ── Source ROS 2 ──
+# ── Source ROS 2 + env ──
 set +u
-export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-# SHM toggle: No Docker in production, so SHM is safe and avoids ~14.8 MB/s
-# UDP fragment/reassemble overhead for camera frames. To re-enable SHM,
-# comment out the FASTRTPS line below (or set USE_SHM=1).
-# Cross-host discovery: switch không forward multicast → dùng unicast
-# initial peers list (Pi 5 ↔ RevPi A). Vẫn cho phép SHM cho localhost,
-# chỉ thay đổi metatraffic discovery sang unicast.
-export FASTRTPS_DEFAULT_PROFILES_FILE="$WS/fastdds_peers.xml"
-echo "ℹ️  FastDDS: unicast peers (cross-host Pi5 ↔ RevPi A)"
-export ROS_DOMAIN_ID=22
-export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+# Single source of truth — ros2_env.sh set ROS_DOMAIN_ID, RMW, FastDDS
+# profile. File này cũng được source từ ~/.bashrc (xem chú thích trong
+# file) → mọi terminal đã có env trước khi gọi start_all.sh. Source lại
+# ở đây chỉ guard trường hợp start_all chạy từ context không bashrc
+# (vd cron, systemd, .desktop file launch).
+source "$WS/ros2_env.sh"
+echo "ℹ️  ROS_DOMAIN_ID=$ROS_DOMAIN_ID  FastDDS=${FASTRTPS_DEFAULT_PROFILES_FILE:-<default>}"
 
 [ -f /opt/ros/jazzy/setup.bash ] && source /opt/ros/jazzy/setup.bash || echo "⚠️  /opt/ros/jazzy/setup.bash not found"
 [ -f "$WS/install/setup.bash" ]  && source "$WS/install/setup.bash"  || echo "⚠️  $WS/install/setup.bash not found — run: colcon build"
