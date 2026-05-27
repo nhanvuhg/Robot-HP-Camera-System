@@ -2641,6 +2641,11 @@ class CartridgeSystem(Node):
         if self._cyl3_expected is None:
             return
         s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
+        
+        # S15 sensor bypass check (e.g. sensor is physically broken)
+        if not s15 and self._conf('bypass_s15_sensor', False):
+            s15 = (self._cyl3_expected == "retracted")
+
         elapsed = time.time() - self._cyl3_cmd_time
         if self._cyl3_expected == "extended":
             confirmed = s16 and not s15
@@ -2649,13 +2654,13 @@ class CartridgeSystem(Node):
         if confirmed:
             if not self._cyl3_confirmed_logged:
                 self.get_logger().info(
-                    f"[CYL3] confirmed {self._cyl3_expected.upper()} sau {elapsed:.2f}s"
+                    f"[CYL3] confirmed {self._cyl3_expected.upper()} (S15-Bypass={self._conf('bypass_s15_sensor', False)}) sau {elapsed:.2f}s"
                 )
                 self._cyl3_confirmed_logged = True
             self._cyl3_mismatch_warned = False
         elif elapsed >= 2.0 and not self._cyl3_mismatch_warned:
             self.get_logger().warn(
-                f"[CYL3] expect {self._cyl3_expected.upper()} nhưng S15={int(s15)} S16={int(s16)} "
+                f"[CYL3] expect {self._cyl3_expected.upper()} nhưng S15={int(s15)} S16={int(s16)} (Bypass S15={self._conf('bypass_s15_sensor', False)}) "
                 f"sau {elapsed:.2f}s — kiểm tra cảm biến / khí nén"
             )
             self._cyl3_mismatch_warned = True
@@ -2675,6 +2680,11 @@ class CartridgeSystem(Node):
         if not self._conf('cyl3_present', True):
             return True, ""
         s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
+        
+        # S15 sensor bypass check (e.g. sensor is physically broken)
+        if not s15 and self._conf('bypass_s15_sensor', False):
+            s15 = (self._cyl3_expected == "retracted")
+
         if not s15:
             return False, "S15 OFF (Cyl3 chưa retract)"
         if s16 and not self.sensor(S6_CHECK_TRAY_P1):
