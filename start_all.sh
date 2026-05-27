@@ -36,12 +36,11 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 # SHM toggle: No Docker in production, so SHM is safe and avoids ~14.8 MB/s
 # UDP fragment/reassemble overhead for camera frames. To re-enable SHM,
 # comment out the FASTRTPS line below (or set USE_SHM=1).
-if [ "${USE_SHM:-1}" = "1" ]; then
-    echo "ℹ️  FastDDS: SHM ENABLED (zero-copy localhost transport)"
-    unset FASTRTPS_DEFAULT_PROFILES_FILE 2>/dev/null || true
-else
-    export FASTRTPS_DEFAULT_PROFILES_FILE="$WS/fastdds_no_shm.xml"
-fi
+# Cross-host discovery: switch không forward multicast → dùng unicast
+# initial peers list (Pi 5 ↔ RevPi A). Vẫn cho phép SHM cho localhost,
+# chỉ thay đổi metatraffic discovery sang unicast.
+export FASTRTPS_DEFAULT_PROFILES_FILE="$WS/fastdds_peers.xml"
+echo "ℹ️  FastDDS: unicast peers (cross-host Pi5 ↔ RevPi A)"
 export ROS_DOMAIN_ID=22
 export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
 
