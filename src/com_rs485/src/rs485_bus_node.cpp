@@ -85,20 +85,13 @@ public:
     sub_vfd_run_ = create_subscription<std_msgs::msg::Bool>(
       "/vfd/cmd_run", 10,
       [this](const std_msgs::msg::Bool::SharedPtr msg) {
-        // Safety latch: sau timeout, ignore mọi cmd_run=true tới khi nhận
-        // cmd_run=false (S3 ON hoặc mode switch) → tránh re-trigger 50s nữa
-        // do vfd_logic heartbeat re-publish true khi S1/S2 vẫn nhiễu ON.
-        if (msg->data && timeout_latched_.load()) {
-          return;
-        }
-        if (!msg->data) {
-          timeout_latched_ = false;  // STOP explicit → re-arm cho lần RUN tiếp
-        }
-
         bool prev = desired_run_.exchange(msg->data);
         if (prev != msg->data) {
           RCLCPP_INFO(get_logger(), "[VFD] /vfd/cmd_run → %s (desired)",
                       msg->data ? "RUN" : "STOP");
+          // Edge → reset / clear safety timer. Sau timeout desired_run_ đã
+          // set false; heartbeat re-publish true sẽ trigger edge này lại →
+          // VFD chạy thêm 50s nữa (user OK với behavior này).
           std::lock_guard<std::mutex> lk(run_timer_mutex_);
           run_start_steady_ = msg->data
               ? std::chrono::steady_clock::now()
@@ -283,11 +276,11 @@ private:
         std::chrono::steady_clock::now() - start).count();
     if (elapsed < run_timeout_s_) return;
 
-    // Timeout — force stop + latch. Set desired_run_ = false, clear timer,
-    // set latch (sub callback sẽ ignore re-publish true cho tới khi nhận
-    // cmd_run=false từ Pi 5). reconcile() ghi REG_CMD=ENABLE (stop) ngay tick.
+    // Timeout — force stop. desired_run_=false, clear timer. reconcile()
+    // ghi REG_CMD=ENABLE (stop) ngay tick. Nếu vfd_logic heartbeat publish
+    // cmd_run=true lại (S1/S2 vẫn ON) → sub callback bắt edge → reset timer
+    // → VFD chạy thêm 50s nữa (user accept behavior).
     desired_run_ = false;
-    timeout_latched_ = true;
     {
       std::lock_guard<std::mutex> lk(run_timer_mutex_);
       run_start_steady_ = std::chrono::steady_clock::time_point{};
@@ -361,13 +354,11 @@ private:
 
   // Safety auto-stop timer: track thời điểm cmd_run flip false→true, force
   // stop nếu vượt run_timeout_s_ (default 50s). Bảo vệ khi S3 nhiễu/cảm biến
-  // chết — VFD không chạy mãi. Latch sau timeout để Pi 5 phải publish FALSE
-  // explicit (vd S3 ON hoặc mode switch) mới re-arm; tránh heartbeat
-  // re-publish true gây cycle 50s on / off / on.
+  // chết. Sau timeout VFD dừng; nếu vfd_logic heartbeat re-publish true (S1/S2
+  // vẫn ON) → bắt edge → chạy thêm 50s nữa. Không latch.
   std::mutex run_timer_mutex_;
   std::chrono::steady_clock::time_point run_start_steady_{};
   double run_timeout_s_{50.0};
-  std::atomic<bool> timeout_latched_{false};
 
   int reconnect_count_{0};
   int fail_count_{0};
