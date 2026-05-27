@@ -1590,17 +1590,26 @@ class CartridgeSystem(Node):
                     # Lock released immediately — _cb_stop có thể stop_motion_task ngay
 
                     # 3s interruptible delay: cho drive xóa stale referenced() flag từ NVM
-                    # và bắt đầu chuyển động vật lý. Event.wait() trả True nếu abort set.
-                    if self._homing_abort.wait(timeout=3.0):
-                        self.get_logger().warn(f"  {name}: homing aborted (STOP) during init delay")
-                        return False
+                    # và bắt đầu chuyển động vật lý. Chia nhỏ thành nhiều bước 200ms
+                    # để refresh _servo_motion_t — giữ _publish_positions đọc tươi suốt
+                    # homing, GUI tracking realtime thay vì freeze sau 2s idle skip.
+                    delay_start = time.time()
+                    while time.time() - delay_start < 3.0:
+                        if self._homing_abort.is_set():
+                            self.get_logger().warn(f"  {name}: homing aborted (STOP) during init delay")
+                            return False
+                        self._servo_motion_t[sid] = time.time()
+                        time.sleep(0.2)
 
-                    # Poll referenced() với abort check mỗi iteration
+                    # Poll referenced() với abort check mỗi iteration + refresh motion
+                    # timestamp để publish loop tiếp tục đọc tươi vị trí trong khi trục
+                    # vẫn đang di chuyển về home.
                     start = time.time()
                     while time.time() - start < self.config.homing_timeout:
                         if self._homing_abort.is_set():
                             self.get_logger().warn(f"  {name}: homing aborted (STOP) during poll")
                             return False
+                        self._servo_motion_t[sid] = time.time()
                         with self._servo_lock:
                             ref = mot.referenced()
                         if ref:
