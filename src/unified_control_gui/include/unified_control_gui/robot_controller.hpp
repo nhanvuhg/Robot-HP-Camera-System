@@ -10,6 +10,8 @@
 #include "std_msgs/msg/int32.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/bool.hpp"
+#include "sensor_msgs/msg/joint_state.hpp"
+#include "dobot_msgs_v3/msg/tool_vector_actual.hpp"
 #include "dobot_msgs_v3/srv/move_jog.hpp"
 #include "dobot_msgs_v3/srv/get_angle.hpp"
 #include "dobot_msgs_v3/srv/get_pose.hpp"
@@ -190,6 +192,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr in_ready_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr out_ready_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr hw_speed_sub_;
+    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
+    rclcpp::Subscription<dobot_msgs_v3::msg::ToolVectorActual>::SharedPtr tool_vector_sub_;
     
     // State
     QString system_status_{"UNKNOWN"};

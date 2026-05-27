@@ -470,50 +470,41 @@ class CartridgeSystem(Node):
 
     def _connect_hardware(self):
         """
-        Khởi động kết nối song song đến tất cả phần cứng khi node start:
-          - 5 servo Festo CMMT-AS qua Modbus TCP (edcon library)
-          - IO Module 1 (Festo CPX-AP, IP: config.io_ip) — cảm biến S1–S16, cylinder 1/2
-          - IO Module 2 (IP: config.io_ip_2) — cảm biến S17–S24 (output side)
-        Mỗi thiết bị kết nối trong thread riêng (timeout 15s).
-        Sau khi xong: khởi động thread _servo_reconnect_loop và _io_bg_loop để
-        tự động reconnect khi mất kết nối.
+        Fire-and-forget hardware connection.
+        Each device connects in its own daemon thread; we do NOT join, so the
+        ROS control loop + position publisher start IMMEDIATELY and don't wait
+        for offline hardware to time out. Devices that come online publish as
+        soon as their connect thread succeeds; offline ones keep retrying via
+        the per-servo monitor / _io_bg_loop reconnect.
         """
-        threads = []
-
         if EDCON_AVAILABLE:
             if EdconLogging:
                 EdconLogging()
             for sid, ip in self.config.servo_ips.items():
-                t = threading.Thread(
-                    target=self._connect_servo, args=(sid, ip, 2),
-                    daemon=True, name=f"connect_s{sid}"
-                )
-                threads.append(t)
+                threading.Thread(
+                    target=self._connect_servo, args=(sid, ip, 1),
+                    daemon=True, name=f"connect_s{sid}",
+                ).start()
+            # Per-servo monitor: each servo gets its own thread, so an offline
+            # servo's Modbus timeout never blocks the others.
+            threading.Thread(
+                target=self._servo_reconnect_loop, daemon=True, name="servo_reconnect"
+            ).start()
         else:
             self.get_logger().warn("Simulation mode (edcon not installed)")
 
         if CPXAP_AVAILABLE:
-            threads.append(threading.Thread(
-                target=self._connect_io, args=(1, self.config.io_ip),
-                daemon=True, name="connect_io1"
-            ))
-            io2_ip = getattr(self.config, 'io_ip_2', "192.168.27.254")
-            threads.append(threading.Thread(
-                target=self._connect_io, args=(2, io2_ip),
-                daemon=True, name="connect_io2"
-            ))
-
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=15)
-
-        if EDCON_AVAILABLE:
             threading.Thread(
-                target=self._servo_reconnect_loop, daemon=True, name="servo_reconnect"
+                target=self._connect_io, args=(1, self.config.io_ip),
+                daemon=True, name="connect_io1",
             ).start()
-
-        if CPXAP_AVAILABLE and (self.io_module or self.io_module_2):
+            io2_ip = getattr(self.config, 'io_ip_2', "192.168.27.254")
+            threading.Thread(
+                target=self._connect_io, args=(2, io2_ip),
+                daemon=True, name="connect_io2",
+            ).start()
+            # Start IO read loop unconditionally — it no-ops while io_module
+            # is None and picks up automatically once a connect thread succeeds.
             threading.Thread(target=self._io_bg_loop, daemon=True, name="io_bg").start()
 
     def _connect_io(self, idx: int, ip: str):
@@ -659,38 +650,54 @@ class CartridgeSystem(Node):
 
     def _servo_reconnect_loop(self):
         """
-        Thread nền chạy vô tận để giám sát và tự động reconnect servo.
-        Mỗi 10s (khi đủ kết nối) hoặc 5s (khi thiếu), thực hiện:
-          - Với servo chưa kết nối: thử _connect_servo(attempts=1)
-          - Với servo đang kết nối: ping bằng current_position()
-        Nếu ping thất bại 2 lần liên tiếp → xóa servo khỏi dict và reconnect.
-        Gửi thông báo GUI khi mất/khôi phục kết nối.
+        Thread nền giám sát + auto reconnect — PARALLEL per-servo.
+        Mỗi servo có thread con riêng, nên 1 servo offline (block ~3s Modbus
+        timeout) KHÔNG block các servo khác phát hiện mất/khôi phục kết nối.
+        Servo online → ping current_position() mỗi 5s; fail 2 lần → reconnect.
+        Servo offline → retry _connect_servo(attempts=1) mỗi 5s.
         """
-        consecutive_fail: dict = {}
+        # Spawn 1 thread per servo, then idle (each child loops forever).
+        for sid, ip in self.config.servo_ips.items():
+            threading.Thread(
+                target=self._servo_monitor_one,
+                args=(sid, ip),
+                daemon=True,
+                name=f"servo_mon_s{sid}",
+            ).start()
+        # Block here so the parent thread is alive (some shutdown paths
+        # check rclpy.ok()); children handle the actual work.
         while rclpy.ok():
-            all_connected = all(sid in self.servos for sid in self.config.servo_ips)
-            time.sleep(10.0 if all_connected else 5.0)
+            time.sleep(60.0)
 
-            for sid, ip in self.config.servo_ips.items():
-                mot = self.servos.get(sid)
-                if mot is None:
-                    if self._connect_servo(sid, ip, attempts=1):
-                        self._notify('info', f'S{sid} da ket noi', f'S{sid} ({ip}) OK')
-                    continue
-                try:
+    def _servo_monitor_one(self, sid: int, ip: str):
+        """Per-servo monitor: ping if connected, reconnect if dropped.
+        Runs forever in its own thread so each servo's Modbus timeouts are
+        isolated from the rest of the fleet."""
+        consecutive_fail = 0
+        while rclpy.ok():
+            time.sleep(5.0)
+            mot = self.servos.get(sid)
+            if mot is None:
+                # Offline → try to bring it back. attempts=1 because the outer
+                # loop will retry every 5s anyway; no need for inner sleep.
+                if self._connect_servo(sid, ip, attempts=1):
+                    consecutive_fail = 0
+                    self._notify('info', f'S{sid} da ket noi', f'S{sid} ({ip}) OK')
+                continue
+            try:
+                with self._servo_lock:
+                    mot.current_position()
+                consecutive_fail = 0
+            except Exception:
+                consecutive_fail += 1
+                if consecutive_fail >= 2:
+                    self.get_logger().error(f"S{sid} mat ket noi -> reconnect")
+                    self._notify('warn', f'Servo S{sid} mat ket noi', f'Dang reconnect...')
                     with self._servo_lock:
-                        mot.current_position()
-                    consecutive_fail[sid] = 0
-                except Exception as e:
-                    consecutive_fail[sid] = consecutive_fail.get(sid, 0) + 1
-                    if consecutive_fail[sid] >= 2:
-                        self.get_logger().error(f"S{sid} mat ket noi -> reconnect")
-                        self._notify('warn', f'Servo S{sid} mat ket noi', f'Dang reconnect...')
-                        with self._servo_lock:
-                            self.servos.pop(sid, None)
-                        if self._connect_servo(sid, ip, attempts=1):
-                            consecutive_fail[sid] = 0
-                            self._notify('info', f'S{sid} ket noi lai', f'S{sid} OK')
+                        self.servos.pop(sid, None)
+                    if self._connect_servo(sid, ip, attempts=1):
+                        consecutive_fail = 0
+                        self._notify('info', f'S{sid} ket noi lai', f'S{sid} OK')
 
     def destroy_node(self):
         """
@@ -2167,9 +2174,13 @@ class CartridgeSystem(Node):
                             self.get_logger().warn(f"S{sid} JOG home timeout after {timeout}s")
                             with self._servo_lock:
                                 mot.stop_motion_task()
-                        if sid not in self.zero_offset:
-                            with self._servo_lock:
-                                self.zero_offset[sid] = mot.current_position()
+                        with self._servo_lock:
+                            self.zero_offset[sid] = mot.current_position()
+                        # Invalidate cache + mark active so _publish_positions reads fresh
+                        self._pos_cache.pop(sid, None)
+                        self._servo_motion_t[sid] = time.time()
+                        if hasattr(self, '_servo_homed_once'):
+                            self._servo_homed_once[sid] = True
                         self._notify('silent_ok', f'Homing complete ...', f'Servo {sid}')
                     threading.Thread(target=_do, daemon=True).start()
                 return

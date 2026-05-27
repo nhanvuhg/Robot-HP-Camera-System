@@ -131,6 +131,32 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
             }
         });
 
+    // Realtime joint angles from feedback streaming (Dobot port 30004, ~100Hz)
+    // Replaces GetAngle service polling — eliminates 500ms display lag.
+    // feedback.py publishes JointState in radians; convert to degrees for GUI.
+    auto sensor_qos = rclcpp::SensorDataQoS().keep_last(1);
+    joint_state_sub_ = node_->create_subscription<sensor_msgs::msg::JointState>(
+        "/nova5/joint_states_robot", sensor_qos,
+        [this](const sensor_msgs::msg::JointState::SharedPtr msg) {
+            QVariantList angles;
+            constexpr double RAD2DEG = 57.29577951308232;
+            for (double p : msg->position) angles.append(p * RAD2DEG);
+            while (angles.size() < 6) angles.append(0.0);
+            joint_angles_ = angles;
+            emit jointAnglesChanged();
+        });
+
+    // Realtime TCP pose from feedback streaming — already in mm/deg.
+    tool_vector_sub_ = node_->create_subscription<dobot_msgs_v3::msg::ToolVectorActual>(
+        "/nova5/dobot_msgs_v3/msg/ToolVectorActual", sensor_qos,
+        [this](const dobot_msgs_v3::msg::ToolVectorActual::SharedPtr msg) {
+            QVariantList pose;
+            pose.append(msg->x); pose.append(msg->y); pose.append(msg->z);
+            pose.append(msg->rx); pose.append(msg->ry); pose.append(msg->rz);
+            cartesian_pose_ = pose;
+            emit cartesianPoseChanged();
+        });
+
     qDebug() << "RobotController initialized";
 
     // Load persisted speed ratio
@@ -166,10 +192,11 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
         }
     });
 
-    // Auto-poll angles/pose every 500ms for realtime display
+    // Position/pose stream in at ~100Hz via joint_state_sub_ + tool_vector_sub_.
+    // Only error ID still needs service polling — slower cadence is fine.
     poll_timer_ = new QTimer(this);
     connect(poll_timer_, &QTimer::timeout, this, &RobotController::pollRobotState);
-    poll_timer_->start(500);
+    poll_timer_->start(1000);
 }
 
 void RobotController::callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr client, bool value)
@@ -368,8 +395,6 @@ void RobotController::gotoState(const QString& state)
 
 void RobotController::pollRobotState()
 {
-    getAngles();
-    getPose();
     pollErrorID();
 }
 

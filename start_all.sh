@@ -36,7 +36,7 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 # SHM toggle: No Docker in production, so SHM is safe and avoids ~14.8 MB/s
 # UDP fragment/reassemble overhead for camera frames. To re-enable SHM,
 # comment out the FASTRTPS line below (or set USE_SHM=1).
-if [ "${USE_SHM:-0}" = "1" ]; then
+if [ "${USE_SHM:-1}" = "1" ]; then
     echo "ℹ️  FastDDS: SHM ENABLED (zero-copy localhost transport)"
     unset FASTRTPS_DEFAULT_PROFILES_FILE 2>/dev/null || true
 else
@@ -128,6 +128,11 @@ if [ "$NEED_CLEANUP" -eq 1 ]; then
         _wait=$((_wait + 1))
     done
 
+    # Clean up stale FastDDS Shared Memory segment and lock files
+    echo "🧹 Cleaning up stale FastDDS Shared Memory segment and lock files..."
+    ros2 daemon stop 2>/dev/null || true
+    rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* 2>/dev/null || true
+
     echo "✅ Clean slate"
 else
     echo "✅ No old processes — skip cleanup"
@@ -150,17 +155,18 @@ cleanup() {
     echo ""
     echo "🛑 Shutting down..."
     rm -f "$PIDFILE"
-    for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_CAMERA:-}" "${PID_GRIPPER:-}" "${PID_ROBOT:-}" "${PID_DOBOT:-}" "${PID_PROVIDE:-}"; do
+    for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_CAMERA:-}" "${PID_GRIPPER:-}" "${PID_ROBOT:-}" "${PID_DOBOT:-}" "${PID_PROVIDE:-}" "${PID_VFD_LOGIC:-}"; do
         [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
     done
     sleep 2
-    for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_CAMERA:-}" "${PID_GRIPPER:-}" "${PID_ROBOT:-}" "${PID_MOTION:-}" "${PID_DOBOT:-}" "${PID_PROVIDE:-}"; do
+    for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_CAMERA:-}" "${PID_GRIPPER:-}" "${PID_ROBOT:-}" "${PID_MOTION:-}" "${PID_DOBOT:-}" "${PID_PROVIDE:-}" "${PID_VFD_LOGIC:-}"; do
         [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null || true
     done
     # Fallback kill all known process names
     pkill -9 -f "cartridge_providesystem_py" 2>/dev/null || true
     pkill -9 -f "cartridge_gui.py" 2>/dev/null || true
     pkill -9 -f "unified_control_gui/unified_control_gui" 2>/dev/null || true
+    pkill -9 -f "vfd_logic_node.py" 2>/dev/null || true
     pkill -9 -f "robot_logic_node" 2>/dev/null || true
     pkill -9 -f "motion_executor" 2>/dev/null || true
     pkill -9 -f "dobot_bringup" 2>/dev/null || true
@@ -173,145 +179,120 @@ cleanup() {
 trap cleanup EXIT INT TERM HUP QUIT
 
 # ══════════════════════════════════════════
-# CARTRIDGE FEEDER SYSTEM
+# WAVE 1 — All hardware-facing nodes start in parallel.
+# Each node connects to its own hardware concurrently (cartridge: 5 servo
+# + 2 IO modules in threads; dobot: command+feedback sockets parallel via
+# nova5.launch.py). Total startup ≈ slowest single node, not the sum.
+# Inter-node ROS service deps are handled by service_is_ready / async
+# clients inside the nodes — no sleep needed.
 # ══════════════════════════════════════════
 
-# ── [1/7] Cartridge Provide System Node (servo control) ──
+# ── [1] Cartridge Provide System Node ──
 LOG_PROVIDE="$LOG_DIR/cartridge_node.log"
 CARTRIDGE_BIN="$WS/install/system_feed_cartridge/lib/system_feed_cartridge/cartridge_providesystem_py"
-echo "  [1/7] 🔧 Cartridge Provide System Node..."
+echo "  [1] 🔧 Cartridge Provide System Node..."
 "$CARTRIDGE_BIN" > "$LOG_PROVIDE" 2>&1 &
 PID_PROVIDE=$!
 echo "        PID=$PID_PROVIDE  Log: $LOG_PROVIDE"
 echo "$PID_PROVIDE" > "$PIDFILE"
-sleep 2
 
-# ══════════════════════════════════════════
-# ROBOT SYSTEM
-# ══════════════════════════════════════════
+# ── [2] VFD Logic Node ──
+LOG_VFD_LOGIC="$LOG_DIR/vfd_logic_node.log"
+VFD_LOGIC_PY="$WS/install/unified_control_gui/lib/unified_control_gui/vfd_logic_node.py"
+echo "  [2] 📡 VFD Logic Node..."
+python3 "$VFD_LOGIC_PY" > "$LOG_VFD_LOGIC" 2>&1 &
+PID_VFD_LOGIC=$!
+echo "        PID=$PID_VFD_LOGIC  Log: $LOG_VFD_LOGIC"
+echo "$PID_VFD_LOGIC" >> "$PIDFILE"
 
-# ── [2/7] Dobot Bringup (Nova5 driver) ──
+# ── [3] Dobot Bringup (command port 29999 + feedback 30004 in parallel) ──
 LOG_DOBOT="$LOG_DIR/dobot_bringup.log"
-echo "  [2/7] 🤖 Dobot Bringup (Nova5)..."
+echo "  [3] 🤖 Dobot Bringup (Nova5)..."
 ros2 launch dobot_bringup_v3 nova5.launch.py > "$LOG_DOBOT" 2>&1 &
 PID_DOBOT=$!
 echo "        PID=$PID_DOBOT  Log: $LOG_DOBOT"
 echo "$PID_DOBOT" >> "$PIDFILE"
-sleep 2
 
-# ── [3/8] Robot Logic Node (pick-and-place) ──
+# ── [4] Robot Logic + Motion Executor (params loaded inside launch file) ──
 LOG_ROBOT="$LOG_DIR/robot_logic_node.log"
-echo "  [3/8] 🧠 Robot Logic Node..."
-ros2 run robot_control_main robot_logic_node --ros-args --params-file "$WS/src/robot_control_main/config/joint_pose_params.yaml" > "$LOG_ROBOT" 2>&1 &
+echo "  [4] 🧠 Robot Logic + Motion Executor..."
+ros2 launch robot_control_main robot_logic.launch.py > "$LOG_ROBOT" 2>&1 &
 PID_ROBOT=$!
+LOG_MOTION="$LOG_ROBOT"   # same log file; kept for tail-f line below
 echo "        PID=$PID_ROBOT  Log: $LOG_ROBOT"
 echo "$PID_ROBOT" >> "$PIDFILE"
 
-# ── [3.5/8] Motion Executor (Action Server) ──
-LOG_MOTION="$LOG_DIR/motion_executor.log"
-echo "  [3.5/8] ⚙️  Motion Executor Node..."
-ros2 run robot_control_main motion_executor --ros-args --params-file "$WS/src/robot_control_main/config/joint_pose_params.yaml" > "$LOG_MOTION" 2>&1 &
-PID_MOTION=$!
-echo "        PID=$PID_MOTION  Log: $LOG_MOTION"
-echo "$PID_MOTION" >> "$PIDFILE"
-sleep 1
-
-# ── [4/7] Gripper Node (Festo CPX, venv) ──
+# ── [5] Gripper Node (Festo CPX, venv) ──
 LOG_GRIPPER="$LOG_DIR/gripper_festo_node.log"
-echo "  [4/7] 🦾 Gripper Festo Node..."
+echo "  [5] 🦾 Gripper Festo Node..."
 "$WS/run_gripper_node.sh" > "$LOG_GRIPPER" 2>&1 &
 PID_GRIPPER=$!
 echo "        PID=$PID_GRIPPER  Log: $LOG_GRIPPER"
 echo "$PID_GRIPPER" >> "$PIDFILE"
-sleep 1
 
-# ── [5/7] Dual Camera System (CSI + YOLO) ──
+# ── [6] Dual Camera System (CSI + YOLO) ──
 LOG_CAMERA="$LOG_DIR/dual_camera_system.log"
-echo "  [5/7] 📷 Dual Camera System (CSI + YOLO)..."
+echo "  [6] 📷 Dual Camera System (CSI + YOLO)..."
 ros2 launch csi_camera dual_camera_system.launch.py > "$LOG_CAMERA" 2>&1 &
 PID_CAMERA=$!
 echo "        PID=$PID_CAMERA  Log: $LOG_CAMERA"
 echo "$PID_CAMERA" >> "$PIDFILE"
-sleep 1
+
+# Brief settle window so the GUI subscribers see publishers ready on first
+# discovery cycle (avoids "UNKNOWN" placeholders flickering at startup).
+sleep 2
 
 # ══════════════════════════════════════════
-# GUI
+# WAVE 2 — GUIs (start in parallel after WAVE 1 settle).
 # ══════════════════════════════════════════
 
-# ── [6/7] Web GUI (cartridge_gui.py — port 8080) ──
+# ── [7] Web GUI (cartridge_gui.py — port 8080) ──
 LOG_WEB="$LOG_DIR/cartridge_web_gui.log"
 WEB_GUI="$WS/src/system_feed_cartridge/scripts/cartridge_gui.py"
 WEB_GUI_ENABLED=true
 for arg in "$@"; do [ "$arg" = "--no-web" ] && WEB_GUI_ENABLED=false; done
 
 if $WEB_GUI_ENABLED && [ -f "$WEB_GUI" ]; then
-    echo "  [6/7] 🌐 Web GUI (port 8080)..."
+    echo "  [7] 🌐 Web GUI (port 8080)..."
     python3 "$WEB_GUI" > "$LOG_WEB" 2>&1 &
     PID_WEB_GUI=$!
     echo "        PID=$PID_WEB_GUI  Log: $LOG_WEB  Access: http://$(hostname -I | awk '{print $1}'):8080"
     echo "$PID_WEB_GUI" >> "$PIDFILE"
-    sleep 1
 else
-    echo "  [6/7] ⏭️  Web GUI skipped (--no-web)"
+    echo "  [7] ⏭️  Web GUI skipped (--no-web)"
 fi
 
-# ── [7/7] QML GUI (native, HDMI) ──
+# ── [8] QML GUI (native, HDMI) ──
 LOG_QML="$LOG_DIR/unified_gui.log"
 QML_BIN="$WS/install/unified_control_gui/lib/unified_control_gui/unified_control_gui"
 if [ -n "${DISPLAY:-}" ]; then
-    echo "  [7/7] 🖥️  QML GUI (DISPLAY=$DISPLAY)..."
+    echo "  [8] 🖥️  QML GUI (DISPLAY=$DISPLAY)..."
     "$QML_BIN" > "$LOG_QML" 2>&1 &
     PID_QML_GUI=$!
     echo "        PID=$PID_QML_GUI  Log: $LOG_QML"
     echo "$PID_QML_GUI" >> "$PIDFILE"
 else
-    echo "  [7/7] ⚠️  DISPLAY not set — skipping QML GUI"
-fi
-
-# ══════════════════════════════════════════
-# [7b] VFD Logic Node — Pi5 (đọc S1/S2/S3, publish /vfd/cmd_run)
-# ══════════════════════════════════════════
-LOG_VFD_LOGIC="$LOG_DIR/vfd_logic_node.log"
-VFD_LOGIC_PY="$WS/install/unified_control_gui/lib/unified_control_gui/vfd_logic_node.py"
-echo "  [7b]  📊 VFD Logic Node (S1/S2/S3 → /vfd/cmd_run)..."
-if [ -x "$VFD_LOGIC_PY" ]; then
-    python3 "$VFD_LOGIC_PY" > "$LOG_VFD_LOGIC" 2>&1 &
-    PID_VFD_LOGIC=$!
-    echo "        PID=$PID_VFD_LOGIC  Log: $LOG_VFD_LOGIC"
-    echo "$PID_VFD_LOGIC" >> "$PIDFILE"
-else
-    echo "        ⚠️  $VFD_LOGIC_PY không tồn tại — chạy: colcon build --packages-select unified_control_gui"
+    echo "  [8] ⚠️  DISPLAY not set — skipping QML GUI"
 fi
 
 # ══════════════════════════════════════════
 # [8] RS485 BUS NODE — RevPi A (Loadcell + VFD)
 # ══════════════════════════════════════════
-REVPI_HOST="${REVPI_HOST:-revpi-a}"
+REVPI_HOST="${REVPI_HOST:-192.168.27.176}"
 REVPI_USER="${REVPI_USER:-pi}"
-REVPI_WS="/home/${REVPI_USER}/ros2_ws"
+REVPI_WS="${REVPI_WS:-/home/${REVPI_USER}/ros2_jazzy}"
 
 LOG_REVPI="$LOG_DIR/revpi_a_nodes.log"
 
 if ping -c 1 -W 1 "$REVPI_HOST" >/dev/null 2>&1; then
-    echo "  [8/8] 📡 RevPi A ($REVPI_HOST) — đang start rs485_bus_node..."
+    echo "  [9] 📡 RevPi A ($REVPI_HOST) — đang start rs485_bus_node..."
     ssh -o BatchMode=yes -o ConnectTimeout=5 "${REVPI_USER}@${REVPI_HOST}" \
-        "pkill -9 -f rs485_bus_node 2>/dev/null; sleep 1; \
-         export ROS_DOMAIN_ID=22; \
-         export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET; \
-         export RMW_IMPLEMENTATION=rmw_fastrtps_cpp; \
-         source /opt/ros/jazzy/setup.bash; \
-         source ${REVPI_WS}/install/setup.bash; \
-         nohup ros2 run com_rs485 rs485_bus_node \
-           --ros-args \
-           -p port:=/dev/ttyRS485 \
-           -p baudrate:=9600 \
-           -p slave_id:=1 \
-           -p loadcell_slave_id:=2 \
-         > /tmp/rs485_bus_node.log 2>&1 &" >> "$LOG_REVPI" 2>&1 \
-    && echo "        ✅ rs485_bus_node started on RevPi A  Log: /tmp/rs485_bus_node.log" \
+        "tmux kill-session -t rs485_bus 2>/dev/null || true; sleep 1; \
+         tmux new-session -d -s rs485_bus 'exec bash /home/pi/start_rs485.sh > /tmp/rs485_bus_node.log 2>&1'" >> "$LOG_REVPI" 2>&1 \
+    && echo "        ✅ rs485_bus_node started on RevPi A via start_rs485.sh" \
     || echo "        ⚠️  SSH failed — rs485_bus_node không start được. Xem: $LOG_REVPI"
 else
-    echo "  [8/8] ⏭️  RevPi A ($REVPI_HOST) không thấy trên LAN — bỏ qua rs485_bus_node"
+    echo "  [9] ⏭️  RevPi A ($REVPI_HOST) không thấy trên LAN — bỏ qua rs485_bus_node"
     echo "        Khi RevPi A online: bash ~/deploy_revpi.sh  rồi restart start_all.sh"
 fi
 
