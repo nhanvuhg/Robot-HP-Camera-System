@@ -8,6 +8,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/set_bool.hpp"
 #include "std_msgs/msg/int32.hpp"
+#include "std_msgs/msg/int32_multi_array.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
@@ -47,6 +48,8 @@ class RobotController : public QObject
     Q_PROPERTY(bool inReady READ inReady NOTIFY inReadyChanged)
     Q_PROPERTY(bool outReady READ outReady NOTIFY outReadyChanged)
     Q_PROPERTY(bool ignoreScale READ ignoreScale WRITE setIgnoreScale NOTIFY ignoreScaleChanged)
+    Q_PROPERTY(QVariantList rowReady READ rowReady NOTIFY rowReadyChanged)
+    Q_PROPERTY(QVariantList slotReady READ slotReady NOTIFY slotReadyChanged)
 
 public:
     explicit RobotController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -67,6 +70,8 @@ public:
     bool inReady() const { return in_ready_; }
     bool outReady() const { return out_ready_; }
     bool ignoreScale() const { return ignore_scale_; }
+    QVariantList rowReady() const { return row_ready_; }
+    QVariantList slotReady() const { return slot_ready_; }
 
 public slots:
     // System control
@@ -136,6 +141,8 @@ signals:
     void inReadyChanged();
     void outReadyChanged();
     void ignoreScaleChanged();
+    void rowReadyChanged();
+    void slotReadyChanged();
     void jointPoseSaved(bool success, QString message);
 
 private:
@@ -194,6 +201,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr in_ready_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr out_ready_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr hw_speed_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int32MultiArray>::SharedPtr row_status_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int32MultiArray>::SharedPtr slot_status_sub_;
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr joint_state_sub_;
     rclcpp::Subscription<dobot_msgs_v3::msg::ToolVectorActual>::SharedPtr tool_vector_sub_;
     
@@ -218,6 +227,8 @@ private:
     bool in_ready_{false};
     bool out_ready_{false};
     bool ignore_scale_{false};
+    QVariantList row_ready_;
+    QVariantList slot_ready_;
     
     QTimer *jog_timer_{nullptr};
     QString jog_axis_;

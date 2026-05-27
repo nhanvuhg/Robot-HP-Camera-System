@@ -327,26 +327,92 @@ Item {
                         Repeater { model: 5
                             delegate: Rectangle {
                                 property int rn: index + 1
+                                property bool aiMode: cameraPageRoot.ctrlMode === "camera_ai"
+                                property bool isReady: aiMode && (robotController.rowReady[index] === true)
                                 property bool isActive: robotController.selectedRow === rn
                                 property bool canSelect: !cameraPageRoot.rowLocked && cameraPageRoot.ctrlMode === "auto"
-                                Layout.fillWidth: true; height: 36; radius: 5
-                                color: isActive ? "#0a4020" : "#0d2538"
-                                border.color: isActive ? "#10b981" : "#134357"; border.width: isActive ? 2 : 1
-                                opacity: canSelect ? 1.0 : (isActive ? 1.0 : 0.45)
+                                Layout.fillWidth: true; height: 32; radius: 5
+                                color: aiMode
+                                       ? (isActive ? "#0a4020" : (isReady ? "#0d3320" : "#0d2538"))
+                                       : (isActive ? "#0a4020" : "#0d2538")
+                                border.color: aiMode
+                                              ? (isActive ? "#10b981" : (isReady ? "#10b981" : "#134357"))
+                                              : (isActive ? "#10b981" : "#134357")
+                                border.width: aiMode
+                                              ? (isActive ? 3 : (isReady ? 2 : 1))
+                                              : (isActive ? 2 : 1)
+                                opacity: aiMode
+                                         ? (isReady || isActive ? 1.0 : 0.45)
+                                         : (canSelect ? 1.0 : (isActive ? 1.0 : 0.45))
                                 Rectangle {
                                     visible: isActive
                                     anchors { top: parent.top; left: parent.left; right: parent.right }
                                     height: 3; radius: 2; color: "#10b981"
                                 }
-                                Text { anchors.centerIn: parent; text: "R" + rn; color: isActive ? "#10b981" : "#94a3b8"; font.pixelSize: 19; font.bold: isActive }
+                                Text {
+                                    anchors.centerIn: parent; text: "R" + rn
+                                    color: aiMode
+                                           ? (isActive ? "#34d399" : (isReady ? "#10b981" : "#94a3b8"))
+                                           : (isActive ? "#10b981" : "#94a3b8")
+                                    font.pixelSize: 18; font.bold: isActive || isReady
+                                }
                                 MouseArea { anchors.fill: parent; enabled: canSelect; onClicked: robotController.selectRow(rn) }
+                            }
+                        }
+                    }
+
+                    // Output Slot
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: false
+                        Text { text: "OUTPUT SLOT"; color: "#5cf4f1"; font.pixelSize: 17; font.bold: true }
+                        Text {
+                            text: robotController.selectedSlot > 0 ? ("Đã chọn slot " + robotController.selectedSlot) : "Chọn vị trí đặt khay output"
+                            color: "#6b7280"; font.pixelSize: 17
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 3
+                        Repeater { model: 9
+                            delegate: Rectangle {
+                                property int sn: index + 1
+                                property bool aiMode: cameraPageRoot.ctrlMode === "camera_ai"
+                                property bool isReady: aiMode && (robotController.slotReady[index] === true)
+                                property bool isActive: robotController.selectedSlot === sn
+                                property bool canSelect: cameraPageRoot.ctrlMode === "auto"
+                                Layout.fillWidth: true; height: 32; radius: 5
+                                color: aiMode
+                                       ? (isActive ? "#0a4020" : (isReady ? "#0d3320" : "#0d2538"))
+                                       : (isActive ? "#04363a" : "#0d2538")
+                                border.color: aiMode
+                                              ? (isActive ? "#10b981" : (isReady ? "#10b981" : "#134357"))
+                                              : (isActive ? "#00bcd4" : "#134357")
+                                border.width: aiMode
+                                              ? (isActive ? 3 : (isReady ? 2 : 1))
+                                              : (isActive ? 2 : 1)
+                                opacity: aiMode
+                                         ? (isReady || isActive ? 1.0 : 0.45)
+                                         : (canSelect ? 1.0 : (isActive ? 1.0 : 0.45))
+                                Rectangle {
+                                    visible: isActive
+                                    anchors { top: parent.top; left: parent.left; right: parent.right }
+                                    height: 3; radius: 2; color: aiMode ? "#10b981" : "#00bcd4"
+                                }
+                                Text {
+                                    anchors.centerIn: parent; text: "O" + sn
+                                    color: aiMode
+                                           ? (isActive ? "#34d399" : (isReady ? "#10b981" : "#94a3b8"))
+                                           : (isActive ? "#00bcd4" : "#94a3b8")
+                                    font.pixelSize: 16; font.bold: isActive || isReady
+                                }
+                                MouseArea { anchors.fill: parent; enabled: canSelect; onClicked: robotController.selectSlot(sn) }
                             }
                         }
                     }
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#134357" }
 
-                    Text { text: "STATE COMMANDS"; color: "#5cf4f1"; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1 }
+                    Text { text: "STATE COMMANDS"; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
                     GridLayout {
                         Layout.fillWidth: true; columns: 2; rowSpacing: 5; columnSpacing: 5
                         Repeater {
@@ -361,7 +427,7 @@ Item {
                             delegate: Rectangle {
                                 required property var modelData
                                 property bool isActive: (modelData.lbl === "IN_READY" && robotController.inReady) || (modelData.lbl === "OUT_READY" && robotController.outReady)
-                                Layout.fillWidth: true; height: 56; radius: 5
+                                Layout.fillWidth: true; height: 64; radius: 5
                                 color: isActive ? Qt.lighter(modelData.bg, 1.8) : (ma.pressed ? Qt.darker(modelData.bg, 1.3) : modelData.bg)
                                 border.color: isActive ? "#00ff00" : (ma.pressed ? Qt.lighter(modelData.bc, 1.2) : modelData.bc)
                                 border.width: isActive || ma.pressed ? 3 : 2
@@ -379,8 +445,8 @@ Item {
                                         anchors.verticalCenter: parent.verticalCenter
                                         Behavior on color { ColorAnimation { duration: 200 } }
                                     }
-                                    Text { text: modelData.icon; color: modelData.bc; font.pixelSize: 21; anchors.verticalCenter: parent.verticalCenter }
-                                    Text { text: modelData.lbl; color: modelData.bc; font.pixelSize: 19; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
+                                    Text { text: modelData.icon; color: modelData.bc; font.pixelSize: 22; anchors.verticalCenter: parent.verticalCenter }
+                                    Text { text: modelData.lbl; color: modelData.bc; font.pixelSize: 20; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
                                 }
                                 MouseArea { id: ma; anchors.fill: parent; onClicked: {
                                     if (modelData.lbl === "IN_READY") robotController.simulateInputTrayReady()
@@ -397,58 +463,58 @@ Item {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#134357" }
 
-                    Text { text: "SYSTEM CONTROL"; color: "#5cf4f1"; font.pixelSize: 17; font.bold: true; font.letterSpacing: 1 }
+                    Text { text: "SYSTEM CONTROL"; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
 
-                    Rectangle { Layout.fillWidth: true; height: 50; radius: 5; color: emMA.pressed ? Qt.darker("#4d1a1a", 1.2) : "#4d1a1a"; border.color: "#ef4444"; border.width: 2
+                    Rectangle { Layout.fillWidth: true; height: 56; radius: 5; color: emMA.pressed ? Qt.darker("#4d1a1a", 1.2) : "#4d1a1a"; border.color: "#ef4444"; border.width: 2
                         scale: emMA.pressed ? 0.95 : 1.0
                         Behavior on scale { NumberAnimation { duration: 100 } }
-                        Text { anchors.centerIn: parent; text: "⛔ EMERGENCY STOP"; color: "#ef4444"; font.pixelSize: 19; font.bold: true }
+                        Text { anchors.centerIn: parent; text: "⛔ EMERGENCY STOP"; color: "#ef4444"; font.pixelSize: 21; font.bold: true }
                         MouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.emergencyStop(true) } }
                     }
 
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 5; columnSpacing: 5
 
-                        Rectangle { Layout.fillWidth: true; height: 46; radius: 5; color: stopResetMA.pressed ? Qt.darker("#4a1a00", 1.2) : "#4a1a00"; border.color: "#FF6600"; border.width: 2
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: stopResetMA.pressed ? Qt.darker("#4a1a00", 1.2) : "#4a1a00"; border.color: "#FF6600"; border.width: 2
                             scale: stopResetMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#FF6600"; font.pixelSize: 18; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#FF6600"; font.pixelSize: 20; font.bold: true }
                             MouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.softStop() } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 46; radius: 5; color: enMA.pressed ? Qt.darker("#0a2a1a", 1.2) : "#0a2a1a"; border.color: "#10b981"; border.width: 2
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: enMA.pressed ? Qt.darker("#0a2a1a", 1.2) : "#0a2a1a"; border.color: "#10b981"; border.width: 2
                             scale: enMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "ENABLE"; color: "#10b981"; font.pixelSize: 20; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "ENABLE"; color: "#10b981"; font.pixelSize: 21; font.bold: true }
                             MouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 46; radius: 5; color: startMA.pressed ? Qt.darker("#0d3320", 1.3) : "#0d3320"; border.color: "#22c55e"; border.width: 2
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: startMA.pressed ? Qt.darker("#0d3320", 1.3) : "#0d3320"; border.color: "#22c55e"; border.width: 2
                             scale: startMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
                             Behavior on color { ColorAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "🚀 START"; color: "#22c55e"; font.pixelSize: 18; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "🚀 START"; color: "#22c55e"; font.pixelSize: 20; font.bold: true }
                             MouseArea { id: startMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = true; robotController.startSystem(true) } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 46; radius: 5; color: pauseMA.pressed ? Qt.darker("#1a1a00", 1.2) : "#1a1a00"; border.color: "#f59e0b"; border.width: 2
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: pauseMA.pressed ? Qt.darker("#1a1a00", 1.2) : "#1a1a00"; border.color: "#f59e0b"; border.width: 2
                             scale: pauseMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "PAUSE"; color: "#f59e0b"; font.pixelSize: 20; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "PAUSE"; color: "#f59e0b"; font.pixelSize: 21; font.bold: true }
                             MouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 46; radius: 5; color: resMA.pressed ? Qt.darker("#0a1a2a", 1.2) : "#0a1a2a"; border.color: "#5cf4f1"; border.width: 2
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: resMA.pressed ? Qt.darker("#0a1a2a", 1.2) : "#0a1a2a"; border.color: "#5cf4f1"; border.width: 2
                             scale: resMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "RESUME"; color: "#5cf4f1"; font.pixelSize: 20; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "RESUME"; color: "#5cf4f1"; font.pixelSize: 21; font.bold: true }
                             MouseArea { id: resMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 46; radius: 5; color: clrMA.pressed ? Qt.darker("#0a1a2a", 1.2) : "#0a1a2a"; border.color: "#4da6ff"; border.width: 2
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: clrMA.pressed ? Qt.darker("#0a1a2a", 1.2) : "#0a1a2a"; border.color: "#4da6ff"; border.width: 2
                             scale: clrMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#4da6ff"; font.pixelSize: 20; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#4da6ff"; font.pixelSize: 21; font.bold: true }
                             MouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
                         }
                     }

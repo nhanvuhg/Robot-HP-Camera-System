@@ -15,6 +15,8 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     // Init joint angles to 6 zeros
     for (int i = 0; i < 6; i++) joint_angles_.append(0.0);
     for (int i = 0; i < 6; i++) cartesian_pose_.append(0.0);
+    for (int i = 0; i < 5; i++) row_ready_.append(false);
+    for (int i = 0; i < 9; i++) slot_ready_.append(false);
 
     // Create service clients
     enable_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/enable_system");
@@ -94,6 +96,37 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
             QMetaObject::invokeMethod(this, [this, msg]() {
                 selected_slot_ = msg->data;
                 emit selectedSlotChanged();
+            }, Qt::QueuedConnection);
+        });
+
+    row_status_sub_ = node_->create_subscription<std_msgs::msg::Int32MultiArray>(
+        "/vision/input_tray/row_status", 10,
+        [this](const std_msgs::msg::Int32MultiArray::SharedPtr msg) {
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                QVariantList next;
+                for (int i = 0; i < 5; ++i) {
+                    next.append(i < (int)msg->data.size() && msg->data[i] == 1);
+                }
+                if (next != row_ready_) {
+                    row_ready_ = next;
+                    emit rowReadyChanged();
+                }
+            }, Qt::QueuedConnection);
+        });
+
+    slot_status_sub_ = node_->create_subscription<std_msgs::msg::Int32MultiArray>(
+        "/vision/output_tray/slot_status", 10,
+        [this](const std_msgs::msg::Int32MultiArray::SharedPtr msg) {
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                QVariantList next;
+                // slot_status: 0=empty (ready to place), 1=occupied (blank)
+                for (int i = 0; i < 9; ++i) {
+                    next.append(i < (int)msg->data.size() && msg->data[i] == 0);
+                }
+                if (next != slot_ready_) {
+                    slot_ready_ = next;
+                    emit slotReadyChanged();
+                }
             }, Qt::QueuedConnection);
         });
     
