@@ -859,7 +859,7 @@ private:
         // Tính tiến theo row index DỰA TRÊN TRỤC CỦA TAY MÁY (Khay đặt theo góc của tay)
         if (row > 1) {
             double dx = (row - 1) * (-105.0); // Đi dọc theo khay (hướng đâm thẳng của tay)
-            double dy = (row - 1) * -8.7;      // Đi ngang khay (hướng vuông góc với tay)
+            double dy = (row - 1) * -8.3;      // Đi ngang khay (hướng vuông góc với tay)
             double dz = (row - 1) * 1.0;
             if (!moveR(dx, dy, dz)) return false;
         }
