@@ -868,7 +868,7 @@ private:
         if (!moveR(0, 0, -101,3)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Gripper GẮP — kẹp khay tại input row
         if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 200,3)) return false;
+        if (!moveR(0, 0, 150,3)) return false;
         if (!moveToIndex(27)) return false;
         if (!moveToIndex(28)) return false;
         if (!moveToIndex(29)) return false;  
@@ -903,7 +903,7 @@ private:
         if (!moveR(0, 0, -101,3)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Gripper GẮP — kẹp khay tại input row
         if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 200,3)) return false;
+        if (!moveR(0, 0, 150,3)) return false;
         if (!moveToIndex(27)) return false;
         if (!moveToIndex(8)) return false;
         if (!moveR(0, 0, -49,5)) return false;

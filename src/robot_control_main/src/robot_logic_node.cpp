@@ -1814,7 +1814,14 @@ void RobotLogicNode::stateInitRefillBuffer()
         clearMotionCmd();
 
         if (!motion_result_) {
-            RCLCPP_ERROR(get_logger(), "[INIT_REFILL] ❌ Motion failed");
+            motion_fail_count_++;
+            RCLCPP_ERROR(get_logger(), "[INIT_REFILL] ❌ Motion failed (%d/3)", motion_fail_count_);
+            if (motion_fail_count_ >= 3) {
+                publishError("MOTION_FAILED_3X");
+                motion_fail_count_ = 0;
+                system_enabled_ = false;
+                transitionTo(SystemState::IDLE);
+            }
             return;
         }
 
@@ -2070,7 +2077,15 @@ void RobotLogicNode::stateRefillBuffer()
         clearMotionCmd();
 
         if (!motion_result_) {
-            RCLCPP_ERROR(get_logger(), "[REFILL] ❌ Motion failed");
+            motion_fail_count_++;
+            RCLCPP_ERROR(get_logger(), "[REFILL] ❌ Motion failed (%d/3)", motion_fail_count_);
+            if (motion_fail_count_ >= 3) {
+                publishError("MOTION_FAILED_3X");
+                motion_fail_count_ = 0;
+                system_enabled_ = false;
+                transitionTo(SystemState::IDLE);
+                return;
+            }
             // Don't crash — go process scale anyway
         } else {
             buffer_is_empty_ = false;

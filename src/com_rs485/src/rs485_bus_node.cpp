@@ -91,8 +91,8 @@ public:
       "/vfd/cmd_freq", 10,
       [this](const std_msgs::msg::Float32::SharedPtr msg) {
         float f = msg->data;
-        if (f < -30.0f) f = -30.0f;
-        if (f >  30.0f) f =  30.0f;
+        if (f < -50.0f) f = -50.0f;
+        if (f >  50.0f) f =  50.0f;
         desired_freq_ = f;
         RCLCPP_INFO(get_logger(), "[VFD] /vfd/cmd_freq → %.1f Hz (desired, %s)",
                     f, f < 0.0f ? "NGƯỢC" : "THUẬN");
