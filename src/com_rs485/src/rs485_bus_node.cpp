@@ -32,7 +32,7 @@ using namespace std::chrono_literals;
 //
 //  SUBSCRIBE:
 //    /vfd/cmd_run   Bool     true=RUN; false=STOP
-//    /vfd/cmd_freq  Float32  Tần số đích (Hz), clamp [-30, 30] (âm = ngược)
+//    /vfd/cmd_freq  Float32  Tần số đích (Hz), clamp [-50, 50] (âm = ngược)
 // =========================================================
 
 class RS485BusNode : public rclcpp::Node
@@ -46,9 +46,9 @@ public:
     CMD_DISABLE_ = 0x0000; CMD_ENABLE_ = 0x0006; CMD_RUN_FWD_ = 0x000F;
 
     // ── Defaults baked vào node (start script KHÔNG set --ros-args) ──
-    // ATV320 ở RevPi A, đấu ngược chiều băng tải → ref_hz mặc định -30.0.
+    // ATV320 ở RevPi A, đấu ngược chiều băng tải → ref_hz mặc định -50.0.
     slave_id_  = declare_parameter<int>("slave_id",    2);
-    ref_hz_    = declare_parameter<double>("ref_hz",  -30.0);
+    ref_hz_    = declare_parameter<double>("ref_hz",  -50.0);
     ref_scale_ = declare_parameter<double>("ref_scale",10.0);
 
     // ── RS485 / Modbus RTU ───────────────────────────────
@@ -75,6 +75,12 @@ public:
     pub_vfd_state_ = create_publisher<std_msgs::msg::Int32>  ("/vfd/state",   10);
     pub_status_    = create_publisher<std_msgs::msg::String> ("/vfd/status",  10);
 
+    // ── Safety timeout: VFD chạy quá run_timeout_s_ giây mà chưa thấy STOP
+    //    (S3 trigger từ Pi 5) → tự dừng. Bảo vệ trường hợp S3 nhiễu/cảm biến
+    //    chết/vfd_logic_node treo. Reset timer mỗi khi cmd_run flip false→true.
+    run_timeout_s_ = declare_parameter<double>("run_timeout_s", 50.0);
+    run_start_steady_ = std::chrono::steady_clock::time_point{};  // not running
+
     // ── Subscribers — chỉ lưu desired, apply trong reconcile ─
     sub_vfd_run_ = create_subscription<std_msgs::msg::Bool>(
       "/vfd/cmd_run", 10,
@@ -83,6 +89,13 @@ public:
         if (prev != msg->data) {
           RCLCPP_INFO(get_logger(), "[VFD] /vfd/cmd_run → %s (desired)",
                       msg->data ? "RUN" : "STOP");
+          // Edge → reset / clear safety timer. Sau timeout desired_run_ đã
+          // set false; heartbeat re-publish true sẽ trigger edge này lại →
+          // VFD chạy thêm 50s nữa (user OK với behavior này).
+          std::lock_guard<std::mutex> lk(run_timer_mutex_);
+          run_start_steady_ = msg->data
+              ? std::chrono::steady_clock::now()
+              : std::chrono::steady_clock::time_point{};
         }
         reconcile();
       });
@@ -248,8 +261,40 @@ private:
     }
   }
 
+  // Safety auto-stop: nếu desired_run_ giữ true quá run_timeout_s_ giây mà
+  // chưa có /vfd/cmd_run=false từ Pi 5 (S3 nhiễu/cảm biến chết/vfd_logic treo)
+  // → tự stop, không cảnh báo. Reset bằng cách publish lại cmd_run=true sau STOP.
+  void check_run_timeout()
+  {
+    std::chrono::steady_clock::time_point start;
+    {
+      std::lock_guard<std::mutex> lk(run_timer_mutex_);
+      start = run_start_steady_;
+    }
+    if (start == std::chrono::steady_clock::time_point{}) return;  // not running
+    auto elapsed = std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - start).count();
+    if (elapsed < run_timeout_s_) return;
+
+    // Timeout — force stop. desired_run_=false, clear timer. reconcile()
+    // ghi REG_CMD=ENABLE (stop) ngay tick. Nếu vfd_logic heartbeat publish
+    // cmd_run=true lại (S1/S2 vẫn ON) → sub callback bắt edge → reset timer
+    // → VFD chạy thêm 50s nữa (user accept behavior).
+    desired_run_ = false;
+    {
+      std::lock_guard<std::mutex> lk(run_timer_mutex_);
+      run_start_steady_ = std::chrono::steady_clock::time_point{};
+    }
+    RCLCPP_INFO(get_logger(),
+        "[VFD] Safety timeout %.1fs — auto STOP (no STOP signal from Pi 5)",
+        run_timeout_s_);
+  }
+
   void poll_loop()
   {
+    // ── Bước 0: kiểm tra safety run timeout (independent với Modbus state) ──
+    check_run_timeout();
+
     // ── Bước 1: reconnect khi Modbus down ──
     if (!connection_ok_) {
       if (++reconnect_count_ >= 10) {  // ~2s
@@ -306,6 +351,14 @@ private:
   std::atomic<bool>  desired_run_{false};
   std::atomic<float> desired_freq_{0.0f};
   int last_freq_written_{INT_MIN};
+
+  // Safety auto-stop timer: track thời điểm cmd_run flip false→true, force
+  // stop nếu vượt run_timeout_s_ (default 50s). Bảo vệ khi S3 nhiễu/cảm biến
+  // chết. Sau timeout VFD dừng; nếu vfd_logic heartbeat re-publish true (S1/S2
+  // vẫn ON) → bắt edge → chạy thêm 50s nữa. Không latch.
+  std::mutex run_timer_mutex_;
+  std::chrono::steady_clock::time_point run_start_steady_{};
+  double run_timeout_s_{50.0};
 
   int reconnect_count_{0};
   int fail_count_{0};
