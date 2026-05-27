@@ -327,6 +327,9 @@ class CartridgeSystem(Node):
         # State của _cyl3_safety_check: '' | 'extending' | 'extended' | 'retracting' | 'retracted'
         self._cyl3_safety_active    = ''
         self._cyl3_safety_last_fire = 0.0
+        # Latch: khi S13+S14 cùng OFF → retract Cyl3 và chốt.
+        # Chỉ xóa latch khi: manual extend từ GUI, hoặc auto mode + S6 ON.
+        self._cyl3_s13s14_latch     = False
 
         # Cyl3 feedback monitor — đối chiếu lệnh extend/retract với S15/S16
         self._cyl3_expected         = None   # None | "extended" | "retracted"
@@ -2022,7 +2025,9 @@ class CartridgeSystem(Node):
                     self._notify('warn', 'Cyl3 disabled', 'cyl3_present=false trong config')
                     return
                 if act == 'extend':
+                    self._cyl3_s13s14_latch = False
                     self._cyl3_extend()
+                    self.get_logger().info("[CYL3] Manual EXTEND → S13/S14 latch cleared")
                 else:
                     self._cyl3_retract()
             else:
@@ -2713,6 +2718,14 @@ class CartridgeSystem(Node):
 
         if s6:
             # S6 ON → cần Cyl3 EXTENDED
+            # Nếu đang latch (S13+S14 OFF đã trigger retract) → auto mode S6 ON xóa latch
+            if self._cyl3_s13s14_latch:
+                if self.operation_mode != 'manual':
+                    self._cyl3_s13s14_latch = False
+                    self.get_logger().info("[CYL3-SYNC] Auto mode + S6 ON → S13/S14 latch cleared")
+                else:
+                    # Manual mode + latch active → không cho extend, chờ user bấm GUI
+                    return
             if s16:
                 # Đã extended → done, idle
                 if self._cyl3_safety_active != 'extended':
@@ -2758,14 +2771,15 @@ class CartridgeSystem(Node):
             self._watchdog_last_tick = time.time()
             if self._system_paused:
                 return
-            # Cyl3 safety watchdog: S13 và S14 cùng OFF -> ép Cyl3 RETRACT ở mọi chế độ
+            # Cyl3 safety watchdog: S13 và S14 cùng OFF -> ép Cyl3 RETRACT và LATCH ở mọi chế độ
             if self._conf('cyl3_present', True):
                 s13 = self.sensor(S13_OUT1_TRAYPOS1)
                 s14 = self.sensor(S14_OUT2_TRAYPOS1)
                 if not s13 and not s14:
-                    if self._cyl3_expected != 'retracted':
+                    if not self._cyl3_s13s14_latch:
                         self._cyl3_retract()
-                        self.get_logger().info("[CYL3-WATCHDOG] Cả S13 và S14 đều OFF (không khay đầu ra) -> Ép Cyl3 RETRACT ở mọi chế độ")
+                        self._cyl3_s13s14_latch = True
+                        self.get_logger().info("[CYL3-WATCHDOG] S13+S14 OFF → Cyl3 RETRACT + LATCH (giữ đến khi manual extend hoặc auto S6 ON)")
 
             self._cyl3_safety_check()
             self._cyl3_monitor()
