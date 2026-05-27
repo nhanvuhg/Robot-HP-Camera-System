@@ -2701,7 +2701,10 @@ class CartridgeSystem(Node):
         """
         if not self._conf('cyl3_present', True):
             return
-        # Bypass safety synchronization if under manual override (e.g. from GUI button click)
+        # Completely bypass safety check if in MANUAL mode — strictly obey manual commands
+        if self.operation_mode == 'manual':
+            return
+        # Bypass safety synchronization if under manual override (e.g. from GUI button click in other modes)
         if time.time() < getattr(self, '_cyl3_manual_override_until', 0.0):
             return
         # Lock-out trong STATE 2A
