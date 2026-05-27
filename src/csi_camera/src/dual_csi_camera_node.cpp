@@ -151,6 +151,10 @@ public:
         declare_parameter("publish_fps", 15);  // [OPT-1] Publish at 15fps (66ms/frame — good for real-time YOLO detection)
         declare_parameter("cam0_topic", std::string("cam0HP/image_raw"));
         declare_parameter("cam1_topic", std::string("cam1HP/image_raw"));
+        // Per-camera enable flags. Set false to skip rpicam launch + capture
+        // thread for a missing camera (avoids 15s wait_for_first_frame + log spam).
+        declare_parameter("cam0_enable", true);
+        declare_parameter("cam1_enable", true);
         // [OPT-5] Optional output resize: resize at camera node before publish
         //         instead of in overlay node → saves CPU in downstream pipeline
         declare_parameter("output_width",  0);  // 0 = no resize (publish at capture resolution)
@@ -162,6 +166,8 @@ public:
         publish_fps_   = get_parameter("publish_fps").as_int();
         cam0_topic_    = get_parameter("cam0_topic").as_string();
         cam1_topic_    = get_parameter("cam1_topic").as_string();
+        cam0_enable_   = get_parameter("cam0_enable").as_bool();
+        cam1_enable_   = get_parameter("cam1_enable").as_bool();
         output_width_  = get_parameter("output_width").as_int();
         output_height_ = get_parameter("output_height").as_int();
 
@@ -170,12 +176,12 @@ public:
         RCLCPP_INFO(get_logger(), "📊 Publish rate: %d fps (skip every %d frames, camera at %d fps)",
                     publish_fps_, skip_count_, target_fps_);
 
-        // [FIX-QoS] Change history depth from 50 to 1! 
+        // [FIX-QoS] Change history depth from 50 to 1!
         // With depth=50, FastDDS queues up frames when YOLO or GUI falls behind,
         // causing them to process massive bursts of stale frames (e.g. 15 frames back-to-back).
         // Depth 1 ensures subscribers always get the MOST RECENT frame exclusively.
-        pub_cam0_ = create_publisher<sensor_msgs::msg::Image>(cam0_topic_, 1);
-        pub_cam1_ = create_publisher<sensor_msgs::msg::Image>(cam1_topic_, 1);
+        if (cam0_enable_) pub_cam0_ = create_publisher<sensor_msgs::msg::Image>(cam0_topic_, 1);
+        if (cam1_enable_) pub_cam1_ = create_publisher<sensor_msgs::msg::Image>(cam1_topic_, 1);
 
         yuv_frame_size_ = (size_t)target_width_ * target_height_ * 3 / 2;
         // At 2028x1080 (native mode): 2028 * 1080 * 3/2 = 3,285,360 bytes ≈ 3.1 MB/frame
@@ -193,39 +199,47 @@ public:
         //         script), call a lightweight version that only checks, not kills.
 
         // Start CAM0
-        RCLCPP_INFO(get_logger(), "🚀 Starting CAM0...");
-        cam0_ = launch_rpicam(0, target_width_, target_height_, target_fps_);
-        if (cam0_.pid < 0) {
-            RCLCPP_ERROR(get_logger(), "❌ CAM0: rpicam-vid failed to start. Will retry in background.");
-        } else {
-            // Wait for CAM0 to produce first real frame before touching CAM1.
-            // [FIX-3] Timeout increased from 8s → 15s.
-            if (!wait_for_first_frame(cam0_.fd.load(), "CAM0", 15)) {
-                kill_cam_process(cam0_);
-                cam0_.pid = -1;
-                cam0_.fd.store(-1);
-                RCLCPP_ERROR(get_logger(), "❌ CAM0 never streamed within 15s. Will retry in background.");
+        if (cam0_enable_) {
+            RCLCPP_INFO(get_logger(), "🚀 Starting CAM0...");
+            cam0_ = launch_rpicam(0, target_width_, target_height_, target_fps_);
+            if (cam0_.pid < 0) {
+                RCLCPP_ERROR(get_logger(), "❌ CAM0: rpicam-vid failed to start. Will retry in background.");
+            } else {
+                // Wait for CAM0 to produce first real frame before touching CAM1.
+                // [FIX-3] Timeout increased from 8s → 15s.
+                if (!wait_for_first_frame(cam0_.fd.load(), "CAM0", 15)) {
+                    kill_cam_process(cam0_);
+                    cam0_.pid = -1;
+                    cam0_.fd.store(-1);
+                    RCLCPP_ERROR(get_logger(), "❌ CAM0 never streamed within 15s. Will retry in background.");
+                }
             }
+        } else {
+            RCLCPP_INFO(get_logger(), "⏭️  CAM0 disabled via cam0_enable=false");
         }
 
         // Start CAM1 only after CAM0 is confirmed streaming (or failed)
-        RCLCPP_INFO(get_logger(), "🚀 Starting CAM1...");
-        cam1_ = launch_rpicam(1, target_width_, target_height_, target_fps_);
-        if (cam1_.pid < 0) {
-            RCLCPP_ERROR(get_logger(), "❌ CAM1: rpicam-vid failed to start. Will retry in background.");
-        } else {
-            // [FIX-3] Same 15s timeout for CAM1 — non-fatal but logged clearly
-            if (!wait_for_first_frame(cam1_.fd.load(), "CAM1", 15)) {
-                kill_cam_process(cam1_);
-                cam1_.pid = -1;
-                cam1_.fd.store(-1);
-                RCLCPP_WARN(get_logger(), "⚠️  CAM1 never streamed within 15s — "
-                    "continuing without CAM1 (capture thread will handle reconnect)");
+        if (cam1_enable_) {
+            RCLCPP_INFO(get_logger(), "🚀 Starting CAM1...");
+            cam1_ = launch_rpicam(1, target_width_, target_height_, target_fps_);
+            if (cam1_.pid < 0) {
+                RCLCPP_ERROR(get_logger(), "❌ CAM1: rpicam-vid failed to start. Will retry in background.");
+            } else {
+                // [FIX-3] Same 15s timeout for CAM1 — non-fatal but logged clearly
+                if (!wait_for_first_frame(cam1_.fd.load(), "CAM1", 15)) {
+                    kill_cam_process(cam1_);
+                    cam1_.pid = -1;
+                    cam1_.fd.store(-1);
+                    RCLCPP_WARN(get_logger(), "⚠️  CAM1 never streamed within 15s — "
+                        "continuing without CAM1 (capture thread will handle reconnect)");
+                }
             }
+        } else {
+            RCLCPP_INFO(get_logger(), "⏭️  CAM1 disabled via cam1_enable=false");
         }
 
-        thread_cam0_ = std::thread(&CSIDualCameraNode::capture_loop, this, 0);
-        thread_cam1_ = std::thread(&CSIDualCameraNode::capture_loop, this, 1);
+        if (cam0_enable_) thread_cam0_ = std::thread(&CSIDualCameraNode::capture_loop, this, 0);
+        if (cam1_enable_) thread_cam1_ = std::thread(&CSIDualCameraNode::capture_loop, this, 1);
 
         RCLCPP_INFO(get_logger(), "✅ Dual Camera Node Ready!");
     }
@@ -777,6 +791,8 @@ private:
 
     std::string cam0_topic_;
     std::string cam1_topic_;
+    bool        cam0_enable_{true};
+    bool        cam1_enable_{true};
 };
 
 // =============================================================================
