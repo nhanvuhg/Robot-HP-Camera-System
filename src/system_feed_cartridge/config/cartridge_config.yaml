@@ -18,10 +18,6 @@ cylinder2_extend_channel: 9
 # false = bypass row1 interlock + skip Cyl3 extend (chỉ dùng khi hardware Cyl3 chưa đấu nối)
 cyl3_present: true
 
-# S15 sensor bypass — set true if S15 retracted sensor is physically broken
-# System will trust expected actuator state instead of raw digital input.
-bypass_s15_sensor: true
-
 # Cụm output stack toggle — true = bật STATE 3/4 (cần Servo3+OutX+OutY+CPX 254 lắp đủ)
 # false = disable auto-trigger và khóa nút manual STATE 3/4. STATE 1/2 (Pos1) không bị ảnh hưởng.
 output_stack_present: false

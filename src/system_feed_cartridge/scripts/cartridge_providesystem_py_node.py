@@ -2021,9 +2021,6 @@ class CartridgeSystem(Node):
                 if not self._conf('cyl3_present', True):
                     self._notify('warn', 'Cyl3 disabled', 'cyl3_present=false trong config')
                     return
-                # Set manual override for 5.0 seconds to bypass safety check during human interaction
-                self._cyl3_manual_override_until = time.time() + 5.0
-                self.get_logger().info(f"[CYL3] Manual command '{act}' received — bypassing safety sync for 5s")
                 if act == 'extend':
                     self._cyl3_extend()
                 else:
@@ -2641,11 +2638,6 @@ class CartridgeSystem(Node):
         if self._cyl3_expected is None:
             return
         s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
-        
-        # S15 sensor bypass check (e.g. sensor is physically broken)
-        if not s15 and self._conf('bypass_s15_sensor', False):
-            s15 = (self._cyl3_expected == "retracted")
-
         elapsed = time.time() - self._cyl3_cmd_time
         if self._cyl3_expected == "extended":
             confirmed = s16 and not s15
@@ -2654,13 +2646,13 @@ class CartridgeSystem(Node):
         if confirmed:
             if not self._cyl3_confirmed_logged:
                 self.get_logger().info(
-                    f"[CYL3] confirmed {self._cyl3_expected.upper()} (S15-Bypass={self._conf('bypass_s15_sensor', False)}) sau {elapsed:.2f}s"
+                    f"[CYL3] confirmed {self._cyl3_expected.upper()} sau {elapsed:.2f}s"
                 )
                 self._cyl3_confirmed_logged = True
             self._cyl3_mismatch_warned = False
         elif elapsed >= 2.0 and not self._cyl3_mismatch_warned:
             self.get_logger().warn(
-                f"[CYL3] expect {self._cyl3_expected.upper()} nhưng S15={int(s15)} S16={int(s16)} (Bypass S15={self._conf('bypass_s15_sensor', False)}) "
+                f"[CYL3] expect {self._cyl3_expected.upper()} nhưng S15={int(s15)} S16={int(s16)} "
                 f"sau {elapsed:.2f}s — kiểm tra cảm biến / khí nén"
             )
             self._cyl3_mismatch_warned = True
@@ -2680,11 +2672,6 @@ class CartridgeSystem(Node):
         if not self._conf('cyl3_present', True):
             return True, ""
         s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
-        
-        # S15 sensor bypass check (e.g. sensor is physically broken)
-        if not s15 and self._conf('bypass_s15_sensor', False):
-            s15 = (self._cyl3_expected == "retracted")
-
         if not s15:
             return False, "S15 OFF (Cyl3 chưa retract)"
         if s16 and not self.sensor(S6_CHECK_TRAY_P1):
@@ -2710,12 +2697,6 @@ class CartridgeSystem(Node):
         _cyl3_safety_active: '' | 'extending' | 'extended' | 'retracting' | 'retracted'
         """
         if not self._conf('cyl3_present', True):
-            return
-        # Completely bypass safety check if in MANUAL mode — strictly obey manual commands
-        if self.operation_mode == 'manual':
-            return
-        # Bypass safety synchronization if under manual override (e.g. from GUI button click in other modes)
-        if time.time() < getattr(self, '_cyl3_manual_override_until', 0.0):
             return
         # Lock-out trong STATE 2A
         if self.state_in.name.startswith('S2A_'):
@@ -4219,8 +4200,6 @@ class CartridgeSystem(Node):
                 ok_il, reason = self._check_row1_interlock()
                 if not ok_il:
                     self._log_once("S2A_ROW1_IL", f"[S2A] BLOCK row1: {reason} — chờ điều kiện")
-                    if self._conf('cyl3_present', True):
-                        self._cyl3_retract()
                     return
             # Chỉ vào đây qua path S6=OFF (target đã set, chưa gửi move)
             target = self._output_target_pos
