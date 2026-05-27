@@ -2758,6 +2758,14 @@ class CartridgeSystem(Node):
             self._watchdog_last_tick = time.time()
             if self._system_paused:
                 return
+            # Cyl3 safety watchdog: S13 và S14 cùng OFF -> ép Cyl3 RETRACT ở mọi chế độ
+            if self._conf('cyl3_present', True):
+                s13 = self.sensor(S13_OUT1_TRAYPOS1)
+                s14 = self.sensor(S14_OUT2_TRAYPOS1)
+                if not s13 and not s14:
+                    if self._cyl3_expected != 'retracted':
+                        self._cyl3_retract()
+                        self.get_logger().info("[CYL3-WATCHDOG] Cả S13 và S14 đều OFF (không khay đầu ra) -> Ép Cyl3 RETRACT ở mọi chế độ")
 
             self._cyl3_safety_check()
             self._cyl3_monitor()
