@@ -2021,6 +2021,9 @@ class CartridgeSystem(Node):
                 if not self._conf('cyl3_present', True):
                     self._notify('warn', 'Cyl3 disabled', 'cyl3_present=false trong config')
                     return
+                # Set manual override for 5.0 seconds to bypass safety check during human interaction
+                self._cyl3_manual_override_until = time.time() + 5.0
+                self.get_logger().info(f"[CYL3] Manual command '{act}' received — bypassing safety sync for 5s")
                 if act == 'extend':
                     self._cyl3_extend()
                 else:
@@ -2697,6 +2700,9 @@ class CartridgeSystem(Node):
         _cyl3_safety_active: '' | 'extending' | 'extended' | 'retracting' | 'retracted'
         """
         if not self._conf('cyl3_present', True):
+            return
+        # Bypass safety synchronization if under manual override (e.g. from GUI button click)
+        if time.time() < getattr(self, '_cyl3_manual_override_until', 0.0):
             return
         # Lock-out trong STATE 2A
         if self.state_in.name.startswith('S2A_'):
@@ -4200,6 +4206,8 @@ class CartridgeSystem(Node):
                 ok_il, reason = self._check_row1_interlock()
                 if not ok_il:
                     self._log_once("S2A_ROW1_IL", f"[S2A] BLOCK row1: {reason} — chờ điều kiện")
+                    if self._conf('cyl3_present', True):
+                        self._cyl3_retract()
                     return
             # Chỉ vào đây qua path S6=OFF (target đã set, chưa gửi move)
             target = self._output_target_pos

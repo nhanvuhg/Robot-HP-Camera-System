@@ -257,10 +257,12 @@ void RobotController::stopAndResetRobot()
         clear_error_client_->async_send_request(clearReq,
             [this](rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedFuture f) {
                 try { qDebug() << "ClearError:" << f.get()->res; } catch (...) {}
-                QTimer::singleShot(300, this, [this]() {
-                    callServiceAsync(enable_client_, true);
-                    qDebug() << "Robot re-enabled — ready for new commands";
-                });
+                QMetaObject::invokeMethod(this, [this]() {
+                    QTimer::singleShot(300, this, [this]() {
+                        callServiceAsync(enable_client_, true);
+                        qDebug() << "Robot re-enabled — ready for new commands";
+                    });
+                }, Qt::QueuedConnection);
             });
     });
 }
