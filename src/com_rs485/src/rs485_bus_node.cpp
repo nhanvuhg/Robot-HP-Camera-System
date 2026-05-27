@@ -32,7 +32,7 @@ using namespace std::chrono_literals;
 //
 //  SUBSCRIBE:
 //    /vfd/cmd_run   Bool     true=RUN; false=STOP
-//    /vfd/cmd_freq  Float32  Tần số đích (Hz), clamp [-30, 30] (âm = ngược)
+//    /vfd/cmd_freq  Float32  Tần số đích (Hz), clamp [-50, 50] (âm = ngược)
 // =========================================================
 
 class RS485BusNode : public rclcpp::Node
@@ -46,9 +46,9 @@ public:
     CMD_DISABLE_ = 0x0000; CMD_ENABLE_ = 0x0006; CMD_RUN_FWD_ = 0x000F;
 
     // ── Defaults baked vào node (start script KHÔNG set --ros-args) ──
-    // ATV320 ở RevPi A, đấu ngược chiều băng tải → ref_hz mặc định -30.0.
+    // ATV320 ở RevPi A, đấu ngược chiều băng tải → ref_hz mặc định -50.0.
     slave_id_  = declare_parameter<int>("slave_id",    2);
-    ref_hz_    = declare_parameter<double>("ref_hz",  -30.0);
+    ref_hz_    = declare_parameter<double>("ref_hz",  -50.0);
     ref_scale_ = declare_parameter<double>("ref_scale",10.0);
 
     // ── RS485 / Modbus RTU ───────────────────────────────
