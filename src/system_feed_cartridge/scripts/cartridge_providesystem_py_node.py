@@ -250,10 +250,16 @@ class CartridgeSystem(Node):
         # Motion flags
         self._inx_moving = False
         self._iny_moving = False
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # ⚠️  CRITICAL ZONE — đọc memory feedback_critical_code_zones.md trước khi sửa.
         # Timestamp lệnh motion gần nhất per-servo (sid → time.time()).
-        # Dùng cho _publish_positions: nếu servo idle > _idle_skip_modbus_s thì
-        # skip Modbus read, reuse cache. Giảm lock contention khi servo không hoạt động.
-        # Cập nhật bởi _jog, _nb_move, _home_all.
+        # _publish_positions skip Modbus khi (now - last_motion) > _idle_skip_modbus_s
+        # → cache reuse → JOG cold press nhanh.
+        # INVARIANT: mọi LOOP kéo dài chạm servo (homing, scan, long move) PHẢI
+        # refresh self._servo_motion_t[sid] = time.time() mỗi iteration < 2s,
+        # nếu không GUI sẽ freeze position cache (bug 2026-05-27).
+        # Cập nhật bởi: _jog, _nb_move, _home_all (poll loops + delay loops).
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         self._servo_motion_t: dict = {}
         self._idle_skip_modbus_s    = 2.0   # giây — sau motion command này thì còn đọc tươi
         # Drive warm-up gate sau referencing_task (FAS firmware quirk):
@@ -468,6 +474,14 @@ class CartridgeSystem(Node):
     # Hardware
     # ══════════════════════════════════════════════════════════════
 
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # ⚠️  CRITICAL ZONE — đọc memory feedback_critical_code_zones.md trước khi sửa.
+    # INVARIANT: KHÔNG t.join() chờ hardware connect. Control loop +
+    # position publisher PHẢI start NGAY sau spawn thread (bug 2026-05-27:
+    # join(timeout=15) làm GUI lên rồi nhưng sensor trống 15-20s).
+    # Mỗi servo có thread monitor RIÊNG trong _servo_monitor_one — KHÔNG
+    # gom thành 1 loop tuần tự (3 servo offline = block 9s/vòng).
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def _connect_hardware(self):
         """
         Fire-and-forget hardware connection.

@@ -106,6 +106,14 @@ class VfdLogicNode(Node):
             return True, "S1/S2 ON"
         return self.current_cmd, "carry-over (gap)"
 
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # ⚠️  CRITICAL ZONE — đọc memory feedback_critical_code_zones.md trước khi sửa.
+    # INVARIANT (user rule):
+    #   - AUTO/AI: check S1/S2 LIÊN TỤC, KHÔNG cần state_in='s1_*'
+    #   - MANUAL: GIỮ gate in_state1 (chỉ chạy khi user nhấn nút STATE 1)
+    #   - S3 luôn ưu tiên STOP; cả 3 ON → vẫn STOP
+    # Đừng unify 2 mode hoặc bỏ subscribe /robot/set_mode.
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def evaluate_logic(self):
         if self.op_mode in (self.MODE_AUTO, self.MODE_AI):
             new_cmd, reason = self._sensor_decision()

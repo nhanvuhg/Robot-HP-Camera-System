@@ -203,7 +203,15 @@ private:
   void pub_str(rclcpp::Publisher<std_msgs::msg::String>::SharedPtr &p, const std::string &s)
   { std_msgs::msg::String m; m.data = s; p->publish(m); }
 
-  // ── Reconcile: drive VFD theo desired_* khi đã arm. ──
+  // ═════════════════════════════════════════════════════════════════
+  //  ⚠️  CRITICAL ZONE — đọc memory feedback_critical_code_zones.md trước khi sửa.
+  //  INVARIANT: subscription callback CHỈ lưu desired_* atomic, KHÔNG gọi
+  //  write_reg trực tiếp. reconcile() idempotent. arm_vfd() sau reconnect.
+  //  Đừng dùng pattern cũ: `if msg->data && !running_` + `running_ = msg->data`
+  //  sau write — sẽ MẤT LỆNH nếu Modbus chưa connect lúc cmd_run đến (running_
+  //  set true nhưng write fail → heartbeat sau đó skip vì check !running_).
+  // ═════════════════════════════════════════════════════════════════
+  // Reconcile: drive VFD theo desired_* khi đã arm.
   // Idempotent — gọi nhiều lần OK; chỉ ghi khi state lệch.
   void reconcile()
   {
