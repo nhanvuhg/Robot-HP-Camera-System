@@ -44,78 +44,90 @@ CartridgeController::CartridgeController(rclcpp::Node::SharedPtr node, QObject *
     system_state_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/system_state", rclcpp::SensorDataQoS(),
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            QString raw = QString::fromStdString(msg->data);
-            // Format: "global|state_in|state_out"
-            QStringList parts = raw.split('|');
-            system_state_ = parts.value(0);
-            state_in_     = parts.value(1);
-            state_out_    = parts.value(2);
-            emit systemStateChanged();
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                QString raw = QString::fromStdString(msg->data);
+                // Format: "global|state_in|state_out"
+                QStringList parts = raw.split('|');
+                system_state_ = parts.value(0);
+                state_in_     = parts.value(1);
+                state_out_    = parts.value(2);
+                emit systemStateChanged();
+            }, Qt::QueuedConnection);
         });
 
     // current_mode từ Python: "jog" | "manual" | "auto"
     current_mode_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/providesystem/current_mode", qos,
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            QString mode = QString::fromStdString(msg->data);
-            if (current_mode_ != mode) {
-                current_mode_ = mode;
-                emit currentModeChanged();
-            }
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                QString mode = QString::fromStdString(msg->data);
+                if (current_mode_ != mode) {
+                    current_mode_ = mode;
+                    emit currentModeChanged();
+                }
+            }, Qt::QueuedConnection);
         });
 
     config_data_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/providesystem/config_data",
         rclcpp::QoS(10).transient_local(),
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            config_data_ = QString::fromStdString(msg->data);
-            emit configDataChanged();
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                config_data_ = QString::fromStdString(msg->data);
+                emit configDataChanged();
+            }, Qt::QueuedConnection);
         });
 
     gui_notify_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/providesystem/gui_notify", qos,
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            last_notification_ = QString::fromStdString(msg->data);
-            QJsonDocument doc  = QJsonDocument::fromJson(last_notification_.toUtf8());
-            if (doc.isObject()) {
-                QJsonObject obj = doc.object();
-                QString level   = obj.value("level").toString("info");
-                QString title   = obj.value("title").toString();
-                QString detail  = obj.value("detail").toString();
-                QString hint    = obj.value("hint").toString();
-                QString logMsg  = detail.isEmpty() ? title : title + " — " + detail;
-                QString type    = (level == "error" || level == "warn") ? "err" : (level == "ok" || level == "silent_ok") ? "ok" : "info";
-                addLog(logMsg, type);
-                if (!level.startsWith("silent")) {
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                last_notification_ = QString::fromStdString(msg->data);
+                QJsonDocument doc  = QJsonDocument::fromJson(last_notification_.toUtf8());
+                if (doc.isObject()) {
+                    QJsonObject obj = doc.object();
+                    QString level   = obj.value("level").toString("info");
+                    QString title   = obj.value("title").toString();
+                    QString detail  = obj.value("detail").toString();
+                    QString hint    = obj.value("hint").toString();
+                    QString logMsg  = detail.isEmpty() ? title : title + " — " + detail;
+                    QString type    = (level == "error" || level == "warn") ? "err" : (level == "ok" || level == "silent_ok") ? "ok" : "info";
+                    addLog(logMsg, type);
+                    if (!level.startsWith("silent")) {
+                        emit notificationReceived();
+                    }
+                    // UI hint: blink button tương ứng trong 5s
+                    if (!hint.isEmpty() && hint != ui_hint_) {
+                        ui_hint_ = hint;
+                        emit uiHintChanged();
+                        if (ui_hint_timer_) ui_hint_timer_->start();
+                    }
+                } else {
+                    addLog(last_notification_, "info");
                     emit notificationReceived();
                 }
-                // UI hint: blink button tương ứng trong 5s
-                if (!hint.isEmpty() && hint != ui_hint_) {
-                    ui_hint_ = hint;
-                    emit uiHintChanged();
-                    if (ui_hint_timer_) ui_hint_timer_->start();
-                }
-            } else {
-                addLog(last_notification_, "info");
-                emit notificationReceived();
-            }
+            }, Qt::QueuedConnection);
         });
 
     servo_pos_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/providesystem/servo_positions", qos,
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            servo_positions_ = QString::fromStdString(msg->data);
-            emit servoPositionsChanged();
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                servo_positions_ = QString::fromStdString(msg->data);
+                emit servoPositionsChanged();
+            }, Qt::QueuedConnection);
         });
 
     sensors_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/providesystem/sensors_state", qos,
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            QString s = QString::fromStdString(msg->data);
-            if (sensor_state_ != s) {
-                sensor_state_ = s;
-                emit sensorStateChanged();
-            }
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                QString s = QString::fromStdString(msg->data);
+                if (sensor_state_ != s) {
+                    sensor_state_ = s;
+                    emit sensorStateChanged();
+                }
+            }, Qt::QueuedConnection);
         });
 
     qDebug() << "CartridgeController v8 initialized";

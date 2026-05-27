@@ -25,6 +25,8 @@
 #include "dobot_msgs_v3/srv/speed_factor.hpp"
 #include "dobot_msgs_v3/srv/get_error_id.hpp"
 #include <memory>
+#include <mutex>
+
 
 class RobotController : public QObject
 {
@@ -228,6 +230,13 @@ private:
     void callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr client, bool value);
     void pollRobotState();
     void sendMoveJog(const QString& axisId);  // native MoveJog for continuous
+
+    // Thread-safe high-frequency GUI updates
+    std::mutex status_mutex_;
+    QVariantList next_joint_angles_;
+    QVariantList next_cartesian_pose_;
+    bool has_new_joints_{false};
+    bool has_new_pose_{false};
 };
 
 #endif // ROBOT_CONTROLLER_HPP

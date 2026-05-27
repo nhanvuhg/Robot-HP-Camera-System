@@ -64,71 +64,89 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     system_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/robot/system_status", 10,
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            system_status_ = QString::fromStdString(msg->data);
-            emit systemStatusChanged();
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                system_status_ = QString::fromStdString(msg->data);
+                emit systemStatusChanged();
+            }, Qt::QueuedConnection);
         });
     
     error_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/robot/error", 10,
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            error_message_ = QString::fromStdString(msg->data);
-            emit errorMessageChanged();
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                error_message_ = QString::fromStdString(msg->data);
+                emit errorMessageChanged();
+            }, Qt::QueuedConnection);
         });
     
     selected_row_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
         "/robot/selected_input_row", 10,
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
-            selected_row_ = msg->data;
-            emit selectedRowChanged();
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                selected_row_ = msg->data;
+                emit selectedRowChanged();
+            }, Qt::QueuedConnection);
         });
     
     selected_slot_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
         "/robot/selected_output_slot", 10,
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
-            selected_slot_ = msg->data;
-            emit selectedSlotChanged();
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                selected_slot_ = msg->data;
+                emit selectedSlotChanged();
+            }, Qt::QueuedConnection);
         });
     
     system_uptime_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/robot/system_uptime", 10,
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            system_uptime_ = QString::fromStdString(msg->data);
-            emit systemUptimeChanged();
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                system_uptime_ = QString::fromStdString(msg->data);
+                emit systemUptimeChanged();
+            }, Qt::QueuedConnection);
         });
 
     in_ready_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
         "/cartridge_providesystem/new_tray_loaded", rclcpp::QoS(10).reliable(),
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
-            if (in_ready_ != msg->data) {
-                in_ready_ = msg->data;
-                emit inReadyChanged();
-            }
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                if (in_ready_ != msg->data) {
+                    in_ready_ = msg->data;
+                    emit inReadyChanged();
+                }
+            }, Qt::QueuedConnection);
         });
 
     out_ready_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
         "/cartridge_providesystem/new_trayoutput_loaded", rclcpp::QoS(10).reliable(),
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
-            if (out_ready_ != msg->data) {
-                out_ready_ = msg->data;
-                emit outReadyChanged();
-            }
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                if (out_ready_ != msg->data) {
+                    out_ready_ = msg->data;
+                    emit outReadyChanged();
+                }
+            }, Qt::QueuedConnection);
         });
 
     tray_count_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
         "/robot/tray_count", 10,
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
-            tray_count_ = msg->data;
-            emit trayCountChanged();
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                tray_count_ = msg->data;
+                emit trayCountChanged();
+            }, Qt::QueuedConnection);
         });
     
     // Subscribe to hardware speed factor readback from Dobot feedback node
     hw_speed_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
         "/robot/hw_speed_factor", 10,
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
-            if (hw_speed_ratio_ != msg->data) {
-                hw_speed_ratio_ = msg->data;
-                emit hwSpeedRatioChanged();
-            }
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                if (hw_speed_ratio_ != msg->data) {
+                    hw_speed_ratio_ = msg->data;
+                    emit hwSpeedRatioChanged();
+                }
+            }, Qt::QueuedConnection);
         });
 
     // Realtime joint angles from feedback streaming (Dobot port 30004, ~100Hz)
@@ -142,8 +160,10 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
             constexpr double RAD2DEG = 57.29577951308232;
             for (double p : msg->position) angles.append(p * RAD2DEG);
             while (angles.size() < 6) angles.append(0.0);
-            joint_angles_ = angles;
-            emit jointAnglesChanged();
+            
+            std::lock_guard<std::mutex> lock(status_mutex_);
+            next_joint_angles_ = angles;
+            has_new_joints_ = true;
         });
 
     // Realtime TCP pose from feedback streaming — already in mm/deg.
@@ -153,9 +173,46 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
             QVariantList pose;
             pose.append(msg->x); pose.append(msg->y); pose.append(msg->z);
             pose.append(msg->rx); pose.append(msg->ry); pose.append(msg->rz);
-            cartesian_pose_ = pose;
-            emit cartesianPoseChanged();
+            
+            std::lock_guard<std::mutex> lock(status_mutex_);
+            next_cartesian_pose_ = pose;
+            has_new_pose_ = true;
         });
+
+    // High-frequency GUI Update Timer (20Hz / 50ms)
+    // Decouples high-frequency ROS streaming (~100Hz) from Qt Main Thread rendering.
+    // Prevents GUI event loop starvation, drastically reduces CPU usage, and guarantees thread safety.
+    QTimer* gui_update_timer = new QTimer(this);
+    connect(gui_update_timer, &QTimer::timeout, this, [this]() {
+        bool update_joints = false;
+        bool update_pose = false;
+        QVariantList joints_to_set;
+        QVariantList pose_to_set;
+
+        {
+            std::lock_guard<std::mutex> lock(status_mutex_);
+            if (has_new_joints_) {
+                joints_to_set = next_joint_angles_;
+                has_new_joints_ = false;
+                update_joints = true;
+            }
+            if (has_new_pose_) {
+                pose_to_set = next_cartesian_pose_;
+                has_new_pose_ = false;
+                update_pose = true;
+            }
+        }
+
+        if (update_joints) {
+            joint_angles_ = joints_to_set;
+            emit jointAnglesChanged();
+        }
+        if (update_pose) {
+            cartesian_pose_ = pose_to_set;
+            emit cartesianPoseChanged();
+        }
+    });
+    gui_update_timer->start(50); // 50ms (20Hz)
 
     qDebug() << "RobotController initialized";
 
