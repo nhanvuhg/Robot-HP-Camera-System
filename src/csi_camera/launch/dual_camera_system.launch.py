@@ -34,6 +34,10 @@ def generate_launch_description():
             'width': 640,
             'height': 480,
             'fps': 10,  # Set to required FPS based on processing requirements
+            # cam1 chưa lắp hardware → disable để tránh 15s wait_for_first_frame
+            # + spam reconnect log. Đổi True khi cam1 (Output Tray) lắp xong.
+            'cam0_enable': True,
+            'cam1_enable': False,
             'cam0_topic': '/cam0HP/image_raw',
             'cam1_topic': '/cam1HP/image_raw',
         }],
@@ -66,21 +70,24 @@ def generate_launch_description():
                     'publish_resized_image': False,
                 }]
             ),
-            
+
             # YOLO for Camera 1 (Output Tray Detection)
-            ComposableNode(
-                package='yolo_ros_hailort_cpp',
-                plugin='yolo_ros_hailort_cpp::YoloNode',
-                name='yolo_cam1',
-                parameters=[{
-                    'model_path': '/home/pi/yolov8s.hef',
-                    'src_image_topic_name': '/cam1HP/image_raw',
-                    'publish_boundingbox_topic_name': '/cam1HP/yolo/bounding_boxes',
-                    'publish_image_topic_name': '/cam1HP/yolo/image_raw',
-                    'conf': 0.35,
-                    'publish_resized_image': False,
-                }]
-            ),
+            # DISABLED — cam1 hardware chưa lắp + /home/pi/yolov8s.hef chưa có.
+            # Uncomment khi cam1 + model sẵn sàng. Cũng nhớ set cam1_enable=True
+            # ở dual_camera_node phía trên.
+            # ComposableNode(
+            #     package='yolo_ros_hailort_cpp',
+            #     plugin='yolo_ros_hailort_cpp::YoloNode',
+            #     name='yolo_cam1',
+            #     parameters=[{
+            #         'model_path': '/home/pi/yolov8s.hef',
+            #         'src_image_topic_name': '/cam1HP/image_raw',
+            #         'publish_boundingbox_topic_name': '/cam1HP/yolo/bounding_boxes',
+            #         'publish_image_topic_name': '/cam1HP/yolo/image_raw',
+            #         'conf': 0.35,
+            #         'publish_resized_image': False,
+            #     }]
+            # ),
         ],
         output='screen',
         respawn=True,
