@@ -2701,58 +2701,9 @@ class CartridgeSystem(Node):
 
         _cyl3_safety_active: '' | 'extending' | 'extended' | 'retracting' | 'retracted'
         """
-        if not self._conf('cyl3_present', True):
-            return
-        # Lock-out trong STATE 2A
-        if self.state_in.name.startswith('S2A_'):
-            if self._cyl3_safety_active:
-                self._cyl3_safety_active = ''
-                self.get_logger().info(
-                    "[CYL3-SYNC] Đang ở STATE 2A — disable S6 mirror, state machine quản lý Cyl3"
-                )
-            return
-
-        s6 = self.sensor(S6_CHECK_TRAY_P1)
-        s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
-        now = time.time()
-
-        # Latch S13/S14 OFF active → giữ retract ở MỌI mode, chờ State 2 rerun
-        # (S2A_CYL3_EXTEND clear latch sau khi recheck S6) hoặc manual GUI extend.
-        # Why: nếu auto mode + S6 ON tự clear latch → extend → tick sau watchdog
-        # lại thấy S13+S14 OFF → re-latch + retract → nhấp nháy.
-        if self._cyl3_s13s14_latch:
-            return
-
-        if s6:
-            # S6 ON → cần Cyl3 EXTENDED
-            if s16:
-                # Đã extended → done, idle
-                if self._cyl3_safety_active != 'extended':
-                    if self._cyl3_safety_active == 'extending':
-                        self.get_logger().info("[CYL3-SYNC] Cyl3 đã extended (S16 ON) — khay được giữ")
-                    self._cyl3_safety_active = 'extended'
-                return
-            # Cần extend
-            if self._cyl3_safety_active != 'extending':
-                self._cyl3_safety_active = 'extending'
-                self.get_logger().info("[CYL3-SYNC] S6 ON (có khay) → Cyl3 EXTEND")
-            if now - self._cyl3_safety_last_fire >= 1.0:
-                self._cyl3_extend()
-                self._cyl3_safety_last_fire = now
-        else:
-            # S6 OFF → cần Cyl3 RETRACTED
-            if s15:
-                if self._cyl3_safety_active != 'retracted':
-                    if self._cyl3_safety_active == 'retracting':
-                        self.get_logger().info("[CYL3-SYNC] Cyl3 đã retracted (S15 ON) — đường thông")
-                    self._cyl3_safety_active = 'retracted'
-                return
-            if self._cyl3_safety_active != 'retracting':
-                self._cyl3_safety_active = 'retracting'
-                self.get_logger().warn("[CYL3-SYNC] S6 OFF (không khay) → Cyl3 RETRACT chừa chỗ")
-            if now - self._cyl3_safety_last_fire >= 1.0:
-                self._cyl3_retract()
-                self._cyl3_safety_last_fire = now
+        # [REMOVED CONTINUOUS S6 MIRROR PER USER REQUEST]
+        # Cyl3 does not check S6 continuously. It only checks when State 2 is Triggered.
+        pass
 
     def _control_loop(self):
         """
@@ -3913,6 +3864,19 @@ class CartridgeSystem(Node):
         if not self._cmd_sent_in:
             self._pub_cartridge_busy(True)
             self._s2a_preflight_scan()
+
+            # --- CYL3 S6 CHECK ON STATE 2 TRIGGER ---
+            if self._conf('cyl3_present', True):
+                s6 = self.sensor(S6_CHECK_TRAY_P1)
+                if s6:
+                    self._cyl3_s13s14_latch = False
+                    self._cyl3_extend()
+                    self.get_logger().info("[S2A TRIGGER] S6 ON → Clear Latch + Extend Cyl3")
+                else:
+                    self._cyl3_retract()
+                    self.get_logger().info("[S2A TRIGGER] S6 OFF → Retract Cyl3")
+            # ----------------------------------------
+
             self._s4_armed_out      = False
             self._output_row        = 0
             self._output_target_pos = 0.0

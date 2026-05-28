@@ -102,6 +102,7 @@ public slots:
     void moveJoint(double j1, double j2, double j3, double j4, double j5, double j6);
     void moveLinear(double x, double y, double z, double rx, double ry, double rz);
     void saveJointPose(const QString& name, double j1, double j2, double j3, double j4, double j5, double j6);
+    Q_INVOKABLE QVariantList getSavedPoses();
     
     // IO control
     void setDigitalOutput(int index, bool status);

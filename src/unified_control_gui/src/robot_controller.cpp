@@ -796,6 +796,70 @@ void RobotController::saveJointPose(const QString& name, double j1, double j2, d
     emit jointPoseSaved(true, msg);
 }
 
+QVariantList RobotController::getSavedPoses()
+{
+    QVariantList list;
+    QString yaml_path = QString::fromStdString(
+        std::string(std::getenv("HOME") ? std::getenv("HOME") : "/home/pi") +
+        "/ros2_ws/src/robot_control_main/config/joint_pose_params.yaml");
+
+    QFile file(yaml_path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "Cannot open YAML for reading poses:" << yaml_path;
+        return list;
+    }
+
+    while (!file.atEnd()) {
+        QString line = QString::fromUtf8(file.readLine());
+        // Check for joint move string
+        if (line.contains("- \"J,") || line.contains("- 'J,")) {
+            // Find name comment
+            QString name = "";
+            int hashIdx = line.indexOf('#');
+            if (hashIdx >= 0) {
+                name = line.mid(hashIdx + 1).trimmed();
+            }
+
+            // Skip placeholders or entries that contain "placeholder"
+            if (name.toLower().contains("placeholder")) {
+                continue;
+            }
+
+            // Extract coordinate string between quotes
+            int firstQuote = line.indexOf('"');
+            int lastQuote = line.lastIndexOf('"');
+            if (firstQuote < 0 || lastQuote < 0 || lastQuote <= firstQuote) {
+                firstQuote = line.indexOf('\'');
+                lastQuote = line.lastIndexOf('\'');
+            }
+
+            if (firstQuote >= 0 && lastQuote > firstQuote) {
+                QString coordStr = line.mid(firstQuote + 1, lastQuote - firstQuote - 1);
+                // coordStr looks like "J,104.2439,45.5457,-153.7780,62.7823,85.6854,184.4839"
+                if (coordStr.startsWith("J,")) {
+                    QStringList parts = coordStr.mid(2).split(',');
+                    if (parts.size() >= 6) {
+                        QVariantMap map;
+                        if (name.isEmpty()) {
+                            name = QString("Pose (index %1)").arg(list.size());
+                        }
+                        map["name"] = name;
+                        map["j1"] = parts[0].toDouble();
+                        map["j2"] = parts[1].toDouble();
+                        map["j3"] = parts[2].toDouble();
+                        map["j4"] = parts[3].toDouble();
+                        map["j5"] = parts[4].toDouble();
+                        map["j6"] = parts[5].toDouble();
+                        list.append(map);
+                    }
+                }
+            }
+        }
+    }
+    file.close();
+    return list;
+}
+
 
 
 // ═══════════════════════════════════════════════════════════════

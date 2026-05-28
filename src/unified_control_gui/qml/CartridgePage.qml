@@ -1637,6 +1637,43 @@
                                             color: root.cGreen
                                         }
 
+                                        Rectangle { width: parent.width; height: 1; color: root.cBorder; opacity: 0.5 }
+                                        Text { text: "LOAD SAVED POSE"; color: root.cDim; font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.8 }
+
+                                        Rectangle {
+                                            id: savedPosesLoaderRect
+                                            width: parent.width; height: 32; radius: 4
+                                            color: loadMA.pressed ? "#0f2c3d" : "#0d1117"
+                                            border.color: "#5cf4f1"; border.width: 1
+
+                                            property var savedPoses: []
+                                            function refreshPoses() {
+                                                savedPoses = robotController.getSavedPoses()
+                                            }
+                                            Component.onCompleted: refreshPoses()
+
+                                            Text {
+                                                anchors { left: parent.left; leftMargin: 8; verticalCenter: parent.verticalCenter }
+                                                text: "📋 TOẠ ĐỘ ĐÃ LƯU (" + parent.savedPoses.length + ")"
+                                                color: "#5cf4f1"; font.pixelSize: 11; font.bold: true
+                                            }
+
+                                            Text {
+                                                anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
+                                                text: "▼"
+                                                color: "#5cf4f1"; font.pixelSize: 10
+                                            }
+
+                                            MouseArea {
+                                                id: loadMA
+                                                anchors.fill: parent
+                                                onClicked: {
+                                                    savedPosesLoaderRect.refreshPoses()
+                                                    poseSelectorPopup.open()
+                                                }
+                                            }
+                                        }
+
                                     }
                                 }
 
@@ -1989,6 +2026,134 @@
                     }
 
                 } // p3Inner
+
+                // ── POPUP: SELECT SAVED POSE ──
+                Rectangle {
+                    id: poseSelectorPopup
+                    anchors.fill: parent
+                    color: "#cc000000" // dim background
+                    visible: false
+                    z: 9999 // ensure it is on top of everything
+
+                    // Close on clicking background
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: poseSelectorPopup.visible = false
+                    }
+
+                    Rectangle {
+                        width: parent.width * 0.85; height: parent.height * 0.75
+                        anchors.centerIn: parent
+                        color: "#0a0d14"
+                        border.color: "#5cf4f1"; border.width: 2
+                        radius: 8
+
+                        // Prevent clicking inside from closing
+                        MouseArea { anchors.fill: parent; preventStealing: true }
+
+                        Column {
+                            anchors { fill: parent; margins: 12 }
+                            spacing: 8
+
+                            Row {
+                                width: parent.width
+                                Text {
+                                    text: "📋 CHỌN TOẠ ĐỘ ROBOT ĐÃ LƯU"
+                                    color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                Item { width: 1; height: 1; anchors.horizontalCenter: parent.horizontalCenter }
+                                Rectangle {
+                                    width: 30; height: 30; radius: 15
+                                    color: closeMA.pressed ? "#552222" : "#221111"
+                                    border.color: "#ff4444"
+                                    anchors.right: parent.right
+                                    Text { anchors.centerIn: parent; text: "✕"; color: "#ff4444"; font.pixelSize: 16; font.bold: true }
+                                    MouseArea {
+                                        id: closeMA; anchors.fill: parent; onClicked: poseSelectorPopup.visible = false
+                                    }
+                                }
+                            }
+
+                            Rectangle { width: parent.width; height: 1; color: "#223344" }
+
+                            ListView {
+                                id: poseListView
+                                width: parent.width; height: parent.height - 60
+                                clip: true
+                                spacing: 6
+                                model: []
+
+                                delegate: Rectangle {
+                                    width: poseListView.width; height: 50
+                                    color: itemMA.pressed ? "#0f2c3d" : (itemMA.containsMouse ? "#0a1a26" : "#0d1117")
+                                    border.color: itemMA.containsMouse ? "#5cf4f1" : "#1a2a3a"; border.width: 1
+                                    radius: 4
+
+                                    Row {
+                                        anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
+                                        spacing: 12
+
+                                        Column {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: parent.width - 90
+                                            spacing: 2
+                                            Text {
+                                                text: modelData.name
+                                                color: "#f59e0b"; font.pixelSize: 14; font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+                                            Text {
+                                                text: "J: (" + modelData.j1.toFixed(2) + ", " + modelData.j2.toFixed(2) + ", " + modelData.j3.toFixed(2) + ", " + modelData.j4.toFixed(2) + ", " + modelData.j5.toFixed(2) + ", " + modelData.j6.toFixed(2) + ")"
+                                                color: "#888"; font.pixelSize: 11; font.family: "monospace"
+                                            }
+                                        }
+
+                                        Rectangle {
+                                            width: 80; height: 30; radius: 4
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            color: applyMA.pressed ? "#1a5a3a" : "#0a2a1a"
+                                            border.color: applyMA.pressed ? "#00ff00" : "#00aa00"
+                                            Text { anchors.centerIn: parent; text: "APPLY"; color: "#00ff00"; font.pixelSize: 11; font.bold: true }
+                                            MouseArea {
+                                                id: applyMA; anchors.fill: parent
+                                                onClicked: {
+                                                    jointInputs.itemAt(0).children[1].children[0].text = modelData.j1.toFixed(4)
+                                                    jointInputs.itemAt(1).children[1].children[0].text = modelData.j2.toFixed(4)
+                                                    jointInputs.itemAt(2).children[1].children[0].text = modelData.j3.toFixed(4)
+                                                    jointInputs.itemAt(3).children[1].children[0].text = modelData.j4.toFixed(4)
+                                                    jointInputs.itemAt(4).children[1].children[0].text = modelData.j5.toFixed(4)
+                                                    jointInputs.itemAt(5).children[1].children[0].text = modelData.j6.toFixed(4)
+                                                    poseSelectorPopup.visible = false
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: itemMA
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: {
+                                            jointInputs.itemAt(0).children[1].children[0].text = modelData.j1.toFixed(4)
+                                            jointInputs.itemAt(1).children[1].children[0].text = modelData.j2.toFixed(4)
+                                            jointInputs.itemAt(2).children[1].children[0].text = modelData.j3.toFixed(4)
+                                            jointInputs.itemAt(3).children[1].children[0].text = modelData.j4.toFixed(4)
+                                            jointInputs.itemAt(4).children[1].children[0].text = modelData.j5.toFixed(4)
+                                            jointInputs.itemAt(5).children[1].children[0].text = modelData.j6.toFixed(4)
+                                            poseSelectorPopup.visible = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    function open() {
+                        poseListView.model = robotController.getSavedPoses()
+                        visible = true
+                    }
+                }
             } // Page 3
 
         } // StackLayout
