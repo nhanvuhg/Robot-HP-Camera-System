@@ -31,9 +31,14 @@ def generate_launch_description():
         name='dual_csi_camera_node',
         output='screen',
         parameters=[{
-            'width': 640,
-            'height': 480,
-            'fps': 10,  # Set to required FPS based on processing requirements
+            # 1280x720@30 = working config (camera_with_overlay tested).
+            # 640x480@10 cũ bị stuck sau reconnect — capture thread câm dù
+            # rpicam-vid alive, không bao giờ publish. publish_fps=15 cho
+            # YOLO inference @ ~22ms.
+            'width': 1280,
+            'height': 720,
+            'fps': 30,
+            'publish_fps': 15,
             # cam1 chưa lắp hardware → disable để tránh 15s wait_for_first_frame
             # + spam reconnect log. Đổi True khi cam1 (Output Tray) lắp xong.
             'cam0_enable': True,
@@ -105,19 +110,20 @@ def generate_launch_description():
         name='overlay_dual_cam',
         output='screen',
         parameters=[{
-            # Camera 0 (Input Tray)
+            # Camera 0 (Input Tray) — match camera publish 1280x720 (16:9)
+            # để preserve aspect ratio, không squish trên GUI.
             'cam0.image_topic': '/cam0HP/image_raw',
             'cam0.boxes_topic': '/cam0HP/yolo/bounding_boxes',
             'cam0.output_topic': '/cam0HP/image_overlay',
-            'cam0.output_width': 640,
-            'cam0.output_height': 480,
-            
-            # Camera 1 (Output Tray)
+            'cam0.output_width':  1280,
+            'cam0.output_height': 720,
+
+            # Camera 1 (Output Tray) — idle channel khi cam1 disabled
             'cam1.image_topic': '/cam1HP/image_raw',
             'cam1.boxes_topic': '/cam1HP/yolo/bounding_boxes',
             'cam1.output_topic': '/cam1HP/image_overlay',
-            'cam1.output_width': 640,
-            'cam1.output_height': 480,
+            'cam1.output_width':  1280,
+            'cam1.output_height': 720,
         }],
         respawn=True,
         respawn_delay=2.0,
