@@ -2716,16 +2716,15 @@ class CartridgeSystem(Node):
         s15, s16 = self._snap(S15_CYL3_RETRACTED, S16_CYL3_EXTENDED)
         now = time.time()
 
+        # Latch S13/S14 OFF active → giữ retract ở MỌI mode, chờ State 2 rerun
+        # (S2A_CYL3_EXTEND clear latch sau khi recheck S6) hoặc manual GUI extend.
+        # Why: nếu auto mode + S6 ON tự clear latch → extend → tick sau watchdog
+        # lại thấy S13+S14 OFF → re-latch + retract → nhấp nháy.
+        if self._cyl3_s13s14_latch:
+            return
+
         if s6:
             # S6 ON → cần Cyl3 EXTENDED
-            # Nếu đang latch (S13+S14 OFF đã trigger retract) → auto mode S6 ON xóa latch
-            if self._cyl3_s13s14_latch:
-                if self.operation_mode != 'manual':
-                    self._cyl3_s13s14_latch = False
-                    self.get_logger().info("[CYL3-SYNC] Auto mode + S6 ON → S13/S14 latch cleared")
-                else:
-                    # Manual mode + latch active → không cho extend, chờ user bấm GUI
-                    return
             if s16:
                 # Đã extended → done, idle
                 if self._cyl3_safety_active != 'extended':
@@ -2776,10 +2775,14 @@ class CartridgeSystem(Node):
                 s13 = self.sensor(S13_OUT1_TRAYPOS1)
                 s14 = self.sensor(S14_OUT2_TRAYPOS1)
                 if not s13 and not s14:
-                    if not self._cyl3_s13s14_latch:
-                        self._cyl3_retract()
-                        self._cyl3_s13s14_latch = True
-                        self.get_logger().info("[CYL3-WATCHDOG] S13+S14 OFF → Cyl3 RETRACT + LATCH (giữ đến khi manual extend hoặc auto S6 ON)")
+                    self._cyl3_s13s14_latch = True
+                    s15 = self.sensor(S15_CYL3_RETRACTED)
+                    now = time.time()
+                    if not s15 or self._cyl3_expected != "retracted":
+                        if now - getattr(self, '_cyl3_watchdog_last_fire', 0.0) >= 1.0:
+                            self._cyl3_retract()
+                            self._cyl3_watchdog_last_fire = now
+                            self.get_logger().info("[CYL3-WATCHDOG] S13+S14 OFF but Cyl3 not retracted → Force Cyl3 RETRACT + LATCH (giữ đến khi manual GUI extend hoặc STATE 2 rerun recheck S6)")
 
             self._cyl3_safety_check()
             self._cyl3_monitor()
@@ -4282,6 +4285,12 @@ class CartridgeSystem(Node):
         if not self.sensor(S6_CHECK_TRAY_P1):
             self._log_once("S2A_A9B_WAIT_S6", "A9b: cho S6 ON truoc khi extend Cyl3")
             return
+        # State 2 recheck S6 ON → clear S13/S14 latch trước khi extend.
+        # Why: latch chỉ release khi (a) manual GUI extend hoặc (b) STATE 2 rerun
+        # tới đây với S6 ON xác nhận có khay cần giữ.
+        if self._cyl3_s13s14_latch:
+            self._cyl3_s13s14_latch = False
+            self.get_logger().info("[S2A] S6 ON → S13/S14 latch cleared (State 2 recheck)")
         self._cyl3_extend()
         self.get_logger().info("[S2A] Cyl3 EXTEND (cố định khay) → InY về home song song")
         self._enter_in(SystemState.S2A_INY_FINAL)
