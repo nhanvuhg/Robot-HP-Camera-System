@@ -78,7 +78,7 @@ public:
     // ── Safety timeout: VFD chạy quá run_timeout_s_ giây mà chưa thấy STOP
     //    (S3 trigger từ Pi 5) → tự dừng. Bảo vệ trường hợp S3 nhiễu/cảm biến
     //    chết/vfd_logic_node treo. Reset timer mỗi khi cmd_run flip false→true.
-    run_timeout_s_ = declare_parameter<double>("run_timeout_s", 50.0);
+    run_timeout_s_ = declare_parameter<double>("run_timeout_s", 200.0);
     run_start_steady_ = std::chrono::steady_clock::time_point{};  // not running
 
     // ── Subscribers — chỉ lưu desired, apply trong reconcile ─
@@ -91,7 +91,7 @@ public:
                       msg->data ? "RUN" : "STOP");
           // Edge → reset / clear safety timer. Sau timeout desired_run_ đã
           // set false; heartbeat re-publish true sẽ trigger edge này lại →
-          // VFD chạy thêm 50s nữa (user OK với behavior này).
+          // VFD chạy thêm 200s nữa (user OK với behavior này).
           std::lock_guard<std::mutex> lk(run_timer_mutex_);
           run_start_steady_ = msg->data
               ? std::chrono::steady_clock::now()
@@ -279,7 +279,7 @@ private:
     // Timeout — force stop. desired_run_=false, clear timer. reconcile()
     // ghi REG_CMD=ENABLE (stop) ngay tick. Nếu vfd_logic heartbeat publish
     // cmd_run=true lại (S1/S2 vẫn ON) → sub callback bắt edge → reset timer
-    // → VFD chạy thêm 50s nữa (user accept behavior).
+    // → VFD chạy thêm 200s nữa (user accept behavior).
     desired_run_ = false;
     {
       std::lock_guard<std::mutex> lk(run_timer_mutex_);
@@ -353,12 +353,12 @@ private:
   int last_freq_written_{INT_MIN};
 
   // Safety auto-stop timer: track thời điểm cmd_run flip false→true, force
-  // stop nếu vượt run_timeout_s_ (default 50s). Bảo vệ khi S3 nhiễu/cảm biến
+  // stop nếu vượt run_timeout_s_ (default 200s). Bảo vệ khi S3 nhiễu/cảm biến
   // chết. Sau timeout VFD dừng; nếu vfd_logic heartbeat re-publish true (S1/S2
-  // vẫn ON) → bắt edge → chạy thêm 50s nữa. Không latch.
+  // vẫn ON) → bắt edge → chạy thêm 200s nữa. Không latch.
   std::mutex run_timer_mutex_;
   std::chrono::steady_clock::time_point run_start_steady_{};
-  double run_timeout_s_{50.0};
+  double run_timeout_s_{200.0};
 
   int reconnect_count_{0};
   int fail_count_{0};
