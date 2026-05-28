@@ -1173,6 +1173,7 @@
 
                     // Card 4: Servo Key Positions
                     Rectangle {
+                        id: servoParamsCard
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         color: root.cBg2; border.color: root.cBorder; radius: 6
@@ -1195,66 +1196,107 @@
                             { key:"outy_scan_arm_mm",label:"OUTY Arm S20",  desc:"Giới hạn kích hoạt S20" }
                         ]
 
-                        Column {
-                            id: servoInfoCol2
+                        Flickable {
+                            id: servoFlickable2
                             anchors { fill: parent; margins: 8 }
-                            spacing: 2
+                            contentWidth: width; contentHeight: servoInfoCol2.height + 20
+                            clip: true
 
-                            Text { text: "SERVO KEY POSITIONS (mm)"; color: root.cAccent; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.5 }
-                            Row { width: parent.width
-                                Repeater { model: ["Parameter","Value","Desc"]
-                                    delegate: Text { text: modelData; color: root.cDim; font.pixelSize: 10; font.bold: true
-                                        width: index===0?110:index===1?66:parent.width-176
-                                        font.capitalization: Font.AllUppercase; font.letterSpacing: 1 } } }
-                            Rectangle { width: parent.width; height: 1; color: root.cBorder }
+                            Column {
+                                id: servoInfoCol2
+                                width: parent.width
+                                spacing: 4
 
-                            Repeater {
-                                id: servoRepeater2
-                                model: parent.parent.servoParams
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: servoInfoCol2.width; height: 38
-                                    color: index % 2 === 0 ? "transparent" : "#0d0d22"
-                                    property alias inputText: sInput2.text
-                                    property string paramKey: modelData.key
-                                    Row {
-                                        anchors.verticalCenter: parent.verticalCenter; width: parent.width
-                                        Text { text: modelData.label; color: root.cCyan; font.pixelSize: 13; font.bold: true
-                                               width: 120; anchors.verticalCenter: parent.verticalCenter }
-                                        Rectangle { width: 94; height: 30; radius: 4; color: root.cBg; border.color: root.cBorder
-                                            TextInput { id: sInput2; anchors { fill: parent; margins: 3 }
-                                                text: "0.0"; font.pixelSize: 14; font.family: "monospace"
-                                                color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter
-                                                validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 2 }
-                                                Connections {
-                                                    function onConfigRevisionChanged() {
-                                                        var v = page2Root.parsedConfig[modelData.key]
-                                                        if (v !== undefined) sInput2.text = String(v)
+                                Text { text: "SERVO KEY POSITIONS (mm)"; color: root.cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
+                                Row { width: parent.width; spacing: parent.width * 0.015
+                                    Repeater { model: ["Parameter","Value","Description"]
+                                        delegate: Text {
+                                            text: modelData
+                                            color: root.cDim
+                                            font.pixelSize: 14; font.bold: true
+                                            width: index===0 ? parent.width * 0.40 : index===1 ? parent.width * 0.22 : parent.width * 0.35
+                                            font.capitalization: Font.AllUppercase; font.letterSpacing: 1
+                                        }
+                                    }
+                                }
+                                Rectangle { width: parent.width; height: 1; color: root.cBorder }
+
+                                Repeater {
+                                    id: servoRepeater2
+                                    model: servoParamsCard.servoParams
+                                    delegate: Rectangle {
+                                        required property var modelData
+                                        required property int index
+                                        width: servoInfoCol2.width; height: 46
+                                        color: index % 2 === 0 ? "transparent" : "#0d0d22"
+                                        property alias inputText: sInput2.text
+                                        property string paramKey: modelData.key
+                                        Row {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: parent.width
+                                            spacing: parent.width * 0.015
+                                            Text {
+                                                text: modelData.label
+                                                color: root.cCyan
+                                                font { pixelSize: 18; bold: true }
+                                                width: parent.width * 0.40
+                                                anchors.verticalCenter: parent.verticalCenter
+                                            }
+                                            Rectangle {
+                                                width: parent.width * 0.22; height: 36; radius: 5
+                                                color: root.cBg; border.color: root.cBorder
+                                                TextInput {
+                                                    id: sInput2
+                                                    anchors { fill: parent; margins: 3 }
+                                                    text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true
+                                                    color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter
+                                                    validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 2 }
+                                                    Connections {
+                                                        function onConfigRevisionChanged() {
+                                                            var v = page2Root.parsedConfig[modelData.key]
+                                                            if (v !== undefined) sInput2.text = String(v)
+                                                        }
+                                                        target: page2Root
                                                     }
-                                                    target: page2Root
                                                 }
                                             }
+                                            Text {
+                                                text: modelData.desc
+                                                color: root.cDim
+                                                font.pixelSize: 16
+                                                elide: Text.ElideRight
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                width: parent.width * 0.35
+                                            }
                                         }
-                                        Item { width: 4 }
-                                        Text { text: modelData.desc; color: root.cDim; font.pixelSize: 12
-                                               elide: Text.ElideRight; anchors.verticalCenter: parent.verticalCenter
-                                               width: parent.width - 120 - 94 - 4 }
                                     }
+                                }
+
+                                Row { spacing: 8; topPadding: 8
+                                    CBtn { lbl:"Save All"; padV:10; padH:22; fontSize: 18; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                                        onClicked: {
+                                            for (var i = 0; i < servoRepeater2.count; i++) {
+                                                var item = servoRepeater2.itemAt(i)
+                                                if (item && item.inputText !== "")
+                                                    cartridgeController.saveConfig(item.paramKey, item.inputText)
+                                            }
+                                        }
+                                    }
+                                    CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cCard; bc:root.cBorder; tc:root.cText; onClicked: page2Root.reloadConfig() }
                                 }
                             }
+                        }
 
-                            Row { spacing: 6; topPadding: 6
-                                CBtn { lbl:"Save All"; padV:8; padH:18; fontSize: 17; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
-                                    onClicked: {
-                                        for (var i = 0; i < servoRepeater2.count; i++) {
-                                            var item = servoRepeater2.itemAt(i)
-                                            if (item && item.inputText !== "")
-                                                cartridgeController.saveConfig(item.paramKey, item.inputText)
-                                        }
-                                    }
-                                }
-                                CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize: 17; bg:root.cCard; bc:root.cBorder; tc:root.cText; onClicked: page2Root.reloadConfig() }
+                        Rectangle {
+                            id: servoScroll2
+                            anchors { right: parent.right; top: parent.top; bottom: parent.bottom; rightMargin: 2; topMargin: 8; bottomMargin: 8 }
+                            width: 4; radius: 2; color: "#1f2937"
+                            visible: servoFlickable2.height < servoFlickable2.contentHeight
+
+                            Rectangle {
+                                width: parent.width; radius: 2; color: root.cAccent
+                                height: Math.max(20, servoFlickable2.height * (servoFlickable2.height / servoFlickable2.contentHeight))
+                                y: servoFlickable2.visibleArea.yPosition * servoFlickable2.height
                             }
                         }
                     }
@@ -2433,74 +2475,96 @@
             color: root.cBg2; border.color: root.cBorder; radius: 6
             HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
 
-            Column {
-                id: cfgZoneCol
+            Flickable {
+                id: cfgZoneFlick
                 anchors { fill: parent; margins: 8 }
-                spacing: 2
+                contentWidth: width; contentHeight: cfgZoneCol.height + 20
+                clip: true
 
-                Text { text: cfgZoneCard.title; color: root.cAccent; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1.5 }
+                Column {
+                    id: cfgZoneCol
+                    width: parent.width
+                    spacing: 6
 
-                Row { width: parent.width; spacing: 0
-                    Text { text: "Row"; color: root.cDim; font.pixelSize: 10; font.bold: true; width: 36; font.capitalization: Font.AllUppercase }
-                    Text { text: "Min"; color: root.cDim; font.pixelSize: 10; font.bold: true; width: 50; font.capitalization: Font.AllUppercase }
-                    Text { text: "Max"; color: root.cDim; font.pixelSize: 10; font.bold: true; width: 50; font.capitalization: Font.AllUppercase }
-                    Text { text: "Target"; color: root.cDim; font.pixelSize: 10; font.bold: true; width: 62; font.capitalization: Font.AllUppercase }
-                }
-                Rectangle { width: parent.width; height: 1; color: root.cBorder }
+                    Text { text: cfgZoneCard.title; color: root.cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
 
-                Repeater {
-                    id: cfgZoneRepeater
-                    model: [10,9,8,7,6,5,4,3,2,1]
-                    delegate: Rectangle {
-                        required property int modelData
-                        required property int index
-                        width: cfgZoneCol.width; height: 38
-                        color: index % 2 === 0 ? "transparent" : "#0d0d22"
-                        property alias minText: minInp.text
-                        property alias maxText: maxInp.text
-                        property alias tgtText: tgtInp.text
-                        property int rowNum: modelData
-
-                        Row {
-                            anchors.verticalCenter: parent.verticalCenter; spacing: 2
-                            Text { text: "R"+modelData; color: root.cCyan; font.pixelSize: 12; font.bold: true; width: 34; anchors.verticalCenter: parent.verticalCenter }
-
-                            Rectangle { width: 48; height: 30; radius: 4; color: root.cBg; border.color: root.cBorder
-                                TextInput { id: minInp; anchors { fill: parent; margins: 2 } text: "0.0"; font.pixelSize: 12; font.family: "monospace"; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
-                                    Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) minInp.text = String(tbl[String(modelData)][0]) } } } }
-                            Rectangle { width: 48; height: 30; radius: 4; color: root.cBg; border.color: root.cBorder
-                                TextInput { id: maxInp; anchors { fill: parent; margins: 2 } text: "0.0"; font.pixelSize: 12; font.family: "monospace"; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
-                                    Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) maxInp.text = String(tbl[String(modelData)][1]) } } } }
-                            Rectangle { width: 48; height: 30; radius: 4; color: root.cBg; border.color: root.cBorder
-                                TextInput { id: tgtInp; anchors { fill: parent; margins: 2 } text: "0.0"; font.pixelSize: 12; font.family: "monospace"; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
-                                    Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) tgtInp.text = String(tbl[String(modelData)][2]) } } } }
-
-                            Item { width: 2 }
-                            Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cDim; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
-                        }
-                        Rectangle { width: parent.width; height: 1; color: "#1e1e3a"; anchors.bottom: parent.bottom }
+                    Row { width: parent.width; spacing: parent.width * 0.02
+                        Text { text: "Row"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.12; font.capitalization: Font.AllUppercase }
+                        Text { text: "Min"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
+                        Text { text: "Max"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
+                        Text { text: "Target"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
+                        Text { text: "Loc"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; font.capitalization: Font.AllUppercase }
                     }
-                }
+                    Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
-                Row { spacing: 6; topPadding: 8
-                    CBtn { lbl:"Save"; padV:8; padH:18; fontSize: 17; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
-                        onClicked: {
-                            var positions = {}
-                            for (var i = 0; i < cfgZoneRepeater.count; i++) {
-                                var item = cfgZoneRepeater.itemAt(i)
-                                if (item) {
-                                  var min = parseFloat(item.minText); if(isNaN(min)) min = 0.0;
-                                  var max = parseFloat(item.maxText); if(isNaN(max)) max = 0.0;
-                                  var tgt = parseFloat(item.tgtText); if(isNaN(tgt)) tgt = 0.0;
-                                  positions[String(item.rowNum)] = [min, max, tgt]
-                                }
+                    Repeater {
+                        id: cfgZoneRepeater
+                        model: [10,9,8,7,6,5,4,3,2,1]
+                        delegate: Rectangle {
+                            required property int modelData
+                            required property int index
+                            width: cfgZoneCol.width; height: 46
+                            color: index % 2 === 0 ? "transparent" : "#0d0d22"
+                            property alias minText: minInp.text
+                            property alias maxText: maxInp.text
+                            property alias tgtText: tgtInp.text
+                            property int rowNum: modelData
+
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width
+                                spacing: parent.width * 0.02
+                                Text { text: "R"+modelData; color: root.cCyan; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; anchors.verticalCenter: parent.verticalCenter }
+
+                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: root.cBg; border.color: root.cBorder
+                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) minInp.text = String(tbl[String(modelData)][0]) } } } }
+                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: root.cBg; border.color: root.cBorder
+                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) maxInp.text = String(tbl[String(modelData)][1]) } } } }
+                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: root.cBg; border.color: root.cBorder
+                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) tgtInp.text = String(tbl[String(modelData)][2]) } } } }
+
+                                Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            cartridgeController.saveConfig(cfgZoneCard.configKey, JSON.stringify(positions))
+                            Rectangle { width: parent.width; height: 1; color: "#1e1e3a"; anchors.bottom: parent.bottom }
                         }
                     }
-                    CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize: 17; bg:root.cCard; bc:root.cBorder; tc:root.cText
-                        onClicked: page2Root.reloadConfig()
+
+                    Row { spacing: 8; topPadding: 8
+                        CBtn { lbl:"Save"; padV:10; padH:22; fontSize: 18; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                            onClicked: {
+                                var positions = {}
+                                for (var i = 0; i < cfgZoneRepeater.count; i++) {
+                                    var item = cfgZoneRepeater.itemAt(i)
+                                    if (item) {
+                                      var min = parseFloat(item.minText); if(isNaN(min)) min = 0.0;
+                                      var max = parseFloat(item.maxText); if(isNaN(max)) max = 0.0;
+                                      var tgt = parseFloat(item.tgtText); if(isNaN(tgt)) tgt = 0.0;
+                                      positions[String(item.rowNum)] = [min, max, tgt]
+                                    }
+                                }
+                                cartridgeController.saveConfig(cfgZoneCard.configKey, JSON.stringify(positions))
+                            }
+                        }
+                        CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cCard; bc:root.cBorder; tc:root.cText
+                            onClicked: page2Root.reloadConfig()
+                        }
                     }
+                }
+            }
+
+            Rectangle {
+                id: cfgZoneScroll
+                anchors { right: parent.right; top: parent.top; bottom: parent.bottom; rightMargin: 2; topMargin: 8; bottomMargin: 8 }
+                width: 4; radius: 2; color: "#1f2937"
+                visible: cfgZoneFlick.height < cfgZoneFlick.contentHeight
+
+                Rectangle {
+                    width: parent.width; radius: 2; color: root.cAccent
+                    height: Math.max(20, cfgZoneFlick.height * (cfgZoneFlick.height / cfgZoneFlick.contentHeight))
+                    y: cfgZoneFlick.visibleArea.yPosition * cfgZoneFlick.height
                 }
             }
         }
