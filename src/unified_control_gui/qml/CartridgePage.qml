@@ -1364,11 +1364,11 @@
                                     color: root.cBg2; border.color: root.cBorder; radius: 6
                                     Column {
                                         id: cartCol
-                                        anchors { fill: parent; margins: 6 }
-                                        spacing: 3
-                                        Row { spacing: 5
-                                            Rectangle { width: 3; height: 11; radius: 1; color: root.cAccent; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "CARTESIAN (mm)"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1 }
+                                        anchors { fill: parent; margins: 8 }
+                                        spacing: 6
+                                        Row { spacing: 6
+                                            Rectangle { width: 4; height: 16; radius: 1; color: root.cAccent; anchors.verticalCenter: parent.verticalCenter }
+                                            Text { text: "CARTESIAN (mm)"; color: root.cAccent; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
                                         }
                                         Repeater {
                                             id: cartRep
@@ -1383,50 +1383,49 @@
                                             delegate: Row {
                                                 required property var modelData
                                                 required property int index
-                                                width: cartCol.width; height: 44; spacing: 2
+                                                width: cartCol.width; height: 52; spacing: 4
                                                 Rectangle {
                                                     id: negBtn
-                                                    width: 46; height: 40; radius: 5
+                                                    width: 58; height: 48; radius: 5
                                                     color: negMA.pressed ? "#6a2222" : root.cCard
                                                     border.color: negMA.pressed ? root.cRed : root.cBorder; border.width: negMA.pressed ? 3 : 2
                                                     scale: negMA.pressed ? 0.92 : 1.0
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on scale { NumberAnimation { duration: 60 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: negMA.pressed ? Qt.lighter(root.cRed, 1.3) : root.cRed; font.pixelSize: 12; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: negMA.pressed ? Qt.lighter(root.cRed, 1.3) : root.cRed; font.pixelSize: 16; font.bold: true }
                                                     MouseArea { id: negMA; anchors.fill: parent; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                                 Rectangle {
-                                                    width: parent.width - 96; height: 40; radius: 5; color: "#0d1117"; border.width: 2; border.color: root.cBorder
-                                                    Text { anchors.centerIn: parent; text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0.0000"; color: "#f59e0b"; font.pixelSize: 16; font.family: "monospace"; font.bold: true }
+                                                    width: parent.width - 120; height: 48; radius: 5; color: "#0d1117"; border.width: 2; border.color: root.cBorder
+                                                    Text { anchors.centerIn: parent; text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0.0000"; color: "#f59e0b"; font.pixelSize: 20; font.family: "monospace"; font.bold: true }
                                                 }
                                                 Rectangle {
                                                     id: posBtn
-                                                    width: 46; height: 40; radius: 5
+                                                    width: 58; height: 48; radius: 5
                                                     color: posMA.pressed ? "#1a4a2a" : root.cCard
                                                     border.color: posMA.pressed ? root.cGreen : root.cBorder; border.width: posMA.pressed ? 3 : 2
                                                     scale: posMA.pressed ? 0.92 : 1.0
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on scale { NumberAnimation { duration: 60 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: posMA.pressed ? Qt.lighter(root.cGreen, 1.3) : root.cGreen; font.pixelSize: 12; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: posMA.pressed ? Qt.lighter(root.cGreen, 1.3) : root.cGreen; font.pixelSize: 16; font.bold: true }
                                                     MouseArea { id: posMA; anchors.fill: parent; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                             }
                                         }
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
-                                        // Input fields for MovL
                                         Row { spacing: 3; width: parent.width
                                             Repeater {
                                                 id: cartInputs
                                                 model: ["X","Y","Z","RX","RY","RZ"]
-                                                delegate: Column { spacing: 1; width: (cartCol.width - 15) / 6
-                                                    Text { text: modelData; color: root.cDim; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                                delegate: Column { spacing: 2; width: (cartCol.width - 15) / 6
+                                                    Text { text: modelData; color: root.cDim; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                                     Rectangle {
-                                                        width: parent.width; height: 36; radius: 4; color: "#0d1117"; border.color: root.cAccent; border.width: 2
+                                                        width: parent.width; height: 40; radius: 4; color: "#0d1117"; border.color: root.cAccent; border.width: 2
                                                         TextInput { id: cartInp
                                                             anchors { fill: parent; margins: 2 }
-                                                            color: root.cText; font.pixelSize: 14; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; clip: true
+                                                            color: root.cText; font.pixelSize: 16; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; clip: true
                                                             text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0"
                                                             selectByMouse: true; verticalAlignment: Text.AlignVCenter; validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
                                                         }
@@ -1436,12 +1435,12 @@
                                         }
                                         Row { spacing: 4; width: parent.width
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 34; radius: 5
+                                                width: parent.width / 2 - 2; height: 42; radius: 5
                                                 color: gpMA.pressed ? "#1a5a3a" : "#0a2a1a"; border.color: gpMA.pressed ? Qt.lighter(root.cCyan, 1.3) : root.cCyan
                                                 border.width: gpMA.pressed ? 2 : 1; scale: gpMA.pressed ? 0.95 : 1.0
                                                 Behavior on color { ColorAnimation { duration: 80 } }
                                                 Behavior on scale { NumberAnimation { duration: 60 } }
-                                                Text { anchors.centerIn: parent; text: "GET POSE"; color: gpMA.pressed ? Qt.lighter(root.cCyan, 1.4) : root.cCyan; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "GET POSE"; color: gpMA.pressed ? Qt.lighter(root.cCyan, 1.4) : root.cCyan; font.pixelSize: 14; font.bold: true }
                                                 MouseArea { id: gpMA; anchors.fill: parent; onClicked: {
                                                     robotController.getPose()
                                                     for (var i = 0; i < 6; i++) {
@@ -1451,12 +1450,12 @@
                                                 }}
                                             }
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 34; radius: 5
+                                                width: parent.width / 2 - 2; height: 42; radius: 5
                                                 color: mlMA.pressed ? "#1a3a65" : "#0a1a35"; border.color: mlMA.pressed ? Qt.lighter(root.cAccent, 1.3) : root.cAccent
                                                 border.width: mlMA.pressed ? 2 : 1; scale: mlMA.pressed ? 0.95 : 1.0
                                                 Behavior on color { ColorAnimation { duration: 80 } }
                                                 Behavior on scale { NumberAnimation { duration: 60 } }
-                                                Text { anchors.centerIn: parent; text: "SEND MovL"; color: mlMA.pressed ? Qt.lighter(root.cAccent, 1.4) : root.cAccent; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "SEND MovL"; color: mlMA.pressed ? Qt.lighter(root.cAccent, 1.4) : root.cAccent; font.pixelSize: 14; font.bold: true }
                                                 MouseArea { id: mlMA; anchors.fill: parent; onClicked: {
                                                     var vals = []
                                                     for (var i = 0; i < 6; i++) vals.push(parseFloat(cartInputs.itemAt(i).children[1].children[0].text) || 0)
@@ -1473,42 +1472,44 @@
                                     color: root.cBg2; border.color: root.cBorder; radius: 6
                                     Column {
                                         id: jointCol
-                                        anchors { fill: parent; margins: 6 }
-                                        spacing: 3
-                                        Row { spacing: 5
-                                            Rectangle { width: 3; height: 11; radius: 1; color: "#5cf4f1"; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "JOINT (deg)"; color: "#5cf4f1"; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1 }
+                                        anchors { fill: parent; margins: 8 }
+                                        spacing: 6
+                                        Row { spacing: 6
+                                            Rectangle { width: 4; height: 16; radius: 1; color: "#5cf4f1"; anchors.verticalCenter: parent.verticalCenter }
+                                            Text { text: "JOINT (deg)"; color: "#5cf4f1"; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
                                         }
                                         Repeater {
                                             id: jointRep
                                             model: 6
                                             delegate: Row {
                                                 property int jn: index + 1
-                                                width: jointCol.width; height: 44; spacing: 2
+                                                width: jointCol.width; height: 52; spacing: 4
                                                 Rectangle {
-                                                    width: 46; height: 40; radius: 5
+                                                    id: jnBtn
+                                                    width: 58; height: 48; radius: 5
                                                     color: jnMA.pressed ? "#6a2222" : root.cCard
                                                     border.color: jnMA.pressed ? root.cRed : root.cBorder; border.width: jnMA.pressed ? 3 : 2
                                                     scale: jnMA.pressed ? 0.92 : 1.0
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on scale { NumberAnimation { duration: 60 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: jnMA.pressed ? Qt.lighter(root.cRed, 1.3) : root.cRed; font.pixelSize: 12; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: jnMA.pressed ? Qt.lighter(root.cRed, 1.3) : root.cRed; font.pixelSize: 16; font.bold: true }
                                                     MouseArea { id: jnMA; anchors.fill: parent; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                                 Rectangle {
-                                                    width: parent.width - 96; height: 40; radius: 5; color: "#0d1117"; border.width: 2; border.color: root.cBorder
-                                                    Text { anchors.centerIn: parent; text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0.0000"; color: "#f59e0b"; font.pixelSize: 16; font.family: "monospace"; font.bold: true }
+                                                    width: parent.width - 120; height: 48; radius: 5; color: "#0d1117"; border.width: 2; border.color: root.cBorder
+                                                    Text { anchors.centerIn: parent; text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0.0000"; color: "#f59e0b"; font.pixelSize: 20; font.family: "monospace"; font.bold: true }
                                                 }
                                                 Rectangle {
-                                                    width: 46; height: 40; radius: 5
+                                                    id: jpBtn
+                                                    width: 58; height: 48; radius: 5
                                                     color: jpMA.pressed ? "#1a4a2a" : root.cCard
                                                     border.color: jpMA.pressed ? root.cGreen : root.cBorder; border.width: jpMA.pressed ? 3 : 2
                                                     scale: jpMA.pressed ? 0.92 : 1.0
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on scale { NumberAnimation { duration: 60 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: jpMA.pressed ? Qt.lighter(root.cGreen, 1.3) : root.cGreen; font.pixelSize: 12; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: jpMA.pressed ? Qt.lighter(root.cGreen, 1.3) : root.cGreen; font.pixelSize: 16; font.bold: true }
                                                     MouseArea { id: jpMA; anchors.fill: parent; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                             }
@@ -1518,13 +1519,13 @@
                                             Repeater {
                                                 id: jointInputs
                                                 model: ["J1","J2","J3","J4","J5","J6"]
-                                                delegate: Column { spacing: 1; width: (jointCol.width - 15) / 6
-                                                    Text { text: modelData; color: root.cDim; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                                delegate: Column { spacing: 2; width: (jointCol.width - 15) / 6
+                                                    Text { text: modelData; color: root.cDim; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                                     Rectangle {
-                                                        width: parent.width; height: 36; radius: 4; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2
+                                                        width: parent.width; height: 40; radius: 4; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2
                                                         TextInput {
                                                             anchors { fill: parent; margins: 2 }
-                                                            color: root.cText; font.pixelSize: 14; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true
+                                                            color: root.cText; font.pixelSize: 16; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true
                                                             text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0"
                                                             selectByMouse: true; validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
                                                         }
@@ -1534,12 +1535,12 @@
                                         }
                                         Row { spacing: 4; width: parent.width
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 34; radius: 5
+                                                width: parent.width / 2 - 2; height: 42; radius: 5
                                                 color: gaMA.pressed ? "#1a5a3a" : "#0a2a1a"; border.color: gaMA.pressed ? Qt.lighter(root.cCyan, 1.3) : root.cCyan
                                                 border.width: gaMA.pressed ? 2 : 1; scale: gaMA.pressed ? 0.95 : 1.0
                                                 Behavior on color { ColorAnimation { duration: 80 } }
                                                 Behavior on scale { NumberAnimation { duration: 60 } }
-                                                Text { anchors.centerIn: parent; text: "GET ANGLES"; color: gaMA.pressed ? Qt.lighter(root.cCyan, 1.4) : root.cCyan; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "GET ANGLES"; color: gaMA.pressed ? Qt.lighter(root.cCyan, 1.4) : root.cCyan; font.pixelSize: 14; font.bold: true }
                                                 MouseArea { id: gaMA; anchors.fill: parent; onClicked: {
                                                     robotController.getAngles()
                                                     for (var i = 0; i < 6; i++) {
@@ -1549,12 +1550,12 @@
                                                 }}
                                             }
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 34; radius: 5
+                                                width: parent.width / 2 - 2; height: 42; radius: 5
                                                 color: mjMA.pressed ? "#082f3a" : "#051a25"; border.color: mjMA.pressed ? Qt.lighter("#5cf4f1", 1.3) : "#5cf4f1"
                                                 border.width: mjMA.pressed ? 2 : 1; scale: mjMA.pressed ? 0.95 : 1.0
                                                 Behavior on color { ColorAnimation { duration: 80 } }
                                                 Behavior on scale { NumberAnimation { duration: 60 } }
-                                                Text { anchors.centerIn: parent; text: "SEND MovJ"; color: mjMA.pressed ? Qt.lighter("#5cf4f1", 1.3) : "#5cf4f1"; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "SEND MovJ"; color: mjMA.pressed ? Qt.lighter("#5cf4f1", 1.3) : "#5cf4f1"; font.pixelSize: 14; font.bold: true }
                                                 MouseArea { id: mjMA; anchors.fill: parent; onClicked: {
                                                     var vals = []
                                                     for (var i = 0; i < 6; i++) vals.push(parseFloat(jointInputs.itemAt(i).children[1].children[0].text) || 0)
@@ -1571,26 +1572,26 @@
                                             // Name / comment input
                                             Rectangle {
                                                 id: poseNameRect
-                                                width: parent.width - 70 - 4; height: 32; radius: 4
+                                                width: parent.width - 90 - 4; height: 42; radius: 6
                                                 color: "#0d1117"; border.color: "#5cf4f1"; border.width: 1
                                                 // Placeholder hint
                                                 Text {
-                                                    anchors { fill: parent; leftMargin: 6; verticalCenter: parent.verticalCenter }
+                                                    anchors { fill: parent; leftMargin: 8; verticalCenter: parent.verticalCenter }
                                                     text: poseNameInput.text.length === 0 ? "pose name / comment..." : ""
-                                                    color: "#555"; font.pixelSize: 12; font.family: "monospace"
+                                                    color: "#555"; font.pixelSize: 14; font.family: "monospace"
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
                                                 TextInput {
                                                     id: poseNameInput
-                                                    anchors { fill: parent; leftMargin: 6; rightMargin: 4; topMargin: 4; bottomMargin: 4 }
-                                                    color: root.cText; font.pixelSize: 12; font.family: "monospace"
-                                                    clip: true; selectByMouse: true
+                                                    anchors { fill: parent; leftMargin: 8; rightMargin: 4; topMargin: 4; bottomMargin: 4 }
+                                                    color: root.cText; font.pixelSize: 14; font.family: "monospace"
+                                                    clip: true; selectByMouse: true; verticalAlignment: Text.AlignVCenter
                                                 }
                                             }
                                             // SAVE button
                                             Rectangle {
                                                 id: savePoseBtn
-                                                width: 70; height: 32; radius: 4
+                                                width: 90; height: 42; radius: 6
                                                 property bool saving: false
                                                 color: saving ? "#1a4d00" : (saveMA.pressed ? "#2a6a00" : "#0a3a00")
                                                 border.color: savePoseBtn.saving ? root.cGreen : (saveMA.pressed ? Qt.lighter(root.cGreen, 1.3) : "#4a8a00")
@@ -1600,7 +1601,7 @@
                                                     anchors.centerIn: parent
                                                     text: savePoseBtn.saving ? "✓ SAVED" : "💾 SAVE"
                                                     color: savePoseBtn.saving ? root.cGreen : "#88cc44"
-                                                    font.pixelSize: 11; font.bold: true
+                                                    font.pixelSize: 13; font.bold: true
                                                 }
                                                 MouseArea {
                                                     id: saveMA; anchors.fill: parent
@@ -1633,16 +1634,16 @@
                                         Text {
                                             id: saveStatusText
                                             width: parent.width; wrapMode: Text.WordWrap
-                                            text: ""; font.pixelSize: 10; font.family: "monospace"
+                                            text: ""; font.pixelSize: 12; font.family: "monospace"
                                             color: root.cGreen
                                         }
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder; opacity: 0.5 }
-                                        Text { text: "LOAD SAVED POSE"; color: root.cDim; font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.8 }
+                                        Text { text: "LOAD SAVED POSE"; color: root.cDim; font.pixelSize: 11; font.bold: true; font.letterSpacing: 0.8 }
 
                                         Rectangle {
                                             id: savedPosesLoaderRect
-                                            width: parent.width; height: 32; radius: 4
+                                            width: parent.width; height: 42; radius: 6
                                             color: loadMA.pressed ? "#0f2c3d" : "#0d1117"
                                             border.color: "#5cf4f1"; border.width: 1
 
@@ -1655,13 +1656,13 @@
                                             Text {
                                                 anchors { left: parent.left; leftMargin: 8; verticalCenter: parent.verticalCenter }
                                                 text: "📋 TOẠ ĐỘ ĐÃ LƯU (" + parent.savedPoses.length + ")"
-                                                color: "#5cf4f1"; font.pixelSize: 11; font.bold: true
+                                                color: "#5cf4f1"; font.pixelSize: 14; font.bold: true
                                             }
 
                                             Text {
                                                 anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
                                                 text: "▼"
-                                                color: "#5cf4f1"; font.pixelSize: 10
+                                                color: "#5cf4f1"; font.pixelSize: 12
                                             }
 
                                             MouseArea {
@@ -1683,67 +1684,67 @@
                                     color: root.cBg2; border.color: root.cBorder; radius: 6
                                     Column {
                                         id: ioCol
-                                        anchors { fill: parent; margins: 6 }
-                                        spacing: 5
-                                        Row { spacing: 5
-                                            Rectangle { width: 3; height: 11; radius: 1; color: root.cCyan; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "I/O CONTROL"; color: root.cCyan; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1 }
+                                        anchors { fill: parent; margins: 8 }
+                                        spacing: 6
+                                        Row { spacing: 6
+                                            Rectangle { width: 4; height: 16; radius: 1; color: root.cCyan; anchors.verticalCenter: parent.verticalCenter }
+                                            Text { text: "I/O CONTROL"; color: root.cCyan; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
                                         }
 
                                         // Step Value
-                                        Text { text: "STEP VALUE"; color: root.cDim; font.pixelSize: 9; font.bold: true }
-                                        Row { spacing: 3; width: parent.width
+                                        Text { text: "STEP VALUE"; color: root.cDim; font.pixelSize: 12; font.bold: true }
+                                        Row { spacing: 4; width: parent.width
                                             Repeater {
                                                 model: [0.1, 1, 5, 10]
                                                 delegate: Rectangle {
                                                     required property var modelData
-                                                    width: (ioCol.width - 9) / 4; height: 28; radius: 4
+                                                    width: (ioCol.width - 12) / 4; height: 34; radius: 5
                                                     color: page3Root.stepValue === modelData ? root.cAccent : root.cCard
                                                     border.color: page3Root.stepValue === modelData ? root.cAccent : root.cBorder; border.width: 2
-                                                    Text { anchors.centerIn: parent; text: modelData; color: page3Root.stepValue === modelData ? "#000" : root.cText; font.pixelSize: 11; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: modelData; color: page3Root.stepValue === modelData ? "#000" : root.cText; font.pixelSize: 14; font.bold: true }
                                                     MouseArea { anchors.fill: parent; onClicked: page3Root.stepValue = modelData }
                                                 }
                                             }
                                         }
 
                                         // Hardware Speed (read-only from Dobot)
-                                        Text { text: "HW SPEED"; color: root.cDim; font.pixelSize: 9; font.bold: true }
+                                        Text { text: "HW SPEED"; color: root.cDim; font.pixelSize: 12; font.bold: true }
                                         Rectangle {
-                                            width: parent.width; height: 26; radius: 4
+                                            width: parent.width; height: 36; radius: 5
                                             color: "#0d1117"; border.color: "#2a3a4a"; border.width: 1
                                             Row {
-                                                anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
-                                                spacing: 4
+                                                anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
+                                                spacing: 6
                                                 Text {
                                                     text: "⚙ Dobot:"
-                                                    color: root.cDim; font.pixelSize: 11
+                                                    color: root.cDim; font.pixelSize: 14
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
                                                 Text {
                                                     text: robotController.hwSpeedRatio + "%"
-                                                    color: "#f59e0b"; font.pixelSize: 14; font.bold: true; font.family: "monospace"
+                                                    color: "#f59e0b"; font.pixelSize: 18; font.bold: true; font.family: "monospace"
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
                                             }
                                         }
 
                                         // Set Speed (interactive slider)
-                                        Text { text: "SET SPEED %"; color: root.cDim; font.pixelSize: 9; font.bold: true }
-                                        Row { spacing: 4; width: parent.width; height: 30
+                                        Text { text: "SET SPEED %"; color: root.cDim; font.pixelSize: 12; font.bold: true }
+                                        Row { spacing: 4; width: parent.width; height: 36
                                             Slider {
                                                 id: speedSlider
-                                                width: parent.width - 50; height: 28
+                                                width: parent.width - 56; height: 34
                                                 from: 1; to: 100; stepSize: 1; value: page3Root.speedVal
                                                 onMoved: { page3Root.speedVal = Math.round(value) }
                                                 onPressedChanged: { if (!pressed) robotController.setSpeedRatio(Math.round(value)) }
                                                 background: Rectangle { x: speedSlider.leftPadding; y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 4; width: speedSlider.availableWidth; height: 8; radius: 4; color: root.cCard; border.color: root.cBorder
                                                     Rectangle { width: speedSlider.visualPosition * parent.width; height: parent.height; radius: 4; color: "#5cf4f1" }
                                                 }
-                                                handle: Rectangle { x: speedSlider.leftPadding + speedSlider.visualPosition * (speedSlider.availableWidth - width); y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 8; width: 16; height: 16; radius: 8; color: "#5cf4f1"; border.color: "#fff" }
+                                                handle: Rectangle { x: speedSlider.leftPadding + speedSlider.visualPosition * (speedSlider.availableWidth - width); y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 8; width: 18; height: 18; radius: 9; color: "#5cf4f1"; border.color: "#fff" }
                                             }
                                             Rectangle {
-                                                width: 44; height: 28; radius: 4; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2
-                                                TextInput { anchors.centerIn: parent; width: 38; color: root.cText; font.pixelSize: 12; font.family: "monospace"; font.bold: true; horizontalAlignment: Text.AlignHCenter
+                                                width: 50; height: 34; radius: 5; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2
+                                                TextInput { anchors.centerIn: parent; width: 44; color: root.cText; font.pixelSize: 14; font.family: "monospace"; font.bold: true; horizontalAlignment: Text.AlignHCenter
                                                     text: page3Root.speedVal
                                                     validator: IntValidator { bottom: 1; top: 100 }
                                                     selectByMouse: true
@@ -1755,45 +1756,45 @@
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
                                         // Gripper DO1 — valve 5/3: GẮP (ch0=T,ch1=F) / NHẢ (ch0=F,ch1=T)
-                                        Text { text: "GRIPPER (DO1)"; color: root.cDim; font.pixelSize: 9; font.bold: true }
+                                        Text { text: "GRIPPER (DO1)"; color: root.cDim; font.pixelSize: 12; font.bold: true }
                                         Row {
                                             id: rowGripper
                                             property bool isOn: false  // false = NHẢ (startup safe state)
-                                            spacing: 4; width: parent.width
+                                            spacing: 6; width: parent.width
                                             Rectangle {
-                                                width: (parent.width - 4) / 2; height: 34; radius: 4
+                                                width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: rowGripper.isOn ? "#0a332e" : root.cCard
                                                 border.color: rowGripper.isOn ? root.cGreen : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "GẮP"; color: rowGripper.isOn ? root.cGreen : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "GẮP"; color: rowGripper.isOn ? root.cGreen : root.cDim; font.pixelSize: 15; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, true); rowGripper.isOn = true } }
                                             }
                                             Rectangle {
-                                                width: (parent.width - 4) / 2; height: 34; radius: 4
+                                                width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: !rowGripper.isOn ? "#1a3a5a" : root.cCard
                                                 border.color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 15; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, false); rowGripper.isOn = false } }
                                             }
                                         }
 
                                         // Picker DO2 — valve 5/3: GẮP (ch2=T,ch3=F) / NHẢ (ch2=F,ch3=T)
-                                        Text { text: "PICKER (DO2)"; color: root.cDim; font.pixelSize: 9; font.bold: true }
+                                        Text { text: "PICKER (DO2)"; color: root.cDim; font.pixelSize: 12; font.bold: true }
                                         Row {
                                             id: rowPicker
                                             property bool isOn: false  // false = NHẢ (startup safe state)
-                                            spacing: 4; width: parent.width
+                                            spacing: 6; width: parent.width
                                             Rectangle {
-                                                width: (parent.width - 4) / 2; height: 34; radius: 4
+                                                width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: rowPicker.isOn ? "#0a332e" : root.cCard
                                                 border.color: rowPicker.isOn ? root.cGreen : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "GẮP"; color: rowPicker.isOn ? root.cGreen : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "GẮP"; color: rowPicker.isOn ? root.cGreen : root.cDim; font.pixelSize: 15; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, true); rowPicker.isOn = true } }
                                             }
                                             Rectangle {
-                                                width: (parent.width - 4) / 2; height: 34; radius: 4
+                                                width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: !rowPicker.isOn ? "#1a3a5a" : root.cCard
                                                 border.color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 15; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, false); rowPicker.isOn = false } }
                                             }
                                         }
@@ -1801,29 +1802,29 @@
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
                                         // Stop & Reset → IDLE
-                                        CBtn { lbl: "⏹ STOP"; width: parent.width; bg: "#4a1a00"; bc: "#FF6600"; tc: "#FF6600"; padV: 10; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                                        CBtn { lbl: "⏹ STOP"; width: parent.width; bg: "#4a1a00"; bc: "#FF6600"; tc: "#FF6600"; padV: 12; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
 
                                         // Enable
-                                        CBtn { lbl: "ENABLE"; width: parent.width; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; padV: 8; onClicked: robotController.enableSystem(true) }
+                                        CBtn { lbl: "ENABLE"; width: parent.width; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; padV: 10; onClicked: robotController.enableSystem(true) }
 
                                         // Pause / Resume
-                                        Row { spacing: 4; width: parent.width
+                                        Row { spacing: 6; width: parent.width
                                             Rectangle {
-                                                width: (parent.width - 4) / 2; height: 34; radius: 4
+                                                width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: pauseMA.pressed ? "#3a3a00" : "#1a1a00"; border.color: pauseMA.pressed ? Qt.lighter(root.cOrange, 1.3) : root.cOrange
                                                 border.width: pauseMA.pressed ? 2 : 1; scale: pauseMA.pressed ? 0.95 : 1.0
                                                 Behavior on color { ColorAnimation { duration: 80 } }
                                                 Behavior on scale { NumberAnimation { duration: 60 } }
-                                                Text { anchors.centerIn: parent; text: "PAUSE"; color: pauseMA.pressed ? Qt.lighter(root.cOrange, 1.3) : root.cOrange; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "PAUSE"; color: pauseMA.pressed ? Qt.lighter(root.cOrange, 1.3) : root.cOrange; font.pixelSize: 14; font.bold: true }
                                                 MouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
                                             }
                                             Rectangle {
-                                                width: (parent.width - 4) / 2; height: 34; radius: 4
+                                                width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: resumeMA.pressed ? "#1a5a3a" : "#0a2a1a"; border.color: resumeMA.pressed ? Qt.lighter(root.cCyan, 1.3) : root.cCyan
                                                 border.width: resumeMA.pressed ? 2 : 1; scale: resumeMA.pressed ? 0.95 : 1.0
                                                 Behavior on color { ColorAnimation { duration: 80 } }
                                                 Behavior on scale { NumberAnimation { duration: 60 } }
-                                                Text { anchors.centerIn: parent; text: "RESUME"; color: resumeMA.pressed ? Qt.lighter(root.cCyan, 1.3) : root.cCyan; font.pixelSize: 12; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "RESUME"; color: resumeMA.pressed ? Qt.lighter(root.cCyan, 1.3) : root.cCyan; font.pixelSize: 14; font.bold: true }
                                                 MouseArea { id: resumeMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
                                             }
                                         }
@@ -2042,7 +2043,8 @@
                     }
 
                     Rectangle {
-                        width: parent.width * 0.85; height: parent.height * 0.75
+                        id: popupBg
+                        width: parent.width * 0.9; height: parent.height * 0.8
                         anchors.centerIn: parent
                         color: "#0a0d14"
                         border.color: "#5cf4f1"; border.width: 2
@@ -2052,23 +2054,24 @@
                         MouseArea { anchors.fill: parent; preventStealing: true }
 
                         Column {
-                            anchors { fill: parent; margins: 12 }
-                            spacing: 8
+                            anchors { fill: parent; margins: 14 }
+                            spacing: 10
 
-                            Row {
-                                width: parent.width
+                            Item {
+                                width: parent.width; height: 34
                                 Text {
                                     text: "📋 CHỌN TOẠ ĐỘ ROBOT ĐÃ LƯU"
-                                    color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1
+                                    color: "#5cf4f1"; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.2
                                     anchors.verticalCenter: parent.verticalCenter
+                                    anchors.left: parent.left
                                 }
-                                Item { width: 1; height: 1; anchors.horizontalCenter: parent.horizontalCenter }
                                 Rectangle {
-                                    width: 30; height: 30; radius: 15
+                                    width: 34; height: 34; radius: 17
                                     color: closeMA.pressed ? "#552222" : "#221111"
                                     border.color: "#ff4444"
                                     anchors.right: parent.right
-                                    Text { anchors.centerIn: parent; text: "✕"; color: "#ff4444"; font.pixelSize: 16; font.bold: true }
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    Text { anchors.centerIn: parent; text: "✕"; color: "#ff4444"; font.pixelSize: 18; font.bold: true }
                                     MouseArea {
                                         id: closeMA; anchors.fill: parent; onClicked: poseSelectorPopup.visible = false
                                     }
@@ -2077,72 +2080,129 @@
 
                             Rectangle { width: parent.width; height: 1; color: "#223344" }
 
-                            ListView {
-                                id: poseListView
-                                width: parent.width; height: parent.height - 60
-                                clip: true
-                                spacing: 6
-                                model: []
+                            Item {
+                                width: parent.width; height: popupBg.height - 83
+                                
+                                ListView {
+                                    id: poseListView
+                                    anchors.fill: parent
+                                    clip: true
+                                    spacing: 8
+                                    model: []
 
-                                delegate: Rectangle {
-                                    width: poseListView.width; height: 50
-                                    color: itemMA.pressed ? "#0f2c3d" : (itemMA.containsMouse ? "#0a1a26" : "#0d1117")
-                                    border.color: itemMA.containsMouse ? "#5cf4f1" : "#1a2a3a"; border.width: 1
-                                    radius: 4
+                                    delegate: Rectangle {
+                                        width: poseListView.width; height: 72
+                                        color: itemMA.pressed ? "#0f2c3d" : (itemMA.containsMouse ? "#0a1a26" : "#0d1117")
+                                        border.color: itemMA.containsMouse ? "#5cf4f1" : "#1a2a3a"; border.width: 1
+                                        radius: 6
 
-                                    Row {
-                                        anchors { fill: parent; leftMargin: 8; rightMargin: 8 }
-                                        spacing: 12
+                                        Row {
+                                            anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
+                                            spacing: 16
 
-                                        Column {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            width: parent.width - 90
-                                            spacing: 2
-                                            Text {
-                                                text: modelData.name
-                                                color: "#f59e0b"; font.pixelSize: 14; font.bold: true
-                                                elide: Text.ElideRight
+                                            // Left side: Comment & Grid coordinates
+                                            Column {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                width: parent.width - 104
+                                                spacing: 4
+                                                
+                                                Text {
+                                                    text: modelData.name ? modelData.name : "Không có tên/ghi chú"
+                                                    color: "#f59e0b"; font.pixelSize: 22; font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+                                                
+                                                // Grid-like layout for coordinates with vertical alignment and clear margins
+                                                Row {
+                                                    spacing: 8
+                                                    width: parent.width
+                                                    
+                                                    Repeater {
+                                                        model: [
+                                                            { label: "J1", val: modelData.j1 },
+                                                            { label: "J2", val: modelData.j2 },
+                                                            { label: "J3", val: modelData.j3 },
+                                                            { label: "J4", val: modelData.j4 },
+                                                            { label: "J5", val: modelData.j5 },
+                                                            { label: "J6", val: modelData.j6 }
+                                                        ]
+                                                        
+                                                        delegate: Row {
+                                                            spacing: 4
+                                                            Text {
+                                                                text: model.modelData.label + ":"
+                                                                color: "#a1a1aa"
+                                                                font { pixelSize: 18; bold: true }
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                            }
+                                                            Text {
+                                                                text: model.modelData.val.toFixed(2)
+                                                                color: "#e4e4e7"
+                                                                font { pixelSize: 19; family: "monospace"; bold: true }
+                                                                anchors.verticalCenter: parent.verticalCenter
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
-                                            Text {
-                                                text: "J: (" + modelData.j1.toFixed(2) + ", " + modelData.j2.toFixed(2) + ", " + modelData.j3.toFixed(2) + ", " + modelData.j4.toFixed(2) + ", " + modelData.j5.toFixed(2) + ", " + modelData.j6.toFixed(2) + ")"
-                                                color: "#888"; font.pixelSize: 11; font.family: "monospace"
-                                            }
-                                        }
 
-                                        Rectangle {
-                                            width: 80; height: 30; radius: 4
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            color: applyMA.pressed ? "#1a5a3a" : "#0a2a1a"
-                                            border.color: applyMA.pressed ? "#00ff00" : "#00aa00"
-                                            Text { anchors.centerIn: parent; text: "APPLY"; color: "#00ff00"; font.pixelSize: 11; font.bold: true }
-                                            MouseArea {
-                                                id: applyMA; anchors.fill: parent
-                                                onClicked: {
-                                                    jointInputs.itemAt(0).children[1].children[0].text = modelData.j1.toFixed(4)
-                                                    jointInputs.itemAt(1).children[1].children[0].text = modelData.j2.toFixed(4)
-                                                    jointInputs.itemAt(2).children[1].children[0].text = modelData.j3.toFixed(4)
-                                                    jointInputs.itemAt(3).children[1].children[0].text = modelData.j4.toFixed(4)
-                                                    jointInputs.itemAt(4).children[1].children[0].text = modelData.j5.toFixed(4)
-                                                    jointInputs.itemAt(5).children[1].children[0].text = modelData.j6.toFixed(4)
-                                                    poseSelectorPopup.visible = false
+                                            // Apply button
+                                            Rectangle {
+                                                width: 88; height: 42; radius: 6
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                color: applyMA.pressed ? "#1a5a3a" : "#0a2a1a"
+                                                border.color: applyMA.pressed ? "#00ff00" : "#00aa00"
+                                                
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: "APPLY"
+                                                    color: "#00ff00"
+                                                    font.pixelSize: 16; font.bold: true; font.letterSpacing: 1
+                                                }
+                                                
+                                                MouseArea {
+                                                    id: applyMA; anchors.fill: parent
+                                                    onClicked: {
+                                                        jointInputs.itemAt(0).children[1].children[0].text = modelData.j1.toFixed(4)
+                                                        jointInputs.itemAt(1).children[1].children[0].text = modelData.j2.toFixed(4)
+                                                        jointInputs.itemAt(2).children[1].children[0].text = modelData.j3.toFixed(4)
+                                                        jointInputs.itemAt(3).children[1].children[0].text = modelData.j4.toFixed(4)
+                                                        jointInputs.itemAt(4).children[1].children[0].text = modelData.j5.toFixed(4)
+                                                        jointInputs.itemAt(5).children[1].children[0].text = modelData.j6.toFixed(4)
+                                                        poseSelectorPopup.visible = false
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
 
-                                    MouseArea {
-                                        id: itemMA
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        onClicked: {
-                                            jointInputs.itemAt(0).children[1].children[0].text = modelData.j1.toFixed(4)
-                                            jointInputs.itemAt(1).children[1].children[0].text = modelData.j2.toFixed(4)
-                                            jointInputs.itemAt(2).children[1].children[0].text = modelData.j3.toFixed(4)
-                                            jointInputs.itemAt(3).children[1].children[0].text = modelData.j4.toFixed(4)
-                                            jointInputs.itemAt(4).children[1].children[0].text = modelData.j5.toFixed(4)
-                                            jointInputs.itemAt(5).children[1].children[0].text = modelData.j6.toFixed(4)
-                                            poseSelectorPopup.visible = false
+                                        MouseArea {
+                                            id: itemMA
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: {
+                                                jointInputs.itemAt(0).children[1].children[0].text = modelData.j1.toFixed(4)
+                                                jointInputs.itemAt(1).children[1].children[0].text = modelData.j2.toFixed(4)
+                                                jointInputs.itemAt(2).children[1].children[0].text = modelData.j3.toFixed(4)
+                                                jointInputs.itemAt(3).children[1].children[0].text = modelData.j4.toFixed(4)
+                                                jointInputs.itemAt(4).children[1].children[0].text = modelData.j5.toFixed(4)
+                                                jointInputs.itemAt(5).children[1].children[0].text = modelData.j6.toFixed(4)
+                                                poseSelectorPopup.visible = false
+                                            }
                                         }
+                                    }
+                                }
+                                
+                                // Custom Scrollbar
+                                Rectangle {
+                                    id: scrollbar
+                                    anchors { right: parent.right; top: parent.top; bottom: parent.bottom; rightMargin: 2 }
+                                    width: 4; radius: 2; color: "#1f2937"
+                                    visible: poseListView.height < poseListView.contentHeight
+                                    
+                                    Rectangle {
+                                        width: parent.width; radius: 2; color: "#5cf4f1"
+                                        height: Math.max(20, poseListView.height * (poseListView.height / poseListView.contentHeight))
+                                        y: poseListView.visibleArea.yPosition * poseListView.height
                                     }
                                 }
                             }
