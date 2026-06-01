@@ -3,6 +3,8 @@
 
 #include <cmath>
 #include <chrono>
+#include <atomic>
+#include <thread>
 
 #include <cv_bridge/cv_bridge.hpp>
 #include <image_transport/image_transport.hpp>
@@ -23,11 +25,12 @@ namespace yolo_ros_hailort_cpp{
     {
     public:
         YoloNode(const rclcpp::NodeOptions &);
+        ~YoloNode();
     private:
         void onInit();
         void colorImageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &);
 
-        static vision_msgs::msg::Detection2DArray objects_to_detection2d(const std::vector<yolo_cpp::Object> &, const std_msgs::msg::Header &);
+        static vision_msgs::msg::Detection2DArray objects_to_detection2d(const std::vector<yolo_cpp::Object> &, const std_msgs::msg::Header &, float scale_x = 1.0f, float scale_y = 1.0f);
 
     protected:
         std::shared_ptr<yolo_parameters::ParamListener> param_listener_;
@@ -41,6 +44,8 @@ namespace yolo_ros_hailort_cpp{
 
         rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr pub_detection2d_;
         image_transport::Publisher pub_image_;
+        std::atomic<bool> inference_busy_{false};  // [OPT-3] Async inference gate
+        std::thread inference_thread_;
     };
 }
 

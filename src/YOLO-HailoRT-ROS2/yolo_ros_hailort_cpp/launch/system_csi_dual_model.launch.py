@@ -37,12 +37,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'conf',
-            default_value='0.25',
+            default_value='0.1',
             description='yolo confidence threshold.'
         ),
         DeclareLaunchArgument(
             'nms',
-            default_value='0.40',
+            default_value='0.20',
             description='yolo nms threshold'
         ),
         DeclareLaunchArgument(

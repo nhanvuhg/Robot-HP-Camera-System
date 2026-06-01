@@ -2,7 +2,7 @@
 //-------add---------
 #include <mutex>
 #include <memory>
-#include <sstream>v  
+#include <sstream>
 //-------------------
 // constexpr bool QUANTIZED = true;
 // constexpr hailo_format_type_t FORMAT_TYPE = HAILO_FORMAT_TYPE_AUTO;
@@ -28,7 +28,6 @@ namespace {
             return sp;
         }
         // Tạo mới với Multi-Network Scheduler để hỗ trợ chạy nhiều model HEF cùng lúc
-        // (Ported from Funai reference — required for dual-model on single Hailo device)
         hailo_vdevice_params_t params;
         hailo_init_vdevice_params(&params);
         params.scheduling_algorithm = HAILO_SCHEDULING_ALGORITHM_ROUND_ROBIN;
@@ -57,9 +56,9 @@ hailo_status YoloHailoRT::init_device(
     std::shared_ptr<VStreams> &vstreams)
 {
     // Cấm các thread gọi configure phần cứng cùng lúc (chống deadlock PCIe)
-    // (Ported from Funai reference — required for component_container_mt)
     static std::mutex init_mtx;
     std::lock_guard<std::mutex> lock(init_mtx);
+
     // auto vdevice_exp = VDevice::create();
     // if (!vdevice_exp) {
     //     std::cerr << "Failed create vdevice, status = " << vdevice_exp.status() << std::endl;
@@ -151,8 +150,8 @@ std::vector<Object> YoloHailoRT::inference(const cv::Mat &frame) {
     hailo_vstream_info_t vstream_info = output_vstream.get_info();
     feature = std::make_shared<FeatureData>(static_cast<uint32_t>(output_vstream.get_frame_size()), vstream_info.quant_info.qp_zp,
         vstream_info.quant_info.qp_scale, vstream_info.shape.width, vstream_info);
-    cv::Mat _frame;
-    cv::resize(frame, _frame, cv::Size(input_vstream.get_info().shape.width, input_vstream.get_info().shape.height), 0, 0, cv::INTER_LINEAR);
+    cv::Mat _frame = frame.clone();
+    cv::resize(frame, _frame, cv::Size(input_vstream.get_info().shape.width, input_vstream.get_info().shape.height), 1);
     input_vstream.write(MemoryView(_frame.data, input_vstream.get_frame_size()));
 
     std::vector<uint8_t>& buffer = feature->m_buffers.get_write_buffer();
