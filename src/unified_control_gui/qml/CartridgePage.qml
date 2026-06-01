@@ -563,6 +563,7 @@
                                                 anchors.fill: parent
                                                 onClicked: {
                                                     cartridgeController.setMode("manual")
+                                                    cartridgeController.startSystem()
                                                     modeDropdown.expanded = false
                                                 }
                                             }
