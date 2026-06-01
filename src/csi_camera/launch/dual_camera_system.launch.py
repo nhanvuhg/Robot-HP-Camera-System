@@ -65,12 +65,13 @@ def generate_launch_description():
                     'src_image_topic_name': '/cam0HP/image_raw',
                     'publish_boundingbox_topic_name': '/cam0HP/yolo/bounding_boxes',
                     'publish_image_topic_name': '/cam0HP/yolo/image_raw',
-                    'conf': 0.001,
+                    'conf': 0.20,
+                    'nms': 0.30,
                     'publish_resized_image': False,
                 }]
             )
         )
-        
+
     if cam1_enable:
         yolo_nodes.append(
             # YOLO for Camera 1 (Output Tray Detection)
@@ -83,7 +84,8 @@ def generate_launch_description():
                     'src_image_topic_name': '/cam1HP/image_raw',
                     'publish_boundingbox_topic_name': '/cam1HP/yolo/bounding_boxes',
                     'publish_image_topic_name': '/cam1HP/yolo/image_raw',
-                    'conf': 0.001,
+                    'conf': 0.40,
+                    'nms': 0.30,
                     'publish_resized_image': False,
                 }]
             )
