@@ -138,6 +138,9 @@ private:
         double sx = static_cast<double>(out_w_) / img_msg->width;
         double sy = static_cast<double>(out_h_) / img_msg->height;
 
+        // Hạ độ sáng xuống một chút (giảm 15% độ sáng) để nhìn khay rõ hơn và làm nổi bật bounding box
+        resized.convertTo(resized, -1, 0.85, 0);
+
         // Vẽ
         draw_detections(resized, *boxes_msg, sx, sy);
 
