@@ -186,9 +186,9 @@ static int select_contiguous_empty(const std::vector<int>& empty_slots, int tota
 }
 
 enum class ControlMode : uint8_t {
-    MANUAL = 0,
     AUTO   = 1,
-    AI     = 2
+    AI     = 2,
+    MANUAL = 3
 };
 
 // ============================================================================
@@ -271,7 +271,7 @@ private:
     // CONSTANTS
     // ========================================================================
     static constexpr int    INPUT_ROW_THRESHOLD    = 8;
-    static constexpr float  DETECTION_SCORE_THRESH = 0.45f;
+    static constexpr float  DETECTION_SCORE_THRESH = 0.01f;
     static constexpr int    SLOT_CONFIRM_FRAMES    = 2;
     static constexpr size_t N_OUTPUT_SLOTS         = 9;  // must match output_tray_rois_ size
 
@@ -403,7 +403,9 @@ private:
                 if (det.results.empty()) continue;
                 const std::string& class_id = det.results[0].hypothesis.class_id;
                 float score = det.results[0].hypothesis.score;
-                if (class_id != "0" || score < DETECTION_SCORE_THRESH) continue;
+                if ((class_id != "0" && class_id != "1") || score < DETECTION_SCORE_THRESH) continue;
+                // Filter out huge bounding boxes (like the entire tray)
+                if (det.bbox.size_x > 200.0 || det.bbox.size_y > 200.0) continue;
                 float cx = det.bbox.center.position.x;
                 float cy = det.bbox.center.position.y;
                 for (size_t i = 0; i < input_tray_rois_.size(); ++i) {

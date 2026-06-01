@@ -24,6 +24,9 @@ def generate_launch_description():
     # Publishes:
     #   - /cam0HP/image_raw (Camera 0 - Input Tray)
     #   - /cam1HP/image_raw (Camera 1 - Output Tray)
+     # Enable/Disable camera flags (CAM1 lacks physical hardware on this machine)
+    cam0_enable = True
+    cam1_enable = False  # Set to True when Camera 1 is physically installed
     
     dual_camera_node = Node(
         package='csi_camera',
@@ -31,9 +34,12 @@ def generate_launch_description():
         name='dual_csi_camera_node',
         output='screen',
         parameters=[{
-            'width': 640,
-            'height': 480,
-            'fps': 10,  # Set to required FPS based on processing requirements
+            'width': 1280,
+            'height': 720,
+            'fps': 30,
+            'publish_fps': 10,  # match Funai default, saves ~30% CPU
+            'cam0_enable': cam0_enable,
+            'cam1_enable': cam1_enable,
             'cam0_topic': '/cam0HP/image_raw',
             'cam1_topic': '/cam1HP/image_raw',
         }],
@@ -42,49 +48,55 @@ def generate_launch_description():
     )
     
     # ================================================================
-    # 2. YOLO CONTAINER WITH 2 MODELS
+    # 2. YOLO CONTAINER (DYNAMIC MODEL ALLOCATION)
     # ================================================================
-    # Both YOLO nodes run simultaneously, processing their respective camera feeds
     
-    yolo_container = ComposableNodeContainer(
-        name='yolo_container',
-        namespace='',
-        package='rclcpp_components',
-        executable='component_container_mt',  # multi-threaded: allows cam0/cam1 inference overlap
-        composable_node_descriptions=[
+    yolo_nodes = []
+    
+    if cam0_enable:
+        yolo_nodes.append(
             # YOLO for Camera 0 (Input Tray Detection)
             ComposableNode(
                 package='yolo_ros_hailort_cpp',
                 plugin='yolo_ros_hailort_cpp::YoloNode',
                 name='yolo_cam0',
                 parameters=[{
-                    'model_path': '/home/pi/input_1_yolov8s.hef',
+                    'model_path': '/home/pi/yolov8s_InputHP1.hef',
                     'src_image_topic_name': '/cam0HP/image_raw',
                     'publish_boundingbox_topic_name': '/cam0HP/yolo/bounding_boxes',
                     'publish_image_topic_name': '/cam0HP/yolo/image_raw',
-                    'conf': 0.35,
+                    'conf': 0.001,
                     'publish_resized_image': False,
                 }]
-            ),
-            
+            )
+        )
+        
+    if cam1_enable:
+        yolo_nodes.append(
             # YOLO for Camera 1 (Output Tray Detection)
             ComposableNode(
                 package='yolo_ros_hailort_cpp',
                 plugin='yolo_ros_hailort_cpp::YoloNode',
                 name='yolo_cam1',
                 parameters=[{
-                    'model_path': '/home/pi/yolov8s.hef',
+                    'model_path': '/home/pi/input_1_yolov8s.hef',
                     'src_image_topic_name': '/cam1HP/image_raw',
                     'publish_boundingbox_topic_name': '/cam1HP/yolo/bounding_boxes',
                     'publish_image_topic_name': '/cam1HP/yolo/image_raw',
-                    'conf': 0.35,
+                    'conf': 0.001,
                     'publish_resized_image': False,
                 }]
-            ),
-        ],
+            )
+        )
+        
+    yolo_container = ComposableNodeContainer(
+        name='yolo_container',
+        namespace='',
+        package='rclcpp_components',
+        executable='component_container_mt',  # multi-threaded: allows cam0/cam1 inference overlap
+        composable_node_descriptions=yolo_nodes,
         output='screen',
         respawn=True,
-        respawn_delay=3.0,
     )
     
     # ================================================================
@@ -98,19 +110,20 @@ def generate_launch_description():
         name='overlay_dual_cam',
         output='screen',
         parameters=[{
-            # Camera 0 (Input Tray)
+            # Camera 0 (Input Tray) — match camera publish 1280x720 (16:9)
+            # để preserve aspect ratio, không squish trên GUI.
             'cam0.image_topic': '/cam0HP/image_raw',
             'cam0.boxes_topic': '/cam0HP/yolo/bounding_boxes',
             'cam0.output_topic': '/cam0HP/image_overlay',
-            'cam0.output_width': 640,
-            'cam0.output_height': 480,
-            
-            # Camera 1 (Output Tray)
+            'cam0.output_width':  1280,
+            'cam0.output_height': 720,
+
+            # Camera 1 (Output Tray) — idle channel khi cam1 disabled
             'cam1.image_topic': '/cam1HP/image_raw',
             'cam1.boxes_topic': '/cam1HP/yolo/bounding_boxes',
             'cam1.output_topic': '/cam1HP/image_overlay',
-            'cam1.output_width': 640,
-            'cam1.output_height': 480,
+            'cam1.output_width':  1280,
+            'cam1.output_height': 720,
         }],
         respawn=True,
         respawn_delay=2.0,
