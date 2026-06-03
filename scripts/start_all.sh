@@ -15,23 +15,12 @@ set -uo pipefail
 #   8. unified_control_gui         — QML GUI (HDMI)
 #   9. rs485_bus_node              — RevPi A (remote via SSH)
 #
-# Usage: bash start_all.sh [--web] [--no-web] [--camera-only]
-#   --camera-only : skip robot/dobot/cartridge nodes — chỉ chạy [6] camera
-#                   + YOLO + overlay + vision_decision_node (debug cam0).
-#                   GUIs giữ nguyên để xem overlay.
+# Usage: bash start_all.sh [--web] [--no-web]
 # Stop:  Ctrl+C (kills all)
 # ═══════════════════════════════════════════════════════════
 
 WS="$HOME/ros2_ws"
 export DISPLAY=${DISPLAY:-:0}
-
-# ── Parse args ──
-CAMERA_ONLY=false
-for arg in "$@"; do
-    case "$arg" in
-        --camera-only) CAMERA_ONLY=true ;;
-    esac
-done
 
 # ── Auto-detect XAUTHORITY (cần thiết khi chạy từ SSH) ──
 if [ -z "${XAUTHORITY:-}" ]; then
@@ -236,10 +225,6 @@ trap cleanup EXIT INT TERM HUP QUIT
 # clients inside the nodes — no sleep needed.
 # ══════════════════════════════════════════
 
-if $CAMERA_ONLY; then
-    echo "  🎥 --camera-only mode: skip [1]-[5] (Cartridge/VFD/Dobot/Robot/Gripper)"
-    : > "$PIDFILE"   # init empty pidfile
-else
 # ── [1] Cartridge Provide System Node ──
 LOG_PROVIDE="$LOG_DIR/cartridge_node.log"
 CARTRIDGE_BIN="$WS/install/system_feed_cartridge/lib/system_feed_cartridge/cartridge_providesystem_py"
@@ -284,7 +269,6 @@ LOG_GRIPPER="$LOG_DIR/gripper_festo_node.log"
 # echo "        PID=$PID_GRIPPER  Log: $LOG_GRIPPER"
 # echo "$PID_GRIPPER" >> "$PIDFILE"
 echo "  [5] ⏭️  Gripper Node OFF (tích hợp trong Cartridge Node)"
-fi  # end if !CAMERA_ONLY
 
 # ── [6] Dual Camera System (CSI + YOLO + bbox overlay) ──
 # Default ON (giống FUNAI's run_two_camera.sh) — launch publish:
