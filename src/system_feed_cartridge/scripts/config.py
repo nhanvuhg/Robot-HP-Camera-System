@@ -59,10 +59,6 @@ class SystemConfig(BaseModel):
     iny_safe_zone: float = 50.0
     iny_push_clearance_mm: float = 5.0   # INY dừng tạm để kẹp trước khi đẩy vào robot (S1)
 
-    # INX Danger Zone — INY không được ra ngoài safe zone khi INX trong vùng này
-    inx_danger_zone_min: float = 0.0
-    inx_danger_zone_max: float = 400.0
-
     # Scan
     target_scaninp1: float = 550.0
     target_scanoutp1: float = 500.0

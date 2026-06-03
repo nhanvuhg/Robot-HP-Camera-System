@@ -262,6 +262,11 @@ class CartridgeSystem(Node):
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         self._servo_motion_t: dict = {}
         self._idle_skip_modbus_s    = 2.0   # giây — sau motion command này thì còn đọc tươi
+        # Servo đang JOG continuous (jog_task duration=0.0): set bởi _jog,
+        # clear bởi _stop. _publish_positions bỏ qua idle-skip cho các sid
+        # trong set này → vị trí luôn đọc tươi suốt thời gian giữ JOG, không
+        # cần refresh _servo_motion_t mỗi tick. Fix freeze sau 2s giữ nút.
+        self._jog_active: set        = set()
         # Drive warm-up gate sau referencing_task (FAS firmware quirk):
         #   -1.0 = pending flush; 0.0 = done; >0.0 = đang chờ settle (timestamp)
         # Khi drive vừa làm xong homing, lệnh position_task đầu tiên có thể bị
@@ -980,6 +985,7 @@ class CartridgeSystem(Node):
                     mot.stop_motion_task()
             except Exception:
                 pass
+        self._jog_active.discard(servo_id)
         if servo_id == 1: self._inx_moving = False
         if servo_id == 2: self._iny_moving = False
 
@@ -1003,8 +1009,8 @@ class CartridgeSystem(Node):
         Đọc vị trí hiện tại của servo (mm, tính từ zero_offset sau homing).
         Công thức: (encoder_counts - zero_offset) / COUNTS_PER_MM
         Trả về 0.0 nếu servo không kết nối, None nếu có lỗi đọc.
-        Đồng thời update _pos_cache để các caller cached (vd _enforce_danger_zones)
-        có dữ liệu tươi hơn ngay sau khi _pos() thực sự được gọi.
+        Đồng thời update _pos_cache để các caller cached có dữ liệu tươi hơn
+        ngay sau khi _pos() thực sự được gọi.
         """
         mot = self.servos.get(servo_id)
         if not mot:
@@ -1031,11 +1037,14 @@ class CartridgeSystem(Node):
 
         # Đánh dấu motion timestamp để _publish_positions biết đọc tươi
         self._servo_motion_t[servo_id] = time.time()
+        # Đánh dấu JOG active → publish loop bỏ qua idle-skip, đọc tươi liên tục
+        self._jog_active.add(servo_id)
         try:
             self._ensure_ready(mot, servo_id)
             with self._servo_lock:
                 mot.jog_task(forward, not forward, duration=0.0)
         except Exception as e:
+            self._jog_active.discard(servo_id)
             self.get_logger().error(f"S{servo_id} jog error: {e}")
 
     def _ensure_ready(self, mot, servo_id: int, timeout: float = 3.0):
@@ -1410,16 +1419,23 @@ class CartridgeSystem(Node):
         p = self._pos(2)
         return p is not None and p <= self.config.iny_safe_zone
 
+    # ══════════════════════════════════════════════════════════════
+    # INVARIANT — S1/S2 MUTEX via S7 (Khay tại Robot) — ÁP DỤNG MỌI MODE
+    #   S7 OFF (Robot trống)  → CHỈ S1 trigger (lấy khay mới vào Robot)
+    #   S7 ON  (Robot có khay) → CHỈ S2 trigger (lấy khay cũ ra)
+    # Enforced ở 4 chỗ: _can_start_s1, _can_start_s2a (auto/ai)
+    #                   + _cb_goto_state STATE1/STATE2 (manual button).
+    # Đừng nới lỏng — vi phạm = 2 khay cùng vị trí Robot → va chạm cơ khí.
+    # ══════════════════════════════════════════════════════════════
     def _can_start_s1(self) -> bool:
         """
         Điều kiện để auto-trigger STATE 1 (chỉ AUTO/AI mode):
           - Đã homing (zero_offset có giá trị)
           - Robot không báo bận (_motion_busy=False)
           - Có khay trên băng tải (S1 OR S2 OR S3 ON)
-          - Vị trí cấp khay trống (S7_TRAY_AT_ROBOT=OFF)
+          - Vị trí cấp khay trống (S7_TRAY_AT_ROBOT=OFF) — xem INVARIANT trên
           - Cylinder 1 đã thu về (S9 ON, S10 OFF)
         """
-        """Điều kiện để bắt đầu STATE 1 (sensor theo mode hiện tại)."""
         if self.operation_mode not in ['auto', 'ai'] or not self.zero_offset or self._motion_busy:
             return False
         has_tray     = self.sensor(S1_BELT_START) or self.sensor(S2_BELT_MID) or self.sensor(S3_BELT_END)
@@ -2590,49 +2606,6 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
 
 
-    def _enforce_danger_zones(self):
-        # Hot path 20Hz — dùng cached position để KHÔNG chiếm _servo_lock mỗi tick.
-        # Trade-off: ~100ms staleness chấp nhận được cho danger zone wide envelope
-        # (min/max threshold), không phải precision check như _at_position.
-        # Nếu cache chưa có (lần đầu sau startup) → skip tick này.
-        inx = self._pos_cached(1)
-        iny = self._pos_cached(2)
-        if inx is None or iny is None: return
-        
-        danger_min = getattr(self.config, 'inx_danger_zone_min', 80.0)
-        danger_max = getattr(self.config, 'inx_danger_zone_max', 400.0)
-        iny_safe   = getattr(self.config, 'iny_safe_zone', 90.0)
-        
-        inx_danger = (danger_min <= inx <= danger_max)
-        iny_danger = (iny > iny_safe)
-        
-        if inx_danger and iny_danger:
-            inx_dir = inx - getattr(self, '_last_inx', inx)
-            iny_dir = iny - getattr(self, '_last_iny', iny)
-            
-            stop1 = False
-            stop2 = False
-            
-            dist_min = abs(inx - danger_min)
-            dist_max = abs(danger_max - inx)
-            
-            if dist_min < dist_max:
-                if inx_dir > 0: stop1 = True
-            else:
-                if inx_dir < 0: stop1 = True
-                
-            if iny_dir > 0: stop2 = True
-                
-            if stop1:
-                self._stop(1)
-                self.get_logger().error(f"Safety Stop: S1 entering danger zone! ({inx:.1f})")
-            if stop2:
-                self._stop(2)
-                self.get_logger().error(f"Safety Stop: S2 exceeding safe zone! ({iny:.1f})")
-                
-        self._last_inx = inx
-        self._last_iny = iny
-
     def _cyl3_monitor(self):
         """
         Đối chiếu lệnh cyl3 gần nhất (_cyl3_expected) với feedback S15/S16.
@@ -2737,8 +2710,7 @@ class CartridgeSystem(Node):
 
             self._cyl3_safety_check()
             self._cyl3_monitor()
-            self._enforce_danger_zones()
-            
+
             # S18 tracking logic for S3 auto-feed delay
             feed_ok = self.sensor(S18_FEED_OK)
             if not feed_ok and self._s10_prev:
@@ -2817,7 +2789,7 @@ class CartridgeSystem(Node):
 
     def _positions_bg_loop(self):
         """
-        Thread nền publish vị trí servo mỗi 100ms (10Hz) lên /providesystem/servo_positions.
+        Thread nền publish vị trí servo mỗi 50ms (20Hz) lên /providesystem/servo_positions.
         Chạy tách biệt khỏi control loop để Modbus read latency không block 20Hz timer.
         Dừng khi _pos_thread_stop=True (set bởi destroy_node).
         """
@@ -2826,7 +2798,7 @@ class CartridgeSystem(Node):
                 self._publish_positions()
             except Exception as e:
                 self.get_logger().warn(f"[pos_bg] {e}")
-            time.sleep(0.1)
+            time.sleep(0.05)
 
     def _publish_positions(self):
         """Đọc vị trí tất cả servo và publish JSON lên /providesystem/servo_positions.
@@ -2847,11 +2819,14 @@ class CartridgeSystem(Node):
             pos = {}
             now = time.time()
             idle_skip = self._idle_skip_modbus_s
+            jog_active = self._jog_active
             for sid, mot in self.servos.items():
                 cached = self._pos_cache.get(sid)
                 # ── (1) Idle skip: servo không có motion command gần đây → reuse cache
+                # Bỏ qua nếu servo đang JOG continuous (duration=0.0) — drive di
+                # chuyển liên tục mà không có loop refresh _servo_motion_t.
                 last_motion = self._servo_motion_t.get(sid, 0.0)
-                if now - last_motion > idle_skip and cached is not None:
+                if sid not in jog_active and now - last_motion > idle_skip and cached is not None:
                     pos[str(sid)] = cached
                     continue
                 # ── (2/3) Đọc tươi (try-acquire) hoặc fallback cache nếu lock busy

@@ -37,7 +37,7 @@ iny_safe_zone: 90.0        # Limit for "Safe" INY position before INX moves (Saf
 iny_push_clearance_mm: 5.0  # INY dừng tạm để kẹp trước khi đẩy vào robot (S1 step trung gian)
 
 # S1 INY Scanning Logic
-iny_target2: 87.0          # Tọa độ INY đẩy khay vào robot / kẹp khay cũ (S1 & S2A)
+iny_target2: 80.0          # Tọa độ INY đẩy khay vào robot / kẹp khay cũ (S1 & S2A)
 target_scaninp1: 970.0       # Scan endpoint target (mm)
 target_scanoutp1: 970.0
 iny_scan_vel: 70             # Scanning speed (mm/s)
@@ -214,11 +214,11 @@ move_timeout: 80.0
 cylinder_timeout: 70.0
 # --------------------------------------------------------------------------
 # LƯU Ý QUAN TRỌNG VỀ NETWORK TIMEOUT (Anti-Deadlock Modbus)
-# - modbus_timeout_ms (mặc định: 3000ms): 
+# - modbus_timeout_ms (mặc định: 3000ms):
 #   => Thời gian chờ tối đa cho 1 lệnh Modbus TCP (đọc position/phát lệnh).
 #   => GIẢM quá thấp (<1500ms): Dễ tuột cáp (Modbus giả lỗi) qua Switch LAN do ping spike.
 #   => TĂNG quá cao (>10000ms): Nếu mạng rớt thật, Thread sẽ bị Treo Cứng ôm trọn Node gây đơ GUI.
-# *Giải pháp an toàn hiện tại: Đã tách Thread _publish_positions ở Python Node, 
+# *Giải pháp an toàn hiện tại: Đã tách Thread _publish_positions ở Python Node,
 #  timeout = 3000ms là đủ nhanh để văng lỗi mà luồng ROS không bị freeze.
 # --------------------------------------------------------------------------
 modbus_timeout_ms: 3000
