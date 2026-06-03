@@ -14,20 +14,21 @@
 
 import launch
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import ComposableNodeContainer
+from launch_ros.actions import ComposableNodeContainer, LoadComposableNodes
 from launch_ros.descriptions import ComposableNode
 
 def generate_launch_description():
     launch_args = [
         DeclareLaunchArgument(
             'model_path_cam0',
-            default_value='/home/pi/input_1_yolov8s.hef',
+            default_value='/home/pi/yolov8s_trainHP6.hef',
             description='HEF model path for Cam0 (Input Tray).'
         ),
         DeclareLaunchArgument(
             'model_path_cam1',
-            default_value='/home/pi/yolov8s.hef',
+            default_value='/home/pi/yolov8s_trainHP6.hef',
             description='HEF model path for Cam1 (Output Tray).'
         ),
         DeclareLaunchArgument(
@@ -37,12 +38,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'conf',
-            default_value='0.25',
+            default_value='0.30',
             description='yolo confidence threshold.'
         ),
         DeclareLaunchArgument(
             'nms',
-            default_value='0.40',
+            default_value='0.45',
             description='yolo nms threshold'
         ),
         DeclareLaunchArgument(
@@ -52,8 +53,13 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'nms_output_name',
-            default_value='yolov8s/yolov8_nms_postprocess',
+            default_value='yolov8s_custom/yolov8_nms_postprocess',
             description='Exact NMS output tensor name inside the HEF.'
+        ),
+        DeclareLaunchArgument(
+            'enable_cam1',
+            default_value='false',
+            description='Set true to also start the cam1 YOLO node (HP: cam1 hardware pending).'
         ),
     ]
 
@@ -61,7 +67,7 @@ def generate_launch_description():
         name='yolo_container',
         namespace='',
         package='rclcpp_components',
-        executable='component_container_mt',  # multi-threaded: allows cam0/cam1 inference overlap
+        executable='component_container_mt',  # MT container so cam0/cam1 callbacks can overlap when both run
         composable_node_descriptions=[
             # CAM 0 NODE (Input Tray)
             ComposableNode(
@@ -81,7 +87,15 @@ def generate_launch_description():
                     'nms_output_name': LaunchConfiguration('nms_output_name'),
                 }]
             ),
-            # CAM 1 NODE (Output Tray)
+        ],
+        output='screen',
+    )
+
+    # CAM 1 NODE (Output Tray) — gated by 'enable_cam1' (default false on HP).
+    cam1_node = LoadComposableNodes(
+        target_container='yolo_container',
+        condition=IfCondition(LaunchConfiguration('enable_cam1')),
+        composable_node_descriptions=[
             ComposableNode(
                 package='yolo_ros_hailort_cpp',
                 plugin='yolo_ros_hailort_cpp::YoloNode',
@@ -100,12 +114,12 @@ def generate_launch_description():
                 }]
             ),
         ],
-        output='screen',
     )
 
     return launch.LaunchDescription(
         launch_args +
         [
-            container
+            container,
+            cam1_node,
         ]
     )

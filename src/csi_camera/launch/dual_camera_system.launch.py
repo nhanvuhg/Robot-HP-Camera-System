@@ -31,11 +31,18 @@ def generate_launch_description():
         name='dual_csi_camera_node',
         output='screen',
         parameters=[{
-            'width': 640,
-            'height': 480,
-            'fps': 10,  # Set to required FPS based on processing requirements
+            # Match Funai production params (1280x720 @ 30fps) — stable on Pi5 with
+            # full-sensor 4056:3040 mode. Lower res like 640x480@10fps triggers
+            # heavy ISP downscale + AGC settle timeout (first frame > 30s).
+            'width': 1280,
+            'height': 720,
+            'fps': 30,
+            'publish_fps': 10,  # Subscribers (YOLO, overlay) only need 10fps
             'cam0_topic': '/cam0HP/image_raw',
             'cam1_topic': '/cam1HP/image_raw',
+            # HP output stack hardware pending. CAM1 absence → 3 fails → kernel
+            # driver reload → kills CAM0 too. Set true after lắp CAM1 hardware.
+            'enable_cam1': False,
         }],
         respawn=True,
         respawn_delay=5.0,
@@ -58,29 +65,16 @@ def generate_launch_description():
                 plugin='yolo_ros_hailort_cpp::YoloNode',
                 name='yolo_cam0',
                 parameters=[{
-                    'model_path': '/home/pi/input_1_yolov8s.hef',
+                    'model_path': '/home/pi/yolov8s_trainHP6.hef',
+                    'nms_output_name': 'yolov8s_custom/yolov8_nms_postprocess',
                     'src_image_topic_name': '/cam0HP/image_raw',
                     'publish_boundingbox_topic_name': '/cam0HP/yolo/bounding_boxes',
                     'publish_image_topic_name': '/cam0HP/yolo/image_raw',
-                    'conf': 0.35,
+                    'conf': 0.60,
                     'publish_resized_image': False,
                 }]
             ),
-            
-            # YOLO for Camera 1 (Output Tray Detection)
-            ComposableNode(
-                package='yolo_ros_hailort_cpp',
-                plugin='yolo_ros_hailort_cpp::YoloNode',
-                name='yolo_cam1',
-                parameters=[{
-                    'model_path': '/home/pi/yolov8s.hef',
-                    'src_image_topic_name': '/cam1HP/image_raw',
-                    'publish_boundingbox_topic_name': '/cam1HP/yolo/bounding_boxes',
-                    'publish_image_topic_name': '/cam1HP/yolo/image_raw',
-                    'conf': 0.35,
-                    'publish_resized_image': False,
-                }]
-            ),
+            # yolo_cam1 disabled: cam1 hardware pending — re-enable when ready
         ],
         output='screen',
         respawn=True,

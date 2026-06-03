@@ -185,10 +185,14 @@ static int select_contiguous_empty(const std::vector<int>& empty_slots, int tota
     return -1;
 }
 
+// [HP] System convention: AUTO=1, AI=2, MANUAL=3 (match robot_controller.cpp
+// + cartridge_providesystem). Previous enum had MANUAL=0 → mode 3 from GUI
+// fell through to default AUTO branch (fill rows true), making AI threshold
+// never apply.
 enum class ControlMode : uint8_t {
-    MANUAL = 0,
     AUTO   = 1,
-    AI     = 2
+    AI     = 2,
+    MANUAL = 3
 };
 
 // ============================================================================
@@ -218,6 +222,9 @@ public:
             "/vision/input_tray/row_status", 10);
         pub_input_empty_ = create_publisher<std_msgs::msg::Bool>(
             "/vision/input_tray/empty", 10);
+        // [HP] Layer-1 tray-presence check: true khi có khay trong khung hình
+        pub_input_present_ = create_publisher<std_msgs::msg::Bool>(
+            "/vision/input_tray/present", 10);
         pub_selected_slot_ = create_publisher<std_msgs::msg::Int32>(
             "/vision/output_tray/selected_slot", 10);
         pub_ai_slot_ = create_publisher<std_msgs::msg::Int32>(
@@ -271,14 +278,16 @@ private:
     // CONSTANTS
     // ========================================================================
     static constexpr int    INPUT_ROW_THRESHOLD    = 8;
-    static constexpr float  DETECTION_SCORE_THRESH = 0.45f;
+    static constexpr float  DETECTION_SCORE_THRESH = 0.60f;
     static constexpr int    SLOT_CONFIRM_FRAMES    = 2;
     static constexpr size_t N_OUTPUT_SLOTS         = 9;  // must match output_tray_rois_ size
 
     // ========================================================================
     // MODE STATE
     // ========================================================================
-    std::atomic<ControlMode> current_mode_{ControlMode::AUTO};
+    // [HP] Default AI để khi vision khởi động trước GUI mode publish, vẫn dùng
+    // YOLO threshold thay vì AUTO branch (fill rows true bỏ qua YOLO).
+    std::atomic<ControlMode> current_mode_{ControlMode::AI};
 
     // ========================================================================
     // INPUT TRAY STATE
@@ -288,6 +297,9 @@ private:
     std::vector<bool> row_full_;
     std::atomic<bool> input_tray_empty_{false};
     int selected_input_row_{-1};
+    // [HP] Layer-1: tray-present ROI (bao toàn bộ khay) + state
+    ROIQuad input_tray_outer_roi_;
+    std::atomic<bool> input_tray_present_{false};
 
     // ========================================================================
     // OUTPUT TRAY STATE
@@ -317,6 +329,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_ai_row_;
     rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr pub_row_status_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_input_empty_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_input_present_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_selected_slot_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_ai_slot_;
     rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr pub_slot_status_;
@@ -337,19 +350,29 @@ private:
     // INITIALIZATION
     // ========================================================================
     void initInputTrayROIs() {
-        std::vector<std::vector<std::pair<int, int>>> row_corners = {
-            {{212, 554}, {341, 200}, {428, 200}, {334, 560}},
-            {{335, 563}, {427, 200}, {522, 200}, {467, 564}},
-            {{473, 567}, {529, 201}, {614, 201}, {607, 567}},
-            {{609, 568}, {612, 198}, {705, 198}, {748, 568}},
-            {{744, 573}, {703, 196}, {803, 196}, {900, 573}}
+        // [HP] Layer-1 outer TRAY ROI — bao toàn bộ khay (12 cartridge × 5 row).
+        // Toạ độ pick từ roi_picker_web.py @ production 1280×720, 6/2026.
+        std::vector<std::pair<int, int>> tray_corners = {
+            {309, 621}, {342, 66}, {1112, 62}, {1152, 632}
         };
-        
+        input_tray_outer_roi_ = ROIQuad::FromCorners(tray_corners);
+
+        // [HP] Layer-2 row ROIs — 5 rows trong khay.
+        // Toạ độ pick từ roi_picker_web.py @ production 1280×720, 6/2026.
+        std::vector<std::vector<std::pair<int, int>>> row_corners = {
+            {{357, 585}, {380, 107}, {508, 106}, {496, 584}},   // ROW1
+            {{508, 585}, {519, 105}, {639, 106}, {637, 586}},   // ROW2
+            {{653, 590}, {655, 105}, {772, 105}, {782, 590}},   // ROW3
+            {{801, 590}, {793, 103}, {914, 105}, {933, 594}},   // ROW4
+            {{946, 594}, {930, 103}, {1054, 102}, {1082, 592}}  // ROW5
+        };
+
         input_tray_rois_.clear();
         for (const auto& corners : row_corners) {
             input_tray_rois_.push_back(ROIQuad::FromCorners(corners));
         }
-        RCLCPP_INFO(get_logger(), "[VISION] Initialized %zu input tray ROIs", input_tray_rois_.size());
+        RCLCPP_INFO(get_logger(), "[VISION] Initialized TRAY ROI + %zu row ROIs",
+                    input_tray_rois_.size());
     }
 
     void initOutputTrayROIs() {
@@ -393,24 +416,39 @@ private:
         bool use_ai = (current_mode_ == ControlMode::AI);
 
         if (!use_ai) {
-            // AUTO: skip YOLO entirely, assume all rows full
+            // AUTO: skip YOLO entirely, assume tray present + all rows full
+            input_tray_present_.store(true);
             std::fill(row_full_.begin(), row_full_.end(), true);
         } else {
-            // AI: count detections per ROI then apply RowFilter
+            // [HP Layer-1] TRAY ROI = spatial filter — chỉ giữ detection BÊN TRONG
+            // khay vận hành. Loại nhiễu/khay khác cạnh ra khỏi row counting.
+            // [HP Layer-2] Row counting áp dụng RowFilter cho stability.
             std::vector<int> row_counts(5, 0);
+            int total_in_tray = 0;
 
             for (const auto& det : msg->detections) {
                 if (det.results.empty()) continue;
                 const std::string& class_id = det.results[0].hypothesis.class_id;
                 float score = det.results[0].hypothesis.score;
-                if (class_id != "0" || score < DETECTION_SCORE_THRESH) continue;
+                // [HP HEF6] class "1" = CARTRIDGE (class "0" = whole TRAY bbox, ignore).
+                if (class_id != "1" || score < DETECTION_SCORE_THRESH) continue;
                 float cx = det.bbox.center.position.x;
                 float cy = det.bbox.center.position.y;
+
+                // L1: spatial filter — bỏ nếu nằm ngoài TRAY ROI
+                if (!input_tray_outer_roi_.bbox_contains(cx, cy)) continue;
+                if (!input_tray_outer_roi_.contains(cx, cy)) continue;
+                total_in_tray++;
+
+                // L2: tìm row ROI khớp
                 for (size_t i = 0; i < input_tray_rois_.size(); ++i) {
                     if (!input_tray_rois_[i].bbox_contains(cx, cy)) continue;
                     if (input_tray_rois_[i].contains(cx, cy)) { row_counts[i]++; break; }
                 }
             }
+
+            // Tray present nếu có bất kỳ detection nào hợp lệ trong TRAY ROI.
+            input_tray_present_.store(total_in_tray > 0);
 
             for (size_t i = 0; i < 5; ++i) {
                 int raw_count  = row_counts[i];
@@ -419,10 +457,11 @@ private:
                 bool stable    = row_filters_[i].update_ready(raw_ready);
                 row_full_[i]   = stable;
                 RCLCPP_INFO(get_logger(),
-                    "[ROW %zu] raw=%d filtered=%d thr=%d READY(raw)=%s READY(stable)=%s (streak=%d/%d)",
+                    "[ROW %zu] raw=%d filtered=%d thr=%d READY(raw)=%s READY(stable)=%s (streak=%d/%d) [tray_total=%d]",
                     i + 1, raw_count, filtered, INPUT_ROW_THRESHOLD,
                     raw_ready ? "YES" : "NO", stable ? "YES" : "NO",
-                    row_filters_[i].ready_streak, row_filters_[i].ready_consec);
+                    row_filters_[i].ready_streak, row_filters_[i].ready_consec,
+                    total_in_tray);
             }
         }
         
@@ -447,6 +486,10 @@ private:
         auto empty_msg = std_msgs::msg::Bool();
         empty_msg.data = input_tray_empty_;
         pub_input_empty_->publish(empty_msg);
+
+        auto present_msg = std_msgs::msg::Bool();
+        present_msg.data = input_tray_present_.load();
+        pub_input_present_->publish(present_msg);
         
         auto status_msg = std_msgs::msg::Int32MultiArray();
         status_msg.data.resize(5);

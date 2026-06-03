@@ -53,6 +53,9 @@ public:
     hailo_status create_feature(hailo_vstream_info_t, const size_t, std::shared_ptr<FeatureData> &);
     std::vector<Object> inference(const cv::Mat &);
 
+    uint32_t get_input_width()  const { return m_vstreams_->first[0].get_info().shape.width; }
+    uint32_t get_input_height() const { return m_vstreams_->first[0].get_info().shape.height; }
+
     Expected<std::shared_ptr<ConfiguredNetworkGroup>> configure_network_group(VDevice &, const std::string &);
 
 private:

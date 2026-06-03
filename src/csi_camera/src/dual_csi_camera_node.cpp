@@ -44,6 +44,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sched.h>
 #include <cstring>
 
 using std::placeholders::_1;
@@ -102,7 +103,11 @@ static void kill_cam_process(CamProcess& cp, bool reload_driver = false)
         if (reaped == 0) {
             // Still alive - force kill
             kill(cp.pid, SIGKILL);
-            waitpid(cp.pid, nullptr, 0);
+            // [FIX-DEADLOCK] Do NOT use blocking waitpid here!
+            // If the process is in D-state (kernel deadlock), waitpid blocks forever.
+            // Let the background loop reap it later.
+            usleep(500000); // give it a brief moment
+            waitpid(cp.pid, &wstatus, WNOHANG); // non-blocking attempt
         }
         cp.pid = -1;
 
@@ -148,9 +153,13 @@ public:
         declare_parameter("width",      1280);
         declare_parameter("height",      720);
         declare_parameter("fps",          30);
-        declare_parameter("publish_fps", 15);  // [OPT-1] Publish at 15fps (66ms/frame — good for real-time YOLO detection)
+        declare_parameter("publish_fps", 10);  // [OPT-1] Publish at 10fps — matches actual YOLO throughput, saves ~30% CPU
         declare_parameter("cam0_topic", std::string("cam0HP/image_raw"));
         declare_parameter("cam1_topic", std::string("cam1HP/image_raw"));
+        // [HP] Enable/disable cam1 entirely. HP output stack hardware pending — when
+        // CAM1 has no hardware, retry loop hits "3 consecutive fails → reload kernel
+        // driver" which kills CAM0 too (shared rp1-cfe module). Skip CAM1 lifecycle.
+        declare_parameter("enable_cam1", true);
         // [OPT-5] Optional output resize: resize at camera node before publish
         //         instead of in overlay node → saves CPU in downstream pipeline
         declare_parameter("output_width",  0);  // 0 = no resize (publish at capture resolution)
@@ -162,6 +171,7 @@ public:
         publish_fps_   = get_parameter("publish_fps").as_int();
         cam0_topic_    = get_parameter("cam0_topic").as_string();
         cam1_topic_    = get_parameter("cam1_topic").as_string();
+        enable_cam1_   = get_parameter("enable_cam1").as_bool();
         output_width_  = get_parameter("output_width").as_int();
         output_height_ = get_parameter("output_height").as_int();
 
@@ -199,8 +209,9 @@ public:
             RCLCPP_ERROR(get_logger(), "❌ CAM0: rpicam-vid failed to start. Will retry in background.");
         } else {
             // Wait for CAM0 to produce first real frame before touching CAM1.
-            // [FIX-3] Timeout increased from 8s → 15s.
-            if (!wait_for_first_frame(cam0_.fd.load(), "CAM0", 15)) {
+            // Timeout 30s: IMX477 on Pi5 CFE can take 18-20s to establish link
+            // after repeated forced kills (sensor left in partial power-up state).
+            if (!wait_for_first_frame(cam0_.fd.load(), "CAM0", 30)) {
                 kill_cam_process(cam0_);
                 cam0_.pid = -1;
                 cam0_.fd.store(-1);
@@ -209,6 +220,9 @@ public:
         }
 
         // Start CAM1 only after CAM0 is confirmed streaming (or failed)
+        if (!enable_cam1_) {
+            RCLCPP_INFO(get_logger(), "⏭️  CAM1 DISABLED via 'enable_cam1' param (HP output stack pending)");
+        } else {
         RCLCPP_INFO(get_logger(), "🚀 Starting CAM1...");
         cam1_ = launch_rpicam(1, target_width_, target_height_, target_fps_);
         if (cam1_.pid < 0) {
@@ -223,9 +237,12 @@ public:
                     "continuing without CAM1 (capture thread will handle reconnect)");
             }
         }
+        }
 
         thread_cam0_ = std::thread(&CSIDualCameraNode::capture_loop, this, 0);
-        thread_cam1_ = std::thread(&CSIDualCameraNode::capture_loop, this, 1);
+        if (enable_cam1_) {
+            thread_cam1_ = std::thread(&CSIDualCameraNode::capture_loop, this, 1);
+        }
 
         RCLCPP_INFO(get_logger(), "✅ Dual Camera Node Ready!");
     }
@@ -256,11 +273,12 @@ private:
     CamProcess launch_rpicam(int cam_id, int width, int height, int fps)
     {
         // [FIX-9] Build --mode string to force the native sensor mode.
-        //         1332x990@15fps DESTROYS IMX477 VBLANK limits and causes CFE timeouts!
-        //         We MUST use 2028:1520:12:P and let ISP downscale to 1280x720. 
-        //         [FIX-IMX477] 2028x1080 mode has a known Kernel DMA bug on Pi 5 that causes
-        //         1000000us Dequeue timer expired. 2028x1520 perfectly resolves it.
-        std::string mode_str = "2028:1520:12:P";
+        //         [HP-GMSL2] GMSL2 deserializer KHÔNG pass mode 2028:1520; chỉ pass
+        //         full-sensor 4056:3040:12:P rồi ISP downscale tới 1280x720. Dùng
+        //         mode 2028:1520 → V4L2 dequeue timer 1s expired → camera timeout.
+        //         (Native CSI direct setup của Funai dùng 2028:1520; HP đi qua GMSL2
+        //         deserializer trung gian nên BẮT BUỘC dùng full-res mode.)
+        std::string mode_str = "4056:3040:12:P";
 
         // Thêm log sensor mode đang dùng để debug dễ hơn
         RCLCPP_INFO(get_logger(), "📷 CAM%d: mode=%s output=%dx%d@%dfps publish@%dfps",
@@ -304,15 +322,31 @@ private:
 
 
 
-            // [FIX-OCCLUSION] Fully fixed exposure pipeline (no auto anything):
-            //   --shutter 33333      : fixed 33ms (1 frame @ 30fps)
-            //   --analoggain 8.0     : fixed analog gain
-            //   --awbgains 1.5,1.8   : fixed white balance (Red=1.5, Blue=1.8)
-            //     → balanced for indoor/fluorescent light, avoids yellow/green tint
-            //     → fixed = no AWB hunting on occlusion = no ISP stall
-            // Real occlusion-freeze fixes:
-            //   1. Timeout 4s→8s (tolerates brief occlusion)
-            //   2. No kernel driver reload on normal reconnect
+            // [FIX-ROOT-CAUSE] Set CFE timeout config directly in child process.
+            // This ensures rpicam-vid always uses our extended 30s timeout
+            // regardless of how the node is launched (script, ros2 run, launch file).
+            setenv("LIBCAMERA_RPI_CONFIG_FILE",
+                   "/home/pi/ros2_ws/pisp_camera_config.yaml", 1);
+
+            // [FIX-RT] Elevate rpicam-vid itself to SCHED_FIFO priority 5.
+            // The reader thread drains the pipe at priority 10, but rpicam-vid
+            // must also run at RT priority so it can loop back and call
+            // VIDIOC_DQBUF within the kernel CFE dequeue timeout (1 second).
+            // Without this, a preempted rpicam-vid misses the 1s window even
+            // if the pipe is empty.
+            {
+                struct sched_param sp_child = {};
+                sp_child.sched_priority = 5;
+                sched_setscheduler(0, SCHED_FIFO, &sp_child);
+                // Non-fatal if fails (no CAP_SYS_NICE) — falls back to normal scheduling
+            }
+
+            // Exposure pipeline:
+            //   --shutter 30000      : FIXED 30ms — must not exceed frame period to prevent
+            //                          VBLANK extension → CFE DMA timing mismatch → hardware freeze
+            //   analoggain           : AUTO — libcamera adjusts brightness naturally;
+            //                          safe because only shutter extension (not gain) causes CFE crash
+            //   --awbgains 3.33,1.55 : FIXED white balance — prevents AWB hunting on scene changes
             execlp("rpicam-vid", "rpicam-vid",
                    "--camera",    c.c_str(),
                    "-t",          "0",
@@ -324,12 +358,8 @@ private:
                    "--mode",      mode_str.c_str(),
                    "--denoise",   "cdn_off",
                    "--flush",
-                   "--shutter",      "30000",   // 30ms exposure (max safe = 30.6ms at 30fps)
-                   // 33333us CAUSED THE FREEZE! It needs 2198 lines but frame
-                   // only has 2197 → driver extends VBLANK → CFE timing mismatch
-                   // → instant freeze when any processing spike occurs
-                   "--analoggain",   "8.0",     // fixed analog gain
-                   "--awbgains",     "3.33,1.55", // fixed AWB to prevent ISP hunting on sudden scene changes
+                   "--shutter",      "12000",  // [HP] giảm 30000→12000us để chống over-exposure
+                   "--awbgains",     "3.33,1.55",
                    "-o",          "-",
                    nullptr);
             _exit(127);
@@ -338,9 +368,18 @@ private:
         // Parent process
         close(pipefd[1]);
 
-        // Increase pipe buffer to 8MB — holds ~3 frames (1280x720 YUV420 = 2.76MB each)
-        // Prevents rpicam-vid write() from blocking when YOLO inference stalls reader thread
-        fcntl(pipefd[0], F_SETPIPE_SZ, 8 * 1024 * 1024);
+        // [FIX-ROOT-CAUSE] Increase pipe buffer to 8MB — holds ~6 frames at 1280x720.
+        // At 30fps the camera pumps 39MB/s through this pipe. The default 1MB pipe
+        // overflows after just 25ms of reader stall, causing rpicam-vid to block on
+        // write() → CFE DMA timeout → permanent hardware freeze.
+        // Requires: sysctl fs.pipe-max-size >= 8388608 (set in /etc/sysctl.d/99-pipe-buffer.conf)
+        int requested_pipe = 8 * 1024 * 1024;
+        int actual_pipe = fcntl(pipefd[0], F_SETPIPE_SZ, requested_pipe);
+        if (actual_pipe < requested_pipe) {
+            fprintf(stderr, "⚠️  CAM%d: Pipe buffer capped at %d bytes (requested %d). "
+                    "Run: sudo sysctl -w fs.pipe-max-size=%d\n",
+                    cam_id, actual_pipe, requested_pipe, requested_pipe);
+        }
 
         struct timespec ts = {0, 300 * 1000 * 1000};  // 300ms
         nanosleep(&ts, nullptr);
@@ -453,6 +492,8 @@ private:
         int fails = 0;
         int reconnect_attempts = 0;
         int frame_counter = 0;  // [OPT-1] Frame skip counter
+        std::vector<uint8_t> latest_yuv(yuv_frame_size_);
+        std::vector<uint8_t> local_buf(yuv_frame_size_);
 
         auto startup_deadline =
             std::chrono::steady_clock::now() + std::chrono::seconds(10);
@@ -488,12 +529,22 @@ private:
             std::atomic<bool> reader_running{true};
             std::mutex mtx_latest;
             std::condition_variable cv_frame_ready;
-            std::vector<uint8_t> latest_yuv(yuv_frame_size_);
             bool new_frame = false;
             auto last_frame_time = std::chrono::steady_clock::now();
 
             std::thread reader_thread([&]() {
-                std::vector<uint8_t> local_buf(yuv_frame_size_);
+                // [FIX-ROOT-CAUSE] Elevate reader thread to real-time priority.
+                // The reader MUST drain the pipe faster than rpicam-vid fills it.
+                // If the OS scheduler preempts this thread for >25ms, the 1MB pipe
+                // overflows → rpicam-vid blocks on write() → CFE DMA crash.
+                // SCHED_FIFO ensures this thread runs before any normal threads.
+                struct sched_param sp;
+                sp.sched_priority = 10;  // Low RT priority (1-99), enough to beat normal threads
+                if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0) {
+                    // Not fatal — falls back to normal scheduling
+                    // Needs root or CAP_SYS_NICE. Launch script runs as user.
+                }
+
                 while (reader_running.load()) {
                     if (!read_frame(fd_dup, local_buf)) {
                         reader_running.store(false);
@@ -515,18 +566,13 @@ private:
                 bool got_frame = false;
                 {
                     std::unique_lock<std::mutex> rlk(mtx_latest);
-                    // [FIX-OCCLUSION] Increased timeout from 4s to 8s.
-                    // When hand/object briefly covers the lens, the ISP may take
-                    // a few seconds to recover even with fixed AWB. 4s was too
-                    // aggressive and triggered unnecessary reconnects that then
-                    // reloaded V4L2 drivers, killing the entire camera system.
-                    if (cv_frame_ready.wait_for(rlk, std::chrono::seconds(8),
+                    // Poll 500ms so stall_duration can be anywhere 0..∞ and both
+                    // the 4s warn and 8s reconnect branches below are reachable.
+                    if (cv_frame_ready.wait_for(rlk, std::chrono::milliseconds(500),
                             [&new_frame](){ return new_frame; })) {
-                        if (new_frame) {
-                            std::swap(yuv_buf, latest_yuv);  // [OPT-2] O(1) swap, no 1.3MB copy
-                            new_frame = false;
-                            got_frame = true;
-                        }
+                        std::swap(yuv_buf, latest_yuv);  // [OPT-2] O(1) swap, no 1.3MB copy
+                        new_frame = false;
+                        got_frame = true;
                     }
                 }
 
@@ -535,9 +581,14 @@ private:
                         frame_ok = false;
                         break;
                     }
-                    // [FIX-OCCLUSION] Timeout watchdog increased from 4s to 8s
-                    // and only WARN first time, don't immediately force reconnect
-                    auto stall_duration = std::chrono::steady_clock::now() - last_frame_time;
+                    // [FIX-RACE] Read last_frame_time under mutex — reader thread
+                    // writes it with mtx_latest held, so we must read it the same way.
+                    std::chrono::steady_clock::time_point captured_last_frame_time;
+                    {
+                        std::lock_guard<std::mutex> rlk(mtx_latest);
+                        captured_last_frame_time = last_frame_time;
+                    }
+                    auto stall_duration = std::chrono::steady_clock::now() - captured_last_frame_time;
                     if (stall_duration > std::chrono::seconds(8)) {
                         frame_ok = false;
                         fails = FAIL_THRESHOLD;
@@ -549,22 +600,30 @@ private:
                         
                         std::string stall_sec = std::to_string(std::chrono::duration<double>(stall_duration).count());
                         
-                        std::string cmd = 
-                            "echo '🚨===================================' > " + crashlog + " && " +
-                            "echo '    CAM" + std::to_string(cam_id) + " CRASH DIAGNOSTIC LOG' >> " + crashlog + " && " +
-                            "echo '===================================' >> " + crashlog + " && " +
-                            "echo 'Time stalled : " + stall_sec + " seconds' >> " + crashlog + " && " +
-                            "echo 'Frames read  : " + std::to_string(frame_counter) + "' >> " + crashlog + " && " +
-                            "echo 'Param Shutter: 30000 (30ms)' >> " + crashlog + " && " +
-                            "echo 'Param AGain  : 8.0' >> " + crashlog + " && " +
-                            "echo 'Param AWBGain: 3.33,1.55 (Fixed)' >> " + crashlog + " && " +
-                            "echo 'Param Mode   : 2028:1520:12:P' >> " + crashlog + " && " +
-                            "echo '' >> " + crashlog + " && " +
-                            "echo '--- TAIL 20 SYSTEM LOGS (rpicam-vid stderr) ---' >> " + crashlog + " && " +
-                            "tail -n 20 " + logfile + " >> " + crashlog;
-                            
-                        int sys_ret = system(cmd.c_str());
-                        (void)sys_ret; // suppress unused result warning
+                        // Write crash log with direct POSIX I/O — avoids fork+exec
+                        // shell overhead and RT-discipline violations from system().
+                        int cfd = open(crashlog.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                        if (cfd >= 0) {
+                            dprintf(cfd, "=================================\n");
+                            dprintf(cfd, "  CAM%d CRASH DIAGNOSTIC LOG\n", cam_id);
+                            dprintf(cfd, "=================================\n");
+                            dprintf(cfd, "Time stalled : %s seconds\n", stall_sec.c_str());
+                            dprintf(cfd, "Frames read  : %d\n", frame_counter);
+                            dprintf(cfd, "Param Shutter: 30000 (30ms)\n");
+                            dprintf(cfd, "Param AGain  : 8.0\n");
+                            dprintf(cfd, "Param AWBGain: 3.33,1.55 (Fixed)\n");
+                            dprintf(cfd, "Param Mode   : 4056:3040:12:P\n");
+                            dprintf(cfd, "\n--- rpicam-vid stderr log ---\n");
+                            int lfd = open(logfile.c_str(), O_RDONLY);
+                            if (lfd >= 0) {
+                                char rbuf[4096];
+                                ssize_t n;
+                                while ((n = read(lfd, rbuf, sizeof(rbuf))) > 0)
+                                    write(cfd, rbuf, static_cast<size_t>(n));
+                                close(lfd);
+                            }
+                            close(cfd);
+                        }
                         RCLCPP_ERROR(get_logger(), "🚨 CAM%d crashed (Stalled %ss)! Detailed parameters and logs saved to %s", 
                                      cam_id, stall_sec.c_str(), crashlog.c_str());
 
@@ -777,6 +836,7 @@ private:
 
     std::string cam0_topic_;
     std::string cam1_topic_;
+    bool enable_cam1_;
 };
 
 // =============================================================================
