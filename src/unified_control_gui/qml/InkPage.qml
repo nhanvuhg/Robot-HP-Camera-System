@@ -880,16 +880,33 @@ Item {
             Text { text: "Zero Drift Warning"; color: "#fff"; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
             Text { text: "Loadcell zero drift detected. Re-tare recommended."; color: "#fff"; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
-            Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
-                text: "TARE NOW"
+            RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                font.pixelSize: 18; font.bold: true
-                onClicked: { scaleController.tare(); zeroDriftPopup.close() }
-                background: Rectangle { radius: 6; color: "#fff"; border.width: 0 }
-                contentItem: Text { text: parent.text; color: "#f59e0b"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                spacing: 20
+                Button {
+                    scale: down ? 0.95 : 1.0
+                    opacity: down ? 0.8 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 50 } }
+                    text: "TARE NOW"
+                    Layout.preferredWidth: 150
+                    Layout.preferredHeight: 45
+                    font.pixelSize: 18; font.bold: true
+                    onClicked: { scaleController.tare(); zeroDriftPopup.close() }
+                    background: Rectangle { radius: 6; color: "#fff"; border.width: 0 }
+                    contentItem: Text { text: parent.text; color: "#f59e0b"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                }
+                Button {
+                    scale: down ? 0.95 : 1.0
+                    opacity: down ? 0.8 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 50 } }
+                    text: "NO"
+                    Layout.preferredWidth: 150
+                    Layout.preferredHeight: 45
+                    font.pixelSize: 18; font.bold: true
+                    onClicked: { zeroDriftPopup.close() }
+                    background: Rectangle { radius: 6; color: "#ef4444"; border.width: 0 }
+                    contentItem: Text { text: parent.text; color: "#fff"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                }
             }
         }
     }
