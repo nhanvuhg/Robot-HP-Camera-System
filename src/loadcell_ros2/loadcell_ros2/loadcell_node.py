@@ -85,6 +85,7 @@ class LoadcellNode(Node):
         self._consec_fails  = 0
         self._prev_raw      = 0.0
         self._zero_drift_warned = False
+        self._status        = 'SIM' if self._use_sim else 'OK'
 
         # ── Publishers ───────────────────────────────────────────────
         qos = QoSProfile(depth=10)
@@ -165,12 +166,14 @@ class LoadcellNode(Node):
             self._raw_mA = mA
 
             # Linear mapping: 4mA=0g, 20mA=max_capacity_g
-            if mA <= self._min_mA:
+            if mA < 3.0:
+                self._status = 'FAULT'
                 gram = 0.0
-            elif mA >= self._max_mA:
-                gram = self._max_cap_g
             else:
+                self._status = 'OK'
                 gram = (mA - self._min_mA) / (self._max_mA - self._min_mA) * self._max_cap_g
+                if gram > self._max_cap_g:
+                    gram = self._max_cap_g
 
             # Apply calibration correction
             gram = (gram - self._cal_zero) * self._cal_factor
@@ -207,7 +210,7 @@ class LoadcellNode(Node):
             self._raw_weight = gram
 
         self._pub_weight.publish(Float32(data=float(gram)))
-        self._pub_status.publish(self._str('OK' if not self._use_sim else 'SIM'))
+        self._pub_status.publish(self._str(self._status))
 
         # Publish raw mA for debug
         if not self._use_sim:
