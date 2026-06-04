@@ -140,7 +140,7 @@ class LoadcellNode(Node):
         """Initialize RevPi modIO for 4-20mA analog input."""
         try:
             import revpimodio2
-            self._rpi = revpimodio2.RevPiModIO(autorefresh=True)
+            self._rpi = revpimodio2.RevPiModIO(autorefresh=False, monitoring=False)
             # Verify the input channel exists
             _ = getattr(self._rpi.io, self._input_ch)
             self.get_logger().info(
@@ -159,6 +159,8 @@ class LoadcellNode(Node):
 
         try:
             # Read raw µA from RevPi analog input
+            # Refresh process image
+            self._rpi.readprocimg()
             raw_uA = getattr(self._rpi.io, self._input_ch).value
             mA = raw_uA / 1000.0
 
