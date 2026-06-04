@@ -20,6 +20,16 @@ cyl3_present: true
 
 # Cụm output stack toggle — true = bật STATE 3/4 (cần Servo3+OutX+OutY+CPX 254 lắp đủ)
 # false = disable auto-trigger và khóa nút manual STATE 3/4. STATE 1/2 (Pos1) không bị ảnh hưởng.
+# ─────────────────────────────────────────────────────────────────────────────
+# PENDING: branch `fix/s4-s3-chain-warnings` (2 commit chưa merge main) đã fix
+# 3 discrepancy S3/S4 workflow (chain S4→S3 dispatcher, S3 standby 10mm,
+# sequential OutX/OutY). Khi hardware Pos2 sẵn sàng:
+#   1. checkout fix/s4-s3-chain-warnings + pull
+#   2. đổi false → true ở dòng dưới
+#   3. rebuild + restart node + verify sequence S3/S4 + chain S4→S3
+#   4. pass → FF-merge branch vào main (recipe ở memory)
+# Memory đầy đủ: project_s3s4_pending_verify.md
+# ─────────────────────────────────────────────────────────────────────────────
 output_stack_present: false
 
 # Velocity (m/s) — synced with FAS
@@ -30,16 +40,16 @@ jog_velocity_max: 0.08        # Max allowed JOG velocity (m/s) — matches drive
 # Axis Coordinate Mapping (mm)
 inx_home: 0.0              # Home position for INX
 inx_safe: -60.0              # Safe position for INX (used when iny_safe_zone is active)
-inx_target2: 503         # Position 2 for S1 loading
-inx_output_stack: -293.0    # Tray stacking position for empty tray
+inx_target2: 502.5          # Position 2 for S1 loading
+inx_output_stack: -298.0    # Tray stacking position for empty tray
 iny_home: 0.0              # Home/Neutral position for INY
 iny_safe_zone: 90.0        # Limit for "Safe" INY position before INX moves (Safety interlock — block INX khi INY > giá trị này)
 iny_push_clearance_mm: 5.0  # INY dừng tạm để kẹp trước khi đẩy vào robot (S1 step trung gian)
 
 # S1 INY Scanning Logic
-iny_target2: 80.0          # Tọa độ INY đẩy khay vào robot / kẹp khay cũ (S1 & S2A)
+iny_target2: 87.0          # Tọa độ INY đẩy khay vào robot / kẹp khay cũ (S1 & S2A)
 target_scaninp1: 970.0       # Scan endpoint target (mm)
-target_scanoutp1: 970.0
+target_scanoutp1: 990.0
 iny_scan_vel: 70             # Scanning speed (mm/s)
 iny_row_vel: 30              # Docking speed (mm/s)
 iny_scan_valid_min_mm: 70.0 # Ignore triggers below this X coordinate (Noise filter)
