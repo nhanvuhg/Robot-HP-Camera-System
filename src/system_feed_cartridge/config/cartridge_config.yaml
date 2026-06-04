@@ -30,7 +30,7 @@ jog_velocity_max: 0.08        # Max allowed JOG velocity (m/s) — matches drive
 # Axis Coordinate Mapping (mm)
 inx_home: 0.0              # Home position for INX
 inx_safe: -60.0              # Safe position for INX (used when iny_safe_zone is active)
-inx_target2: 505.5         # Position 2 for S1 loading
+inx_target2: 503         # Position 2 for S1 loading
 inx_output_stack: -293.0    # Tray stacking position for empty tray
 iny_home: 0.0              # Home/Neutral position for INY
 iny_safe_zone: 90.0        # Limit for "Safe" INY position before INX moves (Safety interlock — block INX khi INY > giá trị này)

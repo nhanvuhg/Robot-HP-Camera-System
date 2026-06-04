@@ -274,6 +274,9 @@ class CartridgeSystem(Node):
         # nhưng không di chuyển vật lý. Phải gọi stop_motion_task() trước để
         # flush internal queue. _s1_confirm_safe sẽ tự lo chuyện này.
         self._drive_warm_t = -1.0
+        # Per-servo warm-up flag: set True sau homing, clear sau flush trong _nb_move.
+        # Giải quyết FAS quirk cho JOG move (state machine đã có gate riêng).
+        self._need_warm_up: dict = {}
 
         # ── INPUT side state machine ──────────────────────────────
         self.state_in           = SystemState.IDLE
@@ -905,6 +908,14 @@ class CartridgeSystem(Node):
             offset = int(self.zero_offset.get(servo_id, 0))
             counts = offset + int(pos_mm * COUNTS_PER_MM)
             self._ensure_ready(mot, servo_id)
+            # FAS firmware quirk: sau homing, position_task đầu tiên bị drive
+            # "nuốt" (accept nhưng không move vật lý). Flush bằng stop_motion_task
+            # rồi settle 0.5s trước khi gửi lệnh thật.
+            if self._need_warm_up.pop(servo_id, False):
+                with self._servo_lock:
+                    mot.stop_motion_task()
+                time.sleep(0.5)
+                self.get_logger().info(f"S{servo_id}: post-homing warm-up flush done")
             with self._servo_lock:
                 if continuous_update and hasattr(mot, 'configure_continuous_update'):
                     mot.configure_continuous_update(True)
@@ -1703,6 +1714,7 @@ class CartridgeSystem(Node):
 
                     self._servo_homed_once[sid] = True
                     self.zero_offset[sid] = post_pos
+                    self._need_warm_up[sid] = True  # FAS quirk: cần flush trước position_task đầu tiên
                     self.get_logger().info(f"  {name} = 0mm (homed, Δ={delta_mm:.1f}mm)")
 
             except Exception as e:
@@ -2214,26 +2226,40 @@ class CartridgeSystem(Node):
                         self._ensure_ready(mot, sid, timeout=5.0)
                         with self._servo_lock:
                             mot.referencing_task(nonblocking=True)
+                        # Refresh _servo_motion_t mỗi 200ms để _publish_positions
+                        # đọc tươi suốt homing → GUI hiển thị vị trí từ từ về 0
+                        # thay vì freeze sau 2s idle skip. (Mirror fix fce323e
+                        # cho path _do_homing.)
                         start = time.time()
                         timeout = self.config.homing_timeout
+                        homed_ok = False
                         while time.time() - start < timeout:
                             with self._servo_lock:
                                 ref = mot.referenced()
                             if ref:
+                                homed_ok = True
                                 break
+                            self._servo_motion_t[sid] = time.time()
                             time.sleep(0.2)
-                        else:
-                            self.get_logger().warn(f"S{sid} JOG home timeout after {timeout}s")
+                        if not homed_ok:
+                            # Timeout: KHÔNG set zero_offset (sẽ làm move targets bị off
+                            # so với physical zero). Stop motion + notify ERROR rõ ràng.
+                            self.get_logger().error(f"S{sid} JOG home TIMEOUT after {timeout}s — KHÔNG set zero_offset")
                             with self._servo_lock:
                                 mot.stop_motion_task()
+                            self._notify('error', 'HOMING FAIL',
+                                f'Servo S{sid} timeout sau {timeout}s — drive không trả referenced=True. '
+                                f'Check FAS Referencing tab / REF cam / wiring. RUN target sẽ bị từ chối.')
+                            return
                         with self._servo_lock:
                             self.zero_offset[sid] = mot.current_position()
+                        self._need_warm_up[sid] = True  # FAS quirk: cần flush trước position_task đầu tiên
                         # Invalidate cache + mark active so _publish_positions reads fresh
                         self._pos_cache.pop(sid, None)
                         self._servo_motion_t[sid] = time.time()
                         if hasattr(self, '_servo_homed_once'):
                             self._servo_homed_once[sid] = True
-                        self._notify('silent_ok', f'Homing complete ...', f'Servo {sid}')
+                        self._notify('silent_ok', f'Homing complete', f'Servo {sid}')
                     threading.Thread(target=_do, daemon=True).start()
                 return
             sid = int(parts[0])
@@ -2257,9 +2283,22 @@ class CartridgeSystem(Node):
                         self.get_logger().error(f"[JOG] S2 (InY) move rejected: {pos} exceeds limits [{min_val}, {max_val}]")
                         self._notify('error', 'LỖI GIỚI HẠN', f'Trục S2 (InY) vượt giới hạn [{min_val}, {max_val}] mm (Nhập: {pos})')
                         return
-                self._nb_move(sid, pos)
+                # _nb_move có 2 reject path silent với GUI (chỉ log ROS):
+                #   (a) pos > servo_limits[sid] (positive limit)
+                #   (b) servo chưa homed (zero_offset chưa set)
+                # Notify để operator thấy lý do RUN không di chuyển hardware.
+                ok = self._nb_move(sid, pos)
+                if not ok:
+                    if sid not in self.zero_offset and sid in self.servos:
+                        self._notify('error', 'RUN bị từ chối',
+                            f'Servo S{sid} chưa homed — chạy HOMING trước khi RUN target')
+                    else:
+                        upper = self._conf('servo_limits', {}).get(sid, 999.0)
+                        self._notify('error', 'RUN bị từ chối',
+                            f'S{sid}: {pos}mm vượt servo_limits ({upper}mm)')
         except Exception as e:
             self.get_logger().error(f"[JOG] exception: {e}")
+            self._notify('error', 'JOG exception', str(e))
 
     def _cb_goto_state(self, msg: String):
         """
