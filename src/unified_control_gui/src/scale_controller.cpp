@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <QRegularExpression>
+#include <QDateTime>
 #include <sys/types.h>
 #include <pwd.h>
 #include <unistd.h>
@@ -13,6 +14,25 @@
 ScaleController::ScaleController(rclcpp::Node::SharedPtr node, QObject *parent)
     : QObject(parent), node_(node)
 {
+    last_weight_time_ = 0;
+    scale_node_connected_ = false;
+
+    // Connection watchdog timer
+    connection_timer_ = new QTimer(this);
+    connect(connection_timer_, &QTimer::timeout, this, [this]() {
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        bool connected = (last_weight_time_ > 0 && (now - last_weight_time_ < 2000));
+        if (connected != scale_node_connected_) {
+            scale_node_connected_ = connected;
+            emit scaleNodeConnectedChanged();
+            if (!scale_node_connected_) {
+                loadcell_status_ = "OFFLINE";
+                emit loadcellStatusChanged();
+            }
+        }
+    });
+    connection_timer_->start(1000);
+
     // Publishers
     pub_active_profile_ = node_->create_publisher<std_msgs::msg::String>("/weight/active_profile", 10);
     pub_target_weight_ = node_->create_publisher<std_msgs::msg::Float32>("/loadcell/target_weight", 10);
@@ -30,6 +50,11 @@ ScaleController::ScaleController(rclcpp::Node::SharedPtr node, QObject *parent)
         "/loadcell/weight", 10,
         [this](const std_msgs::msg::Float32::SharedPtr msg) {
             current_weight_ = msg->data;
+            last_weight_time_ = QDateTime::currentMSecsSinceEpoch();
+            if (!scale_node_connected_) {
+                scale_node_connected_ = true;
+                emit scaleNodeConnectedChanged();
+            }
             emit currentWeightChanged();
         });
 

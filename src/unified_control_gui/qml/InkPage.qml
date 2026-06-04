@@ -120,8 +120,18 @@ Item {
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter
                         spacing: 20
-                        Text { text: "● LOADCELL: " + scaleController.loadcellStatus; color: scaleController.loadcellStatus == "OK" ? "#10b981" : "#ef4444"; font.pixelSize: 16; font.bold: true }
-                        Text { text: "Scale node: ● CONNECTED"; color: "#10b981"; font.pixelSize: 16; font.bold: true }
+                        Text {
+                            text: "● LOADCELL: " + scaleController.loadcellStatus
+                            color: (scaleController.loadcellStatus == "OK" || scaleController.loadcellStatus == "SIM") ? "#10b981" : "#ef4444"
+                            font.pixelSize: 16
+                            font.bold: true
+                        }
+                        Text {
+                            text: "Scale node: ● " + (scaleController.scaleNodeConnected ? "CONNECTED" : "DISCONNECTED")
+                            color: scaleController.scaleNodeConnected ? "#10b981" : "#ef4444"
+                            font.pixelSize: 16
+                            font.bold: true
+                        }
                     }
 
                     Rectangle {

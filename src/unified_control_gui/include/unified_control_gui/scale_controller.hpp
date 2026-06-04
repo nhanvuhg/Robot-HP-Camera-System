@@ -31,10 +31,12 @@ class ScaleController : public QObject
     Q_PROPERTY(int passBatch READ passBatch NOTIFY batchStatsChanged)
     Q_PROPERTY(int failBatch READ failBatch NOTIFY batchStatsChanged)
     Q_PROPERTY(int consecFails READ consecFails NOTIFY consecFailsChanged)
+    Q_PROPERTY(bool scaleNodeConnected READ scaleNodeConnected NOTIFY scaleNodeConnectedChanged)
 
 public:
     explicit ScaleController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
 
+    bool scaleNodeConnected() const { return scale_node_connected_; }
     float currentWeight() const { return current_weight_; }
     QString monitorStatus() const { return monitor_status_; }
     QString loadcellStatus() const { return loadcell_status_; }
@@ -86,6 +88,7 @@ signals:
     void profilesChanged();
     void batchStatsChanged();
     void consecFailsChanged();
+    void scaleNodeConnectedChanged();
     
     // Alarms to trigger QML Popups
     void overloadAlarm();
@@ -114,6 +117,9 @@ private:
     int pass_batch_{0};
     int fail_batch_{0};
     int consec_fails_{0};
+    bool scale_node_connected_{false};
+    qint64 last_weight_time_{0};
+    QTimer* connection_timer_{nullptr};
 
     // Publishers
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_active_profile_;

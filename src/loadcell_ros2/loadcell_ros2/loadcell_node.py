@@ -121,7 +121,7 @@ class LoadcellNode(Node):
         self._weight_timer  = self.create_timer(period, self._publish_weight)
         self._decision_timer = self.create_timer(0.5, self._check_decision)
 
-        self._pub_status.publish(self._str('READY'))
+        self._pub_status.publish(self._str('OK'))
         self._pub_cal_st.publish(self._str('IDLE'))
         self._publish_batch_stats()
 
@@ -207,6 +207,7 @@ class LoadcellNode(Node):
             self._raw_weight = gram
 
         self._pub_weight.publish(Float32(data=float(gram)))
+        self._pub_status.publish(self._str('OK' if not self._use_sim else 'SIM'))
 
         # Publish raw mA for debug
         if not self._use_sim:
