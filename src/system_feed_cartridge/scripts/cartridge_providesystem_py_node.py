@@ -4370,33 +4370,59 @@ class CartridgeSystem(Node):
             self._drive_warm_t = 0.0
         # ─────────────────────────────────────────────────────────────
 
-        if not self._cmd_sent_s3:
+        # busy flag publish 1 lần khi entry
+        if not self._cmd_sent_s3 and not getattr(self, '_s3_outy_safe_done', False):
             self._pub_cartridge_busy(True)
         cfg = self.config
         ox = self._pos(4)
         oy = self._pos(5)
         ox_safe = ox is None or ox <= cfg.outx_home + 5.0
         oy_safe = oy is None or oy <= cfg.outy_target1 + 5.0
-        if ox_safe and oy_safe:
-            self._enter_s3(SystemState.S3_CHECK_S17)
-        else:
+
+        # ── SEQUENTIAL: OutY safe TRƯỚC, sau đó OutX home ──
+        # Rule "tuần tự không chạy cùng lúc OUTX/OUTY" (giống InX/InY ở S1).
+        # _s3_outy_safe_done = flag nội bộ giữa 2 step để dùng chung _cmd_sent_s3.
+        if not oy_safe and not getattr(self, '_s3_outy_safe_done', False):
+            # Step 1: OutY → outy_target1
             if not self._cmd_sent_s3:
-                if not ox_safe:
-                    self._nb_move(4, cfg.outx_home)
-                if not oy_safe:
-                    self._nb_move(5, cfg.outy_target1)
+                if not self._nb_move(5, cfg.outy_target1):
+                    return
                 self._cmd_sent_s3     = True
                 self._step_timeout_s3 = time.time() + self.config.move_timeout
             else:
                 if time.time() > self._step_timeout_s3:
-                    self._enter_s3(SystemState.S3_CHECK_S17)
-                # [BLOCKING-FIX] verify _at_position cho cả OutX và OutY
-                elif (self._arrived(4) and self._arrived(5)
-                      and self._at_position(4, cfg.outx_home)
-                      and self._at_position(5, cfg.outy_target1)):
-                    self._enter_s3(SystemState.S3_CHECK_S17)
+                    # timeout → bỏ qua step 1, sang step 2 (preserve lenient
+                    # behavior cũ — outx_home thường vẫn an toàn cho Servo3)
+                    self._s3_outy_safe_done = True
+                    self._cmd_sent_s3 = False
+                elif self._arrived(5) and self._at_position(5, cfg.outy_target1):
+                    self._s3_outy_safe_done = True
+                    self._cmd_sent_s3 = False
                 else:
-                    self._log_once("S3_SAFE", "Cho OutX/OutY ve home")
+                    self._log_once("S3_OUTY", "Step1: cho OutY ve target1 truoc")
+            return
+
+        if not ox_safe:
+            # Step 2: OutX → outx_home (OutY đã safe hoặc skip do timeout)
+            if not self._cmd_sent_s3:
+                if not self._nb_move(4, cfg.outx_home):
+                    return
+                self._cmd_sent_s3     = True
+                self._step_timeout_s3 = time.time() + self.config.move_timeout
+            else:
+                if time.time() > self._step_timeout_s3:
+                    self._s3_outy_safe_done = False
+                    self._enter_s3(SystemState.S3_SERVO3_TARGET1)
+                elif self._arrived(4) and self._at_position(4, cfg.outx_home):
+                    self._s3_outy_safe_done = False
+                    self._enter_s3(SystemState.S3_SERVO3_TARGET1)
+                else:
+                    self._log_once("S3_OUTX", "Step2: cho OutX ve home")
+            return
+
+        # Both safe → tới Servo3 standby 10mm (theo spec, không skip)
+        self._s3_outy_safe_done = False
+        self._enter_s3(SystemState.S3_SERVO3_TARGET1)
 
     def _s3_servo3_target1(self):
         """
@@ -4853,28 +4879,55 @@ class CartridgeSystem(Node):
 
     def _s4_outy_outx_home(self):
         """
-        Hoàn tất STATE 4: đưa OutX về outx_home AND OutY về outy_target1.
-        Verify cả 2 trục bằng _at_position.
-        Next: S4_COMPLETE → có thể chain ngay sang STATE 3 nếu camera AI báo
-        cần cấp khay mới (`_can_start_s3()` True).
+        Hoàn tất STATE 4: đưa OutY về outy_target1 (raise safe) TRƯỚC, sau đó
+        OutX về outx_home — tuần tự không chạy cùng lúc (giống InY trước InX
+        ở S1). Verify từng trục bằng _arrived AND _at_position.
+        Next: S4_COMPLETE.
         """
         cfg = self.config
-        if not self._cmd_sent_s4:
-            ok4 = self._nb_move(4, cfg.outx_home)
-            ok5 = self._nb_move(5, cfg.outy_target1)
-            if not ok4 or not ok5:
-                self._log_once("S4_HOME_FAIL", "S4 outy/outx home fail")
-                return
-            self._cmd_sent_s4     = True
-            self._step_timeout_s4 = time.time() + self.config.move_timeout
-        else:
-            if time.time() > self._step_timeout_s4:
-                self._error("S4_OUTY_OUTX_HOME timeout")
-            # [BLOCKING-FIX] verify _at_position cho cả OutX và OutY
-            elif (self._arrived(5) and self._arrived(4)
-                  and self._at_position(5, cfg.outy_target1)
-                  and self._at_position(4, cfg.outx_home)):
-                self._enter_s4(SystemState.S4_COMPLETE)
+        oy = self._pos(5)
+        ox = self._pos(4)
+        if oy is None or ox is None:
+            return
+
+        oy_safe = oy <= cfg.outy_target1 + 5.0
+        ox_home = ox <= cfg.outx_home + 5.0
+
+        # ── Step 1: OutY raise to safe trước ──
+        if not oy_safe and not getattr(self, '_s4_outy_home_done', False):
+            if not self._cmd_sent_s4:
+                if not self._nb_move(5, cfg.outy_target1):
+                    self._log_once("S4_HOME_OY_FAIL", "S4 OutY home fail")
+                    return
+                self._cmd_sent_s4     = True
+                self._step_timeout_s4 = time.time() + self.config.move_timeout
+            else:
+                if time.time() > self._step_timeout_s4:
+                    self._error("S4_OUTY_OUTX_HOME OutY timeout")
+                elif self._arrived(5) and self._at_position(5, cfg.outy_target1):
+                    self._s4_outy_home_done = True
+                    self._cmd_sent_s4 = False
+            return
+
+        # ── Step 2: OutX → outx_home (OutY đã safe) ──
+        if not ox_home:
+            if not self._cmd_sent_s4:
+                if not self._nb_move(4, cfg.outx_home):
+                    self._log_once("S4_HOME_OX_FAIL", "S4 OutX home fail")
+                    return
+                self._cmd_sent_s4     = True
+                self._step_timeout_s4 = time.time() + self.config.move_timeout
+            else:
+                if time.time() > self._step_timeout_s4:
+                    self._error("S4_OUTY_OUTX_HOME OutX timeout")
+                elif self._arrived(4) and self._at_position(4, cfg.outx_home):
+                    self._s4_outy_home_done = False
+                    self._enter_s4(SystemState.S4_COMPLETE)
+            return
+
+        # Both ok → complete
+        self._s4_outy_home_done = False
+        self._enter_s4(SystemState.S4_COMPLETE)
 
     def _s4_complete(self):
         self._pub_cartridge_busy(False)
