@@ -3,13 +3,15 @@
 Loadcell Node — chạy trên RevPi A
 ROS_DOMAIN_ID=22, kết nối với Pi 5 qua LAN
 
-Hardware: HX711 hoặc Modbus RTU
+Hardware: 4-20mA analog input via RevPi module (revpimodio2)
+  - InputValue_4: raw µA (0–20000)
+  - 4mA = 0g, 20mA = max_capacity_g
 Fallback: simulation mode (use_simulation:=true)
 
 Deploy:
-  scp -r ~/ros2_ws/src/loadcell_ros2 pi@revpi-a:~/ros2_ws/src/
-  ssh pi@revpi-a "cd ~/ros2_ws && colcon build --packages-select loadcell_ros2"
-  ssh pi@revpi-a "source ~/ros2_ws/install/setup.bash && ros2 run loadcell_ros2 loadcell_node"
+  scp -r ~/ros2_ws/src/loadcell_ros2 pi@<REVPI_IP>:~/ros2_ws/src/
+  ssh pi@<REVPI_IP> "cd ~/ros2_ws && colcon build --packages-select loadcell_ros2"
+  ssh pi@<REVPI_IP> "source ~/ros2_ws/install/setup.bash && ros2 run loadcell_ros2 loadcell_node --ros-args -p use_simulation:=false"
 """
 
 import json
@@ -29,9 +31,11 @@ class LoadcellNode(Node):
 
         # ── Parameters ──────────────────────────────────────────────
         self.declare_parameter('use_simulation', True)
-        self.declare_parameter('hx711_dout_pin', 5)
-        self.declare_parameter('hx711_sck_pin', 6)
-        self.declare_parameter('hx711_gain', 128)
+        self.declare_parameter('input_channel', 'InputValue_4')
+        self.declare_parameter('max_capacity_g', 5000.0)
+        self.declare_parameter('min_current_mA', 4.0)
+        self.declare_parameter('max_current_mA', 20.0)
+        self.declare_parameter('read_interval_ms', 50)
         self.declare_parameter('overload_threshold_g', 5000.0)
         self.declare_parameter('zero_drift_threshold_g', 10.0)
         self.declare_parameter('stabilize_samples', 5)
@@ -40,6 +44,11 @@ class LoadcellNode(Node):
         self.declare_parameter('publish_rate_hz', 10.0)
 
         self._use_sim      = self.get_parameter('use_simulation').value
+        self._input_ch     = self.get_parameter('input_channel').value
+        self._max_cap_g    = self.get_parameter('max_capacity_g').value
+        self._min_mA       = self.get_parameter('min_current_mA').value
+        self._max_mA       = self.get_parameter('max_current_mA').value
+        self._read_ms      = self.get_parameter('read_interval_ms').value
         self._overload_thr = self.get_parameter('overload_threshold_g').value
         self._drift_thr    = self.get_parameter('zero_drift_threshold_g').value
         self._stab_n       = self.get_parameter('stabilize_samples').value
@@ -48,17 +57,16 @@ class LoadcellNode(Node):
         pub_rate           = self.get_parameter('publish_rate_hz').value
 
         # ── Hardware init ────────────────────────────────────────────
-        self._hx = None
-        self._zero_offset = 0.0
+        self._rpi = None
         self._tare_base   = 0.0
         self._tared       = False
-        self._cal_factor  = 1.0
-        self._cal_zero    = 0.0
+        self._cal_factor  = 1.0       # slope correction (default 1.0 = no correction)
+        self._cal_zero    = 0.0       # zero offset correction (gram)
         self._cal_weight_known = 0.0
         self._cal_state   = 'IDLE'
 
         if not self._use_sim:
-            self._init_hx711()
+            self._init_revpi_420()
         else:
             self.get_logger().warn('[LOADCELL] Simulation mode ON — không dùng phần cứng thật')
 
@@ -68,6 +76,7 @@ class LoadcellNode(Node):
         self._target_min    = 0.0
         self._target_max    = 0.0
         self._raw_weight    = 0.0   # gram sau tare+cal
+        self._raw_mA        = 0.0   # raw current in mA (for debug)
         self._overloaded    = False
         self._overload_acked = False
         self._batch_total   = 0
@@ -89,6 +98,7 @@ class LoadcellNode(Node):
         self._pub_signal      = self.create_publisher(Bool,    '/loadcell/signal_process', qos)
         self._pub_mon         = self.create_publisher(String,  '/weight/monitor_status', qos)
         self._pub_ink_cap_ack = self.create_publisher(Float32, '/Fill_HP1/ink_capacity_ack', qos)
+        self._pub_raw_mA      = self.create_publisher(Float32, '/loadcell/raw_mA', qos)
 
         # ── Subscribers ──────────────────────────────────────────────
         self.create_subscription(Float32, '/loadcell/target_weight', self._cb_target, qos)
@@ -120,37 +130,58 @@ class LoadcellNode(Node):
         self._sim_cartridge = False
         self._sim_timer     = self.create_timer(2.0, self._sim_tick) if self._use_sim else None
 
-        self.get_logger().info('[LOADCELL] Node started — topics: /loadcell/*, /weight/monitor_status')
+        hw_mode = 'SIM' if self._use_sim else f'4-20mA ({self._input_ch})'
+        self.get_logger().info(f'[LOADCELL] Node started — mode={hw_mode}, topics: /loadcell/*, /weight/monitor_status')
 
-    # ── Hardware ─────────────────────────────────────────────────────
+    # ── Hardware: 4-20mA via RevPi ────────────────────────────────────
 
-    def _init_hx711(self):
+    def _init_revpi_420(self):
+        """Initialize RevPi modIO for 4-20mA analog input."""
         try:
-            from hx711 import HX711
-            dout = self.get_parameter('hx711_dout_pin').value
-            sck  = self.get_parameter('hx711_sck_pin').value
-            gain = self.get_parameter('hx711_gain').value
-            self._hx = HX711(dout, sck)
-            self._hx.set_gain(gain)
-            self._hx.reset()
-            self._zero_offset = self._hx.get_raw_data_mean(10)
-            self.get_logger().info(f'[HX711] Init OK — dout={dout} sck={sck} zero={self._zero_offset:.0f}')
+            import revpimodio2
+            self._rpi = revpimodio2.RevPiModIO(autorefresh=True)
+            # Verify the input channel exists
+            _ = getattr(self._rpi.io, self._input_ch)
+            self.get_logger().info(
+                f'[4-20mA] Init OK — channel={self._input_ch}, '
+                f'range={self._min_mA}–{self._max_mA} mA → 0–{self._max_cap_g} g'
+            )
         except Exception as e:
-            self.get_logger().error(f'[HX711] Init FAILED: {e} — switching to simulation')
+            self.get_logger().error(f'[4-20mA] Init FAILED: {e} — switching to simulation')
             self._use_sim = True
-            self._hx = None
+            self._rpi = None
 
     def _read_raw_gram(self) -> float:
+        """Read weight in gram from 4-20mA analog input (or simulation)."""
         if self._use_sim:
             return self._sim_weight
+
         try:
-            raw = self._hx.get_raw_data_mean(3)
-            gram = (raw - self._zero_offset - self._cal_zero) * self._cal_factor
+            # Read raw µA from RevPi analog input
+            raw_uA = getattr(self._rpi.io, self._input_ch).value
+            mA = raw_uA / 1000.0
+
+            # Store raw mA for debug publishing
+            self._raw_mA = mA
+
+            # Linear mapping: 4mA=0g, 20mA=max_capacity_g
+            if mA <= self._min_mA:
+                gram = 0.0
+            elif mA >= self._max_mA:
+                gram = self._max_cap_g
+            else:
+                gram = (mA - self._min_mA) / (self._max_mA - self._min_mA) * self._max_cap_g
+
+            # Apply calibration correction
+            gram = (gram - self._cal_zero) * self._cal_factor
+
+            # Apply tare
             if self._tared:
                 gram -= self._tare_base
+
             return gram
         except Exception as e:
-            self.get_logger().warn(f'[HX711] Read error: {e}')
+            self.get_logger().warn(f'[4-20mA] Read error: {e}')
             return self._raw_weight
 
     # ── Simulation tick ───────────────────────────────────────────────
@@ -176,6 +207,10 @@ class LoadcellNode(Node):
             self._raw_weight = gram
 
         self._pub_weight.publish(Float32(data=float(gram)))
+
+        # Publish raw mA for debug
+        if not self._use_sim:
+            self._pub_raw_mA.publish(Float32(data=float(self._raw_mA)))
 
         # overload check
         if gram > self._overload_thr and not self._overloaded:
