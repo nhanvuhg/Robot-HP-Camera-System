@@ -21,13 +21,13 @@ cyl3_present: true
 # Cụm output stack toggle — true = bật STATE 3/4 (cần Servo3+OutX+OutY+CPX 254 lắp đủ)
 # false = disable auto-trigger và khóa nút manual STATE 3/4. STATE 1/2 (Pos1) không bị ảnh hưởng.
 # ─────────────────────────────────────────────────────────────────────────────
-# PENDING: branch `fix/s4-s3-chain-warnings` (2 commit chưa merge main) đã fix
-# 3 discrepancy S3/S4 workflow (chain S4→S3 dispatcher, S3 standby 10mm,
-# sequential OutX/OutY). Khi hardware Pos2 sẵn sàng:
-#   1. checkout fix/s4-s3-chain-warnings + pull
-#   2. đổi false → true ở dòng dưới
-#   3. rebuild + restart node + verify sequence S3/S4 + chain S4→S3
-#   4. pass → FF-merge branch vào main (recipe ở memory)
+# PENDING HARDWARE Pos2 VERIFY: code S3/S4 đã có 3 fix mới merge main
+# (chain S4→S3 dispatcher, S3 standby 10mm, sequential OutX/OutY) nhưng
+# CHƯA test runtime vì flag dưới đang false. Khi hardware Pos2 sẵn sàng:
+#   1. đổi false → true ở dòng dưới
+#   2. rebuild + restart node
+#   3. verify sequence S3/S4 + chain S4→S3 (OUTX/OUTY tuần tự)
+#   4. fail → rollback `git reset --hard backup/main-pre-s3s4-fix-2026-06-03`
 # Memory đầy đủ: project_s3s4_pending_verify.md
 # ─────────────────────────────────────────────────────────────────────────────
 output_stack_present: false
