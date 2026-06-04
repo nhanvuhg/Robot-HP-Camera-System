@@ -313,8 +313,7 @@ class CartridgeSystem(Node):
         self._cmd_sent_s3       = False
         self._step_start_s3     = 0.0
         self._step_timeout_s3   = 0.0
-        self._s3_pending        = False
-        
+
         # ── STATE S4 runtime ─────────────────────────────────────────
         self.state_s4           = SystemState.IDLE
         self._cmd_sent_s4       = False
@@ -4340,6 +4339,14 @@ class CartridgeSystem(Node):
     # STATE 3 — Cấp khay thành phẩm  (giữ nguyên logic gốc)
     # ══════════════════════════════════════════════════════════════
 
+    # ══════════════════════════════════════════════════════════════
+    # WARNING — Pos2 INTERLOCK (S3 prerequisite)
+    #   Servo3 (Platform) KHÔNG được phép chạy khi cụm OutX/OutY còn ở
+    #   vùng workspace. Phải verify OutX ≤ outx_home+5 AND OutY ≤
+    #   outy_target1+5 trước khi Servo3 di chuyển — tránh va chạm
+    #   trục Servo3 với cụm Y.
+    #   Đừng nới lỏng tolerance hoặc skip _at_position verify.
+    # ══════════════════════════════════════════════════════════════
     def _s3_check_outxy_safe(self):
         """
         STATE 3 bước đầu: đảm bảo OutX về `outx_home` AND OutY về `outy_target1`
@@ -4513,6 +4520,12 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
     # STATE 4 — Thay khay output  (giữ nguyên logic gốc)
     # ══════════════════════════════════════════════════════════════
+    # WARNING — Pos2 INTERLOCK (S4 prerequisite)
+    #   OutX KHÔNG được phép di chuyển khi OutY > outy_safe_zone+5
+    #   (15mm). Tương tự rule InX/InY (S1/S2): OutY phải nâng cao
+    #   tới safe zone trước khi OutX dịch ngang — tránh va 2 trục
+    #   output.
+    # ══════════════════════════════════════════════════════════════
 
     def _s4_check_outy_safe(self):
         """
@@ -4577,6 +4590,13 @@ class CartridgeSystem(Node):
             elif self._arrived(4) and self._at_position(4, cfg.outx_target2):
                 self._enter_s4(SystemState.S4_OUTY_PICK)
 
+    # ══════════════════════════════════════════════════════════════
+    # WARNING — CAO RỦI RO: Cyl2 EXTEND ngay sau khi OutY tới target.
+    #   BẮT BUỘC verify _arrived(5) AND _at_position(5, outy_pick_pos)
+    #   trước khi sang S4_CYL2_EXTEND. Sai vị trí = Cyl2 đóng nhầm
+    #   vào khung gia công / khay khác → hỏng cơ khí.
+    #   Tương tự rule S2A_POS_PLACE_TRAY_ROBOT_CYL1 (Pos1).
+    # ══════════════════════════════════════════════════════════════
     def _s4_outy_pick(self):
         """
         STATE 4: OutY → outy_pick_pos (100mm) — hạ xuống vị trí kẹp khay.
@@ -4638,9 +4658,10 @@ class CartridgeSystem(Node):
     def _s4_outx_target3(self):
         """
         STATE 4: OutX → outx_target3 (20mm) — vị trí đặt khay output ra khỏi
-        workspace. Trong khi di chuyển, nếu S17 ON (có khay platform) → set
-        _s3_pending = True để chạy S3 sau khi S4 xong.
+        workspace.
         Next: S4_CHECK_S19 (kiểm tra có cần scan stack output hay không).
+
+        Note: S4→S3 chain xử lý ở _s4_complete (gọi _can_start_s3 trực tiếp).
         """
         cfg = self.config
         if not self._cmd_sent_s4:
@@ -4651,8 +4672,6 @@ class CartridgeSystem(Node):
             self._cmd_sent_s4     = True
             self._step_timeout_s4 = time.time() + self.config.move_timeout
         else:
-            if self.sensor(S17_PLATFORM) and not self._s3_pending:
-                self._s3_pending = True
             if time.time() > self._step_timeout_s4:
                 self._error("S4_OUTX_TARGET3 timeout")
             # [BLOCKING-FIX] verify _at_position(4, outx_target3)
@@ -4777,6 +4796,12 @@ class CartridgeSystem(Node):
                 self._cmd_sent_s4 = False
                 self._enter_s4(SystemState.S4_OUTY_SCAN_S20)
 
+    # ══════════════════════════════════════════════════════════════
+    # WARNING — CAO RỦI RO: Cyl2 RETRACT thả khay sau khi OutY tới
+    # target. BẮT BUỘC verify _arrived(5) AND _at_position(5,
+    # _outy_jog_pos) trước khi sang S4_CYL2_RETRACT. Sai vị trí =
+    # khay rơi ngoài stack / đè khay cũ → kẹt stack.
+    # ══════════════════════════════════════════════════════════════
     def _s4_outy_drop(self):
         """
         Sau khi scan xong, di chuyển OutY đến target chốt được (`_outy_jog_pos`)
@@ -4803,6 +4828,13 @@ class CartridgeSystem(Node):
             self.get_logger().info(f"[S4] OutY tới target ({self._outy_jog_pos:.0f}mm) → CYL2 RETRACT")
             self._enter_s4(SystemState.S4_CYL2_RETRACT)
 
+    # ══════════════════════════════════════════════════════════════
+    # WARNING — Cyl2 retract VERIFY cross-check 2 sensor:
+    #   S21 ON (retracted) AND NOT S22 (extended). Tin 1 sensor đơn
+    #   = nguy cơ false-positive (vd S21 nhiễu ON dù Cyl2 chưa nhả)
+    #   → OutY/OutX di chuyển khi tay vẫn kẹp khay → giật rách.
+    #   Tương tự pattern S9+S10 cho Cyl1.
+    # ══════════════════════════════════════════════════════════════
     def _s4_cyl2_retract_state(self):
         """
         Retract Cyl2 để nhả khay vào output stack. Cross-check 2 sensor:
@@ -4849,11 +4881,14 @@ class CartridgeSystem(Node):
         self._notify('info', 'State 4 done', 'Thay khay output thanh cong')
         self.get_logger().info("[S4] COMPLETE")
         self._s4_trigger = False
+        # Trước đây bug: _enter_s4(S3_CHECK_OUTXY_SAFE) — set state_s4 thành
+        # giá trị S3_*, nhưng _dispatch_s4 không có branch S3_* → state_s4 kẹt
+        # vô hạn, không tick + state_s3 vẫn IDLE → S3 không chạy. Fix: trả
+        # state_s4 về IDLE, kích S3 qua dispatcher đúng.
+        self._enter_s4(SystemState.IDLE)
         if self._can_start_s3():
             self.get_logger().info("[S4→S3] S17 ON + S18 OFF → cấp khay output mới")
-            self._enter_s4(SystemState.S3_CHECK_OUTXY_SAFE)
-        else:
-            self._enter_s4(SystemState.IDLE)
+            self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
 
 
 # ─── Main ─────────────────────────────────────────────────────────
