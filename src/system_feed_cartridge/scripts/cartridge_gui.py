@@ -533,6 +533,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 <!-- ════════════════ TABS ════════════════ -->
 <div class="tabs">
   <div class="tab active" onclick="tab('ctrl',this)">Control Dashboard</div>
+  <div class="tab"        onclick="tab('hp',  this)">Fill HP Control</div>
   <div class="tab"        onclick="tab('cfg', this)">Technical System</div>
   <div class="tab"        onclick="tab('robot',this)">Robot Control</div>
 </div>
@@ -783,6 +784,11 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
   </div>
 
 </div></div>
+
+<!-- ════════════════ FILL HP CONTROL PAGE ════════════════ -->
+<div class="page" id="page-hp">
+  <iframe src="http://192.168.27.88:8080/" style="width:100%; height:100%; border:none; background:var(--bg);"></iframe>
+</div>
 
 <div class="tc" id="tc"></div>
 

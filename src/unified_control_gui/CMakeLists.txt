@@ -29,6 +29,7 @@ set(HEADER_FILES
   include/unified_control_gui/robot_controller.hpp
   include/unified_control_gui/cartridge_controller.hpp
   include/unified_control_gui/scale_controller.hpp
+  include/unified_control_gui/hp_controller.hpp
 )
 
 set(SOURCES
@@ -38,6 +39,7 @@ set(SOURCES
   src/robot_controller.cpp
   src/cartridge_controller.cpp
   src/scale_controller.cpp
+  src/hp_controller.cpp
 )
 
 qt5_add_resources(QML_RESOURCES qml.qrc)

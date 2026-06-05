@@ -388,6 +388,7 @@ class CartridgeSystem(Node):
         self.pub_servo_pos      = self.create_publisher(String, '/providesystem/servo_positions', qos)
         self.pub_sensors        = self.create_publisher(String, '/providesystem/sensors_state', qos)
         self.pub_busy_cartridge = self.create_publisher(Bool, '/cartridge/busy', qos)
+        self.pub_busy_cartridge_pos2 = self.create_publisher(Bool, '/cartridge/pos2_busy', qos)
         self.pub_input_trays_empty = self.create_publisher(Bool, '/cartridge/input_trays_empty', qos)
         self.pub_current_mode   = self.create_publisher(String, '/providesystem/current_mode', qos)        
         self.pub_robot_mode     = self.create_publisher(Int32, '/robot/set_mode', qos)
@@ -417,7 +418,6 @@ class CartridgeSystem(Node):
         self.pub_picker_status  = self.create_publisher(Bool, '/robot/picker_status', 10)
         self.create_subscription(Bool, '/robot/gripper_cmd', self._cb_gripper_cmd, 10)
         self.create_subscription(Bool, '/robot/picker_cmd', self._cb_picker_cmd, 10)
-        self.create_subscription(Bool,   '/robot/done_tray_input',           self._cb_done_tray_input,      qos)
 
         self.create_subscription(String, '/providesystem/gui_confirm',       self._cb_gui_confirm,        qos)
         self.create_subscription(String, '/providesystem/jog_cmd',           self._cb_jog,                qos)
@@ -1518,6 +1518,14 @@ class CartridgeSystem(Node):
         """
         self.pub_busy_cartridge.publish(Bool(data=busy))
 
+    def _pub_cartridge_pos2_busy(self, busy: bool):
+        """
+        Publish trạng thái bận riêng Pos2 (STATE 3 cấp khay thành phẩm /
+        STATE 4 thay khay output) lên /cartridge/pos2_busy.
+        Robot dùng để block PLACE_TO_OUTPUT khi cụm OutX/OutY đang di chuyển.
+        """
+        self.pub_busy_cartridge_pos2.publish(Bool(data=busy))
+
     def _cb_motion_busy(self, msg: Bool):
         """
         Nhận trạng thái bận của robot từ /robot/motion_busy.
@@ -2521,6 +2529,7 @@ class CartridgeSystem(Node):
         Khác với _cb_stop: không chuyển sang MANUAL mode vĩnh viễn.
         """
         self._pub_cartridge_busy(False)
+        self._pub_cartridge_pos2_busy(False)
         self._s1_scan_noise_retry = 0
         self._s4_prev_in         = False
         self.get_logger().error(f"S1 ABORT: {reason}")
@@ -4419,6 +4428,7 @@ class CartridgeSystem(Node):
         # busy flag publish 1 lần khi entry
         if not self._cmd_sent_s3 and not getattr(self, '_s3_outy_safe_done', False):
             self._pub_cartridge_busy(True)
+            self._pub_cartridge_pos2_busy(True)
         cfg = self.config
         ox = self._pos(4)
         oy = self._pos(5)
@@ -4584,6 +4594,7 @@ class CartridgeSystem(Node):
 
     def _s3_complete(self):
         self._pub_cartridge_busy(False)
+        self._pub_cartridge_pos2_busy(False)
         self.pub_newtray_output.publish(Bool(data=True))
         self._notify('info', 'State 3 done', 'Cap khay thanh pham thanh cong')
         self.get_logger().info("[S3] COMPLETE — pub new_trayoutput_loaded")
@@ -4622,6 +4633,7 @@ class CartridgeSystem(Node):
 
         if not self._cmd_sent_s4:
             self._pub_cartridge_busy(True)
+            self._pub_cartridge_pos2_busy(True)
         cfg = self.config
         oy = self._pos(5)
         if oy is not None and oy <= cfg.outy_safe_zone + 5:
@@ -4977,6 +4989,7 @@ class CartridgeSystem(Node):
 
     def _s4_complete(self):
         self._pub_cartridge_busy(False)
+        self._pub_cartridge_pos2_busy(False)
         self._notify('info', 'State 4 done', 'Thay khay output thanh cong')
         self.get_logger().info("[S4] COMPLETE")
         self._s4_trigger = False

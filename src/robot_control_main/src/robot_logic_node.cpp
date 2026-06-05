@@ -120,11 +120,14 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   motion_busy_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  set_mode_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_homing_done_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sensors_state_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_pos2_busy_sub_;
 
     rclcpp::Time last_motion_hb_;
     rclcpp::Time last_vision_hb_;
     std::atomic<bool> motion_busy_{false};
     std::atomic<bool> cartridge_busy_{false};
+    std::atomic<bool> cartridge_pos2_busy_{false};  // STATE 3/4 OutX/OutY đang chạy — block PLACE_TO_OUTPUT
 
     // ========================================================================
     // PUBLISHERS
@@ -216,6 +219,7 @@ private:
     rclcpp::Time wait_tray_start_time_;
 
     std::atomic<bool> feed_chamber_signal_{false};
+    std::atomic<bool> s7_at_robot_{false};   // Cartridge S7 — khay đang ở vị trí Robot (parse từ /providesystem/sensors_state)
     std::atomic<bool> fill_done_{false};
     std::atomic<bool> scale_result_received_{false};
     std::atomic<bool> scale_result_pass_{false};
@@ -603,6 +607,21 @@ void RobotLogicNode::initSubscriptions()
         "/cartridge_providesystem/new_tray_loaded", 10,
         std::bind(&RobotLogicNode::newTrayCallback, this, std::placeholders::_1));
 
+    // cartridge sensors state — 22-char binary "S1..S22"; ta cần S7 (index 6)
+    // để verify thật sự có khay tại Robot trước khi AUTO/AI bắt đầu INIT.
+    sensors_state_sub_ = create_subscription<std_msgs::msg::String>(
+        "/providesystem/sensors_state", 10,
+        [this](const std_msgs::msg::String::SharedPtr msg) {
+            if (msg->data.size() >= 7) {
+                bool prev = s7_at_robot_.load();
+                bool curr = (msg->data[6] == '1');
+                if (prev != curr) {
+                    s7_at_robot_ = curr;
+                    notifyStateChange();
+                }
+            }
+        });
+
     ignore_scale_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/robot/ignore_scale", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
@@ -666,6 +685,18 @@ void RobotLogicNode::initSubscriptions()
                 RCLCPP_WARN(get_logger(), "[INTERLOCK] 🔒 Cartridge BUSY");
             else
                 RCLCPP_INFO(get_logger(), "[INTERLOCK] 🔓 Cartridge FREE");
+        });
+
+    // Pos2 busy: STATE 3 (cấp khay thành phẩm) hoặc STATE 4 (thay khay output)
+    // đang chạy → cụm OutX/OutY có thể đang di chuyển → block PLACE_TO_OUTPUT.
+    cartridge_pos2_busy_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/cartridge/pos2_busy", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            cartridge_pos2_busy_ = msg->data;
+            if (msg->data)
+                RCLCPP_WARN(get_logger(), "[INTERLOCK] 🔒 Cartridge Pos2 BUSY");
+            else
+                RCLCPP_INFO(get_logger(), "[INTERLOCK] 🔓 Cartridge Pos2 FREE");
         });
 
     // AI mode: Camera báo output tray full → set waiting flag
@@ -1457,7 +1488,6 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
     auto sync_msg = std_msgs::msg::String();
 
-    bool was_manual = manual_mode_.load();
     switch (msg->data) {
         case 1:
             manual_mode_ = false;
@@ -1715,6 +1745,14 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         return;
     }
 
+    // AUTO/AI: verify S7 ON từ cartridge sensor — defense-in-depth chống
+    // flag bị set giả qua simulate buttons IN_READY/PICK_INPUT.
+    if (!manual_mode_ && !s7_at_robot_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
+            "[INIT_LOAD] S7 OFF — chờ cartridge thực sự đưa khay đến Robot");
+        return;
+    }
+
     // Wait for feed_chamber signal on first batch
     if (!manual_mode_ && is_first_batch_ && !feed_chamber_signal_) {
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
@@ -1776,8 +1814,26 @@ void RobotLogicNode::stateInitLoadChamberDirect()
                 if (row_full_[i]) { row = (int)i + 1; break; }
         }
         if (row <= 0) {
-            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
-                "[INIT_LOAD] No row selected (AI)");
+            // AI mode: khay tại Robot nhưng vision không thấy row nào ready (ROI rỗng)
+            // → swap khay (pub done_tray_input) thay vì wait vô hạn. Cartridge sẽ chạy
+            // STATE 2 lấy khay rỗng ra, sau đó STATE 1 đưa khay mới vào.
+            if (!waiting_for_new_input_.load()) {
+                RCLCPP_WARN(get_logger(),
+                    "[INIT_LOAD] AI: khay không có row ready → pub done_tray_input để swap");
+                auto done_msg = std_msgs::msg::Bool();
+                done_msg.data = true;
+                done_input_tray_pub_->publish(done_msg);
+                new_tray_loaded_ = false;
+                auto reset_msg = std_msgs::msg::Bool();
+                reset_msg.data = false;
+                new_tray_loaded_pub_->publish(reset_msg);
+                waiting_for_new_input_  = true;
+                wait_tray_start_time_   = this->now();
+                transitionTo(SystemState::IDLE);
+            } else {
+                RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
+                    "[INIT_LOAD] AI: đã pub done_tray_input — chờ khay mới");
+            }
             return;
         }
     }
@@ -2236,6 +2292,12 @@ void RobotLogicNode::statePlaceToOutput()
 
     if (motion_busy_) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "[STATE] Waiting for motion...");
+        return;
+    }
+
+    if (cartridge_pos2_busy_) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge Pos2 BUSY (STATE 3/4) — PLACE_TO_OUTPUT blocked");
         return;
     }
 

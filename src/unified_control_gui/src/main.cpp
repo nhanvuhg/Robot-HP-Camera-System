@@ -7,6 +7,7 @@
 #include "unified_control_gui/robot_controller.hpp"
 #include "unified_control_gui/cartridge_controller.hpp"
 #include "unified_control_gui/scale_controller.hpp"
+#include "unified_control_gui/hp_controller.hpp"
 #include <thread>
 
 int main(int argc, char *argv[])
@@ -35,6 +36,10 @@ int main(int argc, char *argv[])
     auto scaleController = new ScaleController(camNode);
     engine.rootContext()->setContextProperty("scaleController", scaleController);
 
+    auto hpNode = std::make_shared<rclcpp::Node>("hp_controller_node");
+    auto hpController = new HpController(hpNode);
+    engine.rootContext()->setContextProperty("hpController", hpController);
+
     // Load QML from filesystem (fast iteration) → fallback to qrc
     QString qmlPath = "/home/pi/ros2_ws/src/unified_control_gui/qml/Main.qml";
     if (QFileInfo::exists(qmlPath)) {
@@ -52,6 +57,11 @@ int main(int argc, char *argv[])
         rclcpp::spin(camNode); 
     });
     rosThread.detach();
+
+    std::thread hpRosThread([=]() {
+        rclcpp::spin(hpNode);
+    });
+    hpRosThread.detach();
 
     return app.exec();
 }
