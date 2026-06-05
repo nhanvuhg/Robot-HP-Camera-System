@@ -307,6 +307,7 @@ class CartridgeSystem(Node):
         self._output_target_pos = 0.0
         self._s4_armed_out      = False
         self._s4_prev_out       = False
+        self._s2a_s6off_phase   = 0   # 0=idle, 1=fast→950 @ vel150, 2=slow→r1_target @ vel50
 
         # ── STATE S3 runtime ─────────────────────────────────────────
         self.state_s3           = SystemState.IDLE
@@ -4039,11 +4040,11 @@ class CartridgeSystem(Node):
         Đều scan InY → target_scaninp1 (970mm) @ iny_scan_vel.
 
         S6 (pre-check stack):
-          - S6 OFF (stack rỗng): bỏ qua S4 detect — di chuyển 970mm @ iny_scan_vel,
-            đến nơi → enter S2A_INY_TARGETROW với target row 1 (vel sẽ đổi sang
-            iny_row_vel ở state đó).
-            Lý do: stack rỗng nên không có khay nào để S4 trigger → S4 sẽ không
-            bao giờ phát hiện row 1 → cần S6 confirm trước.
+          - S6 OFF (stack rỗng): bỏ qua S4 detect — 2-phase move trực tiếp đến row 1:
+              phase 1: InY → 950mm @ vel=150 (fast pre-position, dưới row1 zone min 990)
+              phase 2: InY → iny_output_zones[1][2] @ vel=50 (slow final approach)
+              → enter S2A_INY_TARGETROW.
+            Lý do: stack rỗng nên không có khay nào để S4 trigger → đi thẳng row 1.
           - S6 ON (stack có khay): scan với S4 falling-edge + armed-gate (giống S1):
               * inx_at_target (InX tại inx_output_stack)
               * iny in [iny_scan_valid_min_mm, iny_scan_valid_max_mm]
@@ -4068,23 +4069,73 @@ class CartridgeSystem(Node):
                     f"[S2A SCAN] S6 thay đổi từ A1: {self._s6_snapshot}→{fresh_s6} — refresh"
                 )
                 self._s6_snapshot = fresh_s6
-            ok = self._nb_move(2, self.config.target_scaninp1, vel=self.config.iny_scan_vel)
-            if not ok:
-                self._log_once("S2A_SCAN_FAIL", "S2A scan: nb_move fail")
-                return
-            self._cmd_sent_in     = True
-            self._step_timeout_in = time.time() + self.config.move_timeout
             self._s4_armed_out    = False
             self._s4_prev_out     = self.sensor(S4_SCAN_STACK_P1)
             # Snapshot row1 occupancy: nếu Cyl3 đang giữ khay tại row1 (S16 ON + S6 ON)
             # → loại trừ row1 khỏi detection trong scan này.
             s16_snap, s6_snap = self._snap(S16_CYL3_EXTENDED, S6_CHECK_TRAY_P1)
             self._row1_occupied = bool(s16_snap and s6_snap)
-            self.get_logger().info(
-                f"[S2A SCAN] InY → {self.config.target_scaninp1:.0f}mm "
-                f"vel={self.config.iny_scan_vel} S6={'ON' if self._s6_snapshot else 'OFF'} "
-                f"row1_occupied={self._row1_occupied}"
-            )
+
+            if not self._s6_snapshot:
+                # S6 OFF: stack rỗng → phase 1 fast vel=150 đến 950mm (dưới row1 zone)
+                ok = self._nb_move(2, 950.0, vel=150)
+                if not ok:
+                    self._log_once("S2A_SCAN_FAIL", "S2A scan S6 OFF phase 1: nb_move fail")
+                    return
+                self._s2a_s6off_phase = 1
+                self.get_logger().info("[S2A SCAN] S6=OFF stack rỗng — fast InY → 950mm @ vel=150 (phase 1)")
+            else:
+                # S6 ON: scan vel=50 đến target_scaninp1 với S4 detection
+                ok = self._nb_move(2, self.config.target_scaninp1, vel=50)
+                if not ok:
+                    self._log_once("S2A_SCAN_FAIL", "S2A scan: nb_move fail")
+                    return
+                self._s2a_s6off_phase = 0
+                self.get_logger().info(
+                    f"[S2A SCAN] S6=ON — scan InY → {self.config.target_scaninp1:.0f}mm @ vel=50 "
+                    f"row1_occupied={self._row1_occupied}"
+                )
+            self._cmd_sent_in     = True
+            self._step_timeout_in = time.time() + self.config.move_timeout
+
+        # ── S6 OFF: 2-phase fast→slow trực tiếp tới row 1 target ──
+        if not self._s6_snapshot:
+            target_r1 = self.config.iny_output_zones[1][2]
+            if self._s2a_s6off_phase == 1:
+                if self._arrived(2) or iny >= 950.0 - 2.0:
+                    ok = self._nb_move(2, target_r1, vel=50)
+                    if not ok:
+                        self._log_once("S2A_SCAN_FAIL", "S2A scan S6 OFF phase 2: nb_move fail")
+                        return
+                    self._s2a_s6off_phase = 2
+                    self._step_timeout_in = time.time() + self.config.move_timeout
+                    self.get_logger().info(
+                        f"[S2A SCAN] S6=OFF arrived 950mm — slow → {target_r1:.0f}mm @ vel=50 (phase 2)"
+                    )
+                elif time.time() > self._step_timeout_in:
+                    self._stop(2)
+                    self.get_logger().warn("[S2A SCAN] S6=OFF phase 1 timeout")
+                    self._enter_in(SystemState.ERROR)
+                return
+
+            if self._s2a_s6off_phase == 2:
+                if self._arrived(2) or iny >= target_r1 - 2.0:
+                    self._stop(2)
+                    self._output_target_pos = target_r1
+                    self._output_row = 1
+                    self.get_logger().info(
+                        f"[S2A SCAN] S6=OFF arrived row1 target ({target_r1:.0f}mm) → TARGETROW"
+                    )
+                    self._enter_in(SystemState.S2A_INY_TARGETROW)
+                elif time.time() > self._step_timeout_in:
+                    self._stop(2)
+                    self.get_logger().warn(
+                        f"[S2A SCAN] S6=OFF phase 2 timeout — fallback row1 ({target_r1:.0f}mm)"
+                    )
+                    self._output_target_pos = target_r1
+                    self._output_row = 1
+                    self._enter_in(SystemState.S2A_INY_TARGETROW)
+                return
 
         # ── S6 ON: detect S4 (giống S1 falling-edge + armed-gate) ────
         if self._s6_snapshot:
@@ -4128,32 +4179,27 @@ class CartridgeSystem(Node):
                             f"[S2A SCAN] S4 falling edge @ {trigger_pos:.1f}mm → "
                             f"row{row} ({target_mm:.0f}mm)"
                         )
+                        self._stop(2)
                         self._enter_in(SystemState.S2A_INY_TARGETROW)
                         return
 
-        # ── Arrived 970mm: S6 OFF default, hoặc S6 ON fallback ───────
+        # ── S6 ON fallback: arrived 970mm mà S4 không trigger row nào ─
+        # (S6 OFF không vào nhánh này — đã return ở khối 2-phase phía trên)
         timed_out = time.time() > self._step_timeout_in
         at_target = self._arrived(2) or iny >= self.config.target_scaninp1 - 2.0
         if timed_out or at_target:
             self._stop(2)
             target_mm = self.config.iny_output_zones[1][2]
-            if self._s6_snapshot:
-                # S6 ON nhưng S4 ko trigger row nào ≠ row1 → mismatch sensor.
-                # Cho place row1 1 LẦN, sau S2A_COMPLETE sẽ pause để operator kiểm tra S4/S6.
-                self.get_logger().warn(
-                    f"[S2A SCAN] S4 không trigger trong S6=ON → fallback row1 ({target_mm:.0f}mm) "
-                    "— sẽ pause sau khi hoàn tất để kiểm tra S4/S6"
-                )
-                self._s4s6_mismatch_seen = True
-                self._notify(
-                    'warn',
-                    'CẢNH BÁO: S4/S6 mismatch',
-                    'Stack báo có khay (S6 ON) nhưng scan không thấy row nào — sẽ STOP sau lần đặt này để kiểm tra cảm biến S4 hoặc S6.'
-                )
-            else:
-                self.get_logger().info(
-                    f"[S2A SCAN] Stack rỗng (S6=OFF) → row1 ({target_mm:.0f}mm)"
-                )
+            self.get_logger().warn(
+                f"[S2A SCAN] S4 không trigger trong S6=ON → fallback row1 ({target_mm:.0f}mm) "
+                "— sẽ pause sau khi hoàn tất để kiểm tra S4/S6"
+            )
+            self._s4s6_mismatch_seen = True
+            self._notify(
+                'warn',
+                'CẢNH BÁO: S4/S6 mismatch',
+                'Stack báo có khay (S6 ON) nhưng scan không thấy row nào — sẽ STOP sau lần đặt này để kiểm tra cảm biến S4 hoặc S6.'
+            )
             self._output_target_pos = target_mm
             self._output_row = 1
             self._enter_in(SystemState.S2A_INY_TARGETROW)

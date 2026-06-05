@@ -703,7 +703,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
     <table class="ct2" id="tIS"></table>
     <div style="margin-top:7px;display:flex;gap:5px">
       <button class="btn g" style="padding:3px 9px;font-size:11px" onclick="saveCfg('iny_input_stack','tIS')">Save</button>
-      <button class="btn"   style="padding:3px 9px;font-size:11px" onclick="loadCfg()">↻ Reload</button>
+      <button class="btn"   style="padding:3px 9px;font-size:11px" onclick="undoCfg('tIS')">↶ Back</button>
     </div>
   </div>
   <div class="card"><div class="ct">Output Stack — InY (mm)</div>
@@ -711,7 +711,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
     <table class="ct2" id="tOS"></table>
     <div style="margin-top:7px;display:flex;gap:5px">
       <button class="btn g" style="padding:3px 9px;font-size:11px" onclick="saveCfg('iny_output_stack','tOS')">Save</button>
-      <button class="btn"   style="padding:3px 9px;font-size:11px" onclick="loadCfg()">↻ Reload</button>
+      <button class="btn"   style="padding:3px 9px;font-size:11px" onclick="undoCfg('tOS')">↶ Back</button>
     </div>
   </div>
   <div class="card"><div class="ct">Output Table — OutY (mm)</div>
@@ -719,7 +719,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
     <table class="ct2" id="tOT"></table>
     <div style="margin-top:7px;display:flex;gap:5px">
       <button class="btn g" style="padding:3px 9px;font-size:11px" onclick="saveCfg('outy_output_table','tOT')">Save</button>
-      <button class="btn"   style="padding:3px 9px;font-size:11px" onclick="loadCfg()">↻ Reload</button>
+      <button class="btn"   style="padding:3px 9px;font-size:11px" onclick="undoCfg('tOT')">↶ Back</button>
     </div>
   </div>
   <div class="card"><div class="ct">Key Positions (mm)</div>
@@ -1052,14 +1052,30 @@ async function loadCfg() {
   }
   buildKP(c);
 }
+const undoStacks = {tIS:[], tOS:[], tOT:[]};
 function buildTbl(id,data) {
   const tbl=document.getElementById(id); tbl.innerHTML='';
+  if(undoStacks[id]) undoStacks[id].length=0;
   for(let r=10;r>=1;r--) {
     const v=data[r]||data[String(r)]||0;
     const tr=document.createElement('tr');
     tr.innerHTML=`<td class="rl">R${r}</td><td><input type="number" step="0.1" value="${v}" id="${id}_r${r}"></td><td style="font-size:9px;color:var(--dim)">${r===10?'Top':r===1?'Bot':''}</td>`;
     tbl.appendChild(tr);
+    const inp=tr.querySelector('input');
+    inp.dataset.prev=String(v);
+    inp.addEventListener('change',()=>{
+      if(inp.value===inp.dataset.prev) return;
+      undoStacks[id]?.push({row:r,prev:inp.dataset.prev});
+      inp.dataset.prev=inp.value;
+    });
   }
+}
+function undoCfg(id) {
+  const st=undoStacks[id];
+  if(!st||!st.length){ toast('Không có thay đổi để hoàn tác','wn'); return; }
+  const last=st.pop();
+  const inp=document.getElementById(`${id}_r${last.row}`);
+  if(inp){ inp.value=last.prev; inp.dataset.prev=last.prev; }
 }
 function buildKP(c) {
   const t=document.getElementById('tKP');

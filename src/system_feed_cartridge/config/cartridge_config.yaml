@@ -1,168 +1,124 @@
 servo_ips:
   1: 192.168.27.248
   2: 192.168.27.249
-  # 3: 192.168.27.250   # Chưa kết nối
-  # 4: 192.168.27.251   # Chưa kết nối
-  # 5: 192.168.27.252   # Chưa kết nối
-# Hardware Mapping & IO
 io_ip: 192.168.27.253
 io_ip_2: 192.168.27.254
 cylinder1_extend_channel: 4
 cylinder1_retract_channel: 5
-cylinder3_extend_channel: 6
-cylinder3_retract_channel: 7
-cylinder2_retract_channel: 8
 cylinder2_extend_channel: 9
-
-# Cyl3 hardware toggle — true = bật full safety (S15/S16 interlock + S13/S14 watchdog + Cyl3 extend step)
-# false = bypass row1 interlock + skip Cyl3 extend (chỉ dùng khi hardware Cyl3 chưa đấu nối)
+cylinder2_retract_channel: 8
 cyl3_present: true
-
-# Cụm output stack toggle — true = bật STATE 3/4 (cần Servo3+OutX+OutY+CPX 254 lắp đủ)
-# false = disable auto-trigger và khóa nút manual STATE 3/4. STATE 1/2 (Pos1) không bị ảnh hưởng.
-# ─────────────────────────────────────────────────────────────────────────────
-# PENDING HARDWARE Pos2 VERIFY: code S3/S4 đã có 3 fix mới merge main
-# (chain S4→S3 dispatcher, S3 standby 10mm, sequential OutX/OutY) nhưng
-# CHƯA test runtime vì flag dưới đang false. Khi hardware Pos2 sẵn sàng:
-#   1. đổi false → true ở dòng dưới
-#   2. rebuild + restart node
-#   3. verify sequence S3/S4 + chain S4→S3 (OUTX/OUTY tuần tự)
-#   4. fail → rollback `git reset --hard backup/main-pre-s3s4-fix-2026-06-03`
-# Memory đầy đủ: project_s3s4_pending_verify.md
-# ─────────────────────────────────────────────────────────────────────────────
 output_stack_present: false
-
-# Velocity (m/s) — synced with FAS
-fas_position_velocity: 0.05   # Fixed velocity for position moves (m/s) — match FAS setting
-jog_velocity: 0.05            # Default JOG velocity (m/s)
-jog_velocity_max: 0.08        # Max allowed JOG velocity (m/s) — matches drive max 80mm/s
-
-# Axis Coordinate Mapping (mm)
-inx_home: 0.0              # Home position for INX
-inx_safe: -60.0              # Safe position for INX (used when iny_safe_zone is active)
-inx_target2: 502.5          # Position 2 for S1 loading
-inx_output_stack: -298.0    # Tray stacking position for empty tray
-iny_home: 0.0              # Home/Neutral position for INY
-iny_safe_zone: 90.0        # Limit for "Safe" INY position before INX moves (Safety interlock — block INX khi INY > giá trị này)
-iny_push_clearance_mm: 5.0  # INY dừng tạm để kẹp trước khi đẩy vào robot (S1 step trung gian)
-
-# S1 INY Scanning Logic
-iny_target2: 87.0          # Tọa độ INY đẩy khay vào robot / kẹp khay cũ (S1 & S2A)
-target_scaninp1: 970.0       # Scan endpoint target (mm)
+servo_limits:
+  1: 560.0
+  2: 1050.0
+  3: 400.0
+  4: 600.0
+  5: 600.0
+homing_timeout: 120.0
+move_timeout: 80.0
+cylinder_timeout: 70.0
+modbus_timeout_ms: 3000
+fas_position_velocity: 0.05
+jog_velocity: 0.05
+jog_velocity_max: 0.08
+inx_home: 0.0
+inx_safe: -60.0
+inx_target2: 502.5
+inx_output_stack: -298.0
+iny_home: 0.0
+iny_safe_zone: 90.0
+iny_push_clearance_mm: 5.0
+target_scaninp1: 970.0
 target_scanoutp1: 990.0
-iny_scan_vel: 70             # Scanning speed (mm/s)
-iny_row_vel: 30              # Docking speed (mm/s)
-iny_scan_valid_min_mm: 70.0 # Ignore triggers below this X coordinate (Noise filter)
-iny_scan_valid_max_mm: 980.0 # Valid scan range upper limit
-s1_scan_noise_retry_limit: 1 # Max automatic retries if noise is detected
-inx_noise_recovery_mm: 10.0  # Safe INX recovery pos during noise failure
-
+iny_scan_vel: 70.0
+iny_row_vel: 30.0
+iny_scan_valid_min_mm: 70.0
+iny_scan_valid_max_mm: 980.0
+s1_scan_noise_retry_limit: 1
+inx_noise_recovery_mm: 10.0
 iny_input_zones:
   1:
-  - 970.0
-  - 880.0
-  - 1015.0
+  - 980.0
+  - 900.0
+  - 1010.0
   2:
-  - 879.0
-  - 790.0
-  - 945.0
-  3:
-  - 789.0
-  - 700.0
-  - 875.0
-  4:
-  - 699.0
-  - 610.0
-  - 805.0
-  5:
-  - 609.0
-  - 520.0
-  - 735.0
-  6:
-  - 519.0
-  - 430.0
-  - 665.0
-  7:
-  - 429.0
-  - 340.0
-  - 595.0
-  8:
-  - 339.0
-  - 250.0
-  - 525.0
-  9:
-  - 249.0
-  - 160.0
-  - 455.0
-  10:
-  - 159.0
-  - 70.0
-  - 385.0
-iny_output_zones:
-  1:
-  - 981.0
-  - 891.0
-  - 1020.0
-  2:
-  - 890.0
-  - 801.0
-  - 950.0
-  3:
-  - 800.0
-  - 711.0
   - 880.0
-  4:
-  - 710.0
-  - 621.0
   - 810.0
-  5:
-  - 620.0
-  - 531.0
+  - 920.0
+  3:
+  - 790.0
+  - 720.0
+  - 830.0
+  4:
+  - 700.0
+  - 630.0
   - 740.0
+  5:
+  - 610.0
+  - 540.0
+  - 650.0
   6:
-  - 530.0
-  - 441.0
-  - 670.0
+  - 520.0
+  - 450.0
+  - 560.0
   7:
-  - 440.0
-  - 351.0
-  - 600.0
+  - 430.0
+  - 360.0
+  - 470.0
   8:
   - 350.0
-  - 261.0
-  - 530.0
+  - 270.0
+  - 380.0
   9:
-  - 260.0
-  - 171.0
-  - 460.0
+  - 250.0
+  - 180.0
+  - 290.0
   10:
+  - 165.0
+  - 90.0
+  - 200.0
+iny_output_zones:
+  1:
+  - 1010.0
+  - 950.0
+  - 1015.0
+  2:
+  - 930.0
+  - 890.0
+  - 925.0
+  3:
+  - 830.0
+  - 800.0
+  - 835.0
+  4:
+  - 740.0
+  - 710.0
+  - 745.0
+  5:
+  - 650.0
+  - 620.0
+  - 655.0
+  6:
+  - 560.0
+  - 530.0
+  - 565.0
+  7:
+  - 470.0
+  - 440.0
+  - 475.0
+  8:
+  - 380.0
+  - 350.0
+  - 385.0
+  9:
+  - 290.0
+  - 260.0
+  - 295.0
+  10:
+  - 200.0
   - 170.0
-  - 81.0
-  - 390.0
-
-
-#-------------------------------------------------------------------------
-
-servo3_home: 0.0           # Điểm lùi sâu nhất của trục Servo 3
-servo3_target1: 10.0       # Điểm chờ của Servo 3 (Bãi đỗ khi dẹp đường)
-servo3_target2: 400.0      # Tọa độ đẩy băng nhám / băng đạn ra của Servo 3
-servo3_push_position: 300.0 # Tọa độ ép khay trước trong quá trình nhồi phụ
-servo3_jog_velocity: 50.0  # Tốc độ lùi/tốc độ rà của Servo 3
-servo3_feed_velocity: 50.0 # Tốc độ bơm khay của Servo 3
-outx_home: 0.0             # Home position cho trục OutX (S4 kéo ngang)
-outx_target1: 100.0        # Điểm chờ chờ bốc khay (ngay trước Pos 2)
-outx_target2: 400.0        # Tọa độ OUTX để ra lấy khay từ Pos 1 (sau S2A)
-outx_target3: 20.0         # Tọa độ OUTX lùi về để thả khay ra khỏi hệ thống
-outy_home: 0.0             # Home position cho trục OutY (S5 bốc dọc)
-outy_target1: 10.0         # Tốc độ nâng/hạ an toàn của khay (Clearance)
-outy_target2: 300.0        # Tọa độ hạ khay chờ xuống dàn
-outy_pick_pos: 100.0       # Tọa độ chính xác để ngoạm khay tại InX stack
-outy_safe_zone: 10.0       # Vùng an toàn của OUTY (phải nâng cao hơn mức này thì OUTX mới được dịch chuyển)
-outy_search_velocity: 40.0 # Tốc độ quét tìm hàng của OUTY (quét qua S10)
-outy_row_limit: 680.0
-outy_slow_vel: 10.0
-target_scanoutp2: 500.0
-outy_scan_arm_mm: 50.0
+  - 205.0
 outy_output_zones:
   10:
   - 9.0
@@ -204,298 +160,263 @@ outy_output_zones:
   - 530.0
   - 471.0
   - 500.0
-servo_limits:
-  1: 560.0
-  2: 1050.0
-  3: 400.0
-  4: 600.0
-  5: 600.0
+iny_target2: 87.0
+servo3_home: 0.0
+servo3_target1: 10.0
+servo3_target2: 400.0
+servo3_push_position: 300.0
+servo3_jog_velocity: 50.0
+servo3_feed_velocity: 50.0
+outx_home: 0.0
+outx_target1: 100.0
+outx_target2: 400.0
+outx_target3: 20.0
+outy_home: 0.0
+outy_target1: 10.0
+outy_target2: 300.0
+outy_pick_pos: 100.0
+outy_safe_zone: 10.0
+outy_search_velocity: 40.0
+outy_row_limit: 680.0
+outy_slow_vel: 10.0
+target_scanoutp2: 500.0
+outy_scan_arm_mm: 50.0
 iny_search_velocity: 30.0
 iny_slow_velocity: 10.0
-position_tolerance: 2.0    # mm — sai số cho phép coi servo "đã thực sự đến target"
-                            # (dùng trong _at_position() / _s1_wait_arrive / gate S4).
-                            # Đặt thấp = chặt = chờ servo settle đúng vị trí trước khi sang
-                            # state nguy hiểm. Tăng nếu drive overshoot nhiều và retry vô ích.
+position_tolerance: 2.0
 outx_safe_position_threshold: 100.0
 max_trays: 8
 max_slots_per_output_tray: 9
-homing_timeout: 120.0
-move_timeout: 80.0
-cylinder_timeout: 70.0
-# --------------------------------------------------------------------------
-# LƯU Ý QUAN TRỌNG VỀ NETWORK TIMEOUT (Anti-Deadlock Modbus)
-# - modbus_timeout_ms (mặc định: 3000ms):
-#   => Thời gian chờ tối đa cho 1 lệnh Modbus TCP (đọc position/phát lệnh).
-#   => GIẢM quá thấp (<1500ms): Dễ tuột cáp (Modbus giả lỗi) qua Switch LAN do ping spike.
-#   => TĂNG quá cao (>10000ms): Nếu mạng rớt thật, Thread sẽ bị Treo Cứng ôm trọn Node gây đơ GUI.
-# *Giải pháp an toàn hiện tại: Đã tách Thread _publish_positions ở Python Node,
-#  timeout = 3000ms là đủ nhanh để văng lỗi mà luồng ROS không bị freeze.
-# --------------------------------------------------------------------------
-modbus_timeout_ms: 3000
-# =============================================================================
-# SENSOR CONFIGURATION — Cartridge Feeding System
-# =============================================================================
-# Phân chia:
-# - CPX 253: Module 2 (I1.0-I1.7) và Module 3 (I2.0-I2.7)
-# - CPX 254: Module 2 (I3.0-I3.7)
-# =============================================================================
-
 num_sensors: 22
-
 sensor_type: PNP
-sensor_logic: NO
-
+sensor_logic: 'NO'
 sensors:
-  # [CPX 253] MODULE 2: I1.0 -> I1.7
-  - id: 1
-    name: S1_BELT_START
-    gui_label: "Belt start"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I1.0"
-    desc: "phát hiện khay ở đầu băng tải đầu vào"
-    pos: pos1
-    role: conveyor
-    used_in: ['IDLE']
-    active: true
-
-  - id: 2
-    name: S2_BELT_MID
-    gui_label: "Belt mid"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I1.1"
-    desc: "phát hiện khay đang di chuyển"
-    pos: pos1
-    role: conveyor
-    used_in: ['IDLE']
-    active: true
-
-  - id: 3
-    name: S3_BELT_END
-    gui_label: "Belt end"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I1.2"
-    desc: "xác nhận khay đã tới cuối băng tải"
-    pos: pos1
-    role: conveyor
-    used_in: ['IDLE']
-    active: true
-
-  - id: 4
-    name: S4_SCAN_STACK_POS1
-    gui_label: "Scan Stack Pos1"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I1.3"
-    desc: "phát hiện chồng khay kim loại"
-    pos: pos1
-    role: stack_detect
-    used_in: ['S1_INY_SCAN']
-    active: true
-
-  - id: 5
-    name: S5_OUTPUT_DETECT
-    gui_label: "Output det."
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I1.4"
-    desc: "xác nhận khay vào vị trí nạp"
-    pos: pos1
-    role: tray_detect
-    used_in: ['S1_CHECK_S5']
-    active: true
-
-  - id: 6
-    name: S6_CHECK_TRAY_P1
-    gui_label: "Check Tray OutP1"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I1.5"
-    desc: "snapshot có khay"
-    pos: pos1
-    role: stack_detect
-    used_in: ['S2A_CHECK_INTERLOCK']
-    active: true
-
-  - id: 7
-    name: S7_TRAY_AT_ROBOT
-    gui_label: "Khay tại Robot"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I1.6"
-    desc: "xác nhận khay đã lên vị trí robot"
-    pos: pos1
-    role: tray_detect
-    used_in: ['IDLE']
-    active: true
-
-  - id: 8
-    name: S8_RESERVED
-    gui_label: "[Reserved]"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I1.7"
-    desc: "chưa sử dụng"
-    pos: pos1
-    role: unused
-    used_in: []
-    active: false
-
-  # [CPX 253] MODULE 3: I2.0 -> I2.7
-  - id: 9
-    name: S9_CYL1_RETRACTED
-    gui_label: "Cyl1 Ret"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I2.0"
-    desc: "Cylinder 1 đã co lại hoàn toàn"
-    pos: pos1
-    role: cyl_retracted
-    used_in: []
-    active: true
-
-  - id: 10
-    name: S10_CYL1_EXTENDED
-    gui_label: "Cyl1 Ext"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I2.1"
-    desc: "Cylinder 1 đã đẩy ra hoàn toàn"
-    pos: pos1
-    role: cyl_extended
-    used_in: []
-    active: true
-
-  - id: 11
-    name: S11_ATV_RUN
-    gui_label: "ATV Run"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I2.2"
-    desc: "Đọc trạng thái ATV Run"
-    pos: vfd
-    role: vfd_monitor
-    used_in: []
-    active: true
-
-  - id: 12
-    name: S12_ATV_FAULT
-    gui_label: "ATV Fault"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I2.3"
-    desc: "Đọc trạng thái ATV Fault"
-    pos: vfd
-    role: vfd_monitor
-    used_in: []
-    active: true
-
-  - id: 13
-    name: S13_OUT1_TRAYPOS1
-    gui_label: "OUT1 Tray Pos1"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I2.4"
-    desc: "Công tắc hành trình OUT1 tại Tray Pos 1 (Omron D4C-1201, pin plunger, 1NO+1NC SPDT, wired NO)"
-    pos: pos1
-    role: limit
-    used_in: []
-    active: true
-
-  - id: 14
-    name: S14_OUT2_TRAYPOS1
-    gui_label: "OUT2 Tray Pos1"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I2.5"
-    desc: "Công tắc hành trình OUT2 tại Tray Pos 1 (Omron D4C-1201, pin plunger, 1NO+1NC SPDT, wired NO)"
-    pos: pos1
-    role: limit
-    used_in: []
-    active: true
-
-  - id: 15
-    name: S15_CYL3_RETRACTED
-    gui_label: "Cyl3 Retracted"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I2.6"
-    desc: "Feedback xác nhận Cyl3 đã rút về"
-    pos: pos1
-    role: feedback
-    used_in: []
-    active: true
-
-  - id: 16
-    name: S16_CYL3_EXTENDED
-    gui_label: "Cyl3 Extended"
-    cpx_ip: "192.168.27.253"
-    cpx_channel: "I2.7"
-    desc: "Feedback xác nhận Cyl3 đã đẩy ra"
-    pos: pos1
-    role: feedback
-    used_in: []
-    active: true
-
-  # [CPX 254] MODULE 2: I3.0 -> I3.7
-  - id: 17
-    name: S17_PLATFORM
-    gui_label: "Platform"
-    cpx_ip: "192.168.27.254"
-    cpx_channel: "I3.0"
-    desc: "khay đã lên Platform"
-    pos: pos2
-    role: tray_detect
-    used_in: []
-    active: true
-
-  - id: 18
-    name: S18_FEED_OK
-    gui_label: "Feed OK"
-    cpx_ip: "192.168.27.254"
-    cpx_channel: "I3.1"
-    desc: "xác nhận cấp khay"
-    pos: pos2
-    role: tray_detect
-    used_in: []
-    active: true
-
-  - id: 19
-    name: S19_CHECK_TRAY_P2
-    gui_label: "Check Tray OutP2"
-    cpx_ip: "192.168.27.254"
-    cpx_channel: "I3.2"
-    desc: "xác nhận có khay"
-    pos: pos2
-    role: stack_detect
-    used_in: []
-    active: true
-
-  - id: 20
-    name: S20_SCAN_STACK_POS2
-    gui_label: "Scan Stack Pos2"
-    cpx_ip: "192.168.27.254"
-    cpx_channel: "I3.3"
-    desc: "OutY phát hiện cạnh"
-    pos: pos2
-    role: stack_detect
-    used_in: []
-    active: true
-
-  - id: 21
-    name: S21_CYL2_RETRACTED
-    gui_label: "Cyl2 Ret"
-    cpx_ip: "192.168.27.254"
-    cpx_channel: "I3.4"
-    desc: "Cylinder 2 co lại"
-    pos: pos2
-    role: cyl_retracted
-    used_in: []
-    active: true
-
-  - id: 22
-    name: S22_CYL2_EXTENDED
-    gui_label: "Cyl2 Ext"
-    cpx_ip: "192.168.27.254"
-    cpx_channel: "I3.5"
-    desc: "Cylinder 2 đẩy ra"
-    pos: pos2
-    role: cyl_extended
-    used_in: []
-    active: true
-
-# =============================================================================
-# KÊNH DO — CYLINDER OUTPUT (Digital Output)
-# =============================================================================
-cylinder_outputs:
-  cylinder1_retract_channel: 4
-  cylinder1_extend_channel:  5
-  cylinder2_retract_channel: 8
-  cylinder2_extend_channel:  9
+- id: 1
+  name: S1_BELT_START
+  gui_label: Belt start
+  cpx_ip: 192.168.27.253
+  cpx_channel: I1.0
+  desc: phát hiện khay ở đầu băng tải đầu vào
+  pos: pos1
+  role: conveyor
+  used_in:
+  - IDLE
+  active: true
+- id: 2
+  name: S2_BELT_MID
+  gui_label: Belt mid
+  cpx_ip: 192.168.27.253
+  cpx_channel: I1.1
+  desc: phát hiện khay đang di chuyển
+  pos: pos1
+  role: conveyor
+  used_in:
+  - IDLE
+  active: true
+- id: 3
+  name: S3_BELT_END
+  gui_label: Belt end
+  cpx_ip: 192.168.27.253
+  cpx_channel: I1.2
+  desc: xác nhận khay đã tới cuối băng tải
+  pos: pos1
+  role: conveyor
+  used_in:
+  - IDLE
+  active: true
+- id: 4
+  name: S4_SCAN_STACK_POS1
+  gui_label: Scan Stack Pos1
+  cpx_ip: 192.168.27.253
+  cpx_channel: I1.3
+  desc: phát hiện chồng khay kim loại
+  pos: pos1
+  role: stack_detect
+  used_in:
+  - S1_INY_SCAN
+  active: true
+- id: 5
+  name: S5_OUTPUT_DETECT
+  gui_label: Output det.
+  cpx_ip: 192.168.27.253
+  cpx_channel: I1.4
+  desc: xác nhận khay vào vị trí nạp
+  pos: pos1
+  role: tray_detect
+  used_in:
+  - S1_CHECK_S5
+  active: true
+- id: 6
+  name: S6_CHECK_TRAY_P1
+  gui_label: Check Tray OutP1
+  cpx_ip: 192.168.27.253
+  cpx_channel: I1.5
+  desc: snapshot có khay
+  pos: pos1
+  role: stack_detect
+  used_in:
+  - S2A_CHECK_INTERLOCK
+  active: true
+- id: 7
+  name: S7_TRAY_AT_ROBOT
+  gui_label: Khay tại Robot
+  cpx_ip: 192.168.27.253
+  cpx_channel: I1.6
+  desc: xác nhận khay đã lên vị trí robot
+  pos: pos1
+  role: tray_detect
+  used_in:
+  - IDLE
+  active: true
+- id: 8
+  name: S8_RESERVED
+  gui_label: '[Reserved]'
+  cpx_ip: 192.168.27.253
+  cpx_channel: I1.7
+  desc: chưa sử dụng
+  pos: pos1
+  role: unused
+  used_in: []
+  active: false
+- id: 9
+  name: S9_CYL1_RETRACTED
+  gui_label: Cyl1 Ret
+  cpx_ip: 192.168.27.253
+  cpx_channel: I2.0
+  desc: Cylinder 1 đã co lại hoàn toàn
+  pos: pos1
+  role: cyl_retracted
+  used_in: []
+  active: true
+- id: 10
+  name: S10_CYL1_EXTENDED
+  gui_label: Cyl1 Ext
+  cpx_ip: 192.168.27.253
+  cpx_channel: I2.1
+  desc: Cylinder 1 đã đẩy ra hoàn toàn
+  pos: pos1
+  role: cyl_extended
+  used_in: []
+  active: true
+- id: 11
+  name: S11_ATV_RUN
+  gui_label: ATV Run
+  cpx_ip: 192.168.27.253
+  cpx_channel: I2.2
+  desc: Đọc trạng thái ATV Run
+  pos: vfd
+  role: vfd_monitor
+  used_in: []
+  active: true
+- id: 12
+  name: S12_ATV_FAULT
+  gui_label: ATV Fault
+  cpx_ip: 192.168.27.253
+  cpx_channel: I2.3
+  desc: Đọc trạng thái ATV Fault
+  pos: vfd
+  role: vfd_monitor
+  used_in: []
+  active: true
+- id: 13
+  name: S13_OUT1_TRAYPOS1
+  gui_label: OUT1 Tray Pos1
+  cpx_ip: 192.168.27.253
+  cpx_channel: I2.4
+  desc: Công tắc hành trình OUT1 tại Tray Pos 1 (Omron D4C-1201, pin plunger, 1NO+1NC
+    SPDT, wired NO)
+  pos: pos1
+  role: limit
+  used_in: []
+  active: true
+- id: 14
+  name: S14_OUT2_TRAYPOS1
+  gui_label: OUT2 Tray Pos1
+  cpx_ip: 192.168.27.253
+  cpx_channel: I2.5
+  desc: Công tắc hành trình OUT2 tại Tray Pos 1 (Omron D4C-1201, pin plunger, 1NO+1NC
+    SPDT, wired NO)
+  pos: pos1
+  role: limit
+  used_in: []
+  active: true
+- id: 15
+  name: S15_CYL3_RETRACTED
+  gui_label: Cyl3 Retracted
+  cpx_ip: 192.168.27.253
+  cpx_channel: I2.6
+  desc: Feedback xác nhận Cyl3 đã rút về
+  pos: pos1
+  role: feedback
+  used_in: []
+  active: true
+- id: 16
+  name: S16_CYL3_EXTENDED
+  gui_label: Cyl3 Extended
+  cpx_ip: 192.168.27.253
+  cpx_channel: I2.7
+  desc: Feedback xác nhận Cyl3 đã đẩy ra
+  pos: pos1
+  role: feedback
+  used_in: []
+  active: true
+- id: 17
+  name: S17_PLATFORM
+  gui_label: Platform
+  cpx_ip: 192.168.27.254
+  cpx_channel: I3.0
+  desc: khay đã lên Platform
+  pos: pos2
+  role: tray_detect
+  used_in: []
+  active: true
+- id: 18
+  name: S18_FEED_OK
+  gui_label: Feed OK
+  cpx_ip: 192.168.27.254
+  cpx_channel: I3.1
+  desc: xác nhận cấp khay
+  pos: pos2
+  role: tray_detect
+  used_in: []
+  active: true
+- id: 19
+  name: S19_CHECK_TRAY_P2
+  gui_label: Check Tray OutP2
+  cpx_ip: 192.168.27.254
+  cpx_channel: I3.2
+  desc: xác nhận có khay
+  pos: pos2
+  role: stack_detect
+  used_in: []
+  active: true
+- id: 20
+  name: S20_SCAN_STACK_POS2
+  gui_label: Scan Stack Pos2
+  cpx_ip: 192.168.27.254
+  cpx_channel: I3.3
+  desc: OutY phát hiện cạnh
+  pos: pos2
+  role: stack_detect
+  used_in: []
+  active: true
+- id: 21
+  name: S21_CYL2_RETRACTED
+  gui_label: Cyl2 Ret
+  cpx_ip: 192.168.27.254
+  cpx_channel: I3.4
+  desc: Cylinder 2 co lại
+  pos: pos2
+  role: cyl_retracted
+  used_in: []
+  active: true
+- id: 22
+  name: S22_CYL2_EXTENDED
+  gui_label: Cyl2 Ext
+  cpx_ip: 192.168.27.254
+  cpx_channel: I3.5
+  desc: Cylinder 2 đẩy ra
+  pos: pos2
+  role: cyl_extended
+  used_in: []
+  active: true
