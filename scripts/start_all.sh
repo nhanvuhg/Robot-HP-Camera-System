@@ -335,7 +335,7 @@ fi
 # ══════════════════════════════════════════
 # [9] RS485 BUS NODE — RevPi A (Loadcell + VFD)
 # ══════════════════════════════════════════
-REVPI_HOST="${REVPI_HOST:-192.168.27.176}"
+REVPI_HOST="${REVPI_HOST:-192.168.27.88}"
 REVPI_USER="${REVPI_USER:-pi}"
 REVPI_WS="${REVPI_WS:-/home/${REVPI_USER}/ros2_jazzy}"
 
