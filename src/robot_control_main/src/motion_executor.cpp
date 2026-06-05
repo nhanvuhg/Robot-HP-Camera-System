@@ -898,7 +898,7 @@ private:
             if (!moveR(dx, dy, dz)) return false;
         }
         
-        // --- INPUT ROW → BUFFER: Picker bốc khay từ input stack rồi nhả vào buffer ---
+        // --- INPUT ROW → BUFFER: Picker bốc cart từ input stack rồi nhả vào buffer ---
         if (!moveR(0, 0, -51,3)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại input row
         if (!wait(1.0)) return false;

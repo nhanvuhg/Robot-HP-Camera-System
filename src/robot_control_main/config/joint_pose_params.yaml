@@ -15,7 +15,7 @@
       - "J,104.2439,45.5457,-153.7780,62.7823,85.6854,184.4839"  # 0: Home position
       
       # INDEX 1-5: INPUT TRAY ROW 1 (Row 1 base, Row 2-5 are calculated but kept here to maintain index spacing)
-      - "J,189.8000,-5.7527,-131.2566,1.6793,93.6393,182.2037"       # 1:Row 1 Base
+      - "J,191.0324,-4.2092,-131.1865,1.8586,94.0913,185.1179"       # 1:Row 1 Base
       - "J,0,0,0,0,0,0" # 2: Placeholder
       - "J,0,0,0,0,0,0" # 3: Placeholder
       - "J,0,0,0,0,0,0" # 4: Placeholder
