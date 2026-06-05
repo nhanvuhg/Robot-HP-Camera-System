@@ -287,8 +287,10 @@ Item {
                                             if (modelData.key === "camera_ai") {
                                                 robotController.selectRow(0)
                                                 robotController.setAiMode(true)
+                                                hpController.publishMode(0)  // sync Fill HP → Auto
                                             } else if (modelData.key === "auto") {
                                                 robotController.setAutoMode(true)
+                                                hpController.publishMode(0)  // sync Fill HP → Auto
                                             }
                                         }
                                     }

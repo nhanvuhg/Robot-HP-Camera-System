@@ -540,6 +540,7 @@
                                                 anchors.fill: parent
                                                 onClicked: {
                                                     cartridgeController.setMode("auto")
+                                                    hpController.publishMode(0)  // sync Fill HP → Auto
                                                     modeDropdown.expanded = false
                                                 }
                                             }
@@ -565,6 +566,7 @@
                                                 onClicked: {
                                                     cartridgeController.setMode("manual")
                                                     cartridgeController.startSystem()
+                                                    hpController.publishMode(2)  // sync Fill HP → Manual
                                                     modeDropdown.expanded = false
                                                 }
                                             }
@@ -657,6 +659,7 @@
                                         onClicked: {
                                             if (cartridgeController.currentMode === "jog") {
                                                 cartridgeController.setMode("manual")
+                                                hpController.publishMode(2)  // sync Fill HP → Manual
                                             } else {
                                                 cartridgeController.gotoState("ABORT_TO_JOG")
                                             }
@@ -2269,12 +2272,35 @@
                     if (!rawStr) return out;
                     var parts = rawStr.split(",");
                     for (var i = 0; i < parts.length; i++) {
-                        var p = parts[i].split("=");
-                        if (p.length === 2) {
-                            out[p[0].trim()] = p[1].trim();
+                        var part = parts[i];
+                        var idx = part.indexOf('=');
+                        var alt = part.indexOf(':');
+                        var pos = idx >= 0 ? idx : alt;
+                        if (pos >= 0) {
+                            out[part.substring(0, pos).trim()] = part.substring(pos + 1).trim();
                         }
                     }
                     return out;
+                }
+
+                function actionMatches(label, action) {
+                    if (!label || !action) return false;
+                    var text = String(label).toLowerCase().trim();
+                    var act = String(action).toLowerCase().trim();
+                    var aliases = {
+                        "open": ["open", "mở"],
+                        "close": ["close", "đóng"],
+                        "on": ["on", "bật"],
+                        "off": ["off", "tắt"],
+                        "air": ["air"],
+                        "ink": ["ink"],
+                        "chamber": ["chamber"],
+                        "waste": ["waste"],
+                        "up": ["up", "lên"],
+                        "down": ["down", "xuống"]
+                    };
+                    var list = aliases[act] || [act];
+                    return list.indexOf(text) !== -1;
                 }
 
                 function parseValveState(rawStr) {
@@ -2300,485 +2326,1130 @@
                     if (!rawStr) return out;
                     var parts = rawStr.split("|");
                     for (var i = 0; i < parts.length; i++) {
-                        var p = parts[i].split("=");
-                        if (p.length === 2) {
-                            out[p[0].trim()] = p[1].trim();
+                        var part = parts[i];
+                        var idx = part.indexOf('=');
+                        var alt = part.indexOf(':');
+                        var pos = idx >= 0 ? idx : alt;
+                        if (pos >= 0) {
+                            out[part.substring(0, pos).trim()] = part.substring(pos + 1).trim();
                         }
                     }
                     return out;
+                }
+
+                function getCartridgeSummary(list) {
+                    if (!list || list.length === 0) return "No data";
+                    var min = 99999, max = -99999, sum = 0, count = 0;
+                    for (var i = 0; i < list.length; i++) {
+                        var val = parseFloat(list[i]);
+                        if (!isNaN(val)) {
+                            if (val < min) min = val;
+                            if (val > max) max = val;
+                            sum += val;
+                            count++;
+                        }
+                    }
+                    if (count === 0) return "No data";
+                    var avg = sum / count;
+                    return "Min: " + min.toFixed(1) + " | Avg: " + avg.toFixed(1) + " | Max: " + max.toFixed(1) + " mbar";
                 }
 
                 property var inputsMap: parseInputState(hpController.inputState)
                 property var valvesMap: parseValveState(hpController.valveState)
                 property var hwMap: parseHardwareState(hpController.hwStatus)
                 property var settingsMap: parseInputState(hpController.pressureThresholds)
+                property var systemStatusMap: parseHardwareState(hpController.systemStatus)
+                property var cartPressures: hpController.cartridgePressures
+                property var adviceMap: parseHardwareState(hpController.basePwmAdvice)
 
-                // Sub-tab for controls (0: Parameters, 1: Valves & Cylinders)
-                property int subTab: 0
+                property string currentMode: (systemStatusMap["MODE"] || "").toLowerCase()
+                property bool runningStatus: systemStatusMap["RUNNING"] === "True"
+                property bool hasError: hpController.errorStatus !== "" && hpController.errorStatus !== "OK" && hpController.errorStatus !== "-"
+
+                property int activeSettingsTab: 0
+
+                property var settingGroups: [
+                    {
+                        id: "auto",
+                        label: "Auto Settings",
+                        items: [
+                            { topic: "cart_fix", type: "threshold", label: "Cart Fix Pressure", min: 0, max: 1200, unit: "mbar" },
+                            { topic: "chamber_vac", type: "threshold", label: "Chamber Vacuum", min: 0, max: 1200, unit: "mbar" },
+                            { topic: "chamber_leak", type: "threshold", label: "Chamber Leak", min: 0, max: 1200, unit: "mbar" },
+                            { topic: "cart_vac", type: "threshold", label: "Cartridge Vacuum", min: 0, max: 1200, unit: "mbar" },
+                            { topic: "cart_leak", type: "threshold", label: "Cartridge Leak", min: 0, max: 1200, unit: "mbar" },
+                            { topic: "pressure_balance", type: "threshold", label: "Pressure Balance", min: 0, max: 1200, unit: "mbar" },
+                            { topic: "chamber_vent", type: "threshold", label: "Chamber Vent", min: 0, max: 1200, unit: "mbar" },
+                            { topic: "fill_compensation", type: "float", label: "Fill Compensation", min: -999, max: 999, unit: "ml" }
+                        ]
+                    },
+                    {
+                        id: "clean",
+                        label: "Clean Settings",
+                        items: [
+                            { topic: "cr_cart_vac", type: "threshold", label: "Cartridge Vacuum", min: 0, max: 1200, unit: "mbar" },
+                            { topic: "cr_cart_leak", type: "threshold", label: "Cartridge Leak", min: 0, max: 1200, unit: "mbar" },
+                            { topic: "cr_pressure_balance", type: "threshold", label: "Pressure Balance", min: 0, max: 1200, unit: "mbar" },
+                            { topic: "cr_volume", type: "float", label: "CR Volume", min: 0, max: 9999, unit: "ml" },
+                            { topic: "cr_flow_rate", type: "float", label: "CR Flow", min: 0, max: 100, unit: "ml/s" },
+                            { topic: "cr_loading_rate", type: "float", label: "CR Loading", min: 0, max: 100, unit: "ml/s" },
+                            { topic: "cr_cycles", type: "int", label: "CR Cycles", min: 1, max: 999, unit: "" }
+                        ]
+                    },
+                    {
+                        id: "dosing",
+                        label: "Dosing Settings",
+                        items: [
+                            { topic: "dosing_volume", type: "float", label: "Dosing Volume", min: 0, max: 9999, unit: "ml" },
+                            { topic: "dosing_flow_rate", type: "float", label: "Dosing Flow", min: 0, max: 100, unit: "ml/s" },
+                            { topic: "dosing_loading_rate", type: "float", label: "Dosing Loading", min: 0, max: 100, unit: "ml/s" }
+                        ]
+                    },
+                    {
+                        id: "pwm",
+                        label: "PWM & Tank",
+                        items: [
+                            { topic: "base_pwm", type: "int", label: "Base PWM", min: 0, max: 100, unit: "%" },
+                            { topic: "chamber_vent_pwm", type: "int", label: "Chamber Vent PWM", min: 0, max: 100, unit: "%" },
+                            { topic: "cr_valve10_pwm", type: "int", label: "CR Valve10 PWM", min: 0, max: 100, unit: "%" },
+                            { topic: "cr_valve10_duration", type: "float", label: "CR Valve10 Time", min: 0.5, max: 30, unit: "s" },
+                            { topic: "cr_valve5_duration", type: "float", label: "CR Valve5 Time", min: 0.5, max: 30, unit: "s" },
+                            { topic: "cr_return_duration", type: "float", label: "CR Return Time", min: 0.5, max: 30, unit: "s" },
+                            { topic: "tank_min", type: "float", label: "Tank Min", min: 0, max: 1000, unit: "mbar" },
+                            { topic: "tank_max", type: "float", label: "Tank Max", min: 0, max: 1000, unit: "mbar" }
+                        ]
+                    }
+                ]
 
                 Item {
                     id: p4Inner
                     anchors { fill: parent; margins: 10 }
 
-                    Row {
-                        id: p4MainLayout
+                    ColumnLayout {
                         anchors.fill: parent
-                        spacing: 12
+                        spacing: 8
 
-                        // ================= LEFT COLUMN: STATUS & TELEMETRY =================
-                        Column {
-                            width: (parent.width - 12) * 0.45
-                            height: parent.height
-                            spacing: 10
+                        // ── SYSTEM ERROR ALARM BANNER (Displays only on system fault) ──
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 52
+                            color: "#3d1010"
+                            border.color: root.cRed
+                            border.width: 2
+                            radius: 6
+                            visible: page4Root.hasError
 
-                            // Card 1: Overview
-                            Rectangle {
-                                width: parent.width; height: 165
-                                color: root.cBg2; border.color: root.cBorder; radius: 6
-                                Column {
-                                    anchors.fill: parent; anchors.margins: 10; spacing: 8
-                                    Row {
-                                        spacing: 6
-                                        Rectangle { width: 4; height: 16; radius: 1; color: root.cCyan; anchors.verticalCenter: parent.verticalCenter }
-                                        Text { text: "SYSTEM OVERVIEW"; color: root.cCyan; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.2 }
-                                    }
-                                    Grid {
-                                        columns: 2; spacing: 8; width: parent.width
-                                        Text { text: "Machine Status:"; color: root.cDim; font.pixelSize: 13; width: 140 }
-                                        Text { text: hpController.systemStatus || "-"; color: root.cText; font.pixelSize: 13; font.bold: true }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 12
 
-                                        Text { text: "Mode Status:"; color: root.cDim; font.pixelSize: 13 }
-                                        Text { text: hpController.modeStatus || "-"; color: root.cAccent; font.pixelSize: 13; font.bold: true }
-
-                                        Text { text: "Dosing Status:"; color: root.cDim; font.pixelSize: 13 }
-                                        Text { text: hpController.dosingStatus || "-"; color: root.cText; font.pixelSize: 13 }
-
-                                        Text { text: "Fill Status:"; color: root.cDim; font.pixelSize: 13 }
-                                        Text { text: hpController.fillStatus || "-"; color: root.cText; font.pixelSize: 13 }
-
-                                        Text { text: "Ball Cycle Time:"; color: root.cDim; font.pixelSize: 13 }
-                                        Text { text: hpController.ballCycleTime || "-"; color: root.cText; font.pixelSize: 13 }
-                                    }
+                                Text {
+                                    text: "⛔ CANH BAO LOI HE THONG:"
+                                    color: root.cRed
+                                    font.pixelSize: 22; font.bold: true
                                 }
-                            }
-
-                            // Card 2: Pressure Sensors
-                            Rectangle {
-                                width: parent.width; height: 190
-                                color: root.cBg2; border.color: root.cBorder; radius: 6
-                                Column {
-                                    anchors.fill: parent; anchors.margins: 10; spacing: 10
-                                    Row {
-                                        spacing: 6
-                                        Rectangle { width: 4; height: 16; radius: 1; color: root.cOrange; anchors.verticalCenter: parent.verticalCenter }
-                                        Text { text: "PRESSURE SENSORS"; color: root.cOrange; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.2 }
-                                    }
-
-                                    // S1
-                                    Column {
-                                        width: parent.width; spacing: 3
-                                        Row {
-                                            width: parent.width
-                                            Text { text: "S1 Chamber"; color: root.cDim; font.pixelSize: 12 }
-                                            Text { text: "  " + hpController.pressureS1.toFixed(1) + " mbar"; color: root.cText; font.pixelSize: 12; font.bold: true }
-                                        }
-                                        Rectangle {
-                                            width: parent.width; height: 8; color: "#112233"; radius: 4
-                                            Rectangle {
-                                                width: Math.max(0, Math.min(parent.width, (hpController.pressureS1 / 1200.0) * parent.width))
-                                                height: parent.height; color: root.cCyan; radius: 4
-                                            }
-                                        }
-                                    }
-
-                                    // S2
-                                    Column {
-                                        width: parent.width; spacing: 3
-                                        Row {
-                                            width: parent.width
-                                            Text { text: "S2 Cartridge"; color: root.cDim; font.pixelSize: 12 }
-                                            Text { text: "  " + hpController.pressureS2.toFixed(1) + " mbar"; color: root.cText; font.pixelSize: 12; font.bold: true }
-                                        }
-                                        Rectangle {
-                                            width: parent.width; height: 8; color: "#112233"; radius: 4
-                                            Rectangle {
-                                                width: Math.max(0, Math.min(parent.width, (hpController.pressureS2 / 1200.0) * parent.width))
-                                                height: parent.height; color: root.cGreen; radius: 4
-                                            }
-                                        }
-                                    }
-
-                                    // S3
-                                    Column {
-                                        width: parent.width; spacing: 3
-                                        Row {
-                                            width: parent.width
-                                            Text { text: "S3 Tank"; color: root.cDim; font.pixelSize: 12 }
-                                            Text { text: "  " + hpController.pressureS3.toFixed(1) + " mbar"; color: root.cText; font.pixelSize: 12; font.bold: true }
-                                        }
-                                        Rectangle {
-                                            width: parent.width; height: 8; color: "#112233"; radius: 4
-                                            Rectangle {
-                                                width: Math.max(0, Math.min(parent.width, (hpController.pressureS3 / 1000.0) * parent.width))
-                                                height: parent.height; color: root.cYellow; radius: 4
-                                            }
-                                        }
-                                    }
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: hpController.errorStatus
+                                    color: root.cText
+                                    font.pixelSize: 21; font.bold: true
+                                    elide: Text.ElideRight
                                 }
-                            }
-
-                            // Card 3: Inputs & Hardware Status
-                            Rectangle {
-                                width: parent.width; height: parent.height - 365
-                                color: root.cBg2; border.color: root.cBorder; radius: 6
-                                Column {
-                                    anchors.fill: parent; anchors.margins: 10; spacing: 8
-                                    Row {
-                                        spacing: 6
-                                        Rectangle { width: 4; height: 16; radius: 1; color: root.cGreen; anchors.verticalCenter: parent.verticalCenter }
-                                        Text { text: "DIGITAL INPUTS"; color: root.cGreen; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.2 }
-                                    }
-                                    
-                                    Grid {
-                                        columns: 2; spacing: 6; width: parent.width
-                                        Row {
-                                            spacing: 6; width: parent.width / 2 - 3
-                                            Rectangle {
-                                                width: 10; height: 10; radius: 5
-                                                color: (page4Root.inputsMap["optical_sensor"] === "on") ? root.cGreen : "#3a3a4a"
-                                            }
-                                            Text { text: "Optical Sensor"; color: root.cText; font.pixelSize: 11 }
-                                        }
-                                        Row {
-                                            spacing: 6; width: parent.width / 2 - 3
-                                            Rectangle {
-                                                width: 10; height: 10; radius: 5
-                                                color: (page4Root.inputsMap["chamber_closed"] === "on") ? root.cGreen : "#3a3a4a"
-                                            }
-                                            Text { text: "Chamber Closed"; color: root.cText; font.pixelSize: 11 }
-                                        }
-                                        Row {
-                                            spacing: 6; width: parent.width / 2 - 3
-                                            Rectangle {
-                                                width: 10; height: 10; radius: 5
-                                                color: (page4Root.inputsMap["ball_feed_up"] === "on") ? root.cGreen : "#3a3a4a"
-                                            }
-                                            Text { text: "Ball Feed Up"; color: root.cText; font.pixelSize: 11 }
-                                        }
-                                        Row {
-                                            spacing: 6; width: parent.width / 2 - 3
-                                            Rectangle {
-                                                width: 10; height: 10; radius: 5
-                                                color: (page4Root.inputsMap["ball_feed_down"] === "on") ? root.cGreen : "#3a3a4a"
-                                            }
-                                            Text { text: "Ball Feed Down"; color: root.cText; font.pixelSize: 11 }
-                                        }
-                                        Row {
-                                            spacing: 6; width: parent.width / 2 - 3
-                                            Rectangle {
-                                                width: 10; height: 10; radius: 5
-                                                color: (page4Root.inputsMap["seal_pin_up"] === "on") ? root.cGreen : "#3a3a4a"
-                                            }
-                                            Text { text: "Seal Pin Up"; color: root.cText; font.pixelSize: 11 }
-                                        }
-                                        Row {
-                                            spacing: 6; width: parent.width / 2 - 3
-                                            Rectangle {
-                                                width: 10; height: 10; radius: 5
-                                                color: (page4Root.inputsMap["seal_pin_down"] === "on") ? root.cGreen : "#3a3a4a"
-                                            }
-                                            Text { text: "Seal Pin Down"; color: root.cText; font.pixelSize: 11 }
-                                        }
-                                    }
-
-                                    // Hardware Connection
-                                    Row {
-                                        spacing: 6
-                                        Rectangle { width: 4; height: 16; radius: 1; color: root.cYellow; anchors.verticalCenter: parent.verticalCenter }
-                                        Text { text: "HARDWARE NODES"; color: root.cYellow; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.2 }
-                                    }
-                                    Flow {
-                                        width: parent.width; spacing: 8
-                                        Repeater {
-                                            model: ["Festo", "Piccolo", "ChamberVent", "Valve10"]
-                                            delegate: Rectangle {
-                                                width: 95; height: 24; radius: 4
-                                                color: root.cCard; border.color: root.cBorder
-                                                Row {
-                                                    anchors.centerIn: parent; spacing: 6
-                                                    Rectangle {
-                                                        width: 8; height: 8; radius: 4
-                                                        color: (page4Root.hwMap[modelData] === "OK") ? root.cGreen : root.cRed
-                                                    }
-                                                    Text { text: modelData; color: root.cText; font.pixelSize: 10; font.bold: true }
-                                                }
-                                            }
-                                        }
-                                    }
+                                CBtn {
+                                    lbl: "XAC NHAN & XOA"
+                                    fontSize: 19
+                                    w: 130; h: 36
+                                    bg: "#4d0000"; bc: root.cRed; tc: root.cRed
+                                    onClicked: hpController.publishString("error_control", "clear")
                                 }
                             }
                         }
 
-                        // ================= RIGHT COLUMN: CONTROLS & SETTINGS =================
-                        Column {
-                            width: (parent.width - 12) * 0.55
-                            height: parent.height
-                            spacing: 10
+                        // ── FLICKABLE CONTENT ──
+                        Flickable {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            contentWidth: width
+                            contentHeight: 1850 // Dynamic height fitting all elements
+                            clip: true
 
-                            // Action panel
-                            Rectangle {
-                                width: parent.width; height: 135
-                                color: root.cBg2; border.color: root.cBorder; radius: 6
-                                Column {
-                                    anchors.fill: parent; anchors.margins: 10; spacing: 8
-                                    Text { text: "MAIN SYSTEM CONTROLS"; color: root.cAccent; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.2 }
-                                    Row {
-                                        spacing: 6
-                                        CBtn {
-                                            lbl: "AUTO MODE"; w: 105; h: 32; bg: (hpController.modeStatus === "auto" ? root.cGreen : root.cCard)
-                                            onClicked: hpController.publishMode(1)
-                                        }
-                                        CBtn {
-                                            lbl: "MANUAL MODE"; w: 115; h: 32; bg: (hpController.modeStatus === "manual" ? root.cOrange : root.cCard)
-                                            onClicked: hpController.publishMode(0)
-                                        }
-                                        CBtn {
-                                            lbl: "RECONNECT"; w: 105; h: 32
-                                            onClicked: hpController.publishString("reconnect_cmd", "reconnect")
-                                        }
-                                        CBtn {
-                                            lbl: "CLEAR FAULT"; w: 110; h: 32; bc: root.cRed
-                                            onClicked: hpController.publishString("error_control", "clear_fault")
-                                        }
-                                    }
-                                    Row {
-                                        spacing: 6
-                                        CBtn {
-                                            lbl: "START RUN"; w: 105; h: 32; bg: "#003311"; bc: root.cGreen
-                                            onClicked: hpController.publishScreenControl("start")
-                                        }
-                                        CBtn {
-                                            lbl: "STOP RUN"; w: 115; h: 32; bg: "#330011"; bc: root.cRed
-                                            onClicked: hpController.publishScreenControl("stop")
-                                        }
-                                        CBtn {
-                                            lbl: "SERVO HOMING"; w: 105; h: 32
-                                            onClicked: hpController.publishString("servo_command", "homing")
-                                        }
-                                    }
-                                }
+                            ScrollBar.vertical: ScrollBar {
+                                width: 14
+                                policy: ScrollBar.AlwaysOn
+                                active: true
+                                background: Rectangle { color: "#111122"; radius: 7 }
+                                contentItem: Rectangle { color: root.cAccent; radius: 7 }
                             }
 
-                            // Sub-tabs
-                            Row {
-                                width: parent.width; height: 32; spacing: 4
-                                Rectangle {
-                                    width: parent.width / 2 - 2; height: parent.height; radius: 4
-                                    color: page4Root.subTab === 0 ? root.cCard : "transparent"
-                                    border.color: page4Root.subTab === 0 ? root.cBorder : "transparent"
-                                    Text { anchors.centerIn: parent; text: "PARAMETERS"; color: page4Root.subTab === 0 ? root.cAccent : root.cDim; font.bold: true; font.pixelSize: 14 }
-                                    MouseArea { anchors.fill: parent; onClicked: page4Root.subTab = 0 }
-                                }
-                                Rectangle {
-                                    width: parent.width / 2 - 2; height: parent.height; radius: 4
-                                    color: page4Root.subTab === 1 ? root.cCard : "transparent"
-                                    border.color: page4Root.subTab === 1 ? root.cBorder : "transparent"
-                                    Text { anchors.centerIn: parent; text: "VALVES & CYLINDERS (MANUAL)"; color: page4Root.subTab === 1 ? root.cAccent : root.cDim; font.bold: true; font.pixelSize: 14 }
-                                    MouseArea { anchors.fill: parent; onClicked: page4Root.subTab = 1 }
-                                }
-                            }
+                            RowLayout {
+                                width: parent.width - 20
+                                height: 1850
+                                spacing: 12
 
-                            // Sub-tab content card
-                            Rectangle {
-                                width: parent.width; height: parent.height - 187
-                                color: root.cBg2; border.color: root.cBorder; radius: 6
-                                
-                                // Tab 0: Parameters form
-                                ScrollView {
-                                    anchors.fill: parent; anchors.margins: 10
-                                    visible: page4Root.subTab === 0
-                                    clip: true
-                                    
-                                    Column {
-                                        width: parent.width - 20; spacing: 12
-                                        
-                                        Text { text: "Dosing Parameters"; color: root.cCyan; font.bold: true; font.pixelSize: 13 }
-                                        Column {
-                                            width: parent.width; spacing: 6
-                                            Row {
-                                                spacing: 8
-                                                Text { text: "Dosing Volume (ml):"; color: root.cText; font.pixelSize: 12; width: 140; anchors.verticalCenter: parent.verticalCenter }
-                                                Rectangle {
-                                                    width: 80; height: 26; color: root.cBg; border.color: root.cBorder; radius: 4
-                                                                                    TextInput {
-                                                        id: dVolInput; anchors.fill: parent; anchors.margins: 4
-                                                        color: root.cText; font.pixelSize: 12; font.bold: true; selectByMouse: true
-                                                        text: page4Root.settingsMap["dosing_volume"] || "20.0"
-                                                    }
-                                                }
-                                                CBtn { lbl: "Set"; w: 50; h: 26; fontSize: 11; onClicked: hpController.publishFloat("dosing_volume", parseFloat(dVolInput.text)) }
+                                // ================= COLUMN 1: TELEMETRY & OVERVIEW (24.5%) =================
+                                ColumnLayout {
+                                    Layout.preferredWidth: p4Inner.width * 0.245
+                                    Layout.fillHeight: true
+                                    spacing: 12
+
+                                    // Overview Card
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 290
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 10
+                                            Text {
+                                                text: "SYSTEM MONITOR"; color: "#6cf"
+                                                font.pixelSize: 25; font.bold: true; font.letterSpacing: 1.5
                                             }
-                                            Row {
-                                                spacing: 8
-                                                Text { text: "Dosing Flow (ml/s):"; color: root.cText; font.pixelSize: 12; width: 140; anchors.verticalCenter: parent.verticalCenter }
-                                                Rectangle {
-                                                    width: 80; height: 26; color: root.cBg; border.color: root.cBorder; radius: 4
-                                                    TextInput {
-                                                        id: dFlowInput; anchors.fill: parent; anchors.margins: 4
-                                                        color: root.cText; font.pixelSize: 12; font.bold: true; selectByMouse: true
-                                                        text: page4Root.settingsMap["dosing_flow_rate"] || "20.0"
+
+                                            GridLayout {
+                                                Layout.fillWidth: true
+                                                columns: 2; columnSpacing: 12; rowSpacing: 8
+
+                                                Text { text: "Machine Mode:"; color: root.cDim; font.pixelSize: 20; font.bold: true }
+                                                Text {
+                                                    text: (page4Root.systemStatusMap["MODE"] || "-").toUpperCase()
+                                                    color: {
+                                                        var m = page4Root.currentMode
+                                                        if (m === "auto") return root.cGreen
+                                                        if (m === "clean & refill" || m.indexOf("clean") !== -1) return root.cOrange
+                                                        return root.cCyan
+                                                    }
+                                                    font.pixelSize: 20; font.bold: true
+                                                }
+
+                                                Text { text: "State / Action:"; color: root.cDim; font.pixelSize: 20; font.bold: true }
+                                                Text { text: page4Root.systemStatusMap["STATE"] || "-"; color: root.cText; font.pixelSize: 20; font.bold: true; elide: Text.ElideRight }
+
+                                                Text { text: "Process Status:"; color: root.cDim; font.pixelSize: 20; font.bold: true }
+                                                Row {
+                                                    spacing: 6
+                                                    Rectangle {
+                                                        width: 18; height: 18; radius: 9
+                                                        color: page4Root.runningStatus ? root.cGreen : "#3a3a4a"
+                                                    }
+                                                    Text {
+                                                        text: page4Root.runningStatus ? "IN PROCESS" : "STOPPED"
+                                                        color: page4Root.runningStatus ? root.cGreen : root.cDim
+                                                        font.pixelSize: 19; font.bold: true
                                                     }
                                                 }
-                                                CBtn { lbl: "Set"; w: 50; h: 26; fontSize: 11; onClicked: hpController.publishFloat("dosing_flow_rate", parseFloat(dFlowInput.text)) }
+
+                                                Text { text: "Cycle / Volume:"; color: root.cDim; font.pixelSize: 20; font.bold: true }
+                                                Text {
+                                                    text: "C: " + (page4Root.systemStatusMap["CYCLE"] || "0") + " | V: " + (page4Root.systemStatusMap["VOLUME"] || "0") + " ml"
+                                                    color: root.cCyan; font.pixelSize: 20; font.bold: true
+                                                }
+                                            }
+
+                                            // Process active blocks row
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 38
+                                                spacing: 6
+
+                                                Rectangle {
+                                                    Layout.fillWidth: true; Layout.fillHeight: true; radius: 4
+                                                    color: (page4Root.runningStatus && page4Root.currentMode === "auto") ? "#003311" : "#1a1a2e"
+                                                    border.color: (page4Root.runningStatus && page4Root.currentMode === "auto") ? root.cGreen : root.cBorder
+                                                    border.width: 1
+                                                    Text { anchors.centerIn: parent; text: "AUTO FILL"; color: (page4Root.runningStatus && page4Root.currentMode === "auto") ? root.cGreen : root.cDim; font.pixelSize: 16; font.bold: true }
+                                                }
+                                                Rectangle {
+                                                    Layout.fillWidth: true; Layout.fillHeight: true; radius: 4
+                                                    color: (page4Root.runningStatus && (page4Root.currentMode === "auto" || page4Root.currentMode.indexOf("clean") !== -1)) ? "#003311" : "#1a1a2e"
+                                                    border.color: (page4Root.runningStatus && (page4Root.currentMode === "auto" || page4Root.currentMode.indexOf("clean") !== -1)) ? root.cGreen : root.cBorder
+                                                    border.width: 1
+                                                    Text { anchors.centerIn: parent; text: "DOSING"; color: (page4Root.runningStatus && (page4Root.currentMode === "auto" || page4Root.currentMode.indexOf("clean") !== -1)) ? root.cGreen : root.cDim; font.pixelSize: 16; font.bold: true }
+                                                }
+                                                Rectangle {
+                                                    Layout.fillWidth: true; Layout.fillHeight: true; radius: 4
+                                                    color: (page4Root.runningStatus && page4Root.currentMode.indexOf("clean") !== -1) ? "#003311" : "#1a1a2e"
+                                                    border.color: (page4Root.runningStatus && page4Root.currentMode.indexOf("clean") !== -1) ? root.cGreen : root.cBorder
+                                                    border.width: 1
+                                                    Text { anchors.centerIn: parent; text: "CLEAN REFILL"; color: (page4Root.runningStatus && page4Root.currentMode.indexOf("clean") !== -1) ? root.cGreen : root.cDim; font.pixelSize: 16; font.bold: true }
+                                                }
                                             }
                                         }
+                                    }
 
-                                        Text { text: "Clean Refill (CR) Parameters"; color: root.cOrange; font.bold: true; font.pixelSize: 13 }
-                                        Column {
-                                            width: parent.width; spacing: 6
-                                            Row {
-                                                spacing: 8
-                                                Text { text: "CR Volume (ml):"; color: root.cText; font.pixelSize: 12; width: 140; anchors.verticalCenter: parent.verticalCenter }
-                                                Rectangle {
-                                                    width: 80; height: 26; color: root.cBg; border.color: root.cBorder; radius: 4
-                                                    TextInput {
-                                                        id: crVolInput; anchors.fill: parent; anchors.margins: 4
-                                                        color: root.cText; font.pixelSize: 12; font.bold: true; selectByMouse: true
-                                                        text: page4Root.settingsMap["cr_volume"] || "50.0"
-                                                    }
-                                                }
-                                                CBtn { lbl: "Set"; w: 50; h: 26; fontSize: 11; onClicked: hpController.publishFloat("cr_volume", parseFloat(crVolInput.text)) }
+                                    // Run Controls Card
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 180
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 10
+                                            Text {
+                                                text: "MAIN SYSTEM CONTROLS"; color: "#6cf"
+                                                font.pixelSize: 25; font.bold: true; font.letterSpacing: 1.5
                                             }
-                                            Row {
-                                                spacing: 8
-                                                Text { text: "CR Flow Rate (ml/s):"; color: root.cText; font.pixelSize: 12; width: 140; anchors.verticalCenter: parent.verticalCenter }
-                                                Rectangle {
-                                                    width: 80; height: 26; color: root.cBg; border.color: root.cBorder; radius: 4
-                                                    TextInput {
-                                                        id: crFlowInput; anchors.fill: parent; anchors.margins: 4
-                                                        color: root.cText; font.pixelSize: 12; font.bold: true; selectByMouse: true
-                                                        text: page4Root.settingsMap["cr_flow_rate"] || "15.0"
-                                                    }
+
+                                            GridLayout {
+                                                Layout.fillWidth: true; Layout.fillHeight: true
+                                                columns: 3; columnSpacing: 6; rowSpacing: 6
+
+                                                CBtn {
+                                                    Layout.fillWidth: true; Layout.preferredHeight: 40
+                                                    lbl: "AUTO MODE"; fontSize: 19
+                                                    bg: page4Root.currentMode === "auto" ? "#003311" : root.cCard
+                                                    bc: page4Root.currentMode === "auto" ? root.cGreen : root.cBorder
+                                                    tc: page4Root.currentMode === "auto" ? root.cGreen : root.cText
+                                                    onClicked: { hpController.publishMode(0); cartridgeController.setMode("auto") }
                                                 }
-                                                CBtn { lbl: "Set"; w: 50; h: 26; fontSize: 11; onClicked: hpController.publishFloat("cr_flow_rate", parseFloat(crFlowInput.text)) }
-                                            }
-                                            Row {
-                                                spacing: 8
-                                                Text { text: "CR Cycles:"; color: root.cText; font.pixelSize: 12; width: 140; anchors.verticalCenter: parent.verticalCenter }
-                                                Rectangle {
-                                                    width: 80; height: 26; color: root.cBg; border.color: root.cBorder; radius: 4
-                                                    TextInput {
-                                                        id: crCyclesInput; anchors.fill: parent; anchors.margins: 4
-                                                        color: root.cText; font.pixelSize: 12; font.bold: true; selectByMouse: true
-                                                        text: page4Root.settingsMap["cr_cycles"] || "3"
-                                                    }
+                                                CBtn {
+                                                    Layout.fillWidth: true; Layout.preferredHeight: 40
+                                                    lbl: "CLEAN MODE"; fontSize: 19
+                                                    bg: page4Root.currentMode.indexOf("clean") !== -1 ? "#331100" : root.cCard
+                                                    bc: page4Root.currentMode.indexOf("clean") !== -1 ? root.cOrange : root.cBorder
+                                                    tc: page4Root.currentMode.indexOf("clean") !== -1 ? root.cOrange : root.cText
+                                                    onClicked: hpController.publishMode(1)
                                                 }
-                                                CBtn { lbl: "Set"; w: 50; h: 26; fontSize: 11; onClicked: hpController.publishInt("cr_cycles", parseInt(crCyclesInput.text)) }
+                                                CBtn {
+                                                    Layout.fillWidth: true; Layout.preferredHeight: 40
+                                                    lbl: "MANUAL MODE"; fontSize: 19
+                                                    bg: page4Root.currentMode === "manual" ? "#001133" : root.cCard
+                                                    bc: page4Root.currentMode === "manual" ? root.cCyan : root.cBorder
+                                                    tc: page4Root.currentMode === "manual" ? root.cCyan : root.cText
+                                                    onClicked: { hpController.publishMode(2); cartridgeController.setMode("manual"); cartridgeController.startSystem() }
+                                                }
+                                                CBtn {
+                                                    Layout.fillWidth: true; Layout.preferredHeight: 40
+                                                    lbl: "START RUN"; fontSize: 19
+                                                    bg: "#003311"; bc: root.cGreen; tc: root.cGreen
+                                                    onClicked: hpController.publishScreenControl("start")
+                                                }
+                                                CBtn {
+                                                    Layout.fillWidth: true; Layout.preferredHeight: 40
+                                                    lbl: "STOP RUN"; fontSize: 19
+                                                    bg: "#330011"; bc: root.cRed; tc: root.cRed
+                                                    onClicked: hpController.publishScreenControl("stop")
+                                                }
+                                                CBtn {
+                                                    Layout.fillWidth: true; Layout.preferredHeight: 40
+                                                    lbl: "RECONN CPX"; fontSize: 19
+                                                    bg: root.cCard; bc: root.cOrange; tc: root.cOrange
+                                                    onClicked: hpController.publishString("reconnect_cmd", "cpx")
+                                                }
                                             }
                                         }
+                                    }
 
-                                        Text { text: "PWM / Tank Parameters"; color: root.cYellow; font.bold: true; font.pixelSize: 13 }
-                                        Column {
-                                            width: parent.width; spacing: 6
-                                            Row {
+                                    // Hardware status
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 120
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 8
+                                            Text {
+                                                text: "HARDWARE NODES"; color: "#6cf"
+                                                font.pixelSize: 22; font.bold: true; font.letterSpacing: 1.2
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true; spacing: 8
+                                                Repeater {
+                                                    model: ["REVPI", "CPX", "SERVO"]
+                                                    delegate: Rectangle {
+                                                        Layout.fillWidth: true; height: 38; radius: 4
+                                                        color: root.cCard; border.color: root.cBorder
+                                                        Row {
+                                                            anchors.centerIn: parent; spacing: 8
+                                                            Rectangle {
+                                                                width: 12; height: 12; radius: 6
+                                                                color: (page4Root.hwMap[modelData] === "OK") ? root.cGreen : root.cRed
+                                                            }
+                                                            Text { text: modelData; color: root.cText; font.pixelSize: 19; font.bold: true }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Machine Status Card
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 330
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 8
+                                            Text {
+                                                text: "MACHINE STATUS"; color: "#6cf"
+                                                font.pixelSize: 25; font.bold: true; font.letterSpacing: 1.5
+                                            }
+
+                                            GridLayout {
+                                                Layout.fillWidth: true; Layout.fillHeight: true
+                                                columns: 2; columnSpacing: 12; rowSpacing: 6
+
+                                                Text { text: "Dosing status:"; color: root.cDim; font.pixelSize: 19; font.bold: true }
+                                                Text { text: hpController.dosingStatus || "-"; color: root.cText; font.pixelSize: 19; font.bold: true }
+
+                                                Text { text: "Fill status:"; color: root.cDim; font.pixelSize: 19; font.bold: true }
+                                                Text { text: hpController.fillStatus || "-"; color: root.cText; font.pixelSize: 19; font.bold: true }
+
+                                                Text { text: "Fix status:"; color: root.cDim; font.pixelSize: 19; font.bold: true }
+                                                Text { text: hpController.fixStatus || "-"; color: root.cText; font.pixelSize: 19; font.bold: true }
+
+                                                Text { text: "Clean Refill:"; color: root.cDim; font.pixelSize: 19; font.bold: true }
+                                                Text { text: hpController.crStatus || "-"; color: root.cText; font.pixelSize: 19; font.bold: true }
+
+                                                Text { text: "Servo Position:"; color: root.cDim; font.pixelSize: 19; font.bold: true }
+                                                Text { text: hpController.servoPosition.toFixed(2) + " mm"; color: root.cCyan; font.pixelSize: 19; font.bold: true }
+
+                                                Text { text: "Servo Raw:"; color: root.cDim; font.pixelSize: 19; font.bold: true }
+                                                Text { text: hpController.servoPositionRaw.toString(); color: root.cText; font.pixelSize: 19; font.bold: true }
+
+                                                Text { text: "Base PWM Status:"; color: root.cDim; font.pixelSize: 19; font.bold: true }
+                                                Text { text: hpController.basePwmStatus + " %"; color: root.cYellow; font.pixelSize: 19; font.bold: true }
+                                            }
+                                        }
+                                    }
+
+                                    Item { Layout.fillHeight: true }
+                                }
+
+                                // ================= COLUMN 2: PRESSURE & SENSORS (24.5%) =================
+                                ColumnLayout {
+                                    Layout.preferredWidth: p4Inner.width * 0.245
+                                    Layout.fillHeight: true
+                                    spacing: 12
+
+                                    // Pressure Sensors Card
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 290
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 10
+                                            Text {
+                                                text: "PRESSURE SENSORS"; color: "#6cf"
+                                                font.pixelSize: 25; font.bold: true; font.letterSpacing: 1.5
+                                            }
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true; spacing: 10
+
+                                                // S1 Chamber
+                                                ColumnLayout {
+                                                    Layout.fillWidth: true; spacing: 4
+                                                    RowLayout {
+                                                        Layout.fillWidth: true
+                                                        Text { text: "S1 Chamber"; color: root.cDim; font.pixelSize: 20 }
+                                                        Text { text: hpController.pressureS1.toFixed(1) + " mbar"; color: root.cCyan; font.pixelSize: 20; font.bold: true; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                                                    }
+                                                    Rectangle {
+                                                        Layout.fillWidth: true; height: 14; color: "#112233"; radius: 7
+                                                        Rectangle {
+                                                            width: Math.max(0, Math.min(parent.width, (hpController.pressureS1 / 1200.0) * parent.width))
+                                                            height: parent.height; color: root.cCyan; radius: 6
+                                                        }
+                                                    }
+                                                }
+
+                                                // S2 Cartridge
+                                                ColumnLayout {
+                                                    Layout.fillWidth: true; spacing: 4
+                                                    RowLayout {
+                                                        Layout.fillWidth: true
+                                                        Text { text: "S2 Cartridge"; color: root.cDim; font.pixelSize: 20 }
+                                                        Text { text: hpController.pressureS2.toFixed(1) + " mbar"; color: root.cGreen; font.pixelSize: 20; font.bold: true; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                                                    }
+                                                    Rectangle {
+                                                        Layout.fillWidth: true; height: 14; color: "#112233"; radius: 7
+                                                        Rectangle {
+                                                            width: Math.max(0, Math.min(parent.width, (hpController.pressureS2 / 1200.0) * parent.width))
+                                                            height: parent.height; color: root.cGreen; radius: 6
+                                                        }
+                                                    }
+                                                }
+
+                                                // S3 Tank
+                                                ColumnLayout {
+                                                    Layout.fillWidth: true; spacing: 4
+                                                    RowLayout {
+                                                        Layout.fillWidth: true
+                                                        Text { text: "S3 Tank"; color: root.cDim; font.pixelSize: 20 }
+                                                        Text { text: hpController.pressureS3.toFixed(1) + " mbar"; color: root.cYellow; font.pixelSize: 20; font.bold: true; Layout.fillWidth: true; horizontalAlignment: Text.AlignRight }
+                                                    }
+                                                    Rectangle {
+                                                        Layout.fillWidth: true; height: 14; color: "#112233"; radius: 7
+                                                        Rectangle {
+                                                            width: Math.max(0, Math.min(parent.width, (hpController.pressureS3 / 1000.0) * parent.width))
+                                                            height: parent.height; color: root.cYellow; radius: 6
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Cartridge Pressures card
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 630
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 8
+                                            Text {
+                                                text: "CARTRIDGE PRESSURES"; color: "#6cf"
+                                                font.pixelSize: 25; font.bold: true; font.letterSpacing: 1.5
+                                            }
+                                            Text {
+                                                Layout.fillWidth: true
+                                                text: page4Root.getCartridgeSummary(page4Root.cartPressures)
+                                                color: root.cCyan
+                                                font.pixelSize: 19
+                                                font.bold: true
+                                            }
+
+                                            GridLayout {
+                                                Layout.fillWidth: true; Layout.fillHeight: true
+                                                columns: 2
+                                                columnSpacing: 16
+                                                rowSpacing: 32
+                                                Repeater {
+                                                    model: 8
+                                                    delegate: ColumnLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 12
+                                                        RowLayout {
+                                                            Layout.fillWidth: true
+                                                            Text {
+                                                                text: "Cart " + (index + 1)
+                                                                color: root.cDim
+                                                                font.pixelSize: 24
+                                                            }
+                                                            Text {
+                                                                id: pText
+                                                                property real val: (page4Root.cartPressures && page4Root.cartPressures[index] !== undefined) ? parseFloat(page4Root.cartPressures[index]) : 0.0
+                                                                text: val.toFixed(1) + " mbar"
+                                                                color: {
+                                                                    if (val >= 950) return root.cRed
+                                                                    if (val >= 500) return root.cOrange
+                                                                    if (val >= 45) return root.cGreen
+                                                                    return root.cCyan
+                                                                }
+                                                                font.pixelSize: 24
+                                                                font.bold: true
+                                                                Layout.fillWidth: true
+                                                                horizontalAlignment: Text.AlignRight
+                                                            }
+                                                        }
+                                                        Rectangle {
+                                                            Layout.fillWidth: true
+                                                            height: 16
+                                                            color: "#112233"
+                                                            radius: 5
+                                                            Rectangle {
+                                                                width: Math.max(0, Math.min(parent.width, (pText.val / 1000.0) * parent.width))
+                                                                height: parent.height; radius: 4
+                                                                color: {
+                                                                    var val = pText.val
+                                                                    if (val >= 950) return root.cRed
+                                                                    if (val >= 500) return root.cOrange
+                                                                    if (val >= 45) return root.cGreen
+                                                                    return root.cCyan
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Last Action Response Card
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 190
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 6
+                                            Text {
+                                                text: "LAST RESPONSE"; color: "#6cf"
+                                                font.pixelSize: 25; font.bold: true; font.letterSpacing: 1.5
+                                            }
+
+                                            ScrollView {
+                                                Layout.fillWidth: true; Layout.fillHeight: true
+                                                clip: true
+                                                Text {
+                                                    width: parent.width
+                                                    text: hpController.manualResponse || "No response yet"
+                                                    color: root.cCyan; font.pixelSize: 17; font.family: "Courier"; wrapMode: Text.Wrap
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Item { Layout.fillHeight: true }
+                                }
+
+                                // ================= COLUMN 3: DIGITAL INPUTS & CYLINDERS (24.5%) =================
+                                ColumnLayout {
+                                    Layout.preferredWidth: p4Inner.width * 0.245
+                                    Layout.fillHeight: true
+                                    spacing: 12
+
+                                    // Digital Inputs
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 440
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 10
+                                            Text {
+                                                text: "DIGITAL INPUTS"; color: "#6cf"
+                                                font.pixelSize: 25; font.bold: true; font.letterSpacing: 1.5
+                                            }
+
+                                            GridLayout {
+                                                Layout.fillWidth: true
+                                                columns: 2; columnSpacing: 16; rowSpacing: 10
+
+                                                // Left Column
+                                                ColumnLayout {
+                                                    spacing: 10
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["optical_sensor"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Optical sensor"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["chamber_closed"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Chamber closed"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["chamber_open"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Chamber open"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["ball_box_empty"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Ball box empty"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["start_button"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Start button"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["stop_button"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Stop button"; color: root.cText; font.pixelSize: 21 } }
+                                                }
+
+                                                // Right Column
+                                                ColumnLayout {
+                                                    spacing: 10
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["ball_feed_up"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Ball feed up"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["ball_feed_down"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Ball feed down"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["ball_push_up"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Ball push up"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["ball_push_down"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Ball push down"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["seal_pin_up"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Seal pin up"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["seal_pin_down"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Seal pin down"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["fix_cylinder_up"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Fix cyl up"; color: root.cText; font.pixelSize: 21 } }
+                                                    Row { spacing: 8; Rectangle { width: 22; height: 22; radius: 11; color: page4Root.inputsMap["fix_cylinder_down"] === "on" ? root.cGreen : "#3a3a4a" } Text { text: "Fix cyl down"; color: root.cText; font.pixelSize: 21 } }
+                                                }
+                                            }
+
+                                            Rectangle { Layout.fillWidth: true; height: 1; color: root.cBorder }
+
+                                            // Magazines status
+                                            RowLayout {
+                                                Layout.fillWidth: true
                                                 spacing: 8
-                                                Text { text: "Base PWM (%):"; color: root.cText; font.pixelSize: 12; width: 140; anchors.verticalCenter: parent.verticalCenter }
+                                                Text { text: "Magazines:"; color: root.cDim; font.pixelSize: 19; font.bold: true; Layout.preferredWidth: 110 }
+                                                Row {
+                                                    spacing: 5
+                                                    Repeater {
+                                                        model: 8
+                                                        Rectangle {
+                                                            width: 30; height: 30; radius: 15
+                                                            color: (page4Root.inputsMap["mag_" + (index + 1)] === "on") ? root.cGreen : "#2d2d3d"
+                                                            border.color: root.cBorder
+                                                            border.width: 1
+                                                            Text {
+                                                                anchors.centerIn: parent
+                                                                text: (index + 1).toString()
+                                                                color: (page4Root.inputsMap["mag_" + (index + 1)] === "on") ? "#0c0c1d" : root.cText
+                                                                font.pixelSize: 17; font.bold: true
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Tubes status
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 8
+                                                Text { text: "Tubes:"; color: root.cDim; font.pixelSize: 19; font.bold: true; Layout.preferredWidth: 110 }
+                                                Row {
+                                                    spacing: 5
+                                                    Repeater {
+                                                        model: 8
+                                                        Rectangle {
+                                                            width: 30; height: 30; radius: 15
+                                                            color: (page4Root.inputsMap["tube_" + (index + 1)] === "on") ? root.cGreen : "#2d2d3d"
+                                                            border.color: root.cBorder
+                                                            border.width: 1
+                                                            Text {
+                                                                anchors.centerIn: parent
+                                                                text: (index + 1).toString()
+                                                                color: (page4Root.inputsMap["tube_" + (index + 1)] === "on") ? "#0c0c1d" : root.cText
+                                                                font.pixelSize: 17; font.bold: true
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Cylinders manual control card
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 500
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 10
+                                            enabled: page4Root.currentMode === "manual"
+                                            opacity: page4Root.currentMode === "manual" ? 1.0 : 0.35
+                                            Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                            Text {
+                                                text: "CYLINDERS CONTROL (MANUAL)"; color: "#6cf"
+                                                font.pixelSize: 25; font.bold: true; font.letterSpacing: 1.5
+                                            }
+
+                                            GridLayout {
+                                                Layout.fillWidth: true
+                                                columns: 1
+                                                rowSpacing: 10
+                                                Repeater {
+                                                    model: [
+                                                        { id: "chamber", statusKey: "cyl_ch", label: "Chamber Cyl", a: "close", b: "open" },
+                                                        { id: "cartridge", statusKey: "cyl_cart", label: "Cartridge Cyl", a: "down", b: "up" },
+                                                        { id: "ball_feed", statusKey: "cyl_bf", label: "Ball Feed Cyl", a: "up", b: "down" },
+                                                        { id: "ball_push", statusKey: "cyl_bp", label: "Ball Push Cyl", a: "up", b: "down" },
+                                                        { id: "seal_pin", statusKey: "cyl_seal", label: "Seal Pin Cyl", a: "up", b: "down" },
+                                                        { id: "fix_cyl", statusKey: "cyl_fix", label: "Fix Cylinder", a: "up", b: "down" }
+                                                    ]
+                                                    delegate: Rectangle {
+                                                        Layout.fillWidth: true
+                                                        height: 62
+                                                        color: root.cCard
+                                                        border.color: root.cBorder
+                                                        radius: 4
+                                                        RowLayout {
+                                                            anchors.fill: parent
+                                                            anchors.margins: 6
+                                                            spacing: 8
+                                                            Text {
+                                                                Layout.fillWidth: true
+                                                                text: modelData.label
+                                                                color: root.cText
+                                                                font.pixelSize: 22
+                                                                font.bold: true
+                                                            }
+                                                            CBtn {
+                                                                lbl: modelData.a
+                                                                w: 115; h: 50; fontSize: 21
+                                                                bg: (page4Root.valvesMap[modelData.statusKey] && page4Root.actionMatches(page4Root.valvesMap[modelData.statusKey].label, modelData.a)) ? root.cGreen : root.cCard
+                                                                tc: (page4Root.valvesMap[modelData.statusKey] && page4Root.actionMatches(page4Root.valvesMap[modelData.statusKey].label, modelData.a)) ? "#0c0c1d" : root.cText
+                                                                onClicked: hpController.publishManual(modelData.id, modelData.a)
+                                                            }
+                                                            CBtn {
+                                                                lbl: modelData.b
+                                                                w: 115; h: 50; fontSize: 21
+                                                                bg: (page4Root.valvesMap[modelData.statusKey] && page4Root.actionMatches(page4Root.valvesMap[modelData.statusKey].label, modelData.b)) ? root.cGreen : root.cCard
+                                                                tc: (page4Root.valvesMap[modelData.statusKey] && page4Root.actionMatches(page4Root.valvesMap[modelData.statusKey].label, modelData.b)) ? "#0c0c1d" : root.cText
+                                                                onClicked: hpController.publishManual(modelData.id, modelData.b)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    Item { Layout.fillHeight: true }
+                                }
+
+                                // ================= COLUMN 4: VALVES & MOTOR CONTROLS & SETTINGS (24.5%) =================
+                                ColumnLayout {
+                                    Layout.preferredWidth: p4Inner.width * 0.245
+                                    Layout.fillHeight: true
+                                    spacing: 12
+
+                                    // Valves control card
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 600
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 6
+                                            enabled: page4Root.currentMode === "manual"
+                                            opacity: page4Root.currentMode === "manual" ? 1.0 : 0.35
+                                            Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                            Text {
+                                                text: "VALVES CONTROL (MANUAL)"; color: "#6cf"
+                                                font.pixelSize: 25; font.bold: true; font.letterSpacing: 1.5
+                                            }
+
+                                            ScrollView {
+                                                Layout.fillWidth: true
+                                                Layout.fillHeight: true
+                                                clip: true
+                                                GridLayout {
+                                                    width: parent.width - 16
+                                                    columns: 1
+                                                    rowSpacing: 6
+                                                    Repeater {
+                                                        model: [
+                                                            { id: "valve1", statusKey: "v1", label: "V1 (Main)", a: "open", b: "close" },
+                                                            { id: "valve2", statusKey: "v2", label: "V2 (Air/Ink)", a: "air", b: "ink" },
+                                                            { id: "valve4", statusKey: "v4", label: "V4 (Main Air)", a: "on", b: "off" },
+                                                            { id: "valve5", statusKey: "v5", label: "V5 (Tank ret)", a: "open", b: "close" },
+                                                            { id: "valve6", statusKey: "v6", label: "V6 (Clean)", a: "open", b: "close" },
+                                                            { id: "valve7", statusKey: "v7", label: "V7 (Purge Ink)", a: "on", b: "off" },
+                                                            { id: "valve8", statusKey: "v8", label: "V8 (Purge Air)", a: "on", b: "off" },
+                                                            { id: "valve9", statusKey: "v9", label: "V9 (Waste/Ch)", a: "chamber", b: "waste" },
+                                                            { id: "valve_chamber", statusKey: "vchamber", label: "V Chamber", a: "on", b: "off" },
+                                                            { id: "vacuum", statusKey: "pump", label: "Vacuum Pump", a: "on", b: "off" }
+                                                        ]
+                                                        delegate: Rectangle {
+                                                            Layout.fillWidth: true
+                                                            height: 56
+                                                            color: root.cCard
+                                                            border.color: root.cBorder
+                                                            radius: 4
+                                                            RowLayout {
+                                                                anchors.fill: parent
+                                                                anchors.margins: 4
+                                                                spacing: 6
+                                                                Text {
+                                                                    Layout.fillWidth: true
+                                                                    text: modelData.label
+                                                                    color: root.cText
+                                                                    font.pixelSize: 21
+                                                                    font.bold: true
+                                                                }
+                                                                CBtn {
+                                                                    lbl: modelData.a
+                                                                    w: 105; h: 48; fontSize: 21
+                                                                    bg: (page4Root.valvesMap[modelData.statusKey] && page4Root.actionMatches(page4Root.valvesMap[modelData.statusKey].label, modelData.a)) ? root.cGreen : root.cCard
+                                                                    tc: (page4Root.valvesMap[modelData.statusKey] && page4Root.actionMatches(page4Root.valvesMap[modelData.statusKey].label, modelData.a)) ? "#0c0c1d" : root.cText
+                                                                    onClicked: hpController.publishManual(modelData.id, modelData.a)
+                                                                }
+                                                                CBtn {
+                                                                    lbl: modelData.b
+                                                                    w: 105; h: 48; fontSize: 21
+                                                                    bg: (page4Root.valvesMap[modelData.statusKey] && page4Root.actionMatches(page4Root.valvesMap[modelData.statusKey].label, modelData.b)) ? root.cGreen : root.cCard
+                                                                    tc: (page4Root.valvesMap[modelData.statusKey] && page4Root.actionMatches(page4Root.valvesMap[modelData.statusKey].label, modelData.b)) ? "#0c0c1d" : root.cText
+                                                                    onClicked: hpController.publishManual(modelData.id, modelData.b)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Motor & Servo dosing
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 310
+                                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+
+                                        ColumnLayout {
+                                            anchors.fill: parent; anchors.margins: 12; spacing: 10
+                                            Text {
+                                                text: "MOTOR & SERVO DOSING"; color: "#6cf"
+                                                font.pixelSize: 25; font.bold: true; font.letterSpacing: 1.5
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 8
+                                                Text {
+                                                    text: "Servo State:"
+                                                    color: root.cDim
+                                                    font.pixelSize: 20; font.bold: true
+                                                }
                                                 Rectangle {
-                                                    width: 80; height: 26; color: root.cBg; border.color: root.cBorder; radius: 4
+                                                    width: 110; height: 32; radius: 4
+                                                    color: {
+                                                        var s = (page4Root.valvesMap["servo"] && page4Root.valvesMap["servo"].label) ? page4Root.valvesMap["servo"].label.toLowerCase() : ""
+                                                        if (s === "ready" || s === "on" || s === "running") return "#003311"
+                                                        if (s === "fault" || s === "error") return "#330011"
+                                                        return "#112233"
+                                                    }
+                                                    border.color: {
+                                                        var s = (page4Root.valvesMap["servo"] && page4Root.valvesMap["servo"].label) ? page4Root.valvesMap["servo"].label.toLowerCase() : ""
+                                                        if (s === "ready" || s === "on" || s === "running") return root.cGreen
+                                                        if (s === "fault" || s === "error") return root.cRed
+                                                        return root.cBorder
+                                                    }
+                                                    Text {
+                                                        anchors.centerIn: parent
+                                                        text: (page4Root.valvesMap["servo"] && page4Root.valvesMap["servo"].label) ? page4Root.valvesMap["servo"].label.toUpperCase() : "-"
+                                                        color: root.cText
+                                                        font.pixelSize: 16; font.bold: true
+                                                    }
+                                                }
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: "Pos: " + (hpController.servoPosition ? hpController.servoPosition.toFixed(2) : "-") + " mm"
+                                                    color: root.cText
+                                                    font.pixelSize: 20; font.bold: true; horizontalAlignment: Text.AlignRight
+                                                }
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 6
+                                                CBtn { Layout.fillWidth: true; Layout.preferredHeight: 42; lbl: "Enable"; fontSize: 19; onClicked: hpController.publishString("servo_command", "enable") }
+                                                CBtn { Layout.fillWidth: true; Layout.preferredHeight: 42; lbl: "Disable"; fontSize: 19; onClicked: hpController.publishString("servo_command", "disable") }
+                                                CBtn { Layout.fillWidth: true; Layout.preferredHeight: 42; lbl: "Home"; fontSize: 19; onClicked: hpController.publishString("servo_command", "home") }
+                                                CBtn { Layout.fillWidth: true; Layout.preferredHeight: 42; lbl: "Reset"; fontSize: 19; bg: "#331100"; bc: root.cRed; tc: root.cRed; onClicked: hpController.publishString("servo_command", "reset_fault") }
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 8
+                                                CBtn {
+                                                    id: btnJogRev
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 46
+                                                    lbl: "◀ JOG REV"
+                                                    fontSize: 19
+                                                    bg: btnJogRev._pressed ? root.cOrange : root.cCard
+                                                    bc: root.cOrange
+                                                    tc: root.cOrange
+                                                    active: page4Root.currentMode === "manual"
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        onPressed: {
+                                                            btnJogRev._pressed = true;
+                                                            hpController.publishString("servo_jog", "rev")
+                                                        }
+                                                        onReleased: {
+                                                            btnJogRev._pressed = false;
+                                                            hpController.publishString("servo_jog", "stop")
+                                                        }
+                                                        onCanceled: {
+                                                            btnJogRev._pressed = false;
+                                                            hpController.publishString("servo_jog", "stop")
+                                                        }
+                                                    }
+                                                }
+                                                CBtn {
+                                                    Layout.preferredWidth: 80
+                                                    Layout.preferredHeight: 46
+                                                    lbl: "STOP"
+                                                    fontSize: 19
+                                                    bg: "#330011"; bc: root.cRed; tc: root.cRed
+                                                    onClicked: hpController.publishString("servo_jog", "stop")
+                                                }
+                                                CBtn {
+                                                    id: btnJogFwd
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 46
+                                                    lbl: "JOG FWD ▶"
+                                                    fontSize: 19
+                                                    bg: btnJogFwd._pressed ? root.cGreen : root.cCard
+                                                    bc: root.cGreen
+                                                    tc: root.cGreen
+                                                    active: page4Root.currentMode === "manual"
+                                                    MouseArea {
+                                                        anchors.fill: parent
+                                                        onPressed: {
+                                                            btnJogFwd._pressed = true;
+                                                            hpController.publishString("servo_jog", "fwd")
+                                                        }
+                                                        onReleased: {
+                                                            btnJogFwd._pressed = false;
+                                                            hpController.publishString("servo_jog", "stop")
+                                                        }
+                                                        onCanceled: {
+                                                            btnJogFwd._pressed = false;
+                                                            hpController.publishString("servo_jog", "stop")
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 8
+                                                Text { text: "Base PWM (%):"; color: root.cText; font.pixelSize: 19; font.bold: true; Layout.preferredWidth: 140 }
+                                                Rectangle {
+                                                    Layout.preferredWidth: 60; Layout.preferredHeight: 32; color: root.cBg; border.color: root.cBorder; radius: 4
                                                     TextInput {
-                                                        id: bPwmInput; anchors.fill: parent; anchors.margins: 4
-                                                        color: root.cText; font.pixelSize: 12; font.bold: true; selectByMouse: true
+                                                        id: pwmInput; anchors.fill: parent; anchors.margins: 4
+                                                        color: root.cText; font.pixelSize: 19; font.bold: true; selectByMouse: true; horizontalAlignment: TextInput.AlignHCenter
                                                         text: page4Root.settingsMap["base_pwm"] || "50"
                                                     }
                                                 }
-                                                CBtn { lbl: "Set"; w: 50; h: 26; fontSize: 11; onClicked: hpController.publishInt("base_pwm", parseInt(bPwmInput.text)) }
+                                                CBtn {
+                                                    lbl: "Set"
+                                                    w: 50; h: 32; fontSize: 15
+                                                    onClicked: {
+                                                        var val = parseInt(pwmInput.text);
+                                                        if (!isNaN(val)) hpController.publishInt("base_pwm", Math.max(0, Math.min(100, val)));
+                                                    }
+                                                }
+                                                Item { Layout.fillWidth: true }
+                                            }
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 8
+                                                Text { text: "V10 PWM (%):"; color: root.cText; font.pixelSize: 19; font.bold: true; Layout.preferredWidth: 140 }
+                                                Rectangle {
+                                                    Layout.preferredWidth: 60; Layout.preferredHeight: 32; color: root.cBg; border.color: root.cBorder; radius: 4
+                                                    TextInput {
+                                                        id: v10Input; anchors.fill: parent; anchors.margins: 4
+                                                        color: root.cText; font.pixelSize: 19; font.bold: true; selectByMouse: true; horizontalAlignment: TextInput.AlignHCenter
+                                                        text: (page4Root.valvesMap["v10"] && page4Root.valvesMap["v10"].label) ? page4Root.valvesMap["v10"].label.replace("%", "") : "0"
+                                                    }
+                                                }
+                                                CBtn {
+                                                    lbl: "Set"
+                                                    w: 50; h: 32; fontSize: 15; active: page4Root.currentMode === "manual"
+                                                    onClicked: {
+                                                        var val = parseInt(v10Input.text);
+                                                        if (!isNaN(val)) hpController.publishManual("valve10", String(Math.max(0, Math.min(100, val))));
+                                                    }
+                                                }
+                                                Item { Layout.fillWidth: true }
                                             }
                                         }
                                     }
-                                }
-
-                                // Tab 1: Valves & Cylinders manual control (only enabled in MANUAL mode)
-                                ScrollView {
-                                    anchors.fill: parent; anchors.margins: 10
-                                    visible: page4Root.subTab === 1
-                                    clip: true
                                     
-                                    Column {
-                                        width: parent.width - 20; spacing: 10
-                                        enabled: hpController.modeStatus === "manual"
-                                        opacity: hpController.modeStatus === "manual" ? 1.0 : 0.35
-                                        Behavior on opacity { NumberAnimation { duration: 150 } }
-                                        
-                                        Text { text: "Valves Control"; color: root.cAccent; font.bold: true; font.pixelSize: 13 }
-                                        Flow {
-                                            width: parent.width; spacing: 6
+                                     // Parameter Settings tabbed card
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 500
+                                        spacing: 6
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 40
+                                            spacing: 4
                                             Repeater {
-                                                model: [
-                                                    { id: "valve1", name: "v1", a: "open", b: "close" },
-                                                    { id: "valve2", name: "v2", a: "air", b: "ink" },
-                                                    { id: "valve4", name: "v4", a: "on", b: "off" },
-                                                    { id: "valve5", name: "v5", a: "open", b: "close" },
-                                                    { id: "valve6", name: "v6", a: "open", b: "close" },
-                                                    { id: "vacuum", name: "pump", a: "on", b: "off" }
-                                                ]
-                                                delegate: Rectangle {
-                                                    width: 142; height: 36; radius: 4
-                                                    color: root.cCard; border.color: root.cBorder
-                                                    Row {
-                                                        anchors.centerIn: parent; spacing: 4
-                                                        Text {
-                                                            text: modelData.name.toUpperCase() + ":"; color: root.cText; font.pixelSize: 10; font.bold: true; width: 34
-                                                        }
-                                                        CBtn {
-                                                            lbl: modelData.a; w: 48; h: 24; fontSize: 9
-                                                            bg: (page4Root.valvesMap[modelData.name] && page4Root.valvesMap[modelData.name].label === modelData.a) ? root.cGreen : root.cCard
-                                                            onClicked: hpController.publishManual(modelData.id, modelData.a)
-                                                        }
-                                                        CBtn {
-                                                            lbl: modelData.b; w: 48; h: 24; fontSize: 9
-                                                            bg: (page4Root.valvesMap[modelData.name] && page4Root.valvesMap[modelData.name].label === modelData.b) ? root.cGreen : root.cCard
-                                                            onClicked: hpController.publishManual(modelData.id, modelData.b)
-                                                        }
-                                                    }
+                                                model: ["AUTO", "CLEAN", "DOSING", "PWM / TANK"]
+                                                delegate: CBtn {
+                                                    Layout.fillWidth: true
+                                                    h: 40
+                                                    lbl: modelData
+                                                    fontSize: 17
+                                                    isSelected: page4Root.activeSettingsTab === index
+                                                    onClicked: page4Root.activeSettingsTab = index
                                                 }
                                             }
                                         }
 
-                                        Text { text: "Cylinders Control"; color: root.cAccent; font.bold: true; font.pixelSize: 13 }
-                                        Flow {
-                                            width: parent.width; spacing: 6
-                                            Repeater {
-                                                model: [
-                                                    { id: "chamber", name: "cyl_ch", a: "open", b: "close" },
-                                                    { id: "cartridge", name: "cyl_cart", a: "up", b: "down" },
-                                                    { id: "ball_feed", name: "cyl_bf", a: "up", b: "down" },
-                                                    { id: "ball_push", name: "cyl_bp", a: "up", b: "down" },
-                                                    { id: "seal_pin", name: "cyl_seal", a: "up", b: "down" },
-                                                    { id: "fix_cyl", name: "cyl_fix", a: "up", b: "down" }
-                                                ]
-                                                delegate: Rectangle {
-                                                    width: 142; height: 36; radius: 4
-                                                    color: root.cCard; border.color: root.cBorder
-                                                    Row {
-                                                        anchors.centerIn: parent; spacing: 4
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            color: root.cBg2
+                                            border.color: root.cBorder
+                                            radius: 6
+                                            clip: true
+
+                                            ColumnLayout {
+                                                anchors.fill: parent
+                                                anchors.margins: 12
+                                                spacing: 0
+
+                                                Repeater {
+                                                    model: page4Root.settingGroups[page4Root.activeSettingsTab].items
+                                                    delegate: RowLayout {
+                                                        Layout.fillWidth: true
+                                                        Layout.fillHeight: true
+                                                        spacing: 8
+
                                                         Text {
-                                                            text: modelData.name.replace("cyl_", "").toUpperCase() + ":"; color: root.cText; font.pixelSize: 10; font.bold: true; width: 34
+                                                            Layout.preferredWidth: 160
+                                                            text: modelData.label + (modelData.unit ? " (" + modelData.unit + ")" : "") + ":"
+                                                            color: root.cText
+                                                            font.pixelSize: 19
+                                                            font.bold: true
+                                                            elide: Text.ElideRight
                                                         }
+
+                                                        Text {
+                                                            Layout.preferredWidth: 60
+                                                            text: (page4Root.settingsMap[modelData.topic] !== undefined) ? page4Root.settingsMap[modelData.topic] : "-"
+                                                            color: root.cAccent
+                                                            font.pixelSize: 19
+                                                            font.bold: true
+                                                            horizontalAlignment: Text.AlignRight
+                                                        }
+
+                                                        Rectangle {
+                                                            Layout.fillWidth: true
+                                                            Layout.preferredHeight: 34
+                                                            color: root.cBg
+                                                            border.color: root.cBorder
+                                                            radius: 4
+                                                            TextInput {
+                                                                id: paramInput
+                                                                anchors.fill: parent
+                                                                anchors.margins: 4
+                                                                color: root.cText
+                                                                font.pixelSize: 19
+                                                                font.bold: true
+                                                                selectByMouse: true
+                                                                horizontalAlignment: TextInput.AlignHCenter
+                                                                text: (page4Root.settingsMap[modelData.topic] !== undefined) ? page4Root.settingsMap[modelData.topic] : ""
+                                                            }
+                                                        }
+
                                                         CBtn {
-                                                            lbl: modelData.a; w: 48; h: 24; fontSize: 9
-                                                            bg: (page4Root.valvesMap[modelData.name] && page4Root.valvesMap[modelData.name].label === modelData.a) ? root.cGreen : root.cCard
-                                                            onClicked: hpController.publishManual(modelData.id, modelData.a)
+                                                            lbl: "SET"
+                                                            w: 55; h: 34; fontSize: 18
+                                                            onClicked: {
+                                                                var val = parseFloat(paramInput.text);
+                                                                if (isNaN(val)) return;
+                                                                if (modelData.type === "threshold") {
+                                                                    hpController.publishString("pressure_thresholds_set", modelData.topic + ":" + val);
+                                                                } else if (modelData.type === "int") {
+                                                                    hpController.publishInt(modelData.topic, parseInt(val));
+                                                                } else {
+                                                                    hpController.publishFloat(modelData.topic, val);
+                                                                }
+                                                            }
                                                         }
-                                                        CBtn {
-                                                            lbl: modelData.b; w: 48; h: 24; fontSize: 9
-                                                            bg: (page4Root.valvesMap[modelData.name] && page4Root.valvesMap[modelData.name].label === modelData.b) ? root.cGreen : root.cCard
-                                                            onClicked: hpController.publishManual(modelData.id, modelData.b)
-                                                        }
+                                                    }
+                                                }
+
+                                                CBtn {
+                                                    Layout.fillWidth: true
+                                                    Layout.preferredHeight: 40
+                                                    lbl: "♻️ RESET DEFAULTS"
+                                                    fontSize: 19
+                                                    bg: "#331100"; bc: root.cRed; tc: root.cRed
+                                                    onClicked: {
+                                                        hpController.publishString("parameters_control", "reset_defaults");
                                                     }
                                                 }
                                             }
                                         }
                                     }
+
+                                    Item { Layout.fillHeight: true }
                                 }
                             }
                         }
@@ -2878,7 +3549,7 @@
             }
 
             Text { id: cbrT; anchors.centerIn: parent; text: cbr.lbl; color: cbr.isSelected ? "#0c0c1d" : (cbr._pressed ? Qt.lighter(cbr.tc, 1.4) : cbr.tc)
-                font.pixelSize: cbr.fontSize; font.bold: true; font.capitalization: Font.AllUppercase
+                font.pixelSize: cbr.fontSize; font.weight: Font.DemiBold; font.capitalization: Font.MixedCase
                 anchors.verticalCenterOffset: (cbr.isSelected || cbr._pressed) ? 2 : 0
                 Behavior on color { ColorAnimation { duration: 80 } }
                 visible: cbr.iconSource === ""
