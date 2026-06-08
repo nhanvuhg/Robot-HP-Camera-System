@@ -175,10 +175,14 @@ Item {
     // ---- Action log state ----
     property var actionLog: []
     property string lastActionRaw: ""
-    // Lay danh sach key inputs, BO sensor mag_index_* va tube_index_* (nguoi
-    // dung khong can xem hien thi nay tren Fill HP tab)
+    // Lay danh sach key inputs, BO sensor mag_<n> va tube_<n> (nguoi dung
+    // khong can xem hien thi nay tren Fill HP tab). Filter PREFIX, khong
+    // phai substring — keys thuc te: mag_1..mag_6, tube_1..tube_6
     property var filteredInputKeys: Object.keys(inputsMap).filter(function(k) {
-        return k.indexOf("mag_index") === -1 && k.indexOf("tube_index") === -1
+        return k.indexOf("mag_") !== 0
+            && k.indexOf("tube_") !== 0
+            && k.indexOf("mag_index") === -1
+            && k.indexOf("tube_index") === -1
     })
     property var valvesMap:   parseValveState(hpController.valveState)
     property var settingsMap: parseKvComma(hpController.pressureThresholds)
@@ -449,11 +453,16 @@ Item {
                     Layout.alignment: Qt.AlignTop
                     spacing: 12
 
-                    // -- Alert center (full width, top of content) --
-                    Sect {
+                    // -- Alert center + Valves (side-by-side at top) --
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+
+                        // Alert center (LEFT, takes remaining width)
+                        Sect {
                         title: "Trung tam canh bao"
                         Layout.fillWidth: true
-                        visible: tab.alertHistory.length > 0
+                        Layout.alignment: Qt.AlignTop
 
                         ColumnLayout {
                             width: parent.width; spacing: 8
@@ -486,8 +495,24 @@ Item {
                                 }
                             }
 
+                            // Empty placeholder when no alerts
+                            Rectangle {
+                                visible: tab.alertHistory.length === 0
+                                Layout.fillWidth: true
+                                implicitHeight: 60
+                                radius: 6
+                                color: cOkBg
+                                border.color: cOk; border.width: 1
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "✅ Khong co canh bao. He thong hoat dong binh thuong."
+                                    color: cOk; font.pixelSize: 16; font.bold: true
+                                }
+                            }
+
                             // Alert list (max ~6 rows visible, scrolls if more)
                             Item {
+                                visible: tab.alertHistory.length > 0
                                 width: parent.width
                                 implicitHeight: Math.min(360, alertColumn.implicitHeight)
                                 ScrollView {
@@ -510,7 +535,40 @@ Item {
                                 }
                             }
                         }
-                    }
+                        } // end Alert center Sect
+
+                        // Valves (RIGHT, 400px wide, fills empty space)
+                        Sect {
+                            title: "Valves (manual only)"
+                            Layout.preferredWidth: 400
+                            Layout.maximumWidth: 400
+                            Layout.alignment: Qt.AlignTop
+                            Item {
+                                width: parent.width
+                                implicitHeight: valvesGridTop.implicitHeight
+                                enabled: tab.modeStr === "MANUAL"
+                                opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                                Grid {
+                                    id: valvesGridTop
+                                    width: parent.width
+                                    columns: 1
+                                    spacing: 3
+                                    Repeater {
+                                        model: tab.valveModel
+                                        IoToggle {
+                                            width: valvesGridTop.width
+                                            ioId:      modelData.id
+                                            statusKey: modelData.statusKey
+                                            ioLabel:   modelData.label
+                                            actA:      modelData.a
+                                            actB:      modelData.b
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } // end RowLayout Alert + Valves
 
                     // -- Pressure cards + Cartridge pressures (40% width side-by-side) --
                     RowLayout {
@@ -586,36 +644,7 @@ Item {
                     }
 
                     // ────────── MANUAL CONTROLS (chi enabled trong MANUAL mode) ──────────
-
-                    // -- Valves grid (auto-fit 2-3 cot) --
-                    Sect {
-                        title: "Valves (manual only)"
-                        Layout.fillWidth: true
-                        Item {
-                            width: parent.width
-                            implicitHeight: valvesGrid.implicitHeight
-                            enabled: tab.modeStr === "MANUAL"
-                            opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                            Behavior on opacity { NumberAnimation { duration: 150 } }
-                            Grid {
-                                id: valvesGrid
-                                width: parent.width
-                                columns: Math.max(1, Math.floor(width / 320))
-                                spacing: 4
-                                Repeater {
-                                    model: tab.valveModel
-                                    IoToggle {
-                                        width: (valvesGrid.width - valvesGrid.spacing * (valvesGrid.columns - 1)) / valvesGrid.columns
-                                        ioId:      modelData.id
-                                        statusKey: modelData.statusKey
-                                        ioLabel:   modelData.label
-                                        actA:      modelData.a
-                                        actB:      modelData.b
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // (Valves moved to top — next to Trung tam canh bao)
 
                     // -- Cylinders grid --
                     Sect {
