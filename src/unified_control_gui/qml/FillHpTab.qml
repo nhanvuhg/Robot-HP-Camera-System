@@ -449,99 +449,143 @@ Item {
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 400
-                    Layout.maximumWidth: 1000
+                    Layout.maximumWidth: 1500
                     Layout.alignment: Qt.AlignTop
                     spacing: 12
 
-                    // -- Alert center + Valves (side-by-side at top) --
+                    // ─── TOP BLOCK: [Alert + (Analog|Cartridge)] | Valves | Cylinders ───
                     RowLayout {
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignLeft
                         spacing: 12
 
-                        // Alert center (LEFT, takes remaining width)
-                        Sect {
-                        title: "Trung tam canh bao"
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignTop
-
+                        // LEFT column: Alert center (full width 812) + Analog|Cart row
                         ColumnLayout {
-                            width: parent.width; spacing: 8
+                            Layout.preferredWidth: 812
+                            Layout.maximumWidth: 812
+                            Layout.alignment: Qt.AlignTop
+                            spacing: 12
 
-                            RowLayout {
-                                width: parent.width; spacing: 8
-                                Text { text: "Tat ca: " + tab.alertHistory.length;     color: cMuted; font.pixelSize: 16 }
-                                Text { text: "Loi: "    + tab.countError;              color: cBad;   font.pixelSize: 16; font.bold: true }
-                                Text { text: "Canh bao: " + tab.countWarning;          color: cWarn;  font.pixelSize: 16; font.bold: true }
-                                Text { text: "Thong tin: " + tab.countInfo;            color: cAccent; font.pixelSize: 16 }
-                                Item { Layout.fillWidth: true }
-                                TbBtn { lbl: "Xoa lich su"; onClicked: { tab.alertHistory = []; tab.lastAlertRaw = "" } }
-                            }
-
-                            RowLayout {
-                                width: parent.width; spacing: 6
-                                Repeater {
-                                    model: [
-                                        { key: "all",      lbl: "Tat ca" },
-                                        { key: "critical", lbl: "Nghiem trong" },
-                                        { key: "error",    lbl: "Loi" },
-                                        { key: "warning",  lbl: "Canh bao" },
-                                        { key: "info",     lbl: "Thong tin" }
-                                    ]
-                                    TbBtn {
-                                        lbl: modelData.lbl
-                                        variant: tab.alertFilter === modelData.key ? "primary" : "default"
-                                        onClicked: tab.alertFilter = modelData.key
-                                    }
-                                }
-                            }
-
-                            // Empty placeholder when no alerts
-                            Rectangle {
-                                visible: tab.alertHistory.length === 0
+                            // Alert center
+                            Sect {
+                                title: "Trung tam canh bao"
                                 Layout.fillWidth: true
-                                implicitHeight: 60
-                                radius: 6
-                                color: cOkBg
-                                border.color: cOk; border.width: 1
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "✅ Khong co canh bao. He thong hoat dong binh thuong."
-                                    color: cOk; font.pixelSize: 16; font.bold: true
-                                }
-                            }
 
-                            // Alert list (max ~6 rows visible, scrolls if more)
-                            Item {
-                                visible: tab.alertHistory.length > 0
-                                width: parent.width
-                                implicitHeight: Math.min(360, alertColumn.implicitHeight)
-                                ScrollView {
-                                    anchors.fill: parent
-                                    clip: true
-                                    ColumnLayout {
-                                        id: alertColumn
-                                        width: parent.width
-                                        spacing: 6
+                                ColumnLayout {
+                                    width: parent.width; spacing: 8
+
+                                    RowLayout {
+                                        width: parent.width; spacing: 8
+                                        Text { text: "Tat ca: " + tab.alertHistory.length;     color: cMuted; font.pixelSize: 16 }
+                                        Text { text: "Loi: "    + tab.countError;              color: cBad;   font.pixelSize: 16; font.bold: true }
+                                        Text { text: "Canh bao: " + tab.countWarning;          color: cWarn;  font.pixelSize: 16; font.bold: true }
+                                        Text { text: "Thong tin: " + tab.countInfo;            color: cAccent; font.pixelSize: 16 }
+                                        Item { Layout.fillWidth: true }
+                                        TbBtn { lbl: "Xoa lich su"; onClicked: { tab.alertHistory = []; tab.lastAlertRaw = "" } }
+                                    }
+
+                                    RowLayout {
+                                        width: parent.width; spacing: 6
                                         Repeater {
-                                            model: tab.filteredAlerts
-                                            AlertRow {
-                                                sev:     modelData.sev
-                                                time:    modelData.time
-                                                area:    modelData.area
-                                                message: modelData.message
+                                            model: [
+                                                { key: "all",      lbl: "Tat ca" },
+                                                { key: "critical", lbl: "Nghiem trong" },
+                                                { key: "error",    lbl: "Loi" },
+                                                { key: "warning",  lbl: "Canh bao" },
+                                                { key: "info",     lbl: "Thong tin" }
+                                            ]
+                                            TbBtn {
+                                                lbl: modelData.lbl
+                                                variant: tab.alertFilter === modelData.key ? "primary" : "default"
+                                                onClicked: tab.alertFilter = modelData.key
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        visible: tab.alertHistory.length === 0
+                                        Layout.fillWidth: true
+                                        implicitHeight: 60
+                                        radius: 6
+                                        color: cOkBg
+                                        border.color: cOk; border.width: 1
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "✅ Khong co canh bao. He thong hoat dong binh thuong."
+                                            color: cOk; font.pixelSize: 16; font.bold: true
+                                        }
+                                    }
+
+                                    Item {
+                                        visible: tab.alertHistory.length > 0
+                                        width: parent.width
+                                        implicitHeight: Math.min(360, alertColumn.implicitHeight)
+                                        ScrollView {
+                                            anchors.fill: parent
+                                            clip: true
+                                            ColumnLayout {
+                                                id: alertColumn
+                                                width: parent.width
+                                                spacing: 6
+                                                Repeater {
+                                                    model: tab.filteredAlerts
+                                                    AlertRow {
+                                                        sev:     modelData.sev
+                                                        time:    modelData.time
+                                                        area:    modelData.area
+                                                        message: modelData.message
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
-                        } // end Alert center Sect
 
-                        // Valves (RIGHT, 400px wide, fills empty space)
+                            // Analog + Cartridge side-by-side (under Alert center)
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+
+                                Sect {
+                                    title: "Analog / Ap suat"
+                                    Layout.preferredWidth: 400
+                                    Layout.maximumWidth: 400
+                                    Layout.alignment: Qt.AlignTop
+                                    ColumnLayout {
+                                        width: parent.width; spacing: 8
+                                        PCard { lbl: "S1 Chamber";   val: hpController.pressureS1; maxVal: 1200 }
+                                        PCard { lbl: "S2 Cartridge"; val: hpController.pressureS2; maxVal: 1200 }
+                                        PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1000 }
+                                    }
+                                }
+
+                                Sect {
+                                    title: "Cartridge pressure"
+                                    Layout.preferredWidth: 400
+                                    Layout.maximumWidth: 400
+                                    Layout.alignment: Qt.AlignTop
+                                    visible: hpController.cartridgePressures && hpController.cartridgePressures.length > 0
+                                    ColumnLayout {
+                                        width: parent.width; spacing: 5
+                                        Repeater {
+                                            model: hpController.cartridgePressures
+                                            CartRow {
+                                                cartName: "Cart " + (index + 1)
+                                                cartVal:  Number(modelData) || 0
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } // end LEFT column
+
+                        // Valves (MIDDLE, fills height of left column)
                         Sect {
                             title: "Valves (manual only)"
-                            Layout.preferredWidth: 400
-                            Layout.maximumWidth: 400
+                            Layout.preferredWidth: 320
+                            Layout.maximumWidth: 320
+                            Layout.fillHeight: true
                             Layout.alignment: Qt.AlignTop
                             Item {
                                 width: parent.width
@@ -568,47 +612,40 @@ Item {
                                 }
                             }
                         }
-                    } // end RowLayout Alert + Valves
 
-                    // -- Pressure cards + Cartridge pressures (40% width side-by-side) --
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignLeft
-                        spacing: 12
-
+                        // Cylinders (RIGHT, next to Valves)
                         Sect {
-                            title: "Analog / Ap suat"
-                            Layout.preferredWidth: 400
-                            Layout.maximumWidth: 400
+                            title: "Cylinders (manual only)"
+                            Layout.preferredWidth: 320
+                            Layout.maximumWidth: 320
+                            Layout.fillHeight: true
                             Layout.alignment: Qt.AlignTop
-                            ColumnLayout {
-                                width: parent.width; spacing: 8
-                                PCard { lbl: "S1 Chamber";   val: hpController.pressureS1; maxVal: 1200 }
-                                PCard { lbl: "S2 Cartridge"; val: hpController.pressureS2; maxVal: 1200 }
-                                PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1000 }
-                            }
-                        }
-
-                        Sect {
-                            title: "Cartridge pressure"
-                            Layout.preferredWidth: 400
-                            Layout.maximumWidth: 400
-                            Layout.alignment: Qt.AlignTop
-                            visible: hpController.cartridgePressures && hpController.cartridgePressures.length > 0
-                            ColumnLayout {
-                                width: parent.width; spacing: 5
-                                Repeater {
-                                    model: hpController.cartridgePressures
-                                    CartRow {
-                                        cartName: "Cart " + (index + 1)
-                                        cartVal:  Number(modelData) || 0
+                            Item {
+                                width: parent.width
+                                implicitHeight: cylGridTop.implicitHeight
+                                enabled: tab.modeStr === "MANUAL"
+                                opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                                Grid {
+                                    id: cylGridTop
+                                    width: parent.width
+                                    columns: 1
+                                    spacing: 3
+                                    Repeater {
+                                        model: tab.cylinderModel
+                                        IoToggle {
+                                            width: cylGridTop.width
+                                            ioId:      modelData.id
+                                            statusKey: modelData.statusKey
+                                            ioLabel:   modelData.label
+                                            actA:      modelData.a
+                                            actB:      modelData.b
+                                        }
                                     }
                                 }
                             }
                         }
-
-                        Item { Layout.fillWidth: true }
-                    }
+                    } // end TOP BLOCK
 
                     // -- Process cards --
                     Sect {
@@ -643,38 +680,7 @@ Item {
                         }
                     }
 
-                    // ────────── MANUAL CONTROLS (chi enabled trong MANUAL mode) ──────────
-                    // (Valves moved to top — next to Trung tam canh bao)
-
-                    // -- Cylinders grid --
-                    Sect {
-                        title: "Cylinders (manual only)"
-                        Layout.fillWidth: true
-                        Item {
-                            width: parent.width
-                            implicitHeight: cylGrid.implicitHeight
-                            enabled: tab.modeStr === "MANUAL"
-                            opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                            Behavior on opacity { NumberAnimation { duration: 150 } }
-                            Grid {
-                                id: cylGrid
-                                width: parent.width
-                                columns: Math.max(1, Math.floor(width / 320))
-                                spacing: 4
-                                Repeater {
-                                    model: tab.cylinderModel
-                                    IoToggle {
-                                        width: (cylGrid.width - cylGrid.spacing * (cylGrid.columns - 1)) / cylGrid.columns
-                                        ioId:      modelData.id
-                                        statusKey: modelData.statusKey
-                                        ioLabel:   modelData.label
-                                        actA:      modelData.a
-                                        actB:      modelData.b
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    // ────────── REMAINING CONTROLS (Valves+Cylinders moved to TOP block) ──────────
 
                     // -- Servo & Motor --
                     Sect {
