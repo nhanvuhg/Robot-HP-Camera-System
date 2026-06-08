@@ -85,6 +85,33 @@ Item {
         }
         return out;
     }
+    // Parse alert string format "LEVEL:WARN|TIME:08:52:03|AREA:CHAMBER_SAFETY|MESSAGE:..."
+    function parseAlertString(rawStr) {
+        var out = { level: "", time: "", area: "", message: "", sev: "info", raw: rawStr };
+        if (!rawStr) return out;
+        var parts = String(rawStr).split("|");
+        for (var i = 0; i < parts.length; i++) {
+            var p = parts[i];
+            var idx = p.indexOf(':');
+            if (idx < 0) continue;
+            var key = p.substring(0, idx).trim().toUpperCase();
+            var val = p.substring(idx + 1).trim();
+            if (key === "LEVEL") out.level = val;
+            else if (key === "TIME") out.time = val;
+            else if (key === "AREA") out.area = val;
+            else if (key === "MESSAGE") out.message = val;
+        }
+        // Classify severity
+        var lvl = out.level.toUpperCase();
+        var msg = (out.message + " " + out.area).toLowerCase();
+        if (lvl === "CRITICAL" || msg.indexOf("critical") >= 0 || msg.indexOf("emergency") >= 0) out.sev = "critical";
+        else if (lvl === "ERROR" || lvl === "FAULT" || msg.indexOf("error") >= 0 || msg.indexOf("fault") >= 0 || msg.indexOf("timeout") >= 0) out.sev = "error";
+        else if (lvl === "WARN" || lvl === "WARNING" || msg.indexOf("warn") >= 0) out.sev = "warning";
+        else out.sev = "info";
+        if (!out.message) out.message = rawStr;
+        return out;
+    }
+
     // Action label matching with aliases (open/close/on/off/air/ink/up/down/chamber/waste)
     function actionMatches(label, action) {
         if (!label || !action) return false;
@@ -104,6 +131,50 @@ Item {
     property var sysMap:      parseKvPipe(hpController.systemStatus)
     property var hwMap:       parseKvPipe(hpController.hwStatus)
     property var inputsMap:   parseKvComma(hpController.inputState)
+
+    // ---- Alert center state (accumulate alerts client-side) ----
+    property var alertHistory: []          // [{level, time, area, message, sev, raw}, ...]
+    property string lastAlertRaw: ""
+    property string alertFilter: "all"     // all | critical | error | warning | info
+    readonly property var filteredAlerts: alertHistory.filter(function(a) {
+        if (tab.alertFilter === "all") return true;
+        return a.sev === tab.alertFilter;
+    })
+    readonly property int countError:    alertHistory.filter(function(a) { return a.sev === "error" || a.sev === "critical" }).length
+    readonly property int countWarning:  alertHistory.filter(function(a) { return a.sev === "warning" }).length
+    readonly property int countInfo:     alertHistory.filter(function(a) { return a.sev === "info" }).length
+
+    Connections {
+        target: hpController
+        function onErrorStatusChanged() {
+            var raw = hpController.errorStatus;
+            if (!raw || raw === "OK" || raw === "-" || raw === tab.lastAlertRaw) return;
+            tab.lastAlertRaw = raw;
+            var parsed = tab.parseAlertString(raw);
+            var hist = tab.alertHistory.slice();
+            hist.unshift(parsed);
+            if (hist.length > 50) hist = hist.slice(0, 50);
+            tab.alertHistory = hist;
+        }
+        function onManualResponseChanged() {
+            var msg = hpController.manualResponse;
+            if (!msg || msg === "-" || msg === tab.lastActionRaw) return;
+            tab.lastActionRaw = msg;
+            var now = new Date();
+            var hh = String(now.getHours()).padStart(2, '0');
+            var mm = String(now.getMinutes()).padStart(2, '0');
+            var ss = String(now.getSeconds()).padStart(2, '0');
+            var line = hh + ":" + mm + ":" + ss + " · " + msg;
+            var log = tab.actionLog.slice();
+            log.unshift(line);
+            if (log.length > 30) log = log.slice(0, 30);
+            tab.actionLog = log;
+        }
+    }
+
+    // ---- Action log state ----
+    property var actionLog: []
+    property string lastActionRaw: ""
     // Lay danh sach key inputs, BO sensor mag_index_* va tube_index_* (nguoi
     // dung khong can xem hien thi nay tren Fill HP tab)
     property var filteredInputKeys: Object.keys(inputsMap).filter(function(k) {
@@ -378,6 +449,69 @@ Item {
                     Layout.alignment: Qt.AlignTop
                     spacing: 12
 
+                    // -- Alert center (full width, top of content) --
+                    Sect {
+                        title: "Trung tam canh bao"
+                        Layout.fillWidth: true
+                        visible: tab.alertHistory.length > 0
+
+                        ColumnLayout {
+                            width: parent.width; spacing: 8
+
+                            RowLayout {
+                                width: parent.width; spacing: 8
+                                Text { text: "Tat ca: " + tab.alertHistory.length;     color: cMuted; font.pixelSize: 16 }
+                                Text { text: "Loi: "    + tab.countError;              color: cBad;   font.pixelSize: 16; font.bold: true }
+                                Text { text: "Canh bao: " + tab.countWarning;          color: cWarn;  font.pixelSize: 16; font.bold: true }
+                                Text { text: "Thong tin: " + tab.countInfo;            color: cAccent; font.pixelSize: 16 }
+                                Item { Layout.fillWidth: true }
+                                TbBtn { lbl: "Xoa lich su"; onClicked: { tab.alertHistory = []; tab.lastAlertRaw = "" } }
+                            }
+
+                            RowLayout {
+                                width: parent.width; spacing: 6
+                                Repeater {
+                                    model: [
+                                        { key: "all",      lbl: "Tat ca" },
+                                        { key: "critical", lbl: "Nghiem trong" },
+                                        { key: "error",    lbl: "Loi" },
+                                        { key: "warning",  lbl: "Canh bao" },
+                                        { key: "info",     lbl: "Thong tin" }
+                                    ]
+                                    TbBtn {
+                                        lbl: modelData.lbl
+                                        variant: tab.alertFilter === modelData.key ? "primary" : "default"
+                                        onClicked: tab.alertFilter = modelData.key
+                                    }
+                                }
+                            }
+
+                            // Alert list (max ~6 rows visible, scrolls if more)
+                            Item {
+                                width: parent.width
+                                implicitHeight: Math.min(360, alertColumn.implicitHeight)
+                                ScrollView {
+                                    anchors.fill: parent
+                                    clip: true
+                                    ColumnLayout {
+                                        id: alertColumn
+                                        width: parent.width
+                                        spacing: 6
+                                        Repeater {
+                                            model: tab.filteredAlerts
+                                            AlertRow {
+                                                sev:     modelData.sev
+                                                time:    modelData.time
+                                                area:    modelData.area
+                                                message: modelData.message
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // -- Pressure cards + Cartridge pressures (40% width side-by-side) --
                     RowLayout {
                         Layout.fillWidth: true
@@ -614,6 +748,43 @@ Item {
                                 TbBtn {
                                     lbl: "♻ Reset Defaults"; variant: "danger"
                                     onClicked: hpController.publishString("parameters_control", "reset_defaults")
+                                }
+                            }
+                        }
+                    }
+
+                    // -- Action log (timestamped manual command responses) --
+                    Sect {
+                        title: "Action log"
+                        Layout.fillWidth: true
+                        visible: tab.actionLog.length > 0
+                        ColumnLayout {
+                            width: parent.width; spacing: 4
+                            RowLayout {
+                                width: parent.width
+                                Text { text: tab.actionLog.length + " thao tac gan day"; color: cMuted; font.pixelSize: 14 }
+                                Item { Layout.fillWidth: true }
+                                TbBtn { lbl: "Xoa log"; onClicked: { tab.actionLog = []; tab.lastActionRaw = "" } }
+                            }
+                            Item {
+                                width: parent.width
+                                implicitHeight: Math.min(240, logColumn.implicitHeight + 4)
+                                ScrollView {
+                                    anchors.fill: parent
+                                    clip: true
+                                    ColumnLayout {
+                                        id: logColumn
+                                        width: parent.width
+                                        spacing: 2
+                                        Repeater {
+                                            model: tab.actionLog
+                                            Text {
+                                                text: modelData; color: cText
+                                                font.pixelSize: 14; font.family: "monospace"
+                                                width: parent.width; elide: Text.ElideRight
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -873,13 +1044,80 @@ Item {
         radius: 8
         color: active ? cAccentSoft : cPanel2
         border.color: active ? cAccent : cBorder
-        border.width: 1
+        border.width: active ? 3 : 1
+        Behavior on border.width { NumberAnimation { duration: 180 } }
+        // Glow effect when active
+        Rectangle {
+            visible: parent.active
+            anchors.fill: parent
+            radius: parent.radius
+            color: "transparent"
+            border.color: cAccent
+            border.width: 1
+            opacity: 0.5
+            anchors.margins: -2
+        }
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 10
             spacing: 5
-            Text { text: lbl; color: cMuted; font.pixelSize: 20 }
+            Text { text: lbl; color: parent.parent.active ? cAccent : cMuted; font.pixelSize: 20; font.bold: parent.parent.active }
             Text { text: val; color: cText; font.pixelSize: 23; font.bold: true; wrapMode: Text.Wrap }
+        }
+    }
+
+    // Alert row component for Trung tam canh bao
+    component AlertRow: Rectangle {
+        property string sev: "info"
+        property string time: ""
+        property string area: ""
+        property string message: ""
+        Layout.fillWidth: true
+        implicitHeight: arCol.implicitHeight + 18
+        radius: 6
+        color:        sev === "critical" ? Qt.rgba(1.0, 0.15, 0.15, 0.18)
+                    : sev === "error"    ? Qt.rgba(1.0, 0.32, 0.32, 0.10)
+                    : sev === "warning"  ? Qt.rgba(1.0, 0.65, 0.15, 0.10)
+                    : Qt.rgba(0.31, 0.42, 1.0, 0.08)
+        border.color: sev === "critical" ? cBad
+                    : sev === "error"    ? cBad
+                    : sev === "warning"  ? cWarn
+                    : cAccent
+        border.width: 1
+
+        RowLayout {
+            id: arCol
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 10
+
+            Text {
+                text: sev === "critical" ? "🔥" : sev === "error" ? "⛔" : sev === "warning" ? "⚠️" : "ℹ️"
+                font.pixelSize: 22
+            }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                RowLayout {
+                    width: parent.width
+                    Text {
+                        text: (area ? area + " · " : "") + sev.toUpperCase()
+                        color: parent.parent.parent.parent.parent.sev === "warning" ? cWarn
+                             : parent.parent.parent.parent.parent.sev === "info"    ? cAccent : cBad
+                        font.pixelSize: 14; font.bold: true
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: time; color: cMuted
+                        font.pixelSize: 13; font.family: "monospace"
+                    }
+                }
+                Text {
+                    text: message; color: cText
+                    font.pixelSize: 15
+                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                    Layout.fillWidth: true
+                }
+            }
         }
     }
 
