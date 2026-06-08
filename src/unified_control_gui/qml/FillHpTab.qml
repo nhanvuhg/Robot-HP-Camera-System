@@ -369,6 +369,7 @@ Item {
                 ColumnLayout {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 400
+                    Layout.maximumWidth: 1000
                     Layout.alignment: Qt.AlignTop
                     spacing: 12
 
