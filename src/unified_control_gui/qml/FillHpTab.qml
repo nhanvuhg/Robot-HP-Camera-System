@@ -436,23 +436,31 @@ Item {
 
                     // ────────── MANUAL CONTROLS (chi enabled trong MANUAL mode) ──────────
 
-                    // -- Valves grid --
+                    // -- Valves grid (auto-fit 2-3 cot) --
                     Sect {
                         title: "Valves (manual only)"
                         Layout.fillWidth: true
-                        ColumnLayout {
-                            width: parent.width; spacing: 4
+                        Item {
+                            width: parent.width
+                            implicitHeight: valvesGrid.implicitHeight
                             enabled: tab.modeStr === "MANUAL"
                             opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
                             Behavior on opacity { NumberAnimation { duration: 150 } }
-                            Repeater {
-                                model: tab.valveModel
-                                IoToggle {
-                                    ioId:       modelData.id
-                                    statusKey:  modelData.statusKey
-                                    ioLabel:    modelData.label
-                                    actA:       modelData.a
-                                    actB:       modelData.b
+                            Grid {
+                                id: valvesGrid
+                                width: parent.width
+                                columns: Math.max(1, Math.floor(width / 320))
+                                spacing: 4
+                                Repeater {
+                                    model: tab.valveModel
+                                    IoToggle {
+                                        width: (valvesGrid.width - valvesGrid.spacing * (valvesGrid.columns - 1)) / valvesGrid.columns
+                                        ioId:      modelData.id
+                                        statusKey: modelData.statusKey
+                                        ioLabel:   modelData.label
+                                        actA:      modelData.a
+                                        actB:      modelData.b
+                                    }
                                 }
                             }
                         }
@@ -462,19 +470,27 @@ Item {
                     Sect {
                         title: "Cylinders (manual only)"
                         Layout.fillWidth: true
-                        ColumnLayout {
-                            width: parent.width; spacing: 4
+                        Item {
+                            width: parent.width
+                            implicitHeight: cylGrid.implicitHeight
                             enabled: tab.modeStr === "MANUAL"
                             opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
                             Behavior on opacity { NumberAnimation { duration: 150 } }
-                            Repeater {
-                                model: tab.cylinderModel
-                                IoToggle {
-                                    ioId:       modelData.id
-                                    statusKey:  modelData.statusKey
-                                    ioLabel:    modelData.label
-                                    actA:       modelData.a
-                                    actB:       modelData.b
+                            Grid {
+                                id: cylGrid
+                                width: parent.width
+                                columns: Math.max(1, Math.floor(width / 320))
+                                spacing: 4
+                                Repeater {
+                                    model: tab.cylinderModel
+                                    IoToggle {
+                                        width: (cylGrid.width - cylGrid.spacing * (cylGrid.columns - 1)) / cylGrid.columns
+                                        ioId:      modelData.id
+                                        statusKey: modelData.statusKey
+                                        ioLabel:   modelData.label
+                                        actA:      modelData.a
+                                        actB:      modelData.b
+                                    }
                                 }
                             }
                         }
@@ -850,7 +866,7 @@ Item {
         }
     }
 
-    // Single valve/cylinder row: label + 2 toggle buttons (a/b)
+    // Single valve/cylinder row: label + 2 toggle buttons (a/b) — compact
     component IoToggle: Rectangle {
         property string ioId: ""
         property string statusKey: ""
@@ -861,28 +877,28 @@ Item {
         readonly property string curLabel: entry ? entry.label : ""
         readonly property bool aActive: actionMatches(curLabel, actA)
         readonly property bool bActive: actionMatches(curLabel, actB)
-        Layout.fillWidth: true
-        implicitHeight: 44
-        radius: 6
+        implicitWidth: 300
+        implicitHeight: 36
+        radius: 5
         color: cPanel2; border.color: cBorder; border.width: 1
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8; anchors.rightMargin: 8
-            spacing: 6
+            anchors.leftMargin: 8; anchors.rightMargin: 6
+            spacing: 4
             Text {
                 text: ioLabel; color: cText
-                font.pixelSize: 13; font.bold: true; font.family: monoFamily
+                font.pixelSize: 12; font.bold: true; font.family: monoFamily
                 Layout.fillWidth: true; elide: Text.ElideRight
             }
-            // Action A button — highlights ok when current state matches
+            // Action A button
             Rectangle {
-                implicitWidth: 84; implicitHeight: 32; radius: 5
+                implicitWidth: 62; implicitHeight: 26; radius: 4
                 color: parent.parent.aActive ? cOk : cPanel
                 border.color: parent.parent.aActive ? cOk : cBorder; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: actA
                     color: parent.parent.parent.aActive ? "#0c0c1d" : cText
-                    font.pixelSize: 12; font.bold: true; font.family: monoFamily
+                    font.pixelSize: 11; font.bold: true; font.family: monoFamily
                 }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -890,13 +906,13 @@ Item {
                 }
             }
             Rectangle {
-                implicitWidth: 84; implicitHeight: 32; radius: 5
+                implicitWidth: 62; implicitHeight: 26; radius: 4
                 color: parent.parent.bActive ? cOk : cPanel
                 border.color: parent.parent.bActive ? cOk : cBorder; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: actB
                     color: parent.parent.parent.bActive ? "#0c0c1d" : cText
-                    font.pixelSize: 12; font.bold: true; font.family: monoFamily
+                    font.pixelSize: 11; font.bold: true; font.family: monoFamily
                 }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
