@@ -201,7 +201,7 @@ Item {
 
             Text {
                 text: "Fill HP Control"
-                color: cText; font.pixelSize: 18; font.bold: true; font.family: monoFamily
+                color: cText; font.pixelSize: 22; font.bold: true; font.family: monoFamily
             }
 
             Item { Layout.fillWidth: true }
@@ -278,13 +278,13 @@ Item {
                     spacing: 12
                     width: parent.width
 
-                    Text { text: "⛔"; font.pixelSize: 22 }
+                    Text { text: "⛔"; font.pixelSize: 26 }
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { text: "CANH BAO HE THONG"; color: cBad; font.bold: true; font.pixelSize: 14 }
+                        Text { text: "CANH BAO HE THONG"; color: cBad; font.bold: true; font.pixelSize: 18 }
                         Text {
                             text: hpController.errorStatus || "-"
-                            color: cText; font.pixelSize: 13; font.family: monoFamily
+                            color: cText; font.pixelSize: 17; font.family: monoFamily
                             wrapMode: Text.WrapAtWordBoundaryOrAnywhere; Layout.fillWidth: true
                         }
                     }
@@ -507,7 +507,7 @@ Item {
                             // Servo commands (always enabled)
                             RowLayout {
                                 width: parent.width; spacing: 6
-                                Text { text: "Pos: " + hpController.servoPosition.toFixed(2) + " mm"; color: cText; font.pixelSize: 13; font.bold: true; font.family: monoFamily; Layout.fillWidth: true }
+                                Text { text: "Pos: " + hpController.servoPosition.toFixed(2) + " mm"; color: cText; font.pixelSize: 17; font.bold: true; font.family: monoFamily; Layout.fillWidth: true }
                                 TbBtn { lbl: "Enable";  onClicked: hpController.publishString("servo_command", "enable") }
                                 TbBtn { lbl: "Disable"; onClicked: hpController.publishString("servo_command", "disable") }
                                 TbBtn { lbl: "Home";    variant: "primary"; onClicked: hpController.publishString("servo_command", "home") }
@@ -527,7 +527,7 @@ Item {
                             // PWM inputs
                             RowLayout {
                                 width: parent.width; spacing: 6
-                                Text { text: "Base PWM (%)"; color: cText; font.pixelSize: 12; font.bold: true; Layout.preferredWidth: 110 }
+                                Text { text: "Base PWM (%)"; color: cText; font.pixelSize: 16; font.bold: true; Layout.preferredWidth: 140 }
                                 PwmInput { id: basePwmIn; valueText: hpController.basePwmStatus.toString() }
                                 TbBtn {
                                     lbl: "Set"; variant: "primary"
@@ -542,7 +542,7 @@ Item {
                                 width: parent.width; spacing: 6
                                 enabled: tab.modeStr === "MANUAL"
                                 opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                                Text { text: "V10 PWM (%)"; color: cText; font.pixelSize: 12; font.bold: true; Layout.preferredWidth: 110 }
+                                Text { text: "V10 PWM (%)"; color: cText; font.pixelSize: 16; font.bold: true; Layout.preferredWidth: 140 }
                                 PwmInput { id: v10In; valueText: (tab.valvesMap["v10"] && tab.valvesMap["v10"].label) ? tab.valvesMap["v10"].label.replace("%","") : "0" }
                                 TbBtn {
                                     lbl: "Set"; variant: "primary"
@@ -631,7 +631,7 @@ Item {
             Text {
                 id: ttl
                 visible: !noTitle && text.length > 0
-                color: cMuted; font.pixelSize: 12; font.bold: true
+                color: cMuted; font.pixelSize: 16; font.bold: true
                 font.letterSpacing: 0.6; font.family: monoFamily
                 text: ""
             }
@@ -658,8 +658,8 @@ Item {
                                           : variant === "warn"    ? cWarn
                                           : variant === "danger"  ? cBad : cText
 
-        implicitWidth: Math.max(70, t.implicitWidth + 22)
-        implicitHeight: 32
+        implicitWidth: Math.max(80, t.implicitWidth + 26)
+        implicitHeight: 38
         radius: 6
         color: ma.containsMouse ? Qt.darker(baseBg, 0.85) : baseBg
         border.color: baseBorder; border.width: 1
@@ -667,7 +667,7 @@ Item {
         Text {
             id: t; anchors.centerIn: parent
             text: lbl; color: baseFg
-            font.pixelSize: 13; font.bold: true; font.family: monoFamily
+            font.pixelSize: 17; font.bold: true; font.family: monoFamily
         }
         MouseArea {
             id: ma; anchors.fill: parent
@@ -684,36 +684,36 @@ Item {
         Text {
             anchors.centerIn: parent; text: parent.lbl
             color: parent.active ? cOk : cText
-            font.pixelSize: 13; font.bold: true; font.family: monoFamily
+            font.pixelSize: 17; font.bold: true; font.family: monoFamily
         }
     }
 
     component CycleChip: Rectangle {
         property string value: "00:00"
         property bool   isRun: false
-        implicitWidth: 90; implicitHeight: 32
+        implicitWidth: 110; implicitHeight: 38
         radius: 6
         color: isRun ? cOkBg : cIdleBg
         border.color: isRun ? cOk : cBorder; border.width: 1
         Text {
             anchors.centerIn: parent; text: value
             color: parent.isRun ? cOk : cText
-            font.pixelSize: 13; font.bold: true; font.family: monoFamily
+            font.pixelSize: 17; font.bold: true; font.family: monoFamily
         }
     }
 
     component StatusChip: Rectangle {
         property string state: "mid"
         property string label: state
-        implicitWidth: txt.implicitWidth + 16; implicitHeight: 22
-        radius: 11
+        implicitWidth: txt.implicitWidth + 20; implicitHeight: 28
+        radius: 14
         color:        state === "on" ? cOkBg : state === "off" ? cBadBg : state === "mid" ? cWarnBg : cIdleBg
         border.color: state === "on" ? cOk   : state === "off" ? cBad   : state === "mid" ? cWarn   : cIdle
         border.width: 1
         Text {
             id: txt; anchors.centerIn: parent; text: label
             color: parent.state === "on" ? cOk : parent.state === "off" ? cBad : parent.state === "mid" ? cWarn : cIdle
-            font.pixelSize: 11; font.bold: true; font.family: monoFamily
+            font.pixelSize: 15; font.bold: true; font.family: monoFamily
         }
     }
 
@@ -724,8 +724,8 @@ Item {
         width: parent.width; spacing: 8
         Text {
             text: lbl; color: cMuted
-            font.pixelSize: 12; font.bold: true; font.family: monoFamily
-            Layout.preferredWidth: 130
+            font.pixelSize: 16; font.bold: true; font.family: monoFamily
+            Layout.preferredWidth: 170
         }
         Loader {
             Layout.fillWidth: true
@@ -734,7 +734,7 @@ Item {
                 id: textComp
                 Text {
                     text: val; color: cText
-                    font.pixelSize: 13; font.family: monoFamily
+                    font.pixelSize: 17; font.family: monoFamily
                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                 }
             }
@@ -749,8 +749,8 @@ Item {
         property string name: ""
         property string state: "mid"
         property string label: state
-        implicitWidth: Math.min(220, Math.max(140, nameTxt.implicitWidth + sChip.implicitWidth + 28))
-        implicitHeight: 34
+        implicitWidth: Math.min(260, Math.max(170, nameTxt.implicitWidth + sChip.implicitWidth + 32))
+        implicitHeight: 40
         radius: 6
         color: cPanel2; border.color: cBorder; border.width: 1
         RowLayout {
@@ -760,7 +760,7 @@ Item {
             Text {
                 id: nameTxt
                 text: name; color: cText
-                font.pixelSize: 12; font.family: monoFamily
+                font.pixelSize: 16; font.family: monoFamily
                 elide: Text.ElideRight; Layout.fillWidth: true
             }
             StatusChip { id: sChip; state: parent.parent.state; label: parent.parent.label }
@@ -780,12 +780,12 @@ Item {
             width: parent.width - 24; spacing: 6
             RowLayout {
                 width: parent.width
-                Text { text: lbl; color: cMuted; font.pixelSize: 13; font.bold: true; font.family: monoFamily }
+                Text { text: lbl; color: cMuted; font.pixelSize: 17; font.bold: true; font.family: monoFamily }
                 Item { Layout.fillWidth: true }
                 RowLayout {
                     spacing: 3
-                    Text { text: val.toFixed(1); color: cText; font.pixelSize: 22; font.bold: true; font.family: monoFamily }
-                    Text { text: "mbar"; color: cMuted; font.pixelSize: 12; font.bold: true }
+                    Text { text: val.toFixed(1); color: cText; font.pixelSize: 26; font.bold: true; font.family: monoFamily }
+                    Text { text: "mbar"; color: cMuted; font.pixelSize: 16; font.bold: true }
                 }
             }
             Rectangle {
@@ -805,7 +805,7 @@ Item {
         property real   cartVal: 0
         readonly property string cls: classifyPressure(cartVal, 280, 400, 600)
         Layout.fillWidth: true
-        implicitHeight: 42
+        implicitHeight: 50
         radius: 6
         color:        cls === "ok"    ? cOkBg
                     : cls === "high"  ? cWarnBg
@@ -822,16 +822,16 @@ Item {
             spacing: 8
             Text {
                 text: cartName; color: cText
-                font.pixelSize: 12; font.bold: true; font.family: monoFamily
-                Layout.preferredWidth: 70
+                font.pixelSize: 16; font.bold: true; font.family: monoFamily
+                Layout.preferredWidth: 95
             }
             ColumnLayout {
                 Layout.fillWidth: true; spacing: 2
                 RowLayout {
                     width: parent.width
                     Item { Layout.fillWidth: true }
-                    Text { text: cartVal.toFixed(0); color: cText; font.pixelSize: 14; font.bold: true; font.family: monoFamily }
-                    Text { text: "mbar"; color: cMuted; font.pixelSize: 10; font.bold: true }
+                    Text { text: cartVal.toFixed(0); color: cText; font.pixelSize: 18; font.bold: true; font.family: monoFamily }
+                    Text { text: "mbar"; color: cMuted; font.pixelSize: 14; font.bold: true }
                 }
                 Rectangle {
                     Layout.fillWidth: true; height: 6; radius: 3
@@ -853,7 +853,7 @@ Item {
         property string lbl: ""
         property string val: ""
         property bool   active: false
-        Layout.preferredHeight: 76
+        Layout.preferredHeight: 92
         radius: 8
         color: active ? cAccentSoft : cPanel2
         border.color: active ? cAccent : cBorder
@@ -862,8 +862,8 @@ Item {
             anchors.fill: parent
             anchors.margins: 10
             spacing: 5
-            Text { text: lbl; color: cMuted; font.pixelSize: 12; font.family: monoFamily }
-            Text { text: val; color: cText; font.pixelSize: 15; font.bold: true; font.family: monoFamily; wrapMode: Text.Wrap }
+            Text { text: lbl; color: cMuted; font.pixelSize: 16; font.family: monoFamily }
+            Text { text: val; color: cText; font.pixelSize: 19; font.bold: true; font.family: monoFamily; wrapMode: Text.Wrap }
         }
     }
 
@@ -878,28 +878,28 @@ Item {
         readonly property string curLabel: entry ? entry.label : ""
         readonly property bool aActive: actionMatches(curLabel, actA)
         readonly property bool bActive: actionMatches(curLabel, actB)
-        implicitWidth: 300
-        implicitHeight: 36
+        implicitWidth: 360
+        implicitHeight: 42
         radius: 5
         color: cPanel2; border.color: cBorder; border.width: 1
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8; anchors.rightMargin: 6
-            spacing: 4
+            anchors.leftMargin: 10; anchors.rightMargin: 8
+            spacing: 6
             Text {
                 text: ioLabel; color: cText
-                font.pixelSize: 12; font.bold: true; font.family: monoFamily
+                font.pixelSize: 16; font.bold: true; font.family: monoFamily
                 Layout.fillWidth: true; elide: Text.ElideRight
             }
             // Action A button
             Rectangle {
-                implicitWidth: 62; implicitHeight: 26; radius: 4
+                implicitWidth: 80; implicitHeight: 32; radius: 5
                 color: parent.parent.aActive ? cOk : cPanel
                 border.color: parent.parent.aActive ? cOk : cBorder; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: actA
                     color: parent.parent.parent.aActive ? "#0c0c1d" : cText
-                    font.pixelSize: 11; font.bold: true; font.family: monoFamily
+                    font.pixelSize: 15; font.bold: true; font.family: monoFamily
                 }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -907,13 +907,13 @@ Item {
                 }
             }
             Rectangle {
-                implicitWidth: 62; implicitHeight: 26; radius: 4
+                implicitWidth: 80; implicitHeight: 32; radius: 5
                 color: parent.parent.bActive ? cOk : cPanel
                 border.color: parent.parent.bActive ? cOk : cBorder; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: actB
                     color: parent.parent.parent.bActive ? "#0c0c1d" : cText
-                    font.pixelSize: 11; font.bold: true; font.family: monoFamily
+                    font.pixelSize: 15; font.bold: true; font.family: monoFamily
                 }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -935,13 +935,13 @@ Item {
         readonly property color baseFg:     variant === "primary" ? cAccent
                                           : variant === "warn"    ? cWarn
                                           : variant === "danger"  ? cBad : cText
-        implicitWidth: 110; implicitHeight: 38
+        implicitWidth: 140; implicitHeight: 46
         radius: 6
         color: _pressed ? Qt.rgba(0.31, 0.42, 1.0, 0.25) : cPanel2
         border.color: baseBorder; border.width: 1
         Text {
             anchors.centerIn: parent; text: lbl; color: baseFg
-            font.pixelSize: 13; font.bold: true; font.family: monoFamily
+            font.pixelSize: 17; font.bold: true; font.family: monoFamily
         }
         MouseArea {
             anchors.fill: parent
@@ -955,14 +955,14 @@ Item {
     // Numeric input rectangle (exposes valueText for parent to read)
     component PwmInput: Rectangle {
         property string valueText: "0"
-        implicitWidth: 70; implicitHeight: 28
+        implicitWidth: 90; implicitHeight: 34
         radius: 4
         color: cBg; border.color: cBorder; border.width: 1
         TextInput {
-            anchors.fill: parent; anchors.margins: 5
+            anchors.fill: parent; anchors.margins: 6
             text: valueText
             onTextChanged: valueText = text
-            color: cText; font.pixelSize: 13; font.bold: true; font.family: monoFamily
+            color: cText; font.pixelSize: 17; font.bold: true; font.family: monoFamily
             selectByMouse: true; horizontalAlignment: TextInput.AlignHCenter
         }
     }
@@ -971,36 +971,36 @@ Item {
     component SettingRow: Rectangle {
         property var item: ({})
         property string currentVal: ""
-        height: 38
+        height: 46
         radius: 6
         color: cPanel2; border.color: cBorder; border.width: 1
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8; anchors.rightMargin: 8
+            anchors.leftMargin: 10; anchors.rightMargin: 10
             spacing: 6
             Text {
                 text: item.label || ""; color: cText
-                font.pixelSize: 12; font.bold: true; font.family: monoFamily
+                font.pixelSize: 16; font.bold: true; font.family: monoFamily
                 Layout.fillWidth: true; elide: Text.ElideRight
             }
             Rectangle {
-                implicitWidth: 70; implicitHeight: 26; radius: 4
+                implicitWidth: 95; implicitHeight: 32; radius: 4
                 color: cBg; border.color: cBorder; border.width: 1
                 TextInput {
                     id: inp
-                    anchors.fill: parent; anchors.margins: 4
+                    anchors.fill: parent; anchors.margins: 6
                     text: currentVal
-                    color: cText; font.pixelSize: 12; font.family: monoFamily
+                    color: cText; font.pixelSize: 16; font.family: monoFamily
                     selectByMouse: true; horizontalAlignment: TextInput.AlignRight
                 }
             }
-            Text { text: item.unit || ""; color: cMuted; font.pixelSize: 11; Layout.preferredWidth: 32 }
+            Text { text: item.unit || ""; color: cMuted; font.pixelSize: 15; Layout.preferredWidth: 38 }
             Rectangle {
-                implicitWidth: 44; implicitHeight: 26; radius: 4
+                implicitWidth: 60; implicitHeight: 32; radius: 4
                 color: "#0a1a3a"; border.color: cAccent; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: "Set"; color: cAccent
-                    font.pixelSize: 11; font.bold: true; font.family: monoFamily
+                    font.pixelSize: 15; font.bold: true; font.family: monoFamily
                 }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
