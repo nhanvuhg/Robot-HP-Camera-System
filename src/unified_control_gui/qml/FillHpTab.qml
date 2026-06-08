@@ -201,7 +201,7 @@ Item {
 
             Text {
                 text: "Fill HP Control"
-                color: cText; font.pixelSize: 26; font.bold: true; font.family: monoFamily
+                color: cText; font.pixelSize: 26; font.bold: true
             }
 
             Item { Layout.fillWidth: true }
@@ -284,7 +284,7 @@ Item {
                         Text { text: "CANH BAO HE THONG"; color: cBad; font.bold: true; font.pixelSize: 22 }
                         Text {
                             text: hpController.errorStatus || "-"
-                            color: cText; font.pixelSize: 21; font.family: monoFamily
+                            color: cText; font.pixelSize: 21
                             wrapMode: Text.WrapAtWordBoundaryOrAnywhere; Layout.fillWidth: true
                         }
                     }
@@ -518,7 +518,7 @@ Item {
                             // Servo commands (always enabled)
                             RowLayout {
                                 width: parent.width; spacing: 6
-                                Text { text: "Pos: " + hpController.servoPosition.toFixed(2) + " mm"; color: cText; font.pixelSize: 21; font.bold: true; font.family: monoFamily; Layout.fillWidth: true }
+                                Text { text: "Pos: " + hpController.servoPosition.toFixed(2) + " mm"; color: cText; font.pixelSize: 21; font.bold: true; font.family: "monospace"; Layout.fillWidth: true }
                                 TbBtn { lbl: "Enable";  onClicked: hpController.publishString("servo_command", "enable") }
                                 TbBtn { lbl: "Disable"; onClicked: hpController.publishString("servo_command", "disable") }
                                 TbBtn { lbl: "Home";    variant: "primary"; onClicked: hpController.publishString("servo_command", "home") }
@@ -643,7 +643,7 @@ Item {
                 id: ttl
                 visible: !noTitle && text.length > 0
                 color: cMuted; font.pixelSize: 20; font.bold: true
-                font.letterSpacing: 0.6; font.family: monoFamily
+                font.letterSpacing: 0.6
                 text: ""
             }
             Item {
@@ -678,7 +678,7 @@ Item {
         Text {
             id: t; anchors.centerIn: parent
             text: lbl; color: baseFg
-            font.pixelSize: 21; font.bold: true; font.family: monoFamily
+            font.pixelSize: 21; font.bold: true
         }
         MouseArea {
             id: ma; anchors.fill: parent
@@ -695,7 +695,7 @@ Item {
         Text {
             anchors.centerIn: parent; text: parent.lbl
             color: parent.active ? cOk : cText
-            font.pixelSize: 21; font.bold: true; font.family: monoFamily
+            font.pixelSize: 21; font.bold: true
         }
     }
 
@@ -709,7 +709,7 @@ Item {
         Text {
             anchors.centerIn: parent; text: value
             color: parent.isRun ? cOk : cText
-            font.pixelSize: 21; font.bold: true; font.family: monoFamily
+            font.pixelSize: 21; font.bold: true; font.family: "monospace"
         }
     }
 
@@ -724,7 +724,7 @@ Item {
         Text {
             id: txt; anchors.centerIn: parent; text: label
             color: parent.state === "on" ? cOk : parent.state === "off" ? cBad : parent.state === "mid" ? cWarn : cIdle
-            font.pixelSize: 19; font.bold: true; font.family: monoFamily
+            font.pixelSize: 19; font.bold: true
         }
     }
 
@@ -735,7 +735,7 @@ Item {
         width: parent.width; spacing: 8
         Text {
             text: lbl; color: cMuted
-            font.pixelSize: 20; font.bold: true; font.family: monoFamily
+            font.pixelSize: 20; font.bold: true
             Layout.preferredWidth: 170
         }
         Loader {
@@ -745,7 +745,7 @@ Item {
                 id: textComp
                 Text {
                     text: val; color: cText
-                    font.pixelSize: 21; font.family: monoFamily
+                    font.pixelSize: 21
                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                 }
             }
@@ -771,7 +771,7 @@ Item {
             Text {
                 id: nameTxt
                 text: name; color: cText
-                font.pixelSize: 20; font.family: monoFamily
+                font.pixelSize: 20
                 elide: Text.ElideRight; Layout.fillWidth: true
             }
             StatusChip { id: sChip; state: parent.parent.state; label: parent.parent.label }
@@ -791,11 +791,11 @@ Item {
             width: parent.width - 24; spacing: 6
             RowLayout {
                 width: parent.width
-                Text { text: lbl; color: cMuted; font.pixelSize: 21; font.bold: true; font.family: monoFamily }
+                Text { text: lbl; color: cMuted; font.pixelSize: 21; font.bold: true }
                 Item { Layout.fillWidth: true }
                 RowLayout {
                     spacing: 3
-                    Text { text: val.toFixed(1); color: cText; font.pixelSize: 30; font.bold: true; font.family: monoFamily }
+                    Text { text: val.toFixed(1); color: cText; font.pixelSize: 30; font.bold: true; font.family: "monospace" }
                     Text { text: "mbar"; color: cMuted; font.pixelSize: 20; font.bold: true }
                 }
             }
@@ -833,7 +833,7 @@ Item {
             spacing: 8
             Text {
                 text: cartName; color: cText
-                font.pixelSize: 20; font.bold: true; font.family: monoFamily
+                font.pixelSize: 20; font.bold: true
                 Layout.preferredWidth: 95
             }
             ColumnLayout {
@@ -841,7 +841,7 @@ Item {
                 RowLayout {
                     width: parent.width
                     Item { Layout.fillWidth: true }
-                    Text { text: cartVal.toFixed(0); color: cText; font.pixelSize: 22; font.bold: true; font.family: monoFamily }
+                    Text { text: cartVal.toFixed(0); color: cText; font.pixelSize: 22; font.bold: true; font.family: "monospace" }
                     Text { text: "mbar"; color: cMuted; font.pixelSize: 18; font.bold: true }
                 }
                 Rectangle {
@@ -873,8 +873,8 @@ Item {
             anchors.fill: parent
             anchors.margins: 10
             spacing: 5
-            Text { text: lbl; color: cMuted; font.pixelSize: 20; font.family: monoFamily }
-            Text { text: val; color: cText; font.pixelSize: 23; font.bold: true; font.family: monoFamily; wrapMode: Text.Wrap }
+            Text { text: lbl; color: cMuted; font.pixelSize: 20 }
+            Text { text: val; color: cText; font.pixelSize: 23; font.bold: true; wrapMode: Text.Wrap }
         }
     }
 
@@ -899,7 +899,7 @@ Item {
             spacing: 6
             Text {
                 text: ioLabel; color: cText
-                font.pixelSize: 20; font.bold: true; font.family: monoFamily
+                font.pixelSize: 20; font.bold: true
                 Layout.fillWidth: true; elide: Text.ElideRight
             }
             // Action A button
@@ -910,7 +910,7 @@ Item {
                 Text {
                     anchors.centerIn: parent; text: actA
                     color: parent.parent.parent.aActive ? "#0c0c1d" : cText
-                    font.pixelSize: 19; font.bold: true; font.family: monoFamily
+                    font.pixelSize: 19; font.bold: true
                 }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -924,7 +924,7 @@ Item {
                 Text {
                     anchors.centerIn: parent; text: actB
                     color: parent.parent.parent.bActive ? "#0c0c1d" : cText
-                    font.pixelSize: 19; font.bold: true; font.family: monoFamily
+                    font.pixelSize: 19; font.bold: true
                 }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -952,7 +952,7 @@ Item {
         border.color: baseBorder; border.width: 1
         Text {
             anchors.centerIn: parent; text: lbl; color: baseFg
-            font.pixelSize: 21; font.bold: true; font.family: monoFamily
+            font.pixelSize: 21; font.bold: true
         }
         MouseArea {
             anchors.fill: parent
@@ -973,7 +973,7 @@ Item {
             anchors.fill: parent; anchors.margins: 6
             text: valueText
             onTextChanged: valueText = text
-            color: cText; font.pixelSize: 21; font.bold: true; font.family: monoFamily
+            color: cText; font.pixelSize: 21; font.bold: true; font.family: "monospace"
             selectByMouse: true; horizontalAlignment: TextInput.AlignHCenter
         }
     }
@@ -991,7 +991,7 @@ Item {
             spacing: 6
             Text {
                 text: item.label || ""; color: cText
-                font.pixelSize: 20; font.bold: true; font.family: monoFamily
+                font.pixelSize: 20; font.bold: true
                 Layout.fillWidth: true; elide: Text.ElideRight
             }
             Rectangle {
@@ -1001,7 +1001,7 @@ Item {
                     id: inp
                     anchors.fill: parent; anchors.margins: 6
                     text: currentVal
-                    color: cText; font.pixelSize: 20; font.family: monoFamily
+                    color: cText; font.pixelSize: 20; font.family: "monospace"
                     selectByMouse: true; horizontalAlignment: TextInput.AlignRight
                 }
             }
@@ -1011,7 +1011,7 @@ Item {
                 color: "#0a1a3a"; border.color: cAccent; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: "Set"; color: cAccent
-                    font.pixelSize: 19; font.bold: true; font.family: monoFamily
+                    font.pixelSize: 19; font.bold: true
                 }
                 MouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
