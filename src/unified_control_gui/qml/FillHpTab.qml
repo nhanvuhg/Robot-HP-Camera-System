@@ -205,7 +205,10 @@ Item {
                 // ====== SIDEBAR 340 ======
                 ColumnLayout {
                     Layout.preferredWidth: 340
-                    Layout.alignment: Qt.AlignTop
+                    Layout.minimumWidth: 340
+                    Layout.maximumWidth: 340
+                    Layout.fillWidth: false
+                    Layout.alignment: Qt.AlignTop | Qt.AlignLeft
                     spacing: 12
 
                     Sect {
@@ -267,6 +270,7 @@ Item {
                 // ====== CONTENT ======
                 ColumnLayout {
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 400
                     Layout.alignment: Qt.AlignTop
                     spacing: 12
 
