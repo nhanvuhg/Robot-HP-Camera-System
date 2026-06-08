@@ -3,6 +3,7 @@
     <file alias="Main.qml">qml/Main.qml</file>
     <file alias="CameraPage.qml">qml/CameraPage.qml</file>
     <file alias="CartridgePage.qml">qml/CartridgePage.qml</file>
+    <file alias="FillHpTab.qml">qml/FillHpTab.qml</file>
     <file alias="CameraView.qml">qml/CameraView.qml</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
