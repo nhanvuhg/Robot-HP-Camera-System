@@ -104,6 +104,11 @@ Item {
     property var sysMap:      parseKvPipe(hpController.systemStatus)
     property var hwMap:       parseKvPipe(hpController.hwStatus)
     property var inputsMap:   parseKvComma(hpController.inputState)
+    // Lay danh sach key inputs, BO sensor mag_index_* va tube_index_* (nguoi
+    // dung khong can xem hien thi nay tren Fill HP tab)
+    property var filteredInputKeys: Object.keys(inputsMap).filter(function(k) {
+        return k.indexOf("mag_index") === -1 && k.indexOf("tube_index") === -1
+    })
     property var valvesMap:   parseValveState(hpController.valveState)
     property var settingsMap: parseKvComma(hpController.pressureThresholds)
     property int activeSettingsTab: 0
@@ -428,15 +433,15 @@ Item {
                         }
                     }
 
-                    // -- Inputs (read-only chips) --
+                    // -- Inputs (read-only chips) - exclude mag_index/tube_index sensors --
                     Sect {
                         title: "Ngo vao Input"
                         Layout.fillWidth: true
-                        visible: Object.keys(tab.inputsMap).length > 0
+                        visible: tab.filteredInputKeys.length > 0
                         Flow {
                             spacing: 6; width: parent.width
                             Repeater {
-                                model: Object.keys(tab.inputsMap)
+                                model: tab.filteredInputKeys
                                 Chip {
                                     name:  modelData
                                     state: classifyState(tab.inputsMap[modelData])
