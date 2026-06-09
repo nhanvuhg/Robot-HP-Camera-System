@@ -873,10 +873,13 @@ private:
         if (!moveToIndex(28)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(1.0)) return false;
-        if (!moveR(0, 140.5, 0)) return false;
+        if (!moveR(0, 139, 0,5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(2.0)) return false;
-        if (!moveR(0, -170, 0)) return false;
+        if (!moveR(1, -60, 0)) return false;
+        if (!moveR(-10, 29, 0)) return false;
+        if (!wait(0.5)) return false;
+        if (!moveR(0, -60, 0)) return false;
         if (!moveToIndex(28)) return false;
         return true;
     }
@@ -916,7 +919,7 @@ private:
     bool executeChamberScale() {
         RCLCPP_INFO(get_logger(), "[MOTION] Chamber → Scale");
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 140, 0)) return false;
+        if (!moveR(0, 140.5, 0)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại chamber
         if (!wait(2.0)) return false;
         if (!moveR(0, -170, 0)) return false;
@@ -924,7 +927,7 @@ private:
         if (!moveR(0, 0, -60)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay lên scale
         if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 100)) return false;
+        if (!moveR(0, 0, 110)) return false;
         return true;
     }
 
@@ -976,10 +979,14 @@ private:
         if (!moveR(0, 0, 90)) return false;
         if (!moveToIndex(28)) return false;
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 140.5, 0)) return false;
+        if (!wait(1.0)) return false;
+        if (!moveR(0, 139, 0,5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(2.0)) return false;
-        if (!moveR(0, -180, 0)) return false;
+        if (!moveR(-1, -60, 0)) return false;
+        if (!moveR(-10, 29, 0)) return false;
+        if (!wait(0.5)) return false;
+        if (!moveR(0, -60, 0)) return false;
         if (!moveToIndex(28)) return false;
         return true;
     }
