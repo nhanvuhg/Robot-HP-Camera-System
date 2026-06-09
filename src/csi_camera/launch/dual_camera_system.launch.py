@@ -70,7 +70,7 @@ def generate_launch_description():
                     'src_image_topic_name': '/cam0HP/image_raw',
                     'publish_boundingbox_topic_name': '/cam0HP/yolo/bounding_boxes',
                     'publish_image_topic_name': '/cam0HP/yolo/image_raw',
-                    'conf': 0.60,
+                    'conf': 0.7,
                     'publish_resized_image': False,
                 }]
             ),

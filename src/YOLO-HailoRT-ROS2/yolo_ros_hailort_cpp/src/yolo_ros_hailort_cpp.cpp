@@ -1,4 +1,5 @@
 #include "yolo_ros_hailort_cpp/yolo_ros_hailort_cpp.hpp"
+#include <algorithm>  // [CONF-GUARD] for std::remove_if
 
 namespace yolo_ros_hailort_cpp
 {
@@ -97,6 +98,18 @@ namespace yolo_ros_hailort_cpp
             auto now = std::chrono::system_clock::now();
             auto objects = this->yolo_->inference(resized_frame);
             auto end = std::chrono::system_clock::now();
+
+            // [CONF-GUARD] Drop bbox co confidence duoi `conf` threshold.
+            // Phong truong hop Hailo NMS post-process khong filter chinh
+            // xac theo conf — guard nay dam bao cả ve va publish chi nhan
+            // object qualified.
+            const float conf_threshold = static_cast<float>(this->params_.conf);
+            objects.erase(
+                std::remove_if(objects.begin(), objects.end(),
+                    [conf_threshold](const yolo_cpp::Object &o) {
+                        return o.prob < conf_threshold;
+                    }),
+                objects.end());
 
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - now);
             RCLCPP_INFO(this->get_logger(), "Inference time: %5ld ms", elapsed.count());
