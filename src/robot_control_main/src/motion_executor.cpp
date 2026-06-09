@@ -904,7 +904,7 @@ private:
         if (!moveR(0, 0, 120,5)) return false;
         if (!moveToIndex(27)) return false;
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 0, -60)) return false;
+        if (!moveR(0, 0, -58)) return false;
         if (!wait(1.0)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào buffer
         if (!wait(1.0)) return false;
