@@ -1733,33 +1733,6 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         return;
     }
 
-    if (cartridge_busy_) {
-        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge BUSY — INIT_LOAD blocked");
-        return;
-    }
-
-    if (waiting_for_new_input_.load() || !new_tray_loaded_.load()) {
-        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
-            "[INIT_LOAD] Waiting for new input tray (new_tray_loaded=false)...");
-        return;
-    }
-
-    // AUTO/AI: verify S7 ON từ cartridge sensor — defense-in-depth chống
-    // flag bị set giả qua simulate buttons IN_READY/PICK_INPUT.
-    if (!manual_mode_ && !s7_at_robot_.load()) {
-        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
-            "[INIT_LOAD] S7 OFF — chờ cartridge thực sự đưa khay đến Robot");
-        return;
-    }
-
-    // Wait for feed_chamber signal on first batch
-    if (!manual_mode_ && is_first_batch_ && !feed_chamber_signal_) {
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
-            "[INIT_LOAD] Waiting for feed_chamber signal...");
-        return;
-    }
-
     // ── Motion result handling ──
     if (getMotionCmd() == "INPUT_TRAY_CHAMBER") {
         if (motion_in_progress_) return;
@@ -1793,6 +1766,33 @@ void RobotLogicNode::stateInitLoadChamberDirect()
             feed_chamber_signal_ = false;  // consumed — require new signal on next cycle
             transitionTo(SystemState::INIT_REFILL_BUFFER);
         }
+        return;
+    }
+
+    if (cartridge_busy_) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge BUSY — INIT_LOAD blocked");
+        return;
+    }
+
+    if (waiting_for_new_input_.load() || !new_tray_loaded_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+            "[INIT_LOAD] Waiting for new input tray (new_tray_loaded=false)...");
+        return;
+    }
+
+    // AUTO/AI: verify S7 ON từ cartridge sensor — defense-in-depth chống
+    // flag bị set giả qua simulate buttons IN_READY/PICK_INPUT.
+    if (!manual_mode_ && !s7_at_robot_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
+            "[INIT_LOAD] S7 OFF — chờ cartridge thực sự đưa khay đến Robot");
+        return;
+    }
+
+    // Wait for feed_chamber signal on first batch
+    if (!manual_mode_ && is_first_batch_ && !feed_chamber_signal_) {
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
+            "[INIT_LOAD] Waiting for feed_chamber signal...");
         return;
     }
 
@@ -1858,12 +1858,6 @@ void RobotLogicNode::stateInitRefillBuffer()
         return;
     }
 
-    if (cartridge_busy_) {
-        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge BUSY — INIT_REFILL blocked");
-        return;
-    }
-
     // ── Motion result handling ──
     if (getMotionCmd() == "INPUT_TRAY_BUFFER") {
         if (motion_in_progress_) return;
@@ -1896,6 +1890,12 @@ void RobotLogicNode::stateInitRefillBuffer()
         } else {
             transitionTo(SystemState::WAIT_FILLING);
         }
+        return;
+    }
+
+    if (cartridge_busy_) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge BUSY — INIT_REFILL blocked");
         return;
     }
 
@@ -2121,12 +2121,6 @@ void RobotLogicNode::stateRefillBuffer()
         return;
     }
 
-    if (cartridge_busy_) {
-        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge BUSY — REFILL_BUFFER blocked");
-        return;
-    }
-
     // ── Motion result handling ──
     if (getMotionCmd() == "INPUT_TRAY_BUFFER") {
         if (motion_in_progress_) return;
@@ -2159,6 +2153,12 @@ void RobotLogicNode::stateRefillBuffer()
         // After refill → wait for scale result and fill_done (via PROCESSING_SCALE→PLACE→WAIT_FILLING)
         RCLCPP_INFO(get_logger(), "[PIPELINE] Refill done → PROCESSING_SCALE");
         transitionTo(SystemState::PROCESSING_SCALE);
+        return;
+    }
+
+    if (cartridge_busy_) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge BUSY — REFILL_BUFFER blocked");
         return;
     }
 
@@ -2295,46 +2295,6 @@ void RobotLogicNode::statePlaceToOutput()
         return;
     }
 
-    if (cartridge_pos2_busy_) {
-        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge Pos2 BUSY (STATE 3/4) — PLACE_TO_OUTPUT blocked");
-        return;
-    }
-
-    if (!use_ai_for_control_) {
-        // AUTO: Camera not needed for slot selection
-    }
-
-    // ── Slot selection ──
-    int slot = SLOT_UNSET;
-    {
-        std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-        if (!use_ai_for_control_) {
-            // AUTO: use counter managed by vision/logic
-            if (selected_output_slot_ != SLOT_UNSET) {
-                slot = selected_output_slot_;
-            } else {
-                // Vision node hasn't provided slot yet — use local counter
-                slot = current_auto_slot_;
-            }
-        } else {
-            slot = selected_output_slot_;
-        }
-    }
-
-    if (slot == SLOT_UNSET || slot <= 0) {
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
-            "[OUTPUT] Waiting for slot selection...");
-        return;
-    }
-
-    // Check output tray ready (after done_tray_output, wait for new_trayoutput_loaded)
-    if (waiting_for_new_output_.load()) {
-        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
-            "[OUTPUT] Waiting for new output tray...");
-        return;
-    }
-
     // ── Motion result handling ──
     if (getMotionCmd() == "SCALE_OUTPUT") {
         if (motion_in_progress_) return;
@@ -2399,6 +2359,46 @@ void RobotLogicNode::statePlaceToOutput()
 
         // Continue cycle
         transitionTo(SystemState::WAIT_FILLING);
+        return;
+    }
+
+    if (cartridge_pos2_busy_) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge Pos2 BUSY (STATE 3/4) — PLACE_TO_OUTPUT blocked");
+        return;
+    }
+
+    if (!use_ai_for_control_) {
+        // AUTO: Camera not needed for slot selection
+    }
+
+    // ── Slot selection ──
+    int slot = SLOT_UNSET;
+    {
+        std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+        if (!use_ai_for_control_) {
+            // AUTO: use counter managed by vision/logic
+            if (selected_output_slot_ != SLOT_UNSET) {
+                slot = selected_output_slot_;
+            } else {
+                // Vision node hasn't provided slot yet — use local counter
+                slot = current_auto_slot_;
+            }
+        } else {
+            slot = selected_output_slot_;
+        }
+    }
+
+    if (slot == SLOT_UNSET || slot <= 0) {
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
+            "[OUTPUT] Waiting for slot selection...");
+        return;
+    }
+
+    // Check output tray ready (after done_tray_output, wait for new_trayoutput_loaded)
+    if (waiting_for_new_output_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
+            "[OUTPUT] Waiting for new output tray...");
         return;
     }
 
