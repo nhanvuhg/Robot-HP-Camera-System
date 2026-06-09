@@ -171,6 +171,14 @@ private:
     rclcpp::Client<dobot_msgs_v3::srv::EmergencyStop>::SharedPtr dobot_emergency_stop_client_;
     rclcpp::Client<dobot_msgs_v3::srv::StopScript>::SharedPtr dobot_stop_script_client_;
     rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedPtr clear_error_client_;
+
+    // [STOP-PRESERVE] Snapshot/restore picker+gripper state khi STOP de dam bao
+    // CPX coil khong bi reset boi side-effect cua Pause/ResetRobot/EnableRobot.
+    // (gripper_cmd_pub_ + picker_cmd_pub_ da duoc declare o tren — dung lai)
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr gripper_status_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr picker_status_sub_;
+    bool last_gripper_state_{false};
+    bool last_picker_state_{false};
     rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedPtr reset_robot_client_;
     rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedPtr speed_factor_client_;
     rclcpp::Client<dobot_msgs_v3::srv::GetErrorID>::SharedPtr get_error_id_client_;

@@ -38,6 +38,16 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     pause_client_ = node_->create_client<dobot_msgs_v3::srv::Pause>("/nova5/dobot_bringup/Pause");
     dobot_emergency_stop_client_ = node_->create_client<dobot_msgs_v3::srv::EmergencyStop>("/nova5/dobot_bringup/EmergencyStop");
     dobot_stop_script_client_ = node_->create_client<dobot_msgs_v3::srv::StopScript>("/nova5/dobot_bringup/StopScript");
+
+    // [STOP-PRESERVE] Track gripper/picker state real-time tu gripper_festo_node
+    gripper_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+        "/robot/gripper_status", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) { last_gripper_state_ = msg->data; });
+    picker_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+        "/robot/picker_status", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) { last_picker_state_ = msg->data; });
+    gripper_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
+    picker_cmd_pub_  = node_->create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
     clear_error_client_ = node_->create_client<dobot_msgs_v3::srv::ClearError>("/nova5/dobot_bringup/ClearError");
     reset_robot_client_ = node_->create_client<dobot_msgs_v3::srv::ResetRobot>("/nova5/dobot_bringup/ResetRobot");
     speed_factor_client_ = node_->create_client<dobot_msgs_v3::srv::SpeedFactor>("/nova5/dobot_bringup/SpeedFactor");
@@ -61,9 +71,16 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     system_pause_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/pause_button", 10);  // sync sang cartridge
     system_resume_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/resume_button", 10); // sync sang cartridge
     ignore_scale_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/ignore_scale", 10);
-    gripper_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
-    picker_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
-    
+
+    // [STOP-PRESERVE] Track gripper/picker state real-time tu gripper_festo_node
+    // (gripper_cmd_pub_/picker_cmd_pub_ da khoi tao o tren, dung lai)
+    gripper_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+        "/robot/gripper_status", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) { last_gripper_state_ = msg->data; });
+    picker_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+        "/robot/picker_status", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) { last_picker_state_ = msg->data; });
+
     // Create subscribers
     system_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
         "/robot/system_status", 10,
@@ -313,6 +330,17 @@ void RobotController::stopAndResetRobot()
 {
     qDebug() << "Stop & Reset Robot";
 
+    // [STOP-PRESERVE] Snapshot picker+gripper state ngay TRUOC khi gui STOP
+    // services. Tat ca STOP services khong duoc set DO1/DO2, nhung Dobot
+    // ResetRobot mot so phien ban firmware co the reset DO outputs nhu side
+    // effect → trigger gripper_festo node receive ResetEvent. De an toan,
+    // sau khi EnableRobot xong, ta REPUBLISH state cu de force gripper_festo
+    // restore CPX coil ve nguyen trang truoc STOP.
+    const bool snapshot_gripper = last_gripper_state_;
+    const bool snapshot_picker  = last_picker_state_;
+    qDebug() << "  -> Snapshot gripper=" << snapshot_gripper
+             << ", picker=" << snapshot_picker;
+
     // ✅ HARD HALT motion: EmergencyStop + StopScript TRƯỚC Pause/ResetRobot.
     // Pause/ResetRobot KHÔNG halt được motion đang chạy mid-MovJ; chỉ Dobot
     // EmergencyStop service moi cat duong di chuyen ngay lap tuc.
@@ -361,15 +389,34 @@ void RobotController::stopAndResetRobot()
     }
 
     // Step 3: ClearError + EnableRobot (after 500ms for reset_state to complete)
-    QTimer::singleShot(500, this, [this]() {
+    QTimer::singleShot(500, this, [this, snapshot_gripper, snapshot_picker]() {
         auto clearReq = std::make_shared<dobot_msgs_v3::srv::ClearError::Request>();
         clear_error_client_->async_send_request(clearReq,
-            [this](rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedFuture f) {
+            [this, snapshot_gripper, snapshot_picker](rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedFuture f) {
                 try { qDebug() << "ClearError:" << f.get()->res; } catch (...) {}
-                QMetaObject::invokeMethod(this, [this]() {
-                    QTimer::singleShot(300, this, [this]() {
+                QMetaObject::invokeMethod(this, [this, snapshot_gripper, snapshot_picker]() {
+                    QTimer::singleShot(300, this, [this, snapshot_gripper, snapshot_picker]() {
                         callServiceAsync(enable_client_, true);
                         qDebug() << "Robot re-enabled — ready for new commands";
+
+                        // [STOP-PRESERVE] Restore gripper+picker state sau khi
+                        // EnableRobot. Day la safety net: neu state hien tai
+                        // van match snapshot, no-op; neu khac (do reset side
+                        // effect), gripper_festo se chinh CPX coil ve dung.
+                        QTimer::singleShot(200, this, [this, snapshot_gripper, snapshot_picker]() {
+                            if (gripper_cmd_pub_) {
+                                auto gMsg = std_msgs::msg::Bool();
+                                gMsg.data = snapshot_gripper;
+                                gripper_cmd_pub_->publish(gMsg);
+                            }
+                            if (picker_cmd_pub_) {
+                                auto pMsg = std_msgs::msg::Bool();
+                                pMsg.data = snapshot_picker;
+                                picker_cmd_pub_->publish(pMsg);
+                            }
+                            qDebug() << "  -> Restored gripper=" << snapshot_gripper
+                                     << ", picker=" << snapshot_picker;
+                        });
                     });
                 }, Qt::QueuedConnection);
             });
