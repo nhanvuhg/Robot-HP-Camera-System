@@ -873,7 +873,7 @@ private:
         if (!moveToIndex(28)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(1.0)) return false;
-        if (!moveR(0, 140, 0)) return false;
+        if (!moveR(0, 140.5, 0)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(2.0)) return false;
         if (!moveR(0, -170, 0)) return false;
@@ -904,7 +904,7 @@ private:
         if (!moveR(0, 0, 120,5)) return false;
         if (!moveToIndex(27)) return false;
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 0, -58)) return false;
+        if (!moveR(0, 0, -55)) return false;
         if (!wait(1.0)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào buffer
         if (!wait(1.0)) return false;
@@ -924,7 +924,7 @@ private:
         if (!moveR(0, 0, -60)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay lên scale
         if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 70)) return false;
+        if (!moveR(0, 0, 100)) return false;
         return true;
     }
 
@@ -971,12 +971,12 @@ private:
     bool executeBufferChamber() {
         RCLCPP_INFO(get_logger(), "[MOTION] Buffer → Chamber");
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 0, -60)) return false;
+        if (!moveR(0, 0, -58)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại buffer
         if (!moveR(0, 0, 90)) return false;
         if (!moveToIndex(28)) return false;
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 140, 0)) return false;
+        if (!moveR(0, 140.5, 0)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(2.0)) return false;
         if (!moveR(0, -180, 0)) return false;
