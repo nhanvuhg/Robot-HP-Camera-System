@@ -36,6 +36,7 @@ class HpController : public QObject
     Q_PROPERTY(double pwmDebug READ pwmDebug NOTIFY pwmDebugChanged)
     Q_PROPERTY(int basePwmStatus READ basePwmStatus NOTIFY basePwmStatusChanged)
     Q_PROPERTY(QVariantList cartridgePressures READ cartridgePressures NOTIFY cartridgePressuresChanged)
+    Q_PROPERTY(QVariantList alertHistory READ alertHistory NOTIFY alertHistoryChanged)
 
 public:
     explicit HpController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -63,6 +64,9 @@ public:
     double pwmDebug() const { return pwm_debug_; }
     int basePwmStatus() const { return base_pwm_status_; }
     QVariantList cartridgePressures() const { return cartridge_pressures_; }
+    QVariantList alertHistory() const { return alert_history_; }
+
+    void addAlert(const QString &title, const QString &text, const QString &sev = "info");
 
 public slots:
     // Control interfaces
@@ -96,6 +100,7 @@ signals:
     void pwmDebugChanged();
     void basePwmStatusChanged();
     void cartridgePressuresChanged();
+    void alertHistoryChanged();
 
 private:
     rclcpp::Node::SharedPtr node_;
@@ -157,6 +162,7 @@ private:
     double pwm_debug_{0.0};
     int base_pwm_status_{0};
     QVariantList cartridge_pressures_;
+    QVariantList alert_history_;
 };
 
 #endif // HP_CONTROLLER_HPP

@@ -1,6 +1,7 @@
 #include "unified_control_gui/hp_controller.hpp"
 #include <QDebug>
 #include <QMetaObject>
+#include <QTime>
 
 HpController::HpController(rclcpp::Node::SharedPtr node, QObject *parent)
     : QObject(parent), node_(node)
@@ -147,6 +148,9 @@ HpController::HpController(rclcpp::Node::SharedPtr node, QObject *parent)
                 if (manual_response_ != val) {
                     manual_response_ = val;
                     emit manualResponseChanged();
+                    if (!val.isEmpty()) {
+                        addAlert("Manual Response", val, "info");
+                    }
                 }
             }, Qt::QueuedConnection);
         });
@@ -181,6 +185,11 @@ HpController::HpController(rclcpp::Node::SharedPtr node, QObject *parent)
                 if (error_status_ != val) {
                     error_status_ = val;
                     emit errorStatusChanged();
+                    if (!val.isEmpty() && val != "OK" && val != "-") {
+                        addAlert("Error Alert", val, "error");
+                    } else if (val == "OK") {
+                        addAlert("Error Cleared", "System error has been cleared.", "info");
+                    }
                 }
             }, Qt::QueuedConnection);
         });
@@ -287,6 +296,7 @@ HpController::HpController(rclcpp::Node::SharedPtr node, QObject *parent)
         });
 
     qDebug() << "HpController initialized successfully.";
+    addAlert("System Status", "HpController initialized successfully.", "info");
 }
 
 // ── Control Slots ────────────────────────────────────────────────────────────
@@ -296,6 +306,7 @@ void HpController::publishManual(const QString &name, const QString &action)
     auto msg = std_msgs::msg::String();
     msg.data = (name + ":" + action).toStdString();
     pub_manual_->publish(msg);
+    addAlert("Manual Command", QString("%1: %2").arg(name).arg(action), "info");
 }
 
 void HpController::publishMode(int mode)
@@ -303,6 +314,8 @@ void HpController::publishMode(int mode)
     auto msg = std_msgs::msg::Int32();
     msg.data = mode;
     pub_mode_->publish(msg);
+    QString modeStr = (mode == 0) ? "AUTO" : (mode == 1) ? "CLEAN" : "MANUAL";
+    addAlert("Mode Switch", QString("Change mode to %1").arg(modeStr), "info");
 }
 
 void HpController::publishScreenControl(const QString &action)
@@ -310,6 +323,7 @@ void HpController::publishScreenControl(const QString &action)
     auto msg = std_msgs::msg::String();
     msg.data = action.toStdString();
     pub_screen_control_->publish(msg);
+    addAlert("Screen Control", QString("Command: %1").arg(action.toUpper()), "info");
 }
 
 void HpController::publishInt(const QString &topic, int value)
@@ -319,6 +333,7 @@ void HpController::publishInt(const QString &topic, int value)
         auto msg = std_msgs::msg::Int32();
         msg.data = value;
         it->second->publish(msg);
+        addAlert("Parameter Update", QString("%1 = %2").arg(topic).arg(value), "info");
     } else {
         qWarning() << "Unsupported HP int topic:" << topic;
     }
@@ -331,6 +346,7 @@ void HpController::publishFloat(const QString &topic, double value)
         auto msg = std_msgs::msg::Float32();
         msg.data = static_cast<float>(value);
         it->second->publish(msg);
+        addAlert("Parameter Update", QString("%1 = %2").arg(topic).arg(value), "info");
     } else {
         qWarning() << "Unsupported HP float topic:" << topic;
     }
@@ -343,7 +359,23 @@ void HpController::publishString(const QString &topic, const QString &value)
         auto msg = std_msgs::msg::String();
         msg.data = value.toStdString();
         it->second->publish(msg);
+        addAlert("Parameter Update", QString("%1 = %2").arg(topic).arg(value), "info");
     } else {
         qWarning() << "Unsupported HP string topic:" << topic;
     }
+}
+
+void HpController::addAlert(const QString &title, const QString &text, const QString &sev)
+{
+    QVariantMap item;
+    item["title"] = title;
+    item["text"] = text;
+    item["sev"] = sev;
+    item["time"] = QTime::currentTime().toString("HH:mm:ss");
+
+    alert_history_.prepend(item);
+    while (alert_history_.size() > 50) {
+        alert_history_.removeLast();
+    }
+    emit alertHistoryChanged();
 }

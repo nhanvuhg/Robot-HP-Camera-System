@@ -519,7 +519,7 @@ private:
         // before it officially starts trajectory execution.
         rclcpp::sleep_for(std::chrono::milliseconds(250));
 
-        const int max_attempts = 100; // 10 seconds max
+        const int max_attempts = 600; // 60 seconds max
         for (int i = 0; i < max_attempts; ++i) {
             // Thoát ngay nếu STOP/cancel — không chờ thêm
             if (shouldAbort()) {
@@ -529,8 +529,8 @@ private:
             auto req = std::make_shared<RobotMode::Request>();
             auto future = robot_mode_client_->async_send_request(req);
             if (future.wait_for(1s) != std::future_status::ready) {
-                RCLCPP_WARN(get_logger(), "[SYNC] RobotMode timeout");
-                break;
+                RCLCPP_WARN(get_logger(), "[SYNC] RobotMode request timed out, retrying...");
+                continue;
             }
             try {
                 auto res = future.get();
@@ -548,8 +548,8 @@ private:
             rclcpp::sleep_for(std::chrono::milliseconds(100));
         }
 
-        RCLCPP_WARN(get_logger(), "[SYNC] Max polls reached, proceeding anyway");
-        return true;
+        RCLCPP_ERROR(get_logger(), "[SYNC] Timeout waiting for motion to complete! Robot still in mode 7.");
+        return false;
     }
 
     std::vector<double> getCurrentPose() {
@@ -858,26 +858,25 @@ private:
         
         // Tính tiến theo row index DỰA TRÊN TRỤC CỦA TAY MÁY (Khay đặt theo góc của tay)
         if (row > 1) {
-            double dx = (row - 1) * (-105.0); // Đi dọc theo khay (hướng đâm thẳng của tay)
-            double dy = (row - 1) * -8.3;      // Đi ngang khay (hướng vuông góc với tay)
+            double dx = (row - 1) * (-104.75); // Đi dọc theo khay (hướng đâm thẳng của tay)
+            double dy = (row - 1) * -8.8;      // Đi ngang khay (hướng vuông góc với tay)
             double dz = (row - 1) * 1.0;
             if (!moveR(dx, dy, dz)) return false;
         }
         
         // --- INPUT ROW → CHAMBER: Picker bốc khay từ input stack rồi nhả vào chamber ---
-        if (!moveR(0, 0, -51,3)) return false;
+        if (!moveR(0, 0, -110,5)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại input row
         if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 100,3)) return false;
+        if (!moveR(0, 0, 120,5)) return false;
         if (!moveToIndex(27)) return false;
         if (!moveToIndex(28)) return false;
-        if (!moveToIndex(29)) return false;  
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 100, 0,5)) return false;
+        if (!wait(1.0)) return false;
+        if (!moveR(0, 140, 0)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(2.0)) return false;
-        if (!moveR(0, -150, 1,5)) return false;
-        if (!moveToIndex(29)) return false;
+        if (!moveR(0, -170, 0)) return false;
         if (!moveToIndex(28)) return false;
         return true;
     }
@@ -892,25 +891,24 @@ private:
         
         // Tính tiến theo row index DỰA TRÊN TRỤC CỦA TAY MÁY (Khay đặt theo góc của tay)
         if (row > 1) {
-            double dx = (row - 1) * (-105.0); // Đi dọc theo khay (hướng đâm thẳng của tay)
-            double dy = (row - 1) * -8.7;      // Đi ngang khay (hướng vuông góc với tay)
+            double dx = (row - 1) * (-104.75); // Đi dọc theo khay (hướng đâm thẳng của tay)
+            double dy = (row - 1) * -8.8;      // Đi ngang khay (hướng vuông góc với tay)
             double dz = (row - 1) * 1.0;
             if (!moveR(dx, dy, dz)) return false;
         }
         
         // --- INPUT ROW → BUFFER: Picker bốc cart từ input stack rồi nhả vào buffer ---
-        if (!moveR(0, 0, -51,3)) return false;
+        if (!moveR(0, 0, -110,5)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại input row
         if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 100,3)) return false;
+        if (!moveR(0, 0, 120,5)) return false;
         if (!moveToIndex(27)) return false;
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 0, -49,5)) return false;
+        if (!moveR(0, 0, -60)) return false;
         if (!wait(1.0)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào buffer
         if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 49,5)) return false;
-        if (!wait(1.0)) return false;
+        if (!moveR(0, 0, 70)) return false;
         if (!moveToIndex(0)) return false;
         return true;
     }
@@ -918,15 +916,15 @@ private:
     bool executeChamberScale() {
         RCLCPP_INFO(get_logger(), "[MOTION] Chamber → Scale");
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 100, 0)) return false;
+        if (!moveR(0, 140, 0)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại chamber
         if (!wait(2.0)) return false;
-        if (!moveR(0, -100, 3,5)) return false;
+        if (!moveR(0, -170, 0)) return false;
         if (!moveToIndex(9)) return false;
-        if (!moveR(0, 0, -30,5)) return false;
+        if (!moveR(0, 0, -60)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay lên scale
         if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 30,5)) return false;
+        if (!moveR(0, 0, 70)) return false;
         return true;
     }
 
@@ -973,17 +971,15 @@ private:
     bool executeBufferChamber() {
         RCLCPP_INFO(get_logger(), "[MOTION] Buffer → Chamber");
         if (!moveToIndex(8)) return false;
-        if (!moveR(0, 0, -49,5)) return false;
+        if (!moveR(0, 0, -60)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại buffer
-        if (!moveR(0, 0, 80,5)) return false;
+        if (!moveR(0, 0, 90)) return false;
         if (!moveToIndex(28)) return false;
-        if (!moveToIndex(29)) return false;  
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 100, 0,5)) return false;
+        if (!moveR(0, 140, 0)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(2.0)) return false;
-        if (!moveR(0, -150, 1,5)) return false;
-        if (!moveToIndex(29)) return false;
+        if (!moveR(0, -180, 0)) return false;
         if (!moveToIndex(28)) return false;
         return true;
     }

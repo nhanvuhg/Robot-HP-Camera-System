@@ -404,7 +404,7 @@
         StackLayout {
             id: stack
             anchors { top: tabbar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
-            currentIndex: 0
+            currentIndex: 3
 
             // ── PAGE 1: CONTROL DASHBOARD ────────────────────────
             Item {

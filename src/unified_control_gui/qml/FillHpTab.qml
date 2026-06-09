@@ -613,34 +613,22 @@ Item {
                             }
                         }
 
-                        // Cylinders (RIGHT, next to Valves)
+                        // Inputs (read-only chips) - exclude mag_index/tube_index sensors - moved to RIGHT column
                         Sect {
-                            title: "Cylinders (manual only)"
+                            title: "Ngo vao Input"
                             Layout.preferredWidth: 320
                             Layout.maximumWidth: 320
                             Layout.fillHeight: true
                             Layout.alignment: Qt.AlignTop
-                            Item {
-                                width: parent.width
-                                implicitHeight: cylGridTop.implicitHeight
-                                enabled: tab.modeStr === "MANUAL"
-                                opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                                Behavior on opacity { NumberAnimation { duration: 150 } }
-                                Grid {
-                                    id: cylGridTop
-                                    width: parent.width
-                                    columns: 1
-                                    spacing: 3
-                                    Repeater {
-                                        model: tab.cylinderModel
-                                        IoToggle {
-                                            width: cylGridTop.width
-                                            ioId:      modelData.id
-                                            statusKey: modelData.statusKey
-                                            ioLabel:   modelData.label
-                                            actA:      modelData.a
-                                            actB:      modelData.b
-                                        }
+                            visible: tab.filteredInputKeys.length > 0
+                            Flow {
+                                spacing: 6; width: parent.width
+                                Repeater {
+                                    model: tab.filteredInputKeys
+                                    Chip {
+                                        name:  modelData
+                                        state: classifyState(tab.inputsMap[modelData])
+                                        label: String(tab.inputsMap[modelData])
                                     }
                                 }
                             }
@@ -662,19 +650,31 @@ Item {
                         }
                     }
 
-                    // -- Inputs (read-only chips) - exclude mag_index/tube_index sensors --
+                    // Cylinders (manual only) - moved from top block
                     Sect {
-                        title: "Ngo vao Input"
+                        title: "Cylinders (manual only)"
                         Layout.fillWidth: true
-                        visible: tab.filteredInputKeys.length > 0
-                        Flow {
-                            spacing: 6; width: parent.width
-                            Repeater {
-                                model: tab.filteredInputKeys
-                                Chip {
-                                    name:  modelData
-                                    state: classifyState(tab.inputsMap[modelData])
-                                    label: String(tab.inputsMap[modelData])
+                        Item {
+                            width: parent.width
+                            implicitHeight: cylGridBottom.implicitHeight
+                            enabled: tab.modeStr === "MANUAL"
+                            opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                            Behavior on opacity { NumberAnimation { duration: 150 } }
+                            Grid {
+                                id: cylGridBottom
+                                width: parent.width
+                                columns: Math.max(1, Math.floor(width / 320))
+                                spacing: 6
+                                Repeater {
+                                    model: tab.cylinderModel
+                                    IoToggle {
+                                        width: (cylGridBottom.width - cylGridBottom.spacing * (cylGridBottom.columns - 1)) / cylGridBottom.columns
+                                        ioId:      modelData.id
+                                        statusKey: modelData.statusKey
+                                        ioLabel:   modelData.label
+                                        actA:      modelData.a
+                                        actB:      modelData.b
+                                    }
                                 }
                             }
                         }
