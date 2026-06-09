@@ -588,11 +588,12 @@ class CartridgeSystem(Node):
             return
         try:
             channels = []
-            for sub in self.io_module.modules:
-                if sub.is_function_supported("read_channels"):
-                    ch = sub.read_channels()
-                    if isinstance(ch, list):
-                        channels.extend(ch)
+            with self._io_bg_lock:
+                for sub in self.io_module.modules:
+                    if sub.is_function_supported("read_channels"):
+                        ch = sub.read_channels()
+                        if isinstance(ch, list):
+                            channels.extend(ch)
             if len(channels) < 16:
                 self.get_logger().warn(
                     f"[INIT-CYL3] Sensor read trả {len(channels)} channel (< 16) — skip smart init"
@@ -621,7 +622,7 @@ class CartridgeSystem(Node):
         """
         Setup/initialize CPX 253 valves when starting AUTO/AI mode:
           1. Gripper & Picker to NHẢ (safe initial states)
-          2. Cylinder 1 & 2 to RETRACT
+          2. Cylinder 1 & 2 SMART init theo sensor — giữ nguyên state qua node restart
           3. Smart init Cylinder 3 based on S6 sensor
         """
         self.get_logger().info("[CPX-SETUP] Initializing CPX valves for AUTO/AI mode...")
@@ -637,12 +638,91 @@ class CartridgeSystem(Node):
             except Exception as e:
                 self.get_logger().error(f"[CPX-SETUP] Failed to init gripper/picker: {e}")
 
-        # 2. Cylinder 1 & 2
-        self._cyl1_retract()
-        self._cyl2_retract()
+        # 2. Cylinder 1 & 2 — smart init giữ state
+        self._init_cyl12_state()
 
         # 3. Cylinder 3
         self._init_cyl3_state()
+
+    def _init_cyl12_state(self):
+        """
+        Smart Cyl1/Cyl2 init khi START AUTO/AI — đọc sensor feedback và re-assert
+        coil tương ứng để GIỮ vị trí vật lý hiện tại qua node restart.
+
+        Mirror pattern của _init_cyl3_state. Trước đây force RETRACT vô điều kiện
+        làm xi lanh đang giữ khay bị thu về → đánh rơi.
+
+        Logic per cylinder:
+          • EXTENDED sensor ON, RETRACTED OFF → re-assert EXTEND coil
+          • RETRACTED ON, EXTENDED OFF       → re-assert RETRACT coil
+          • Cả 2 OFF (đang transition / lệch) hoặc cả 2 ON (lỗi sensor) →
+            default safe = RETRACT + log warn
+
+        Cyl1 sensors: S9_CYL1_RETRACTED (mod1 ch8) + S10_CYL1_EXTENDED (mod1 ch9)
+        Cyl2 sensors: S21_CYL2_RETRACTED (mod2 ch4) + S22_CYL2_EXTENDED (mod2 ch5)
+
+        Module 2 chưa lắp (Pos2 pending) → bỏ qua Cyl2, GIỮ NGUYÊN coil.
+        """
+        # ── Cyl1 ──
+        if self.io_module:
+            try:
+                channels1 = []
+                with self._io_bg_lock:
+                    for sub in self.io_module.modules:
+                        if sub.is_function_supported("read_channels"):
+                            ch = sub.read_channels()
+                            if isinstance(ch, list):
+                                channels1.extend(ch)
+                if len(channels1) >= 10:
+                    s9  = bool(channels1[8])   # S9_CYL1_RETRACTED
+                    s10 = bool(channels1[9])   # S10_CYL1_EXTENDED
+                    ss = f"S9={'ON' if s9 else 'OFF'} S10={'ON' if s10 else 'OFF'}"
+                    if s10 and not s9:
+                        self.get_logger().info(f"[INIT-CYL1] {ss} → EXTENDED → re-assert EXTEND (giữ khay)")
+                        self._cyl1_extend()
+                    elif s9 and not s10:
+                        self.get_logger().info(f"[INIT-CYL1] {ss} → RETRACTED → re-assert RETRACT")
+                        self._cyl1_retract()
+                    else:
+                        self.get_logger().warn(f"[INIT-CYL1] {ss} → sensor bất thường → default RETRACT")
+                        self._cyl1_retract()
+                else:
+                    self.get_logger().warn(f"[INIT-CYL1] read {len(channels1)} ch < 10 → default RETRACT")
+                    self._cyl1_retract()
+            except Exception as e:
+                self.get_logger().warn(f"[INIT-CYL1] exception: {e} → default RETRACT")
+                self._cyl1_retract()
+
+        # ── Cyl2 (cần Module 2 cho sensor S21/S22) ──
+        if not self.io_module_2:
+            self.get_logger().info("[INIT-CYL2] Module 2 chưa connect → giữ nguyên coil (no-op)")
+            return
+        try:
+            channels2 = []
+            with self._io_bg_lock:
+                for sub in self.io_module_2.modules:
+                    if sub.is_function_supported("read_channels"):
+                        ch = sub.read_channels()
+                        if isinstance(ch, list):
+                            channels2.extend(ch)
+            # S21 = cache2[4], S22 = cache2[5]
+            if len(channels2) >= 6:
+                s21 = bool(channels2[4])  # S21_CYL2_RETRACTED
+                s22 = bool(channels2[5])  # S22_CYL2_EXTENDED
+                ss = f"S21={'ON' if s21 else 'OFF'} S22={'ON' if s22 else 'OFF'}"
+                if s22 and not s21:
+                    self.get_logger().info(f"[INIT-CYL2] {ss} → EXTENDED → re-assert EXTEND (giữ khay)")
+                    self._cyl2_extend()
+                elif s21 and not s22:
+                    self.get_logger().info(f"[INIT-CYL2] {ss} → RETRACTED → re-assert RETRACT")
+                    self._cyl2_retract()
+                else:
+                    self.get_logger().warn(f"[INIT-CYL2] {ss} → sensor bất thường → default RETRACT")
+                    self._cyl2_retract()
+            else:
+                self.get_logger().warn(f"[INIT-CYL2] read {len(channels2)} ch < 6 → giữ nguyên coil")
+        except Exception as e:
+            self.get_logger().warn(f"[INIT-CYL2] exception: {e} → giữ nguyên coil")
 
     def _connect_servo(self, sid: int, ip: str, attempts: int = 5) -> bool:
         """
@@ -788,12 +868,12 @@ class CartridgeSystem(Node):
             if self.io_module is not None:
                 try:
                     channels = []
-                    for mod in self.io_module.modules:
-                        if mod.is_function_supported("read_channels"):
-                            ch = mod.read_channels()
-                            if isinstance(ch, list):
-                                channels.extend(ch)
                     with self._io_bg_lock:
+                        for mod in self.io_module.modules:
+                            if mod.is_function_supported("read_channels"):
+                                ch = mod.read_channels()
+                                if isinstance(ch, list):
+                                    channels.extend(ch)
                         self._io_sensor_cache = channels
                         self._io_ready = True
                     fail1 = 0
@@ -809,12 +889,12 @@ class CartridgeSystem(Node):
             if self.io_module_2 is not None:
                 try:
                     channels2 = []
-                    for mod in self.io_module_2.modules:
-                        if mod.is_function_supported("read_channels"):
-                            ch2 = mod.read_channels()
-                            if isinstance(ch2, list):
-                                channels2.extend(ch2)
                     with self._io_bg_lock:
+                        for mod in self.io_module_2.modules:
+                            if mod.is_function_supported("read_channels"):
+                                ch2 = mod.read_channels()
+                                if isinstance(ch2, list):
+                                    channels2.extend(ch2)
                         self._io_sensor_cache_2 = channels2
                         self._io_ready_2 = True
                     fail2 = 0
