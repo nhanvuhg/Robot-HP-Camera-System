@@ -36,6 +36,8 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     servo_p_client_ = node_->create_client<dobot_msgs_v3::srv::ServoP>("/nova5/dobot_bringup/ServoP");
     do_client_ = node_->create_client<dobot_msgs_v3::srv::DO>("/nova5/dobot_bringup/DO");
     pause_client_ = node_->create_client<dobot_msgs_v3::srv::Pause>("/nova5/dobot_bringup/Pause");
+    dobot_emergency_stop_client_ = node_->create_client<dobot_msgs_v3::srv::EmergencyStop>("/nova5/dobot_bringup/EmergencyStop");
+    dobot_stop_script_client_ = node_->create_client<dobot_msgs_v3::srv::StopScript>("/nova5/dobot_bringup/StopScript");
     clear_error_client_ = node_->create_client<dobot_msgs_v3::srv::ClearError>("/nova5/dobot_bringup/ClearError");
     reset_robot_client_ = node_->create_client<dobot_msgs_v3::srv::ResetRobot>("/nova5/dobot_bringup/ResetRobot");
     speed_factor_client_ = node_->create_client<dobot_msgs_v3::srv::SpeedFactor>("/nova5/dobot_bringup/SpeedFactor");
@@ -311,12 +313,29 @@ void RobotController::stopAndResetRobot()
 {
     qDebug() << "Stop & Reset Robot";
 
-    // ✅ FORCE INSTANT STOP: Call Pause and ResetRobot directly from GUI
+    // ✅ HARD HALT motion: EmergencyStop + StopScript TRƯỚC Pause/ResetRobot.
+    // Pause/ResetRobot KHÔNG halt được motion đang chạy mid-MovJ; chỉ Dobot
+    // EmergencyStop service moi cat duong di chuyen ngay lap tuc.
+    auto eStopReq = std::make_shared<dobot_msgs_v3::srv::EmergencyStop::Request>();
+    if (dobot_emergency_stop_client_ && dobot_emergency_stop_client_->service_is_ready()) {
+        qDebug() << "  -> EmergencyStop (hard halt motion)";
+        dobot_emergency_stop_client_->async_send_request(eStopReq);
+    } else {
+        qWarning() << "  -> EmergencyStop service NOT ready — motion may NOT halt!";
+    }
+
+    auto stopScriptReq = std::make_shared<dobot_msgs_v3::srv::StopScript::Request>();
+    if (dobot_stop_script_client_ && dobot_stop_script_client_->service_is_ready()) {
+        qDebug() << "  -> StopScript (abort script)";
+        dobot_stop_script_client_->async_send_request(stopScriptReq);
+    }
+
+    // FORCE INSTANT STOP: Pause + ResetRobot (sau EmergencyStop để clear state)
     auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
     if (pause_client_ && pause_client_->service_is_ready()) {
         pause_client_->async_send_request(pauseReq);
     }
-    
+
     auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
     if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
         reset_robot_client_->async_send_request(resetRobotReq);

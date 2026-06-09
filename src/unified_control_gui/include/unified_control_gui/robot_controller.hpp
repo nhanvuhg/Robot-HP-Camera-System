@@ -21,6 +21,8 @@
 #include "dobot_msgs_v3/srv/servo_p.hpp"
 #include "dobot_msgs_v3/srv/do.hpp"
 #include "dobot_msgs_v3/srv/pause.hpp"
+#include "dobot_msgs_v3/srv/emergency_stop.hpp"
+#include "dobot_msgs_v3/srv/stop_script.hpp"
 #include "dobot_msgs_v3/srv/clear_error.hpp"
 #include "dobot_msgs_v3/srv/reset_robot.hpp"
 #include "dobot_msgs_v3/srv/speed_factor.hpp"
@@ -166,6 +168,8 @@ private:
     rclcpp::Client<dobot_msgs_v3::srv::ServoP>::SharedPtr servo_p_client_;
     rclcpp::Client<dobot_msgs_v3::srv::DO>::SharedPtr do_client_;
     rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedPtr pause_client_;
+    rclcpp::Client<dobot_msgs_v3::srv::EmergencyStop>::SharedPtr dobot_emergency_stop_client_;
+    rclcpp::Client<dobot_msgs_v3::srv::StopScript>::SharedPtr dobot_stop_script_client_;
     rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedPtr clear_error_client_;
     rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedPtr reset_robot_client_;
     rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedPtr speed_factor_client_;
