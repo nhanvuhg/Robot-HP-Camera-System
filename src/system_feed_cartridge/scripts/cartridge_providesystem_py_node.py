@@ -556,22 +556,7 @@ class CartridgeSystem(Node):
                 mod = CpxAp(ip_address=ip, cycle_time=None)
                 if idx == 1:
                     self.io_module = mod
-                    # Initialize gripper/picker (5/3 valve) về trạng thái NHẢ an toàn:
-                    #   Gripper: ch0=F, ch1=T  (nhả gripper)
-                    #   Picker:  ch2=F, ch3=T  (nhả picker)
-                    # KHÔNG để both off (center) vì 5/3 ở center = không tác động —
-                    # khay có thể vẫn đang kẹp khi node restart.
-                    try:
-                        if len(mod.modules) > 3:
-                            v_mod = mod.modules[3]
-                            if v_mod.is_function_supported("set_channel"):
-                                v_mod.reset_channel(0); v_mod.set_channel(1)  # nhả gripper
-                                v_mod.reset_channel(2); v_mod.set_channel(3)  # nhả picker
-                                self.get_logger().info("Init valves: gripper+picker → NHẢ (safe)")
-                    except Exception as ve:
-                        self.get_logger().warn(f"Failed to init valves: {ve}")
-                    # Smart init Cyl3 dựa trên sensor thực tế (S6 tray + S15/S16 feedback)
-                    self._init_cyl3_state()
+                    self.get_logger().info("Connected CPX IO Module 1. Keeping valve states unchanged (only read).")
                 else:
                     self.io_module_2 = mod
                 self.get_logger().info(f"IO {idx} {ip} OK")
@@ -631,6 +616,33 @@ class CartridgeSystem(Node):
                 self._cyl3_retract()
         except Exception as e:
             self.get_logger().warn(f"[INIT-CYL3] exception: {e}")
+
+    def _setup_cpx_valves_for_auto_ai(self):
+        """
+        Setup/initialize CPX 253 valves when starting AUTO/AI mode:
+          1. Gripper & Picker to NHẢ (safe initial states)
+          2. Cylinder 1 & 2 to RETRACT
+          3. Smart init Cylinder 3 based on S6 sensor
+        """
+        self.get_logger().info("[CPX-SETUP] Initializing CPX valves for AUTO/AI mode...")
+        # 1. Gripper & Picker
+        if self.io_module:
+            try:
+                for mod in self.io_module.modules:
+                    if mod.is_function_supported("set_channel"):
+                        mod.reset_channel(0); mod.set_channel(1)  # nhả gripper
+                        mod.reset_channel(2); mod.set_channel(3)  # nhả picker
+                        self.get_logger().info("[CPX-SETUP] Gripper + Picker → NHẢ (safe)")
+                        break
+            except Exception as e:
+                self.get_logger().error(f"[CPX-SETUP] Failed to init gripper/picker: {e}")
+
+        # 2. Cylinder 1 & 2
+        self._cyl1_retract()
+        self._cyl2_retract()
+
+        # 3. Cylinder 3
+        self._init_cyl3_state()
 
     def _connect_servo(self, sid: int, ip: str, attempts: int = 5) -> bool:
         """
@@ -1788,6 +1800,7 @@ class CartridgeSystem(Node):
         self._sync_mode_jog()
         
         if self.operation_mode in ['auto', 'ai']:
+            self._setup_cpx_valves_for_auto_ai()
             if not self.zero_offset:
                 self.get_logger().info("[START] Auto/AI mode — not homed → HOMING")
                 # Reset drive warm-up gate — sau homing phải flush lại trước motion đầu tiên
@@ -2743,18 +2756,20 @@ class CartridgeSystem(Node):
             if self._system_paused:
                 return
             # Cyl3 safety watchdog: S13 và S14 cùng OFF -> ép Cyl3 RETRACT và LATCH ở mọi chế độ
-            if self._conf('cyl3_present', True):
-                s13 = self.sensor(S13_OUT1_TRAYPOS1)
-                s14 = self.sensor(S14_OUT2_TRAYPOS1)
-                if not s13 and not s14:
-                    self._cyl3_s13s14_latch = True
-                    s15 = self.sensor(S15_CYL3_RETRACTED)
-                    now = time.time()
-                    if not s15 or self._cyl3_expected != "retracted":
-                        if now - getattr(self, '_cyl3_watchdog_last_fire', 0.0) >= 1.0:
-                            self._cyl3_retract()
-                            self._cyl3_watchdog_last_fire = now
-                            self.get_logger().info("[CYL3-WATCHDOG] S13+S14 OFF but Cyl3 not retracted → Force Cyl3 RETRACT + LATCH (giữ đến khi manual GUI extend hoặc STATE 2 rerun recheck S6)")
+            # CHỈ chạy khi ở chế độ AUTO/AI và hệ thống đang chạy (giữ nguyên trạng thái chỉ read khi chạy run node)
+            if self.operation_mode in ['auto', 'ai'] and getattr(self, '_system_running', False):
+                if self._conf('cyl3_present', True):
+                    s13 = self.sensor(S13_OUT1_TRAYPOS1)
+                    s14 = self.sensor(S14_OUT2_TRAYPOS1)
+                    if not s13 and not s14:
+                        self._cyl3_s13s14_latch = True
+                        s15 = self.sensor(S15_CYL3_RETRACTED)
+                        now = time.time()
+                        if not s15 or self._cyl3_expected != "retracted":
+                            if now - getattr(self, '_cyl3_watchdog_last_fire', 0.0) >= 1.0:
+                                self._cyl3_retract()
+                                self._cyl3_watchdog_last_fire = now
+                                self.get_logger().info("[CYL3-WATCHDOG] S13+S14 OFF but Cyl3 not retracted → Force Cyl3 RETRACT + LATCH (giữ đến khi manual GUI extend hoặc STATE 2 rerun recheck S6)")
 
             self._cyl3_safety_check()
             self._cyl3_monitor()
