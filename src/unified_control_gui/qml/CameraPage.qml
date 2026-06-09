@@ -284,14 +284,6 @@ Item {
                                         enabled: !parent.isLocked
                                         onClicked: {
                                             cameraPageRoot.ctrlMode = modelData.key
-                                            if (modelData.key === "camera_ai") {
-                                                robotController.selectRow(0)
-                                                robotController.setAiMode(true)
-                                                hpController.publishMode(0)  // sync Fill HP → Auto
-                                            } else if (modelData.key === "auto") {
-                                                robotController.setAutoMode(true)
-                                                hpController.publishMode(0)  // sync Fill HP → Auto
-                                            }
                                         }
                                     }
                                 }
@@ -496,7 +488,21 @@ Item {
                             Behavior on scale { NumberAnimation { duration: 100 } }
                             Behavior on color { ColorAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "🚀 START"; color: "#22c55e"; font.pixelSize: 20; font.bold: true }
-                            MouseArea { id: startMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = true; robotController.startSystem(true) } }
+                            MouseArea { id: startMA; anchors.fill: parent; onClicked: {
+                                if (cameraPageRoot.ctrlMode === "camera_ai") {
+                                    robotController.selectRow(0)
+                                    robotController.setAiMode(true)
+                                    hpController.publishMode(0) // sync Fill HP → Auto
+                                } else if (cameraPageRoot.ctrlMode === "auto") {
+                                    if (robotController.selectedRow <= 0) {
+                                        robotController.selectRow(1)
+                                    }
+                                    robotController.setAutoMode(true)
+                                    hpController.publishMode(0) // sync Fill HP → Auto
+                                }
+                                cameraPageRoot.modeLocked = true
+                                robotController.startSystem(true)
+                            } }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: pauseMA.pressed ? Qt.darker("#1a1a00", 1.2) : "#1a1a00"; border.color: "#f59e0b"; border.width: 2
