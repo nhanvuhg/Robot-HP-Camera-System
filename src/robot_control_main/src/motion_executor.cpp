@@ -873,13 +873,13 @@ private:
         if (!moveToIndex(28)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(1.0)) return false;
-        if (!moveR(0, 139, 0,5)) return false;
+        if (!moveR(0, 139, 0,3)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(2.0)) return false;
         if (!moveR(1, -60, 0)) return false;
         if (!moveR(-10, 29, 0)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, -60, 0)) return false;
+        if (!moveR(0, -150, 0)) return false;
         if (!moveToIndex(28)) return false;
         return true;
     }
@@ -934,6 +934,7 @@ private:
     bool executeScaleOutput(int slot) {
         RCLCPP_INFO(get_logger(), "[MOTION] Scale → Output Slot %d", slot);
         if (slot < 1 || slot > 9) return false;
+        if (!moveToIndex(30)) return false;
         if (!moveToIndex(10)) return false;
         if (!moveR(40, 0, 0)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay đang ở scale
@@ -980,13 +981,13 @@ private:
         if (!moveToIndex(28)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(1.0)) return false;
-        if (!moveR(0, 139, 0,5)) return false;
+        if (!moveR(0, 139, 0,3)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(2.0)) return false;
         if (!moveR(-1, -60, 0)) return false;
         if (!moveR(-10, 29, 0)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, -60, 0)) return false;
+        if (!moveR(0, -150, 0)) return false;
         if (!moveToIndex(28)) return false;
         return true;
     }
