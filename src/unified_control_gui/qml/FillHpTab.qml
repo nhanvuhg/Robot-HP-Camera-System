@@ -597,11 +597,10 @@ Item {
                             Layout.fillHeight: true
                             Layout.alignment: Qt.AlignTop
 
-                            GridLayout {
+                            Grid {
                                 width: parent.width
                                 columns: 3
-                                columnSpacing: 6
-                                rowSpacing: 6
+                                spacing: 6
 
                                 Repeater {
                                     model: tab.filteredInputKeys.length > 0 ? tab.filteredInputKeys : [
@@ -626,7 +625,7 @@ Item {
                                             return classifyState(rawVal) === "on";
                                         }
 
-                                        Layout.fillWidth: true
+                                        width: Math.floor((parent.width - 12) / 3)
                                         height: 48
                                         radius: 4
                                         color: on_ ? "#0a332e" : tab.cPanel
