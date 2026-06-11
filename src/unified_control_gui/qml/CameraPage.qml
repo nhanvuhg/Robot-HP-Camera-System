@@ -293,6 +293,7 @@ Item {
 
                     ColumnLayout {
                         Layout.fillWidth: true
+                        Layout.fillHeight: true
                         spacing: 5
                         Repeater {
                             model: 8
@@ -302,8 +303,6 @@ Item {
                             }
                         }
                     }
-
-                    Item { Layout.fillHeight: true } // Spacer at bottom to push elements up if height allows
                 }
             }
 
@@ -703,6 +702,7 @@ Item {
         property real   cartVal: 0
         readonly property string cls: classifyPressure(cartVal, 280, 400, 600)
         Layout.fillWidth: true
+        Layout.fillHeight: true
         implicitHeight: 50
         radius: 6
         color:        cls === "ok"    ? cOkBg
