@@ -11,6 +11,49 @@ Item {
     property bool modeLocked: false
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
 
+    readonly property color cPanel:       "#081e29"
+    readonly property color cPanel2:      "#051a1a"
+    readonly property color cBorder:      "#134357"
+    readonly property color cText:        "#e8e8f0"
+    readonly property color cMuted:       "#8888aa"
+    readonly property color cAccent:      "#4f6cff"
+    readonly property color cOk:          "#00e676"
+    readonly property color cOkBg:        Qt.rgba(0.0, 0.90, 0.46, 0.15)
+    readonly property color cWarn:        "#ffa726"
+    readonly property color cWarnBg:      Qt.rgba(1.0, 0.65, 0.15, 0.15)
+    readonly property color cBad:         "#ff5252"
+    readonly property color cBadBg:       Qt.rgba(1.0, 0.32, 0.32, 0.15)
+
+    function classifyPressure(val, lowT, highT, limitT) {
+        if (val < lowT) return "low";
+        if (val >= limitT) return "limit";
+        if (val >= highT) return "high";
+        return "ok";
+    }
+
+    function getCartridgeStats() {
+        var list = hpController.cartridgePressures;
+        if (!list || list.length === 0) {
+            return "Min 0.0 | Avg 0.0 | Max\n0.0 mbar";
+        }
+        var minVal = Number.MAX_VALUE;
+        var maxVal = -Number.MAX_VALUE;
+        var sum = 0.0;
+        var count = 0;
+        for (var i = 0; i < list.length; i++) {
+            var v = parseFloat(list[i]);
+            if (!isNaN(v)) {
+                if (v < minVal) minVal = v;
+                if (v > maxVal) maxVal = v;
+                sum += v;
+                count++;
+            }
+        }
+        if (count === 0) return "Min 0.0 | Avg 0.0 | Max\n0.0 mbar";
+        var avgVal = sum / count;
+        return "Min " + minVal.toFixed(1) + " | Avg " + avgVal.toFixed(1) + " | Max\n" + maxVal.toFixed(1) + " mbar";
+    }
+
     // Tính từ systemStatus — chặn đổi mode khi robot đang chạy
     // MANUAL được coi là "rảnh" (không busy) — robot chỉ chờ lệnh thủ công, cho phép đổi mode.
     property bool robotBusy: {
@@ -193,6 +236,76 @@ Item {
                     }
                 }
 
+            }
+
+            // ── Analog / Pressure Column (Middle) ──────────────────
+            Rectangle {
+                Layout.fillHeight: true
+                Layout.preferredWidth: 400
+                Layout.maximumWidth: 400
+                color: "#081e29"
+                border.color: "#134357"
+                radius: 6
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 10
+
+                    Text {
+                        text: "ANALOG / AP SUAT"
+                        color: "#5cf4f1"
+                        font.pixelSize: 20
+                        font.bold: true
+                        font.letterSpacing: 0.6
+                        Layout.fillWidth: true
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        PCard { lbl: "S1 Chamber";   val: hpController.pressureS1; maxVal: 1200 }
+                        PCard { lbl: "S2 Cartridge"; val: hpController.pressureS2; maxVal: 1200 }
+                        PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1000 }
+                    }
+
+                    Item { height: 10 } // Spacer
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: "CARTRIDGE\nPRESSURE"
+                            color: "#8888aa"
+                            font.pixelSize: 18
+                            font.bold: true
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: getCartridgeStats()
+                            color: "#8888aa"
+                            font.pixelSize: 15
+                            font.bold: true
+                            horizontalAlignment: Text.AlignRight
+                            wrapMode: Text.Wrap
+                            Layout.preferredWidth: 220
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 5
+                        visible: hpController.cartridgePressures && hpController.cartridgePressures.length > 0
+                        Repeater {
+                            model: hpController.cartridgePressures
+                            CartRow {
+                                cartName: "Cart " + (index + 1)
+                                cartVal:  Number(modelData) || 0
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillHeight: true } // Spacer at bottom to push elements up if height allows
+                }
             }
 
             // ── System Monitor + Controls ──────────────────────
@@ -547,6 +660,88 @@ Item {
                     RowLayout { spacing: 6; Layout.alignment: Qt.AlignVCenter
                         Image { source: "qrc:/icons/qml/icons/schedule.svg"; fillMode: Image.PreserveAspectFit; smooth: true; Layout.preferredWidth: 24; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
                         Text { text: currentTime; font.pixelSize: 16; color: "#6cf"; Layout.alignment: Qt.AlignVCenter }
+                    }
+                }
+            }
+        }
+    }
+
+    component PCard: Rectangle {
+        property string lbl: ""
+        property real   val: 0
+        property real   maxVal: 1000
+        Layout.fillWidth: true
+        implicitHeight: pc.implicitHeight + 24
+        radius: 8
+        color: cPanel2; border.color: cBorder; border.width: 1
+        ColumnLayout {
+            id: pc; x: 12; y: 12
+            width: parent.width - 24; spacing: 6
+            RowLayout {
+                width: parent.width
+                Text { text: lbl; color: cMuted; font.pixelSize: 21; font.bold: true }
+                Item { Layout.fillWidth: true }
+                RowLayout {
+                    spacing: 3
+                    Text { text: val.toFixed(1); color: cText; font.pixelSize: 30; font.bold: true; font.family: "monospace" }
+                    Text { text: "mbar"; color: cMuted; font.pixelSize: 20; font.bold: true }
+                }
+            }
+            Rectangle {
+                Layout.fillWidth: true; height: 8; radius: 4
+                color: cBorder
+                Rectangle {
+                    height: parent.height; radius: parent.radius
+                    width: parent.width * Math.max(0, Math.min(1, val / maxVal))
+                    color: cAccent
+                }
+            }
+        }
+    }
+
+    component CartRow: Rectangle {
+        property string cartName: ""
+        property real   cartVal: 0
+        readonly property string cls: classifyPressure(cartVal, 280, 400, 600)
+        Layout.fillWidth: true
+        implicitHeight: 50
+        radius: 6
+        color:        cls === "ok"    ? cOkBg
+                    : cls === "high"  ? cWarnBg
+                    : cls === "limit" ? cBadBg
+                    : Qt.rgba(0.01, 0.51, 0.78, 0.15)
+        border.color: cls === "ok"    ? cOk
+                    : cls === "high"  ? cWarn
+                    : cls === "limit" ? cBad
+                    : "#0284c7"
+        border.width: 1
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10; anchors.rightMargin: 10
+            spacing: 8
+            Text {
+                text: cartName; color: cText
+                font.pixelSize: 20; font.bold: true
+                Layout.preferredWidth: 95
+            }
+            ColumnLayout {
+                Layout.fillWidth: true; spacing: 2
+                RowLayout {
+                    width: parent.width
+                    Item { Layout.fillWidth: true }
+                    Text { text: cartVal.toFixed(0); color: cText; font.pixelSize: 22; font.bold: true; font.family: "monospace" }
+                    Text { text: "mbar"; color: cMuted; font.pixelSize: 18; font.bold: true }
+                }
+                Rectangle {
+                    Layout.fillWidth: true; height: 6; radius: 3
+                    color: cBorder
+                    Rectangle {
+                        height: parent.height; radius: parent.radius
+                        width: parent.width * Math.max(0, Math.min(1, cartVal / 1000))
+                        color: cls === "ok"    ? cOk
+                             : cls === "high"  ? cWarn
+                             : cls === "limit" ? cBad
+                             : "#0284c7"
                     }
                 }
             }
