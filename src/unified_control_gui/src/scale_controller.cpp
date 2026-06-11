@@ -187,6 +187,18 @@ void ScaleController::tare()
     auto msg = std_msgs::msg::Bool();
     msg.data = true;
     pub_tare_cmd_->publish(msg);
+    if (zero_drift_pending_) {
+        zero_drift_pending_ = false;
+        emit zeroDriftPendingChanged();
+    }
+}
+
+void ScaleController::dismissZeroDrift()
+{
+    if (!zero_drift_pending_) {
+        zero_drift_pending_ = true;
+        emit zeroDriftPendingChanged();
+    }
 }
 
 void ScaleController::resetTare()

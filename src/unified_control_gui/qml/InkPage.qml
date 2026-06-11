@@ -841,6 +841,45 @@ Item {
         }
     }
 
+    // ── Persistent banner: hiện khi operator chọn NO ở zero-drift popup ──
+    // Set bởi scaleController.dismissZeroDrift(); clear khi tare() đc gọi.
+    Rectangle {
+        id: zeroDriftBanner
+        visible: scaleController.zeroDriftPending
+        anchors.top: parent.top
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.topMargin: 6
+        width: Math.min(parent.width - 40, 720); height: 38
+        radius: 6
+        color: "#f59e0b"
+        border.color: "#92400e"; border.width: 1
+        z: 200
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 12; anchors.rightMargin: 8
+            spacing: 10
+            Text {
+                text: "⚠  TEMPO NOT YET TARED — press TARE to clear drift"
+                color: "#1a1a1a"; font.pixelSize: 16; font.bold: true
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+            }
+            Button {
+                text: "TARE"
+                Layout.preferredWidth: 80; Layout.preferredHeight: 28
+                font.pixelSize: 13; font.bold: true
+                background: Rectangle { color: "#ffffff"; radius: 4 }
+                contentItem: Text {
+                    text: parent.text; color: "#f59e0b"
+                    font: parent.font
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                onClicked: scaleController.tare()
+            }
+        }
+    }
+
     // Popups
     Popup {
         id: overloadPopup
@@ -903,7 +942,7 @@ Item {
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 45
                     font.pixelSize: 18; font.bold: true
-                    onClicked: { zeroDriftPopup.close() }
+                    onClicked: { scaleController.dismissZeroDrift(); zeroDriftPopup.close() }
                     background: Rectangle { radius: 6; color: "#ef4444"; border.width: 0 }
                     contentItem: Text { text: parent.text; color: "#fff"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }

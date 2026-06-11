@@ -32,6 +32,7 @@ class ScaleController : public QObject
     Q_PROPERTY(int failBatch READ failBatch NOTIFY batchStatsChanged)
     Q_PROPERTY(int consecFails READ consecFails NOTIFY consecFailsChanged)
     Q_PROPERTY(bool scaleNodeConnected READ scaleNodeConnected NOTIFY scaleNodeConnectedChanged)
+    Q_PROPERTY(bool zeroDriftPending READ zeroDriftPending NOTIFY zeroDriftPendingChanged)
 
 public:
     explicit ScaleController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -55,6 +56,7 @@ public:
     int passBatch() const { return pass_batch_; }
     int failBatch() const { return fail_batch_; }
     int consecFails() const { return consec_fails_; }
+    bool zeroDriftPending() const { return zero_drift_pending_; }
 
 public slots:
     QVariantList getInkProfiles();
@@ -70,6 +72,7 @@ public slots:
     void tare();
     void resetTare();
     void ackOverload();
+    void dismissZeroDrift();   // operator chọn NO ở popup → giữ banner "TEMPO NOT YET TARED"
     void resetBatch();
     void startCalibration();
     void setKnownCalibration(float weight);
@@ -89,6 +92,7 @@ signals:
     void batchStatsChanged();
     void consecFailsChanged();
     void scaleNodeConnectedChanged();
+    void zeroDriftPendingChanged();
     
     // Alarms to trigger QML Popups
     void overloadAlarm();
@@ -121,6 +125,7 @@ private:
     qint64 last_weight_time_{0};
     QTimer* connection_timer_{nullptr};
     bool last_zero_drift_{false};
+    bool zero_drift_pending_{false};   // true = operator đã chọn NO, chờ tare
 
     // Publishers
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_active_profile_;
