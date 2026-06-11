@@ -542,42 +542,6 @@ Item {
                                 }
                             }
 
-                            // Analog + Cartridge side-by-side (under Alert center)
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 12
-
-                                Sect {
-                                    title: "Analog / Ap suat"
-                                    Layout.preferredWidth: 400
-                                    Layout.maximumWidth: 400
-                                    Layout.alignment: Qt.AlignTop
-                                    ColumnLayout {
-                                        width: parent.width; spacing: 8
-                                        PCard { lbl: "S1 Chamber";   val: hpController.pressureS1; maxVal: 1200 }
-                                        PCard { lbl: "S2 Cartridge"; val: hpController.pressureS2; maxVal: 1200 }
-                                        PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1000 }
-                                    }
-                                }
-
-                                Sect {
-                                    title: "Cartridge pressure"
-                                    Layout.preferredWidth: 400
-                                    Layout.maximumWidth: 400
-                                    Layout.alignment: Qt.AlignTop
-                                    visible: hpController.cartridgePressures && hpController.cartridgePressures.length > 0
-                                    ColumnLayout {
-                                        width: parent.width; spacing: 5
-                                        Repeater {
-                                            model: hpController.cartridgePressures
-                                            CartRow {
-                                                cartName: "Cart " + (index + 1)
-                                                cartVal:  Number(modelData) || 0
-                                            }
-                                        }
-                                    }
-                                }
-                            }
                         } // end LEFT column
 
                         // Valves (MIDDLE, fills height of left column)
