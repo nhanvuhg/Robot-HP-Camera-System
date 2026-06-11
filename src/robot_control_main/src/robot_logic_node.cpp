@@ -2136,11 +2136,17 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
             // Tray available → refill buffer while chamber fills
             RCLCPP_INFO(get_logger(), "[PIPELINE] Tray available → REFILL_BUFFER");
             transitionTo(SystemState::REFILL_BUFFER);
-        } else {
-            // Drain mode — no refill, just wait for scale result and fill
+        } else if (scale_has_cartridge_) {
+            // Drain mode + scale còn cartridge cũ → đợi scale result
             RCLCPP_WARN(get_logger(),
                 "[PIPELINE] Drain mode — no refill → PROCESSING_SCALE (wait scale + fill)");
             transitionTo(SystemState::PROCESSING_SCALE);
+        } else {
+            // Drain mode + scale empty (vd resume sau timeout, scale đã drained) →
+            // chỉ còn việc đợi chamber fill_done.
+            RCLCPP_INFO(get_logger(),
+                "[PIPELINE] Drain mode + scale empty → WAIT_FILLING");
+            transitionTo(SystemState::WAIT_FILLING);
         }
         return;
     }
@@ -2238,9 +2244,17 @@ void RobotLogicNode::stateRefillBuffer()
             return;
         }
 
-        // After refill → wait for scale result and fill_done (via PROCESSING_SCALE→PLACE→WAIT_FILLING)
-        RCLCPP_INFO(get_logger(), "[PIPELINE] Refill done → PROCESSING_SCALE");
-        transitionTo(SystemState::PROCESSING_SCALE);
+        // After refill:
+        //  - scale_has_cartridge_ true → wait scale result (normal pipelined cycle)
+        //  - scale empty (vd resume sau timeout, scale đã drained) → wait fill_done
+        if (scale_has_cartridge_) {
+            RCLCPP_INFO(get_logger(), "[PIPELINE] Refill done → PROCESSING_SCALE");
+            transitionTo(SystemState::PROCESSING_SCALE);
+        } else {
+            RCLCPP_INFO(get_logger(),
+                "[PIPELINE] Refill done, scale empty → WAIT_FILLING (đợi chamber fill_done)");
+            transitionTo(SystemState::WAIT_FILLING);
+        }
         return;
     }
 
