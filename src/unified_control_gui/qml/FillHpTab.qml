@@ -594,8 +594,8 @@ Item {
                         Sect {
                             id: sensorSect
                             title: "SENSOR SIGNAL FILL MACHINE"
-                            Layout.preferredWidth: 320
-                            Layout.maximumWidth: 320
+                            Layout.preferredWidth: 400
+                            Layout.maximumWidth: 400
                             Layout.fillHeight: true
                             Layout.minimumHeight: implicitHeight
                             Layout.alignment: Qt.AlignTop
