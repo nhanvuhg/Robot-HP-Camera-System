@@ -1,6 +1,6 @@
 #!/bin/bash
 # Restart rs485_bus_node on RevPi with correct DDS config
-REVPI=192.168.27.88
+REVPI=192.168.27.193
 
 # Step 1: kill old
 ssh -o ConnectTimeout=5 pi@$REVPI 'kill -9 $(pgrep -f rs485_bus_node) 2>/dev/null; echo step1_done'

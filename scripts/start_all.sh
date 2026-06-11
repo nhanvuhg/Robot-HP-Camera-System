@@ -14,6 +14,7 @@ set -uo pipefail
 #   7. cartridge_gui.py            — HTML GUI (port 8080, optional)
 #   8. unified_control_gui         — QML GUI (HDMI)
 #   9. rs485_bus_node              — RevPi A (remote via SSH)
+#  10. loadcell_node               — RevPi A 4-20mA (remote via SSH)
 #
 # Usage: bash start_all.sh [--web] [--no-web]
 # Stop:  Ctrl+C (kills all)
@@ -335,7 +336,7 @@ fi
 # ══════════════════════════════════════════
 # [9] RS485 BUS NODE — RevPi A (Loadcell + VFD)
 # ══════════════════════════════════════════
-REVPI_HOST="${REVPI_HOST:-192.168.27.88}"
+REVPI_HOST="${REVPI_HOST:-192.168.27.193}"
 REVPI_USER="${REVPI_USER:-pi}"
 REVPI_WS="${REVPI_WS:-/home/${REVPI_USER}/ros2_jazzy}"
 
@@ -353,9 +354,28 @@ else
     echo "        Khi RevPi A online: bash ~/deploy_revpi.sh  rồi restart start_all.sh"
 fi
 
+# ══════════════════════════════════════════
+# [10] LOADCELL NODE — RevPi A (4-20mA)
+# ══════════════════════════════════════════
+LOADCELL_HOST="${LOADCELL_HOST:-192.168.27.193}"
+LOADCELL_USER="${LOADCELL_USER:-pi}"
+
+LOG_LOADCELL="$LOG_DIR/loadcell_node.log"
+
+if ping -c 1 -W 1 "$LOADCELL_HOST" >/dev/null 2>&1; then
+    echo "  [10] ⚖️  RevPi A ($LOADCELL_HOST) — đang start loadcell_node (4-20mA)..."
+    ssh -o BatchMode=yes -o ConnectTimeout=5 "${LOADCELL_USER}@${LOADCELL_HOST}" \
+        "tmux kill-session -t loadcell 2>/dev/null || true; sleep 1; \
+         tmux new-session -d -s loadcell 'exec bash /home/pi/start_loadcell.sh > /tmp/loadcell_node.log 2>&1'" >> "$LOG_LOADCELL" 2>&1 \
+    && echo "        ✅ loadcell_node started on RevPi A via start_loadcell.sh" \
+    || echo "        ⚠️  SSH failed — loadcell_node không start được. Xem: $LOG_LOADCELL"
+else
+    echo "  [10] ⏭️  RevPi A ($LOADCELL_HOST) không thấy trên LAN — bỏ qua loadcell_node"
+fi
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ All processes started! (9 components)"
+echo "✅ All processes started! (10 components)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "📋 Logs:"
@@ -365,40 +385,22 @@ echo "  tail -f $LOG_ROBOT          # Robot logic"
 echo "  tail -f $LOG_GRIPPER        # Gripper"
 echo "  tail -f $LOG_CAMERA         # Camera + YOLO"
 [ -n "${PID_QML_GUI:-}" ] && echo "  tail -f $LOG_QML             # QML GUI"
+echo "  ssh pi@192.168.27.193 cat /tmp/loadcell_node.log  # Loadcell"
 echo ""
 echo "🌐 Web GUI: bash start_all.sh --web"
 echo ""
 echo "Press Ctrl+C to stop all"
 echo ""
 
-# Monitor — phân biệt user tắt GUI (exit 0) vs crash (exit ≠ 0).
-#   exit 0   → user nhấn power/close trên GUI → dừng toàn bộ hệ thống
-#   exit ≠ 0 → crash (Hailo oops, SIGKILL...) → auto-restart GUI (tối đa 5 lần)
-GUI_CRASH_COUNT=0
-MAX_GUI_CRASHES=5
+# Monitor — GUI exit (bất kỳ lý do gì) → dừng toàn bộ hệ thống.
+# Bỏ auto-restart crash: user yêu cầu khi tắt file không retry/reconnect lại
+# GUI; tránh "zombie restart" che lỗi cứng (Hailo oops, OOM, segfault...).
 while true; do
     if [ -n "${PID_QML_GUI:-}" ]; then
         wait "$PID_QML_GUI" 2>/dev/null
         GUI_EXIT=$?
-
-        # exit 0=user close, 130=SIGINT(Ctrl+C), 143=SIGTERM(cleanup) → dừng hệ thống
-        if [ "$GUI_EXIT" -eq 0 ] || [ "$GUI_EXIT" -eq 130 ] || [ "$GUI_EXIT" -eq 143 ]; then
-            echo "[GUI] 🔴 Closed (exit=$GUI_EXIT) — dừng hệ thống"
-            break
-        fi
-
-        GUI_CRASH_COUNT=$((GUI_CRASH_COUNT + 1))
-        if [ "$GUI_CRASH_COUNT" -ge "$MAX_GUI_CRASHES" ]; then
-            echo "[GUI] ❌ Crashed $GUI_CRASH_COUNT times (exit=$GUI_EXIT) — dừng hệ thống"
-            break
-        fi
-        echo "[GUI] ⚠️  Crashed (exit=$GUI_EXIT, $GUI_CRASH_COUNT/$MAX_GUI_CRASHES) — restarting in 2s..."
-        sleep 2
-        echo "=== GUI RESTART $(date) (crash #$GUI_CRASH_COUNT, exit=$GUI_EXIT) ===" >> "$LOG_QML"
-        "$QML_BIN" >> "$LOG_QML" 2>&1 &
-        PID_QML_GUI=$!
-        echo "[GUI] ✅ Restarted PID=$PID_QML_GUI"
-        echo "$PID_QML_GUI" >> "$PIDFILE"
+        echo "[GUI] 🔴 Exited (code=$GUI_EXIT) — dừng hệ thống"
+        break
     else
         sleep 3
     fi

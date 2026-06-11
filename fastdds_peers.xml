@@ -13,7 +13,7 @@
 
   IPs:
     192.168.27.247 = Raspberry Pi 5
-    192.168.27.176 = RevPi A
+    192.168.27.193 = RevPi A
 -->
 <dds>
     <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
@@ -70,13 +70,13 @@
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.88</address>
+                                <address>192.168.27.193</address>
                                 <port>12910</port>
                             </udpv4>
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.88</address>
+                                <address>192.168.27.193</address>
                                 <port>12912</port>
                             </udpv4>
                         </locator>
