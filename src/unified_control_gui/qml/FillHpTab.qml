@@ -428,6 +428,18 @@ Item {
                     }
 
                     Sect {
+                        title: "Qua trinh"
+                        Layout.fillWidth: true
+                        ColumnLayout {
+                            width: parent.width; spacing: 7
+                            Kv { lbl: "Auto fill";    val: hpController.fillStatus || "-" }
+                            Kv { lbl: "Dosing";       val: hpController.dosingStatus || "-" }
+                            Kv { lbl: "Clean refill"; val: hpController.crStatus || "-" }
+                            Kv { lbl: "Cycle / Vol";  val: tab.cycleStr + "  ·  " + tab.volumeStr }
+                        }
+                    }
+
+                    Sect {
                         title: "Hardware"
                         Layout.fillWidth: true
                         visible: Object.keys(tab.hwMap).length > 0
@@ -599,20 +611,7 @@ Item {
                         }
                     } // end TOP BLOCK
 
-                    // -- Process cards --
-                    Sect {
-                        title: "Qua trinh"
-                        Layout.fillWidth: true
-                        GridLayout {
-                            columns: 4
-                            rowSpacing: 8; columnSpacing: 8
-                            width: parent.width
-                            PCardBox { Layout.fillWidth: true; lbl: "Auto fill";    val: hpController.fillStatus    || "-"; active: tab.modeStr === "AUTO" && tab.running }
-                            PCardBox { Layout.fillWidth: true; lbl: "Dosing";       val: hpController.dosingStatus  || "-" }
-                            PCardBox { Layout.fillWidth: true; lbl: "Clean refill"; val: hpController.crStatus      || "-"; active: tab.modeStr === "CLEAN" && tab.running }
-                            PCardBox { Layout.fillWidth: true; lbl: "Cycle / Vol";  val: tab.cycleStr + "  ·  " + tab.volumeStr }
-                        }
-                    }
+
 
                     // Cylinders (manual only) - moved from top block
                     Sect {
