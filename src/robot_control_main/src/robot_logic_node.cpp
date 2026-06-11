@@ -2088,6 +2088,8 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
             return;
         }
 
+        feed_chamber_signal_ = false;  // consumed — require new signal on next cycle
+
         if (!waiting_for_new_input_.load()) {
             // Tray available → refill buffer while chamber fills
             RCLCPP_INFO(get_logger(), "[PIPELINE] Tray available → REFILL_BUFFER");
@@ -2098,6 +2100,16 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
                 "[PIPELINE] Drain mode — no refill → PROCESSING_SCALE (wait scale + fill)");
             transitionTo(SystemState::PROCESSING_SCALE);
         }
+        return;
+    }
+
+    // Gate: feed_chamber signal required before each BUFFER→CHAMBER load.
+    // Fill machine publishes liên tục khi đang fill; tạm dừng (vd thay mực) →
+    // signal off → robot không đặt khay mới vào chamber. Manual mode bypass:
+    // operator nhấn nút simulate feed_chamber để chạy.
+    if (!manual_mode_ && !feed_chamber_signal_) {
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
+            "[LOAD_BUFFER] Waiting for feed_chamber signal...");
         return;
     }
 
