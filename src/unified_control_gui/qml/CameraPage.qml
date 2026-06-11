@@ -294,12 +294,11 @@ Item {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 5
-                        visible: hpController.cartridgePressures && hpController.cartridgePressures.length > 0
                         Repeater {
-                            model: hpController.cartridgePressures
+                            model: 8
                             CartRow {
                                 cartName: "Cart " + (index + 1)
-                                cartVal:  Number(modelData) || 0
+                                cartVal:  (hpController.cartridgePressures && hpController.cartridgePressures.length > index) ? (Number(hpController.cartridgePressures[index]) || 0) : 0
                             }
                         }
                     }
