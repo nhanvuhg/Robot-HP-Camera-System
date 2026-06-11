@@ -604,25 +604,25 @@ Item {
                                 rowSpacing: 6
 
                                 Repeater {
-                                    model: [
-                                        { key: "start_button",     lbl: "START", desc: "Start Btn" },
-                                        { key: "stop_button",      lbl: "STOP",  desc: "Stop Btn" },
-                                        { key: "optical_sensor",   lbl: "OPT",   desc: "Opt Sensor" },
-                                        { key: "ball_feed_down",   lbl: "BFD",   desc: "Ball Fd Dn" },
-                                        { key: "ball_feed_up",     lbl: "BFU",   desc: "Ball Fd Up" },
-                                        { key: "ball_push_down",   lbl: "BPD",   desc: "Ball Ps Dn" },
-                                        { key: "ball_push_up",     lbl: "BPU",   desc: "Ball Ps Up" },
-                                        { key: "chamber_open",     lbl: "CH_O",  desc: "Chbr Open" },
-                                        { key: "chamber_close",    lbl: "CH_C",  desc: "Chbr Close" },
-                                        { key: "needle_down",      lbl: "NDL_D", desc: "Needle Dn" },
-                                        { key: "needle_up",        lbl: "NDL_U", desc: "Needle Up" },
-                                        { key: "cpx_ok",           lbl: "CPX",   desc: "CPX OK" },
-                                        { key: "vacuum_sensor",    lbl: "VAC",   desc: "Vacuum" }
+                                    model: tab.filteredInputKeys.length > 0 ? tab.filteredInputKeys : [
+                                        "start_button",
+                                        "stop_button",
+                                        "optical_sensor",
+                                        "ball_feed_down",
+                                        "ball_feed_up",
+                                        "ball_push_down",
+                                        "ball_push_up",
+                                        "chamber_open",
+                                        "chamber_close",
+                                        "needle_down",
+                                        "needle_up",
+                                        "cpx_ok",
+                                        "vacuum_sensor"
                                     ]
                                     delegate: Rectangle {
                                         id: sBtn
                                         property bool on_: {
-                                            var rawVal = tab.inputsMap[modelData.key];
+                                            var rawVal = tab.inputsMap[modelData];
                                             return classifyState(rawVal) === "on";
                                         }
 
@@ -635,20 +635,15 @@ Item {
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
 
-                                        Column {
+                                        Text {
                                             anchors.centerIn: parent
-                                            spacing: 1
-                                            Text {
-                                                text: modelData.lbl
-                                                color: sBtn.on_ ? tab.cOk : tab.cText
-                                                font.pixelSize: 12; font.bold: true
-                                                anchors.horizontalCenter: parent.horizontalCenter
-                                            }
-                                            Text {
-                                                text: modelData.desc
-                                                color: tab.cMuted; font.pixelSize: 9
-                                                anchors.horizontalCenter: parent.horizontalCenter
-                                            }
+                                            width: parent.width - 6
+                                            text: modelData
+                                            color: sBtn.on_ ? tab.cOk : tab.cText
+                                            font.pixelSize: 10
+                                            font.bold: true
+                                            wrapMode: Text.WrapAnywhere
+                                            horizontalAlignment: Text.AlignHCenter
                                         }
                                     }
                                 }
