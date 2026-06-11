@@ -562,6 +562,7 @@ Item {
                             Layout.preferredWidth: 320
                             Layout.maximumWidth: 320
                             Layout.fillHeight: true
+                            Layout.minimumHeight: implicitHeight
                             Layout.alignment: Qt.AlignTop
                             Item {
                                 width: parent.width
@@ -591,14 +592,16 @@ Item {
 
                         // Inputs (read-only grid) - SENSOR SIGNAL FILL MACHINE
                         Sect {
+                            id: sensorSect
                             title: "SENSOR SIGNAL FILL MACHINE"
                             Layout.preferredWidth: 320
                             Layout.maximumWidth: 320
                             Layout.fillHeight: true
+                            Layout.minimumHeight: implicitHeight
                             Layout.alignment: Qt.AlignTop
 
                             Grid {
-                                width: parent.width
+                                width: sensorSect.width - 24
                                 columns: 3
                                 spacing: 6
 
@@ -625,7 +628,7 @@ Item {
                                             return classifyState(rawVal) === "on";
                                         }
 
-                                        width: Math.floor((parent.width - 12) / 3)
+                                        width: Math.floor((sensorSect.width - 36) / 3)
                                         height: 48
                                         radius: 4
                                         color: on_ ? "#0a332e" : tab.cPanel
