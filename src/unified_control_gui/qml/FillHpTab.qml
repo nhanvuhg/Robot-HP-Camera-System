@@ -55,7 +55,16 @@ Item {
             var idx = part.indexOf('=');
             var alt = part.indexOf(':');
             var pos = idx >= 0 ? idx : alt;
-            if (pos >= 0) out[part.substring(0, pos).trim()] = part.substring(pos + 1).trim();
+            if (pos >= 0) {
+                var k = part.substring(0, pos).trim();
+                var v = part.substring(pos + 1).trim();
+                if (k === "safety_ch1") {
+                    k = "safety_i_4_i04";
+                } else if (k === "safety_ch2") {
+                    k = "safety_i_5_i04";
+                }
+                out[k] = v;
+            }
         }
         return out;
     }
@@ -64,6 +73,37 @@ Item {
         if (v === "on" || v === "true" || v === "ok" || v === "ready" || v === "connected") return "on";
         if (v === "off" || v === "false" || v === "error" || v === "fault" || v === "disconnected") return "off";
         return "mid";
+    }
+    function getSensorLabel(key) {
+        var mapping = {
+            "start_button": "Start button",
+            "stop_button": "Stop button",
+            "optical_sensor": "Optical sensor",
+            "ball_feed_down": "Ball feed down",
+            "ball_feed_up": "Ball feed up",
+            "ball_push_down": "Ball push down",
+            "ball_push_up": "Ball push up",
+            "chamber_open": "Chamber open",
+            "chamber_closed": "Chamber closed",
+            "seal_pin_down": "Seal pin down",
+            "seal_pin_up": "Seal pin up",
+            "fix_cylinder_down": "Fix cyl down",
+            "fix_cylinder_up": "Fix cyl up",
+            "ball_box_empty": "Ball box empty",
+            "safety_i_4_i04": "Safety I_4_i04",
+            "safety_i_5_i04": "Safety I_5_i04",
+            "safety_area_clear": "Safety area clear"
+        };
+        if (mapping[key] !== undefined) {
+            return mapping[key];
+        }
+        if (key.indexOf("mag_") === 0) {
+            return "Mag " + key.substring(4);
+        }
+        if (key.indexOf("tube_") === 0) {
+            return "Tube " + key.substring(5);
+        }
+        return key;
     }
     function classifyPressure(val, lowT, highT, limitT) {
         if (val < lowT) return "low";
@@ -175,14 +215,9 @@ Item {
     // ---- Action log state ----
     property var actionLog: []
     property string lastActionRaw: ""
-    // Lay danh sach key inputs, BO sensor mag_<n> va tube_<n> (nguoi dung
-    // khong can xem hien thi nay tren Fill HP tab). Filter PREFIX, khong
-    // phai substring — keys thuc te: mag_1..mag_6, tube_1..tube_6
+    // Lay danh sach key inputs, loc bo mag_index va tube_index de lay 33 binary sensors
     property var filteredInputKeys: Object.keys(inputsMap).filter(function(k) {
-        return k.indexOf("mag_") !== 0
-            && k.indexOf("tube_") !== 0
-            && k.indexOf("mag_index") === -1
-            && k.indexOf("tube_index") === -1
+        return k !== "mag_index" && k !== "tube_index"
     })
     property var valvesMap:   parseValveState(hpController.valveState)
     property var settingsMap: parseKvComma(hpController.pressureThresholds)
@@ -294,6 +329,8 @@ Item {
             CycleChip {
                 value: hpController.ballCycleTime || "00:00"
                 isRun: tab.running
+                Layout.leftMargin: 6
+                Layout.rightMargin: 6
             }
 
             TbBtn {
@@ -306,6 +343,7 @@ Item {
             ModeBtn { lbl: "Manual"; active: tab.modeStr === "MANUAL"; onClicked: hpController.publishMode(2) }
             ModeBtn { lbl: "Auto";   active: tab.modeStr === "AUTO";   onClicked: hpController.publishMode(0) }
             ModeBtn { lbl: "Clean";  active: tab.modeStr === "CLEAN";  onClicked: hpController.publishMode(1) }
+            ModeBtn { lbl: "Prefill"; active: tab.modeStr === "PREFILL"; onClicked: hpController.publishMode(3) }
 
             Item { width: 8 }
 
@@ -554,6 +592,162 @@ Item {
                                 }
                             }
 
+                            // Cylinders & Servos row
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+
+                                // Cylinders (60% width of 812 = 487.2)
+                                Sect {
+                                    title: "Cylinders (manual only)"
+                                    Layout.preferredWidth: 487
+                                    Layout.fillHeight: true
+                                    Layout.alignment: Qt.AlignTop
+
+                                    Item {
+                                        anchors.fill: parent
+                                        enabled: tab.modeStr === "MANUAL"
+                                        opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                        Behavior on opacity { NumberAnimation { duration: 150 } }
+                                        ColumnLayout {
+                                            anchors.fill: parent
+                                            spacing: 6
+                                            Repeater {
+                                                model: tab.cylinderModel
+                                                IoToggle {
+                                                    Layout.fillWidth: true
+                                                    Layout.fillHeight: true
+                                                    ioId:      modelData.id
+                                                    statusKey: modelData.statusKey
+                                                    ioLabel:   modelData.label
+                                                    actA:      modelData.a
+                                                    actB:      modelData.b
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Servo & Motor (40% width of 812 = 324.8)
+                                Sect {
+                                    title: "Servo & Motor"
+                                    Layout.preferredWidth: 325
+                                    Layout.fillHeight: true
+                                    Layout.alignment: Qt.AlignTop
+
+                                    ColumnLayout {
+                                        width: parent.width
+                                        spacing: 8
+
+                                        // Position display
+                                        Text {
+                                            text: "Pos: " + hpController.servoPosition.toFixed(2) + " mm"
+                                            color: cText
+                                            font.pixelSize: 18
+                                            font.bold: true
+                                            font.family: monoFamily
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+
+                                        // Commands Grid (Vertical stack of buttons)
+                                        ColumnLayout {
+                                            spacing: 5
+                                            Layout.fillWidth: true
+
+                                            TbBtn {
+                                                lbl: "Enable"
+                                                Layout.fillWidth: true
+                                                onClicked: hpController.publishString("servo_command", "enable")
+                                            }
+                                            TbBtn {
+                                                lbl: "Disable"
+                                                Layout.fillWidth: true
+                                                onClicked: hpController.publishString("servo_command", "disable")
+                                            }
+                                            TbBtn {
+                                                lbl: "Home"
+                                                variant: "primary"
+                                                Layout.fillWidth: true
+                                                onClicked: hpController.publishString("servo_command", "home")
+                                            }
+                                            TbBtn {
+                                                lbl: "Reset Fault"
+                                                variant: "danger"
+                                                Layout.fillWidth: true
+                                                onClicked: hpController.publishString("servo_command", "reset_fault")
+                                            }
+                                        }
+
+                                        // Jog Controls (Vertical layout with STOP button at the bottom)
+                                        ColumnLayout {
+                                            spacing: 5
+                                            Layout.fillWidth: true
+                                            enabled: tab.modeStr === "MANUAL"
+                                            opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                            Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                            RowLayout {
+                                                spacing: 6
+                                                Layout.fillWidth: true
+                                                JogBtn {
+                                                    lbl: "◀ JOG REV"
+                                                    dir: "rev"
+                                                    variant: "warn"
+                                                    Layout.fillWidth: true
+                                                }
+                                                JogBtn {
+                                                    lbl: "JOG FWD ▶"
+                                                    dir: "fwd"
+                                                    variant: "primary"
+                                                    Layout.fillWidth: true
+                                                }
+                                            }
+                                            TbBtn {
+                                                lbl: "STOP"
+                                                variant: "danger"
+                                                Layout.fillWidth: true
+                                                onClicked: hpController.publishString("servo_jog", "stop")
+                                            }
+                                        }
+
+                                        // PWM Controls (Compact vertical stacks)
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 4
+
+                                            RowLayout {
+                                                width: parent.width; spacing: 6
+                                                Text { text: "Base PWM"; color: cText; font.pixelSize: 14; font.bold: true; Layout.fillWidth: true }
+                                                PwmInput { id: basePwmIn; valueText: hpController.basePwmStatus.toString(); Layout.preferredWidth: 60 }
+                                                TbBtn {
+                                                    lbl: "Set"; variant: "primary"
+                                                    Layout.preferredWidth: 50
+                                                    onClicked: {
+                                                        var v = parseInt(basePwmIn.valueText);
+                                                        if (!isNaN(v)) hpController.publishInt("base_pwm", Math.max(0, Math.min(100, v)));
+                                                    }
+                                                }
+                                            }
+                                            RowLayout {
+                                                width: parent.width; spacing: 6
+                                                enabled: tab.modeStr === "MANUAL"
+                                                opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                                Text { text: "V10 PWM"; color: cText; font.pixelSize: 14; font.bold: true; Layout.fillWidth: true }
+                                                PwmInput { id: v10In; valueText: (tab.valvesMap["v10"] && tab.valvesMap["v10"].label) ? tab.valvesMap["v10"].label.replace("%","") : "0"; Layout.preferredWidth: 60 }
+                                                TbBtn {
+                                                    lbl: "Set"; variant: "primary"
+                                                    Layout.preferredWidth: 50
+                                                    onClicked: {
+                                                        var v = parseInt(v10In.valueText);
+                                                        if (!isNaN(v)) hpController.publishManual("valve10", String(Math.max(0, Math.min(100, v))));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                         } // end LEFT column
 
                         // Valves (MIDDLE, fills height of left column)
@@ -565,20 +759,18 @@ Item {
                             Layout.minimumHeight: implicitHeight
                             Layout.alignment: Qt.AlignTop
                             Item {
-                                width: parent.width
-                                implicitHeight: valvesGridTop.implicitHeight
+                                anchors.fill: parent
                                 enabled: tab.modeStr === "MANUAL"
                                 opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
                                 Behavior on opacity { NumberAnimation { duration: 150 } }
-                                Grid {
-                                    id: valvesGridTop
-                                    width: parent.width
-                                    columns: 1
+                                ColumnLayout {
+                                    anchors.fill: parent
                                     spacing: 3
                                     Repeater {
                                         model: tab.valveModel
                                         IoToggle {
-                                            width: valvesGridTop.width
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
                                             ioId:      modelData.id
                                             statusKey: modelData.statusKey
                                             ioLabel:   modelData.label
@@ -606,7 +798,7 @@ Item {
                                 spacing: 6
 
                                 Repeater {
-                                    model: tab.filteredInputKeys.length > 0 ? tab.filteredInputKeys : [
+                                    model: [
                                         "start_button",
                                         "stop_button",
                                         "optical_sensor",
@@ -615,11 +807,31 @@ Item {
                                         "ball_push_down",
                                         "ball_push_up",
                                         "chamber_open",
-                                        "chamber_close",
-                                        "needle_down",
-                                        "needle_up",
-                                        "cpx_ok",
-                                        "vacuum_sensor"
+                                        "chamber_closed",
+                                        "seal_pin_down",
+                                        "seal_pin_up",
+                                        "fix_cylinder_down",
+                                        "fix_cylinder_up",
+                                        "ball_box_empty",
+                                        "safety_i_4_i04",
+                                        "safety_i_5_i04",
+                                        "safety_area_clear",
+                                        "mag_1",
+                                        "mag_2",
+                                        "mag_3",
+                                        "mag_4",
+                                        "mag_5",
+                                        "mag_6",
+                                        "mag_7",
+                                        "mag_8",
+                                        "tube_1",
+                                        "tube_2",
+                                        "tube_3",
+                                        "tube_4",
+                                        "tube_5",
+                                        "tube_6",
+                                        "tube_7",
+                                        "tube_8"
                                     ]
                                     delegate: Rectangle {
                                         id: sBtn
@@ -640,7 +852,7 @@ Item {
                                         Text {
                                             anchors.centerIn: parent
                                             width: parent.width - 6
-                                            text: modelData
+                                            text: getSensorLabel(modelData)
                                             color: sBtn.on_ ? tab.cOk : tab.cText
                                             font.pixelSize: 10
                                             font.bold: true
@@ -655,139 +867,112 @@ Item {
 
 
 
-                    // Cylinders (manual only) - moved from top block
-                    Sect {
-                        title: "Cylinders (manual only)"
+
+
+                    // -- Settings and Raw Status row --
+                    RowLayout {
                         Layout.fillWidth: true
-                        Item {
-                            width: parent.width
-                            implicitHeight: cylGridBottom.implicitHeight
-                            enabled: tab.modeStr === "MANUAL"
-                            opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                            Behavior on opacity { NumberAnimation { duration: 150 } }
-                            Grid {
-                                id: cylGridBottom
-                                width: parent.width
-                                columns: Math.max(1, Math.floor(width / 320))
-                                spacing: 6
-                                Repeater {
-                                    model: tab.cylinderModel
-                                    IoToggle {
-                                        width: (cylGridBottom.width - cylGridBottom.spacing * (cylGridBottom.columns - 1)) / cylGridBottom.columns
-                                        ioId:      modelData.id
-                                        statusKey: modelData.statusKey
-                                        ioLabel:   modelData.label
-                                        actA:      modelData.a
-                                        actB:      modelData.b
+                        spacing: 12
+
+                        // Settings (tabs + grid)
+                        Sect {
+                            title: "Thong so dieu khien"
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.alignment: Qt.AlignTop
+
+                            ColumnLayout {
+                                width: parent.width; spacing: 8
+
+                                RowLayout {
+                                    width: parent.width; spacing: 6
+                                    Repeater {
+                                        model: tab.settingGroups
+                                        TbBtn {
+                                            lbl: modelData.label
+                                            variant: tab.activeSettingsTab === index ? "primary" : "default"
+                                            Layout.fillWidth: true
+                                            onClicked: tab.activeSettingsTab = index
+                                        }
+                                    }
+                                }
+
+                                // Restore defaults dashed-like box
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    implicitHeight: 85
+                                    color: "transparent"
+                                    border.color: "#3a2a08" // Dark warning color
+                                    border.width: 1
+                                    radius: 6
+
+                                    ColumnLayout {
+                                        anchors.centerIn: parent
+                                        spacing: 6
+
+                                        TbBtn {
+                                            lbl: "♻️ Khoi phuc mac dinh"
+                                            variant: "warn"
+                                            Layout.alignment: Qt.AlignHCenter
+                                            onClicked: hpController.publishString("parameters_control", "reset_defaults")
+                                        }
+                                        Text {
+                                            text: "Dua TAT CA thong so ve gia tri goc trong code (can quyen Admin)"
+                                            color: cMuted
+                                            font.pixelSize: 13
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+                                    }
+                                }
+
+                                // Grid auto-fit settings rows for active tab
+                                Grid {
+                                    id: settingsGrid
+                                    width: parent.width
+                                    columns: Math.max(1, Math.floor(width / 320))
+                                    spacing: 6
+                                    Repeater {
+                                        model: tab.settingGroups[tab.activeSettingsTab].items
+                                        SettingRow {
+                                            width: (settingsGrid.width - settingsGrid.spacing * (settingsGrid.columns - 1)) / settingsGrid.columns
+                                            item: modelData
+                                            currentVal: tab.settingsMap[modelData.topic] || ""
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // ────────── REMAINING CONTROLS (Valves+Cylinders moved to TOP block) ──────────
+                        // Raw Status
+                        Sect {
+                            title: "RAW STATUS"
+                            Layout.preferredWidth: 350
+                            Layout.fillHeight: true
+                            Layout.alignment: Qt.AlignTop
 
-                    // -- Servo & Motor --
-                    Sect {
-                        title: "Servo & Motor"
-                        Layout.fillWidth: true
-                        ColumnLayout {
-                            width: parent.width; spacing: 8
-
-                            // Servo commands (always enabled)
-                            RowLayout {
-                                width: parent.width; spacing: 6
-                                Text { text: "Pos: " + hpController.servoPosition.toFixed(2) + " mm"; color: cText; font.pixelSize: 21; font.bold: true; font.family: "monospace"; Layout.fillWidth: true }
-                                TbBtn { lbl: "Enable";  onClicked: hpController.publishString("servo_command", "enable") }
-                                TbBtn { lbl: "Disable"; onClicked: hpController.publishString("servo_command", "disable") }
-                                TbBtn { lbl: "Home";    variant: "primary"; onClicked: hpController.publishString("servo_command", "home") }
-                                TbBtn { lbl: "Reset Fault"; variant: "danger"; onClicked: hpController.publishString("servo_command", "reset_fault") }
-                            }
-
-                            // Jog (manual only, press-and-hold)
-                            RowLayout {
-                                width: parent.width; spacing: 6
-                                enabled: tab.modeStr === "MANUAL"
-                                opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                                JogBtn { lbl: "◀ JOG REV"; dir: "rev"; variant: "warn"; Layout.fillWidth: true }
-                                TbBtn  { lbl: "STOP"; variant: "danger"; onClicked: hpController.publishString("servo_jog", "stop") }
-                                JogBtn { lbl: "JOG FWD ▶"; dir: "fwd"; variant: "primary"; Layout.fillWidth: true }
-                            }
-
-                            // PWM inputs
-                            RowLayout {
-                                width: parent.width; spacing: 6
-                                Text { text: "Base PWM (%)"; color: cText; font.pixelSize: 20; font.bold: true; Layout.preferredWidth: 140 }
-                                PwmInput { id: basePwmIn; valueText: hpController.basePwmStatus.toString() }
-                                TbBtn {
-                                    lbl: "Set"; variant: "primary"
-                                    onClicked: {
-                                        var v = parseInt(basePwmIn.valueText);
-                                        if (!isNaN(v)) hpController.publishInt("base_pwm", Math.max(0, Math.min(100, v)));
-                                    }
-                                }
-                                Item { Layout.fillWidth: true }
-                            }
-                            RowLayout {
-                                width: parent.width; spacing: 6
-                                enabled: tab.modeStr === "MANUAL"
-                                opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                                Text { text: "V10 PWM (%)"; color: cText; font.pixelSize: 20; font.bold: true; Layout.preferredWidth: 140 }
-                                PwmInput { id: v10In; valueText: (tab.valvesMap["v10"] && tab.valvesMap["v10"].label) ? tab.valvesMap["v10"].label.replace("%","") : "0" }
-                                TbBtn {
-                                    lbl: "Set"; variant: "primary"
-                                    onClicked: {
-                                        var v = parseInt(v10In.valueText);
-                                        if (!isNaN(v)) hpController.publishManual("valve10", String(Math.max(0, Math.min(100, v))));
-                                    }
-                                }
-                                Item { Layout.fillWidth: true }
-                            }
-                        }
-                    }
-
-                    // -- Settings (tabs + grid) --
-                    Sect {
-                        title: "Thong so dieu khien"
-                        Layout.fillWidth: true
-                        ColumnLayout {
-                            width: parent.width; spacing: 8
-
-                            RowLayout {
-                                width: parent.width; spacing: 6
-                                Repeater {
-                                    model: tab.settingGroups
-                                    TbBtn {
-                                        lbl: modelData.label
-                                        variant: tab.activeSettingsTab === index ? "primary" : "default"
-                                        Layout.fillWidth: true
-                                        onClicked: tab.activeSettingsTab = index
-                                    }
-                                }
-                            }
-
-                            // Grid auto-fit settings rows for active tab
-                            Grid {
-                                id: settingsGrid
+                            Rectangle {
                                 width: parent.width
-                                columns: Math.max(1, Math.floor(width / 320))
-                                spacing: 6
-                                Repeater {
-                                    model: tab.settingGroups[tab.activeSettingsTab].items
-                                    SettingRow {
-                                        width: (settingsGrid.width - settingsGrid.spacing * (settingsGrid.columns - 1)) / settingsGrid.columns
-                                        item: modelData
-                                        currentVal: tab.settingsMap[modelData.topic] || ""
-                                    }
-                                }
-                            }
+                                implicitHeight: 200
+                                color: "#0c1920"
+                                border.color: "#1e3d4a"
+                                border.width: 1
+                                radius: 6
 
-                            RowLayout {
-                                width: parent.width
-                                Item { Layout.fillWidth: true }
-                                TbBtn {
-                                    lbl: "♻ Reset Defaults"; variant: "danger"
-                                    onClicked: hpController.publishString("parameters_control", "reset_defaults")
+                                ScrollView {
+                                    anchors.fill: parent
+                                    clip: true
+                                    padding: 8
+
+                                    Text {
+                                        width: parent.width - 16
+                                        text: "servo_position_raw=" + hpController.servoPositionRaw + "\n" +
+                                              "servo_position=" + hpController.servoPosition + "\n" +
+                                              "pressure_thresholds=" + hpController.pressureThresholds
+                                        color: "#a9c0cb"
+                                        font.pixelSize: 12
+                                        font.family: monoFamily
+                                        wrapMode: Text.Wrap
+                                    }
                                 }
                             }
                         }
@@ -854,6 +1039,7 @@ Item {
             id: inner
             x: 12; y: 12
             width: parent.width - 24
+            height: parent.height - 24
             spacing: 10
             Text {
                 id: ttl
@@ -865,6 +1051,7 @@ Item {
             Item {
                 id: ci
                 Layout.fillWidth: true
+                Layout.fillHeight: true
                 implicitHeight: childrenRect.height
             }
         }
@@ -918,11 +1105,13 @@ Item {
     component CycleChip: Rectangle {
         property string value: "00:00"
         property bool   isRun: false
-        implicitWidth: 110; implicitHeight: 38
+        implicitWidth: Math.max(120, valText.implicitWidth + 24)
+        implicitHeight: 38
         radius: 6
         color: isRun ? cOkBg : cIdleBg
         border.color: isRun ? cOk : cBorder; border.width: 1
         Text {
+            id: valText
             anchors.centerIn: parent; text: value
             color: parent.isRun ? cOk : cText
             font.pixelSize: 21; font.bold: true; font.family: "monospace"

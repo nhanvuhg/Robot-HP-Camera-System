@@ -120,6 +120,7 @@ private:
     bool scale_node_connected_{false};
     qint64 last_weight_time_{0};
     QTimer* connection_timer_{nullptr};
+    bool last_zero_drift_{false};
 
     // Publishers
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_active_profile_;

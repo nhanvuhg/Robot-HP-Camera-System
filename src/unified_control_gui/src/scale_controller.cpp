@@ -116,9 +116,11 @@ ScaleController::ScaleController(rclcpp::Node::SharedPtr node, QObject *parent)
     sub_zero_drift_ = node_->create_subscription<std_msgs::msg::Bool>(
         "/loadcell/zero_drift_warning", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
-            if (msg->data) {
+            bool current = msg->data;
+            if (current && !last_zero_drift_) {
                 emit zeroDriftAlarm();
             }
+            last_zero_drift_ = current;
         });
 
     sub_ink_capacity_ = node_->create_subscription<std_msgs::msg::Float32>(
