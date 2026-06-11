@@ -253,7 +253,7 @@ Item {
                     spacing: 10
 
                     Text {
-                        text: "ANALOG / AP SUAT"
+                        text: "ANALOG PRESSURE"
                         color: "#5cf4f1"
                         font.pixelSize: 20
                         font.bold: true
