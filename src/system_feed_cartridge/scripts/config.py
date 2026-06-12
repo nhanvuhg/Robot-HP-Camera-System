@@ -98,6 +98,11 @@ class SystemConfig(BaseModel):
 
     target_scanoutp2: float = 500.0
     outy_scan_arm_mm: float = 50.0
+    # S4 scan S20 — mirror s1_scan_valid_* của Pos1
+    outy_scan_valid_min_mm: float = 50.0
+    outy_scan_valid_max_mm: float = 500.0
+    s4_scan_noise_retry_limit: int = 1
+    s4_check_servo3_safe: bool = False
     iny_search_velocity: float = 30.0
     iny_slow_velocity: float = 10.0
     position_tolerance: float = 2.0   # mm — sai số servo "đã đến target", dùng cho _at_position()

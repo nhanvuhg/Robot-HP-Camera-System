@@ -168,42 +168,42 @@ servo3_target2: 400
 servo3_push_position: 300.0
 servo3_jog_velocity: 50.0
 servo3_feed_velocity: 50.0
+# ── 4. STATE 4 — OutY ────────────────────────────────────────────────────────
 outx_home: 0.0
+outx_target1: 100.0
 outx_target2: 400.0
 outx_target3: 20.0
-# ── 4. STATE 4 — OutY ────────────────────────────────────────────────────────
 outy_home: 0.0
-
+outy_target1: 10.0
 outy_target2: 300.0
 outy_pick_pos: 100.0
 outy_safe_zone: 10.0
 outy_search_velocity: 40.0
 outy_row_limit: 680.0
-outy_slow_vel: 10.0
+outy_slow_vel: 120.0
 target_scanoutp2: 500.0
 outy_scan_arm_mm: 50
 # ── S4 scan S20 (mirror iny_scan_valid_* của Pos1) ──
 # Vùng OutY hợp lệ để nhận S20 falling edge. Tune theo cơ khí thực tế khi lắp Pos2:
 #   min = dưới điểm mà khung/cấu trúc cố định có thể che S20 (chống trigger sớm)
 #   max = sát cuối hành trình scan
-outy_scan_valid_min_mm: 50.0
-outy_scan_valid_max_mm: 500.0
+outy_scan_valid_min_mm: 70.0
+outy_scan_valid_max_mm: 980.0
 # Số lần retry scan S20 trước khi fallback row1 (giống s1_scan_noise_retry_limit)
-s4_scan_noise_retry_limit: 1
+s4_scan_noise_retry_limit: 2
 # Interlock Servo3 ↔ OutX/OutY — CHỈ bật nếu layout thực tế cho thấy 2 cụm giao
 # nhau. Default false vì Servo3 đứng tại feed sau S3 by design (bật = deadlock
 # nếu không retract Servo3 trước S4).
 s4_check_servo3_safe: false
 iny_search_velocity: 30.0
-iny_slow_velocity: 10.0
+iny_slow_velocity: 20.0
 position_tolerance: 2.0
 outx_safe_position_threshold: 100.0
-max_trays: 8
+
+
+
+max_trays: 10
 max_slots_per_output_tray: 9
-
-
-
-
 
 num_sensors: 22
 sensor_type: PNP

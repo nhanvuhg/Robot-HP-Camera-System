@@ -5086,38 +5086,6 @@ class CartridgeSystem(Node):
             f"[S4 SCAN] OutY {oy:.0f}mm arm={'OK' if self._s20_armed else 'NO'} "
             f"S20={'ON' if s20_now else 'OFF'}")
 
-    def _s4_retry_scan_home(self):
-        """
-        Retry sau khi scan S20 thất bại lần 1 (mirror _s1_retry_scan_home):
-        đưa OutY về outy_target1 (safe) rồi quay lại S4_OUTY_SCAN_S20.
-        Reset _s20_armed/_s20_prev trước khi scan lại.
-        Timeout → resend (không ERROR).
-        """
-        cfg = self.config
-        if not self._cmd_sent_s4:
-            ok = self._nb_move(5, cfg.outy_target1)
-            if not ok:
-                self._log_once("S4_RETRY_MOVE_FAIL",
-                               "[S4] retry scan: OutY về safe fail — chờ thử lại")
-                return
-            self._cmd_sent_s4     = True
-            self._step_timeout_s4 = time.time() + cfg.move_timeout
-            return
-
-        if time.time() > self._step_timeout_s4:
-            self.get_logger().warn("[S4] retry scan: OutY về safe timeout — resend")
-            self._cmd_sent_s4 = False
-            return
-
-        # [BLOCKING-FIX] verify về safe thật trước khi scan lại
-        if self._arrived(5) and self._at_position(5, cfg.outy_target1):
-            self._cmd_sent_s4 = False
-            self._step_timeout_s4 = 0.0
-            self._s20_armed = False
-            self._s20_prev  = self.sensor(S20_SCAN_STACK_P2)
-            self.get_logger().info("[S4 SCAN] Retry lại từ OutY safe")
-            self._enter_s4(SystemState.S4_OUTY_SCAN_S20)
-
     # ══════════════════════════════════════════════════════════════
     # WARNING — CAO RỦI RO: Cyl2 RETRACT thả khay sau khi OutY tới
     # target. BẮT BUỘC verify _arrived(5) AND _at_position(5,
@@ -5243,6 +5211,38 @@ class CartridgeSystem(Node):
         # Both ok → complete
         self._s4_outy_home_done = False
         self._enter_s4(SystemState.S4_COMPLETE)
+
+    def _s4_retry_scan_home(self):
+        """
+        Retry sau khi scan S20 thất bại lần 1 (mirror _s1_retry_scan_home):
+        đưa OutY về outy_target1 (safe) rồi quay lại S4_OUTY_SCAN_S20.
+        Reset _s20_armed/_s20_prev trước khi scan lại.
+        Timeout → resend (không ERROR).
+        """
+        cfg = self.config
+        if not self._cmd_sent_s4:
+            ok = self._nb_move(5, cfg.outy_target1)
+            if not ok:
+                self._log_once("S4_RETRY_MOVE_FAIL",
+                               "[S4] retry scan: OutY về safe fail — chờ thử lại")
+                return
+            self._cmd_sent_s4     = True
+            self._step_timeout_s4 = time.time() + cfg.move_timeout
+            return
+
+        if time.time() > self._step_timeout_s4:
+            self.get_logger().warn("[S4] retry scan: OutY về safe timeout — resend")
+            self._cmd_sent_s4 = False
+            return
+
+        # [BLOCKING-FIX] verify về safe thật trước khi scan lại
+        if self._arrived(5) and self._at_position(5, cfg.outy_target1):
+            self._cmd_sent_s4 = False
+            self._step_timeout_s4 = 0.0
+            self._s20_armed = False
+            self._s20_prev  = self.sensor(S20_SCAN_STACK_P2)
+            self.get_logger().info("[S4 SCAN] Retry lại từ OutY safe")
+            self._enter_s4(SystemState.S4_OUTY_SCAN_S20)
 
     def _s4_complete(self):
         self._pub_cartridge_busy(False)
