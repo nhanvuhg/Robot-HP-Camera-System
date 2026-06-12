@@ -323,7 +323,14 @@ class CartridgeSystem(Node):
         self._s4_trigger        = False
         self._outy_jog_start    = 0.0
         self._outy_jog_pos      = 0.0
-        
+        # S4 scan S20 (NC, falling edge) — mirror pattern S1/S2A scan S4
+        self._s20_prev          = False
+        self._s20_armed         = False
+        self._s4_scan_noise_retry = 0
+        # Cyl2 retry timer RIÊNG — không dùng chung _cyl_retry_t với chain input
+        # (S4 chạy song song STATE 1/2, share biến = race condition)
+        self._cyl2_retry_t      = 0.0
+
         # ── Shared / Other ───────────────────────────────────────────
         self._motion_busy       = False
         self._robot_last_seen   = 0.0   # timestamp of last /robot/motion_busy msg
@@ -1583,7 +1590,11 @@ class CartridgeSystem(Node):
             else:
                 s10_off_duration = 5.0
                 
+        # S17 ON = có khay trên Platform sẵn sàng cấp — thiếu check này trước đây
+        # khiến auto-trigger fire khi platform trống rồi treo ở S3_WAIT_S17,
+        # chiếm busy flag vô ích.
         return (bool(self.zero_offset)
+                and self.sensor(S17_PLATFORM)
                 and not self.sensor(S18_FEED_OK)
                 and s10_off_duration >= 5.0)
 
@@ -2598,6 +2609,29 @@ class CartridgeSystem(Node):
                     'Chưa homing — không biết vị trí 0 của servo',
                     action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 4'],
                     hint='press_homing')
+                return
+            # Pre-flight sensor check (mirror STATE 1/2/3):
+            #   S18 ON  — phải có khay ở vị trí feed cần thay (giống điều kiện auto)
+            #   S21 ON + S22 OFF — Cyl2 phải retracted trước khi OutY hạ xuống kẹp
+            s18 = self.sensor(S18_FEED_OK)
+            s21, s22 = self._snap(S21_CYL2_RETRACTED, S22_CYL2_EXTENDED)
+            if (not s18) or (not s21) or s22:
+                reasons, check, action = [], [], []
+                if not s18:
+                    reasons.append(f"{self._sensor_label(18)} OFF (không có khay ở feed)")
+                    check.append('khay output có thật ở vị trí feed không')
+                    action.append('Chạy STATE 3 cấp khay trước')
+                if not s21:
+                    reasons.append(f"{self._sensor_label(21)} OFF (Cyl2 chưa retract)")
+                    check.append(f'van Cyl2, áp khí, dây {self._sensor_label(21)}')
+                    action.append('Cyl2 RETRACT manual')
+                if s22:
+                    reasons.append(f"{self._sensor_label(22)} ON (Cyl2 đang extend)")
+                    check.append(f'van Cyl2, dây {self._sensor_label(22)}')
+                    action.append('Cyl2 RETRACT manual')
+                self._notify_step('warn', 'STATE 4', 'pre-flight',
+                    'Điều kiện chưa đủ: ' + '; '.join(reasons),
+                    check=check, action=action)
                 return
             self._jog_mode = False
             self._drive_warm_t = -1.0  # FAS drive warm-up
@@ -4592,7 +4626,10 @@ class CartridgeSystem(Node):
             self._step_timeout_s3 = time.time() + self.config.move_timeout
         else:
             if time.time() > self._step_timeout_s3:
-                self._error(f"S3_SERVO3_TARGET1 timeout")
+                # Mirror pattern S1/S2: resend thay vì ERROR (ERROR clear zero_offset
+                # → ép re-home cả 5 servo, quá khắc nghiệt khi commissioning Pos2)
+                self.get_logger().warn("[S3] SERVO3_TARGET1 timeout — resend lệnh")
+                self._cmd_sent_s3 = False
             # [BLOCKING-FIX] verify _at_position(3, servo3_target1)
             elif self._arrived(3) and self._at_position(3, cfg.servo3_target1):
                 self._enter_s3(SystemState.S3_CHECK_S17)
@@ -4658,7 +4695,8 @@ class CartridgeSystem(Node):
                 return
 
             if time.time() > self._step_timeout_s3:
-                self._error("S3_SERVO3_FEED timeout")
+                self.get_logger().warn("[S3] SERVO3_FEED timeout — resend lệnh")
+                self._cmd_sent_s3 = False
             # [BLOCKING-FIX] verify _at_position(3, servo3_target2). Nhánh này chỉ
             # vào khi Servo3 đã tới giới hạn target2 mà S18 chưa ON → cần verify thật
             # đã ở target2, tránh đọc nhầm drive flag rồi quay về 10mm vô lý.
@@ -4726,6 +4764,18 @@ class CartridgeSystem(Node):
             self._drive_warm_t = 0.0
         # ─────────────────────────────────────────────────────────────
 
+        # Optional interlock Servo3 ↔ OutX/OutY: chỉ bật (s4_check_servo3_safe: true
+        # trong YAML) nếu kiểm tra layout thực tế thấy workspace 2 cụm giao nhau.
+        # Default FALSE vì _s3_complete để Servo3 đứng tại vị trí feed by design —
+        # bật mà không retract Servo3 sẽ deadlock.
+        if self._conf('s4_check_servo3_safe', False):
+            p3 = self._pos(3)
+            if p3 is not None and p3 > self.config.servo3_target1 + 5.0:
+                self._log_once("S4_SERVO3_ILK",
+                    f"[S4] INTERLOCK: Servo3 @ {p3:.0f}mm > "
+                    f"{self.config.servo3_target1}+5mm — chờ Servo3 về standby")
+                return
+
         if not self._cmd_sent_s4:
             self._pub_cartridge_busy(True)
             self._pub_cartridge_pos2_busy(True)
@@ -4752,9 +4802,15 @@ class CartridgeSystem(Node):
     def _s4_outx_target2(self):
         """
         STATE 4: OutX → outx_target2 (400mm) — vị trí lấy khay thành phẩm từ Pos 1.
-        Verify _at_position trước khi sang S4_OUTY_PICK (hạ OutY xuống kẹp khay).
+        Gate _outy_safe() re-check MỖI TICK (mirror rule _iny_safe của S1/S2 —
+        không chỉ tin thứ tự bước, phòng OutY drift giữa chừng).
+        Timeout → resend (pattern S1/S2). Verify _at_position trước khi sang
+        S4_OUTY_PICK (hạ OutY xuống kẹp khay).
         """
         cfg = self.config
+        if not self._outy_safe():
+            self._log_once("S4_OX2_OYSAFE", "[S4] OutY chưa safe — khóa OutX")
+            return
         if not self._cmd_sent_s4:
             ok = self._nb_move(4, cfg.outx_target2)
             if not ok:
@@ -4764,7 +4820,8 @@ class CartridgeSystem(Node):
             self._step_timeout_s4 = time.time() + self.config.move_timeout
         else:
             if time.time() > self._step_timeout_s4:
-                self._error("S4_OUTX_TARGET2 timeout")
+                self.get_logger().warn("[S4] OUTX_TARGET2 timeout — resend lệnh")
+                self._cmd_sent_s4 = False
             # [BLOCKING-FIX] verify _at_position(4, outx_target2)
             elif self._arrived(4) and self._at_position(4, cfg.outx_target2):
                 self._enter_s4(SystemState.S4_OUTY_PICK)
@@ -4793,26 +4850,47 @@ class CartridgeSystem(Node):
             self._step_timeout_s4 = time.time() + self.config.move_timeout
         else:
             if time.time() > self._step_timeout_s4:
-                self._error("S4_OUTY_PICK timeout")
+                self.get_logger().warn("[S4] OUTY_PICK timeout — resend lệnh")
+                self._cmd_sent_s4 = False
             # [BLOCKING-FIX] CAO — Cyl2 sẽ extend kẹp khay; sai vị trí = va chạm
             elif self._arrived(5) and self._at_position(5, cfg.outy_pick_pos):
                 self._enter_s4(SystemState.S4_CYL2_EXTEND)
 
     def _s4_cyl2_extend(self):
         """
-        Kích Cyl2 EXTEND để kẹp khay đầu ra. Chờ S22 (Cyl2 Extended) ON.
-        Timeout CYLINDER_TIMEOUT_S → _error() (vào ERROR state, vì retry pneumatic
-        ở đây không có max attempts giống các state khác — TODO: bổ sung).
-        Next: S4_OUTY_TARGET1 (nâng OutY giữ khay lên 10mm).
+        Kích Cyl2 EXTEND kẹp khay output — mirror pattern Cyl1 (_s1_cyl1_extend):
+          • Retry lệnh valve mỗi 3s — cover luôn case _cyl2_extend() trả False
+            (IO chưa ready) mà trước đây bị bỏ qua return value.
+          • Cross-check 2 sensor: S22 ON AND S21 OFF (RULE 9 — không tin 1 sensor).
+          • KHÔNG _error theo timeout — notify warn sau CYLINDER_TIMEOUT_S rồi
+            TIẾP TỤC retry (operator có thể STOP nếu muốn abort).
+        Next: S4_OUTY_TARGET1.
         """
+        cyl2_ret, cyl2_ext = self._snap(S21_CYL2_RETRACTED, S22_CYL2_EXTENDED)
         if not self._cmd_sent_s4:
             self._cyl2_extend()
-            self._cmd_sent_s4 = True
+            self._cyl2_retry_t  = time.time() + 3.0
             self._step_start_s4 = time.time()
-        if self.sensor(S22_CYL2_EXTENDED):
+            self._cmd_sent_s4   = True
+        if cyl2_ext and not cyl2_ret:
+            self.get_logger().info("[S4] S22 ON + S21 OFF — Cyl2 kẹp khay OK")
             self._enter_s4(SystemState.S4_OUTY_TARGET1)
-        elif time.time() - self._step_start_s4 > CYLINDER_TIMEOUT_S:
-            self._error("[S4] Timeout: Cyl2 extend — S22 khong ON")
+            return
+        if time.time() > self._cyl2_retry_t:
+            self.get_logger().info("[S4] Retry Cyl2 extend")
+            self._cyl2_extend()
+            self._cyl2_retry_t = time.time() + 3.0
+        if time.time() - self._step_start_s4 > CYLINDER_TIMEOUT_S:
+            self._notify_step('warn', 'STATE 4', 'Cyl2 extend',
+                f'{self._sensor_label(22)} chưa ON sau {CYLINDER_TIMEOUT_S:.0f}s '
+                f'— vẫn đang retry mỗi 3s',
+                check=['van Cyl2 extend', 'áp khí',
+                       f'dây {self._sensor_label(21)}/{self._sensor_label(22)}',
+                       'IO module đã connect chưa'],
+                action=['Kiểm tra van/khí nén', 'Hoặc nhấn STOP để abort'])
+            self._step_start_s4 = time.time()  # throttle warn — lặp mỗi 15s
+        self._log_once("S4_WAIT_S22",
+                       f"Cho S22 ON + S21 OFF | S21={cyl2_ret} S22={cyl2_ext}")
 
     def _s4_outy_target1(self):
         """
@@ -4829,20 +4907,23 @@ class CartridgeSystem(Node):
             self._step_timeout_s4 = time.time() + self.config.move_timeout
         else:
             if time.time() > self._step_timeout_s4:
-                self._error("S4_OUTY_TARGET1 timeout")
+                self.get_logger().warn("[S4] OUTY_TARGET1 timeout — resend lệnh")
+                self._cmd_sent_s4 = False
             # [BLOCKING-FIX] verify _at_position(5, outy_target1)
             elif self._arrived(5) and self._at_position(5, cfg.outy_target1):
                 self._enter_s4(SystemState.S4_OUTX_TARGET3)
 
     def _s4_outx_target3(self):
         """
-        STATE 4: OutX → outx_target3 (20mm) — vị trí đặt khay output ra khỏi
-        workspace.
-        Next: S4_CHECK_S19 (kiểm tra có cần scan stack output hay không).
-
-        Note: S4→S3 chain xử lý ở _s4_complete (gọi _can_start_s3 trực tiếp).
+        STATE 4: OutX → outx_target3 (20mm) — vị trí đặt khay output.
+        Gate _outy_safe() mỗi tick (OutY đang giữ khay ở target1=10mm — vẫn phải
+        nằm trong safe zone trước khi OutX dịch ngang). Timeout → resend.
+        Next: S4_CHECK_S19.
         """
         cfg = self.config
+        if not self._outy_safe():
+            self._log_once("S4_OX3_OYSAFE", "[S4] OutY chưa safe — khóa OutX")
+            return
         if not self._cmd_sent_s4:
             ok = self._nb_move(4, cfg.outx_target3)
             if not ok:
@@ -4852,7 +4933,8 @@ class CartridgeSystem(Node):
             self._step_timeout_s4 = time.time() + self.config.move_timeout
         else:
             if time.time() > self._step_timeout_s4:
-                self._error("S4_OUTX_TARGET3 timeout")
+                self.get_logger().warn("[S4] OUTX_TARGET3 timeout — resend lệnh")
+                self._cmd_sent_s4 = False
             # [BLOCKING-FIX] verify _at_position(4, outx_target3)
             elif self._arrived(4) and self._at_position(4, cfg.outx_target3):
                 self._enter_s4(SystemState.S4_CHECK_S19)
@@ -4888,7 +4970,8 @@ class CartridgeSystem(Node):
             self._step_timeout_s4 = time.time() + self.config.move_timeout
         else:
             if time.time() > self._step_timeout_s4:
-                self._error("S4_OUTY_ROW1 timeout")
+                self.get_logger().warn("[S4] OUTY_ROW1 timeout — resend lệnh")
+                self._cmd_sent_s4 = False
             # [BLOCKING-FIX] verify _at_position(5, row1 target)
             elif (self._arrived(5)
                   and self._at_position(5, cfg.outy_output_zones[1][2])):
@@ -4896,84 +4979,144 @@ class CartridgeSystem(Node):
 
     def _s4_outy_scan_s20(self):
         """
-        Scan OutY xuống `target_scanoutp2` (500mm) hoặc tới `outy_output_zones[2][1]`
-        nếu S19 ON, để tìm row trống trong output stack. S20 (Scan Stack Pos 2) ON
-        khi gặp khay tồn → tính row → chốt vị trí thả.
-        Tương tự RULE 12 (falling edge cho S4), nhưng S20 hiện code dùng raw ON
-        (có thể cần đổi sang falling edge nếu nhiễu).
-        Fallback khi không trigger S20: thả vào row 1.
-        Next: S4_OUTY_DROP.
+        Scan OutY tìm row trống trong output stack — logic mirror Y CHANG
+        _s1_iny_scan / _s2a_iny_jog_output (S20 cùng loại cảm biến NC như S4):
+          1. S20 là NC → bắt FALLING EDGE (prev ON → now OFF) khi chạm khay tồn.
+             KHÔNG dùng raw level — S20 kẹt ON sẽ trigger sai ngay đầu scan.
+          2. Armed gate re-evaluate mỗi tick:
+             - OutX vẫn tại outx_target3 ± position_tolerance (_at_position)
+             - OutY ∈ [outy_scan_valid_min_mm, outy_scan_valid_max_mm]
+          3. Disarm + warn nếu OutX drift khỏi target giữa lúc scan.
+
+        Falling edge hợp lệ → _zone_to_row(outy_output_zones) → stop(5) →
+        S4_OUTY_DROP (DROP tự gửi move — KHÔNG pre-issue ở đây, fix double-issue
+        do _enter_s4 reset _cmd_sent_s4).
+
+        Hết hành trình không có edge:
+          - retry < s4_scan_noise_retry_limit (default 1) → S4_RETRY_SCAN_HOME
+          - hết retry → fallback row1 + notify warn (operator kiểm tra S19/S20).
         """
         cfg = self.config
         oy = self._pos(5)
         if oy is None:
             return
-            
-        scan_target = cfg.outy_output_zones[2][1] if self.sensor(S19_CHECK_TRAY_P2) else getattr(cfg, 'target_scanoutp2', 500.0)
+
+        scan_target = (cfg.outy_output_zones[2][1]
+                       if self.sensor(S19_CHECK_TRAY_P2)
+                       else getattr(cfg, 'target_scanoutp2', 500.0))
 
         if not self._cmd_sent_s4:
             ok = self._nb_move(5, scan_target, vel=cfg.outy_search_velocity)
             if not ok:
                 self._log_once("S4_SCAN_FAIL", "S4 outy_scan: nb_move fail")
                 return
-            self._cmd_sent_s4 = True
+            self._cmd_sent_s4     = True
             self._step_timeout_s4 = time.time() + cfg.move_timeout
+            self._s20_armed       = False
+            self._s20_prev        = self.sensor(S20_SCAN_STACK_P2)
             self.get_logger().info(
-                f"[S4] S19={'ON' if self.sensor(S19_CHECK_TRAY_P2) else 'OFF'} → scan xuống {scan_target:.0f}mm "
-                f"vel={cfg.outy_search_velocity}"
+                f"[S4 SCAN] OutY → {scan_target:.0f}mm vel={cfg.outy_search_velocity} "
+                f"S19={'ON' if self.sensor(S19_CHECK_TRAY_P2) else 'OFF'}"
             )
-            
-        arm_mm = getattr(cfg, 'outy_scan_arm_mm', getattr(cfg, 'outy_safe_zone', 50.0))
-        
-        if self.sensor(S20_SCAN_STACK_P2):
+
+        # ── Armed gate (mirror S1 RULE 3): OutX tại target + OutY trong vùng valid ──
+        valid_min = self._conf(
+            'outy_scan_valid_min_mm',
+            getattr(cfg, 'outy_scan_arm_mm', getattr(cfg, 'outy_safe_zone', 50.0)))
+        valid_max = self._conf('outy_scan_valid_max_mm', scan_target)
+        outx_at_target = self._at_position(4, cfg.outx_target3)
+        oy_in_valid    = valid_min <= oy <= valid_max
+        new_armed      = outx_at_target and oy_in_valid
+
+        if self._s20_armed and not outx_at_target:
+            ox_now = self._pos(4)
+            self._log_once(
+                "S4_SCAN_OUTX_DRIFT",
+                f"[S4 SCAN] OutX trôi khỏi {cfg.outx_target3}mm "
+                f"({ox_now if ox_now is None else f'{ox_now:.2f}'}mm, "
+                f"tol={cfg.position_tolerance}mm) — DISARM S20"
+            )
+        self._s20_armed = new_armed
+
+        s20_now = self.sensor(S20_SCAN_STACK_P2)
+        # S20 là NC (cùng loại S4): chạm khay → ON sang OFF → falling edge
+        s20_falling = self._s20_prev and (not s20_now)
+        self._s20_prev = s20_now
+
+        if self._s20_armed and s20_falling:
             trigger_pos = self._pos(5) or oy
-            
             row = self._zone_to_row(trigger_pos, cfg.outy_output_zones)
-            if row is not None:
-                target_mm = cfg.outy_output_zones[row][2]
-                self._outy_jog_pos = target_mm
-                self._s4_scan_noise_retry = 0
-                self.get_logger().info(f"[S4] S20 ON @ {trigger_pos:.1f}mm → chot ROW{row} Target={target_mm:.0f}mm")
-                self._nb_move(5, target_mm, vel=cfg.outy_slow_vel)
-                self._cmd_sent_s4 = True
-                self._step_timeout_s4 = time.time() + cfg.move_timeout
-                self._enter_s4(SystemState.S4_OUTY_DROP)
-                return
+            target_mm = cfg.outy_output_zones[row][2]
+            self._outy_jog_pos = target_mm
+            self._s4_scan_noise_retry = 0
+            self.get_logger().info(
+                f"[S4 SCAN] S20 falling edge @ {trigger_pos:.1f}mm → "
+                f"row{row} ({target_mm:.0f}mm)"
+            )
+            self._stop(5)
+            self._enter_s4(SystemState.S4_OUTY_DROP)
+            return
 
         timed_out = time.time() > self._step_timeout_s4
         at_target = self._arrived(5) or oy >= scan_target - 2.0
         if timed_out or at_target:
             self._stop(5)
-            self.get_logger().warn(f"[S4] S20 không trigger → fallback row1")
+            if self._s4_scan_noise_retry < self._conf('s4_scan_noise_retry_limit', 1):
+                self._s4_scan_noise_retry += 1
+                self._notify('warn', 'S4: Không bắt được S20 hợp lệ',
+                             f'Retry scan lần {self._s4_scan_noise_retry}')
+                self._enter_s4(SystemState.S4_RETRY_SCAN_HOME)
+                return
             tgt = cfg.outy_output_zones[1][2]
+            self.get_logger().warn(
+                f"[S4 SCAN] S20 không trigger sau retry → fallback row1 ({tgt:.0f}mm)")
+            self._notify_step('warn', 'STATE 4', 'scan S20 fallback',
+                f'{self._sensor_label(19)} báo có khay nhưng {self._sensor_label(20)} '
+                f'không trigger — fallback row1',
+                check=[f'{self._sensor_label(20)} sạch + thẳng hàng',
+                       f'{self._sensor_label(19)} có nhiễu không'],
+                action=['Kiểm tra cảm biến S19/S20 sau khi state hoàn tất'])
             self._outy_jog_pos = tgt
-            self._nb_move(5, tgt, vel=cfg.outy_slow_vel)
-            self._cmd_sent_s4 = True
-            self._step_timeout_s4 = time.time() + cfg.move_timeout
+            self._s4_scan_noise_retry = 0
             self._enter_s4(SystemState.S4_OUTY_DROP)
             return
 
-        self._log_once("S4_SCAN",
-                       f"[S4] OUTY {oy:.0f}mm S20={'ON' if self.sensor(S20_SCAN_STACK_P2) else 'OFF'}")
+        self._log_once(
+            "S4_SCAN",
+            f"[S4 SCAN] OutY {oy:.0f}mm arm={'OK' if self._s20_armed else 'NO'} "
+            f"S20={'ON' if s20_now else 'OFF'}")
 
     def _s4_retry_scan_home(self):
         """
-        Recovery khi S4 scan thất bại: đưa OutY về outy_target1 (safe) rồi quay lại
-        S4_OUTY_SCAN_S20 để scan lại. Timeout → _error().
+        Retry sau khi scan S20 thất bại lần 1 (mirror _s1_retry_scan_home):
+        đưa OutY về outy_target1 (safe) rồi quay lại S4_OUTY_SCAN_S20.
+        Reset _s20_armed/_s20_prev trước khi scan lại.
+        Timeout → resend (không ERROR).
         """
         cfg = self.config
         if not self._cmd_sent_s4:
             ok = self._nb_move(5, cfg.outy_target1)
             if not ok:
-                self._enter_s4(SystemState.ERROR)
-            self._cmd_sent_s4 = True
+                self._log_once("S4_RETRY_MOVE_FAIL",
+                               "[S4] retry scan: OutY về safe fail — chờ thử lại")
+                return
+            self._cmd_sent_s4     = True
             self._step_timeout_s4 = time.time() + cfg.move_timeout
-        else:
-            if time.time() > self._step_timeout_s4:
-                self._error("Homing OUTY sau lỗi timeout")
-            elif self._arrived(5) or (self._pos(5) <= cfg.outy_target1 + 2.0):
-                self._cmd_sent_s4 = False
-                self._enter_s4(SystemState.S4_OUTY_SCAN_S20)
+            return
+
+        if time.time() > self._step_timeout_s4:
+            self.get_logger().warn("[S4] retry scan: OutY về safe timeout — resend")
+            self._cmd_sent_s4 = False
+            return
+
+        # [BLOCKING-FIX] verify về safe thật trước khi scan lại
+        if self._arrived(5) and self._at_position(5, cfg.outy_target1):
+            self._cmd_sent_s4 = False
+            self._step_timeout_s4 = 0.0
+            self._s20_armed = False
+            self._s20_prev  = self.sensor(S20_SCAN_STACK_P2)
+            self.get_logger().info("[S4 SCAN] Retry lại từ OutY safe")
+            self._enter_s4(SystemState.S4_OUTY_SCAN_S20)
 
     # ══════════════════════════════════════════════════════════════
     # WARNING — CAO RỦI RO: Cyl2 RETRACT thả khay sau khi OutY tới
@@ -5016,19 +5159,36 @@ class CartridgeSystem(Node):
     # ══════════════════════════════════════════════════════════════
     def _s4_cyl2_retract_state(self):
         """
-        Retract Cyl2 để nhả khay vào output stack. Cross-check 2 sensor:
-        S21 ON (Cyl2 retracted) AND S22 OFF (Cyl2 NOT extended).
-        Timeout CYLINDER_TIMEOUT_S → _error().
-        Next: S4_OUTY_OUTX_HOME (đưa 2 trục về home, hoàn tất STATE 4).
+        Retract Cyl2 nhả khay vào output stack — mirror _s1_wait_release (Cyl1):
+          • Retry lệnh valve mỗi 3s.
+          • Cross-check 2 sensor: S21 ON AND S22 OFF (giữ nguyên — đã đúng RULE 9).
+          • KHÔNG _error theo timeout — warn rồi tiếp tục retry.
+        Next: S4_OUTY_OUTX_HOME.
         """
+        cyl2_ret, cyl2_ext = self._snap(S21_CYL2_RETRACTED, S22_CYL2_EXTENDED)
         if not self._cmd_sent_s4:
             self._cyl2_retract()
-            self._cmd_sent_s4 = True
+            self._cyl2_retry_t  = time.time() + 3.0
             self._step_start_s4 = time.time()
-        if self.sensor(S21_CYL2_RETRACTED) and not self.sensor(S22_CYL2_EXTENDED):
+            self._cmd_sent_s4   = True
+        if cyl2_ret and not cyl2_ext:
+            self.get_logger().info("[S4] S21 ON + S22 OFF — Cyl2 nhả xong")
             self._enter_s4(SystemState.S4_OUTY_OUTX_HOME)
-        elif time.time() - self._step_start_s4 > CYLINDER_TIMEOUT_S:
-            self._error("[S4] Timeout: Cyl2 retract")
+            return
+        if time.time() > self._cyl2_retry_t:
+            self.get_logger().info("[S4] Retry Cyl2 retract")
+            self._cyl2_retract()
+            self._cyl2_retry_t = time.time() + 3.0
+        if time.time() - self._step_start_s4 > CYLINDER_TIMEOUT_S:
+            self._notify_step('warn', 'STATE 4', 'Cyl2 retract',
+                f'{self._sensor_label(21)} chưa ON sau {CYLINDER_TIMEOUT_S:.0f}s '
+                f'— vẫn đang retry mỗi 3s',
+                check=['van Cyl2 retract', 'áp khí',
+                       f'dây {self._sensor_label(21)}/{self._sensor_label(22)}'],
+                action=['Kiểm tra van/khí nén', 'Hoặc nhấn STOP để abort'])
+            self._step_start_s4 = time.time()
+        self._log_once("S4_WAIT_S21",
+                       f"Cho S21 ON + S22 OFF | S21={cyl2_ret} S22={cyl2_ext}")
 
     def _s4_outy_outx_home(self):
         """
@@ -5056,7 +5216,8 @@ class CartridgeSystem(Node):
                 self._step_timeout_s4 = time.time() + self.config.move_timeout
             else:
                 if time.time() > self._step_timeout_s4:
-                    self._error("S4_OUTY_OUTX_HOME OutY timeout")
+                    self.get_logger().warn("[S4] HOME OutY timeout — resend lệnh")
+                    self._cmd_sent_s4 = False
                 elif self._arrived(5) and self._at_position(5, cfg.outy_target1):
                     self._s4_outy_home_done = True
                     self._cmd_sent_s4 = False
@@ -5072,7 +5233,8 @@ class CartridgeSystem(Node):
                 self._step_timeout_s4 = time.time() + self.config.move_timeout
             else:
                 if time.time() > self._step_timeout_s4:
-                    self._error("S4_OUTY_OUTX_HOME OutX timeout")
+                    self.get_logger().warn("[S4] HOME OutX timeout — resend lệnh")
+                    self._cmd_sent_s4 = False
                 elif self._arrived(4) and self._at_position(4, cfg.outx_home):
                     self._s4_outy_home_done = False
                     self._enter_s4(SystemState.S4_COMPLETE)
