@@ -86,6 +86,8 @@ class LoadcellNode(Node):
         self._prev_raw      = 0.0
         self._zero_drift_warned = False
         self._status        = 'SIM' if self._use_sim else 'OK'
+        self._decision_latched = False
+        self._weight_history = []
 
         # ── Publishers ───────────────────────────────────────────────
         qos = QoSProfile(depth=10)
@@ -210,6 +212,9 @@ class LoadcellNode(Node):
         gram = self._read_raw_gram()
         with self._lock:
             self._raw_weight = gram
+            self._weight_history.append(gram)
+            if len(self._weight_history) > self._stab_n:
+                self._weight_history.pop(0)
 
         self._pub_weight.publish(Float32(data=float(gram)))
         self._pub_status.publish(self._str(self._status))
@@ -247,9 +252,19 @@ class LoadcellNode(Node):
             target_min = self._target_min
             target_max = self._target_max
             target_wt  = self._target_weight
+            history = list(self._weight_history)
+            latched = self._decision_latched
 
+        # Nếu cân trống (hoặc cartridge được nhấc ra), giải phóng latch (re-arm) và thoát
         if w < self._empty_thr:
-            return  # không có cartridge
+            if latched:
+                with self._lock:
+                    self._decision_latched = False
+            return
+
+        # Nếu đã bắn kết quả cho lần đặt khay này rồi, không tiến hành kiểm tra hay bắn lại
+        if latched:
+            return
 
         # Tính target_min/max từ target_weight nếu chưa set
         if target_min <= 0 and target_max <= 0 and target_wt > 0:
@@ -260,17 +275,22 @@ class LoadcellNode(Node):
         if target_min <= 0:
             return  # chưa nhận target
 
-        # Kiểm tra ổn định (đọc thêm vài lần)
-        samples = []
-        for _ in range(self._stab_n):
-            samples.append(self._read_raw_gram())
-            time.sleep(0.05)
+        # Kiểm tra số lượng mẫu trong cửa sổ lịch sử
+        if len(history) < self._stab_n:
+            return  # chưa đủ mẫu để kiểm tra ổn định
 
-        spread = max(samples) - min(samples)
+        # Đảm bảo toàn bộ các mẫu trong cửa sổ đều lớn hơn empty_thr
+        for val in history:
+            if val < self._empty_thr:
+                return
+
+        # Tính độ lệch (spread) trong cửa sổ mẫu (không dùng time.sleep chặn executor)
+        spread = max(history) - min(history)
         if spread > self._stab_tol:
             return  # chưa ổn định
 
-        stable_w = sum(samples) / len(samples)
+        # Tính toán khối lượng ổn định trung bình
+        stable_w = sum(history) / len(history)
         passed = (target_min <= stable_w <= target_max)
 
         self.get_logger().info(
@@ -281,6 +301,7 @@ class LoadcellNode(Node):
         self._pub_signal.publish(Bool(data=passed))
 
         with self._lock:
+            self._decision_latched = True
             self._batch_total += 1
             if passed:
                 self._batch_pass += 1
