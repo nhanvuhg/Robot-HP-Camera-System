@@ -55,6 +55,7 @@ enum class SystemState
     TAKE_CHAMBER_TO_SCALE,      // CHAMBER → SCALE (8 cartridges)
     LOAD_CHAMBER_FROM_BUFFER,   // BUFFER → CHAMBER
     WAIT_RESUME_CHOICE,         // feed_chamber timeout → wait operator popup (INIT_LOAD_CHAMBER_DIRECT or LOAD_CHAMBER_FROM_BUFFER)
+    WAIT_SCALE_CHOICE,          // loadcell silent 150s in PROCESSING_SCALE → wait operator popup (WAIT_FILLING / PLACE_TO_OUTPUT / PLACE_TO_FAIL)
     REFILL_BUFFER,              // INPUT_TRAY → BUFFER (if tray available)
     PROCESSING_SCALE,           // Wait scale result
     ERROR_SCALE_TIMEOUT,
@@ -222,7 +223,8 @@ private:
     std::atomic<bool> feed_chamber_signal_{false};
     // feed_chamber wait timeout in LOAD_CHAMBER_FROM_BUFFER → if timeout, skip
     // BUFFER→CHAMBER and drain SCALE, then enter WAIT_RESUME_CHOICE after PLACE.
-    static constexpr double LOAD_BUFFER_FEED_TIMEOUT_S = 300.0;
+    static constexpr double LOAD_BUFFER_FEED_TIMEOUT_S = 150.0;
+    static constexpr double SCALE_TOPIC_TIMEOUT_S      = 150.0;  // PROCESSING_SCALE: no loadcell msg → WAIT_SCALE_CHOICE
     rclcpp::Time feed_chamber_wait_start_;          // set on first wait, reset on pass/exit
     bool feed_chamber_wait_active_{false};          // true while measuring elapsed
     std::atomic<bool> skipped_buffer_load_{false};  // set on timeout, consumed in WAIT_RESUME_CHOICE
@@ -376,6 +378,7 @@ private:
     void stateTakeChamberToScale();
     void stateLoadChamberFromBuffer();
     void stateWaitResumeChoice();
+    void stateWaitScaleChoice();
     void stateRefillBuffer();
     void stateProcessingScale();
     void stateErrorScaleTimeout();
@@ -631,7 +634,7 @@ void RobotLogicNode::initSubscriptions()
         });
 
     ignore_scale_sub_ = create_subscription<std_msgs::msg::Bool>(
-        "/robot/ignore_scale", 10,
+        "/robot/ignore_scale", rclcpp::QoS(10).reliable().transient_local(),
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             ignore_scale_ = msg->data;
             RCLCPP_INFO(get_logger(), "[SCALE] Ignore Scale mode toggled: %s", ignore_scale_ ? "ON" : "OFF");
@@ -1156,14 +1159,18 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
         bool is_resume_cmd = (sn == "INIT_LOAD_CHAMBER_DIRECT" || sn == "LOAD_CHAMBER_FROM_BUFFER");
         bool in_resume_wait = (current_state_ == SystemState::WAIT_RESUME_CHOICE);
 
-        if (is_place_cmd && !in_scale_state) {
+        // Scale choice from WAIT_SCALE_CHOICE: 3 target hợp lệ.
+        bool is_scale_choice_cmd = (sn == "WAIT_FILLING" || sn == "PLACE_TO_OUTPUT" || sn == "PLACE_TO_FAIL");
+        bool in_scale_choice     = (current_state_ == SystemState::WAIT_SCALE_CHOICE);
+
+        if (is_place_cmd && !in_scale_state && !in_scale_choice) {
             RCLCPP_WARN(get_logger(),
                 "[GOTO] '%s' ignored — only valid from PROCESSING_SCALE, current: %s",
                 sn.c_str(), stateToString(current_state_).c_str());
             return;
         }
 
-        if (!is_place_cmd && !(is_resume_cmd && in_resume_wait)) {
+        if (!is_place_cmd && !(is_resume_cmd && in_resume_wait) && !(is_scale_choice_cmd && in_scale_choice)) {
             RCLCPP_WARN(get_logger(), "[GOTO] Ignored '%s' — auto pipeline active", sn.c_str());
             return;
         }
@@ -1182,6 +1189,7 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
     else if (sn == "REFILL_BUFFER")             target = SystemState::REFILL_BUFFER;
     else if (sn == "LOAD_CHAMBER_FROM_BUFFER")  target = SystemState::LOAD_CHAMBER_FROM_BUFFER;
     else if (sn == "WAIT_RESUME_CHOICE")        target = SystemState::WAIT_RESUME_CHOICE;
+    else if (sn == "WAIT_SCALE_CHOICE")         target = SystemState::WAIT_SCALE_CHOICE;
     else { RCLCPP_ERROR(get_logger(), "[GOTO] Unknown: %s", sn.c_str()); return; }
 
     // Resume after feed_chamber timeout: operator đã xử lý thực tế →
@@ -1206,6 +1214,14 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
             RCLCPP_WARN(get_logger(),
                 "[RESUME] Operator chose LOAD_CHAMBER_FROM_BUFFER → retry with current buffer");
         }
+    }
+
+    // Scale choice: reset scale timer so PROCESSING_SCALE doesn't re-trigger immediately
+    if (current_state_ == SystemState::WAIT_SCALE_CHOICE) {
+        scale_wait_start_      = this->now();
+        scale_result_received_ = false;
+        stored_scale_result_.store(false);
+        RCLCPP_WARN(get_logger(), "[SCALE_CHOICE] Operator chose '%s' → resuming", sn.c_str());
     }
 
     if (target == SystemState::PROCESSING_SCALE) {
@@ -1695,6 +1711,7 @@ void RobotLogicNode::handleCurrentState()
         case SystemState::TAKE_CHAMBER_TO_SCALE:   stateTakeChamberToScale();    break;
         case SystemState::LOAD_CHAMBER_FROM_BUFFER: stateLoadChamberFromBuffer(); break;
         case SystemState::WAIT_RESUME_CHOICE:      stateWaitResumeChoice();      break;
+        case SystemState::WAIT_SCALE_CHOICE:       stateWaitScaleChoice();       break;
         case SystemState::REFILL_BUFFER:           stateRefillBuffer();          break;
         case SystemState::PROCESSING_SCALE:        stateProcessingScale();       break;
         case SystemState::ERROR_SCALE_TIMEOUT:     stateErrorScaleTimeout();     break;
@@ -2155,7 +2172,7 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
     // Fill machine publishes liên tục khi đang fill; tạm dừng (vd thay mực) →
     // signal off → robot không đặt khay mới vào chamber. Manual mode bypass:
     // operator nhấn nút simulate feed_chamber để chạy.
-    // Timeout 300s: skip BUFFER→CHAMBER, drain SCALE rồi vào WAIT_RESUME_CHOICE
+    // Timeout 150s: skip BUFFER→CHAMBER, drain SCALE rồi vào WAIT_RESUME_CHOICE
     // để operator chọn cách resume.
     if (!manual_mode_ && !feed_chamber_signal_) {
         if (!feed_chamber_wait_active_) {
@@ -2197,6 +2214,22 @@ void RobotLogicNode::stateWaitResumeChoice()
     publishSystemStatus("WAIT_RESUME_CHOICE");
     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 10000,
         "[RESUME] ⏸ Waiting operator: INIT_LOAD_CHAMBER_DIRECT or LOAD_CHAMBER_FROM_BUFFER");
+}
+
+// ============================================================================
+// STATE: WAIT_SCALE_CHOICE
+// Entered when PROCESSING_SCALE has not received any loadcell topic for 150s.
+// Operator chooses via GUI popup:
+//   - WAIT_FILLING     (đã lấy cartridge ra → back to wait fill cycle)
+//   - PLACE_TO_OUTPUT  (force place as PASS)
+//   - PLACE_TO_FAIL    (force place as FAIL)
+// ============================================================================
+
+void RobotLogicNode::stateWaitScaleChoice()
+{
+    publishSystemStatus("WAIT_SCALE_CHOICE");
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 10000,
+        "[SCALE_CHOICE] ⏸ No loadcell 150s — waiting operator: WAIT_FILLING / PLACE_TO_OUTPUT / PLACE_TO_FAIL");
 }
 
 // ============================================================================
@@ -2349,10 +2382,17 @@ void RobotLogicNode::stateProcessingScale()
         return;
     }
 
-    // No timeout — wait indefinitely for scale result
     double elapsed = (this->now() - scale_wait_start_).seconds();
+
+    if (elapsed > SCALE_TOPIC_TIMEOUT_S) {
+        RCLCPP_WARN(get_logger(),
+            "[SCALE] ⚠ No loadcell topic for %.0fs → WAIT_SCALE_CHOICE", elapsed);
+        transitionTo(SystemState::WAIT_SCALE_CHOICE);
+        return;
+    }
+
     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
-        "[SCALE] ⏳ Waiting for result... (%.1fs)", elapsed);
+        "[SCALE] ⏳ Waiting for result... (%.1fs / %.0fs)", elapsed, SCALE_TOPIC_TIMEOUT_S);
 }
 
 // ============================================================================
@@ -2814,6 +2854,7 @@ std::string RobotLogicNode::stateToString(SystemState state)
         case SystemState::TAKE_CHAMBER_TO_SCALE:   return "TAKE_CHAMBER_TO_SCALE";
         case SystemState::LOAD_CHAMBER_FROM_BUFFER: return "LOAD_CHAMBER_FROM_BUFFER";
         case SystemState::WAIT_RESUME_CHOICE:      return "WAIT_RESUME_CHOICE";
+        case SystemState::WAIT_SCALE_CHOICE:       return "WAIT_SCALE_CHOICE";
         case SystemState::REFILL_BUFFER:           return "REFILL_BUFFER";
         case SystemState::PROCESSING_SCALE:        return "PROCESSING_SCALE";
         case SystemState::ERROR_SCALE_TIMEOUT:     return "ERROR_SCALE_TIMEOUT";

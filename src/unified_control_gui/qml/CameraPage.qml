@@ -54,8 +54,8 @@ Item {
         return "Min " + minVal.toFixed(1) + " | Avg " + avgVal.toFixed(1) + " | Max\n" + maxVal.toFixed(1) + " mbar";
     }
 
-    // Tính từ systemStatus — chặn đổi mode khi robot đang chạy
-    // MANUAL được coi là "rảnh" (không busy) — robot chỉ chờ lệnh thủ công, cho phép đổi mode.
+    // Calculated from systemStatus - block mode change when robot is running
+    // MANUAL is considered "idle" (not busy) - robot only waits for manual commands, allowing mode change.
     property bool robotBusy: {
         var s = (robotController.systemStatus || "").toLowerCase()
         return s !== "" && s !== "idle" && s !== "ready" && s !== "unknown" && s !== "manual"
@@ -72,7 +72,7 @@ Item {
         }
     }
 
-    // Sync mode từ Cartridge (đảm bảo 2 UI đồng bộ)
+    // Sync mode from Cartridge (ensures both UIs are synchronized)
     Connections {
         target: cartridgeController
         function onCurrentModeChanged() {
@@ -136,24 +136,6 @@ Item {
                         }
                     }
 
-                    Button {
-                        text: "INK SYSTEM  ▸"
-                        Layout.preferredHeight: 50
-                        font.pixelSize: 16; font.bold: true
-                        onClicked: stackView.push(inkPage)
-                        background: Rectangle {
-                            radius: 6
-                            gradient: Gradient {
-                                GradientStop { position: 0.0; color: "#00bcd4" }
-                                GradientStop { position: 1.0; color: "#006064" }
-                            }
-                        }
-                        contentItem: Text {
-                            text: parent.text; font: parent.font
-                            color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-
                     RowLayout {
                         spacing: 5
                         Text {
@@ -195,6 +177,52 @@ Item {
                         background: Rectangle { radius: 6; color: "transparent"; border.color: "#134357"; border.width: 2 }
                         contentItem: Image { source: "qrc:/icons/qml/icons/power_settings.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true }
                     }
+                }
+            }
+        }
+
+        // ── Scale Issue Warning Banner ─────────────────────────
+        Rectangle {
+            id: scaleWarnBanner
+            Layout.fillWidth: true
+            height: 44
+            visible: mainWindow.scaleIssueWarning
+            color: "#2d1010"
+            border.color: "#ef4444"
+            border.width: 1
+            radius: 4
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 10
+                spacing: 12
+
+                Text {
+                    text: "⚠"
+                    color: "#ef4444"
+                    font.pixelSize: 20
+                    font.bold: true
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: "SCALE ISSUE — Scale problem or cartridge taken away. Operator intervention was required. Check scale and loadcell before next cycle."
+                    color: "#fca5a5"
+                    font.pixelSize: 14
+                    elide: Text.ElideRight
+                }
+                Button {
+                    Layout.preferredWidth: 110; Layout.preferredHeight: 30
+                    text: "✓  Confirm"
+                    font.pixelSize: 13; font.bold: true
+                    background: Rectangle { color: "#4d1010"; border.color: "#ef4444"; border.width: 1; radius: 4 }
+                    contentItem: Text {
+                        text: parent.text; color: "#ef4444"
+                        font: parent.font
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: mainWindow.scaleIssueWarning = false
                 }
             }
         }
@@ -327,13 +355,13 @@ Item {
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#134357" }
 
-                    // ── 3-Column Layout: Trái (Trạng thái Robot), Giữa (Thông tin Mực), Phải (Chế độ Điều khiển) ──
+                    // ── 3-Column Layout: Left (Robot Status), Middle (Ink Info), Right (Control Mode) ──
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: false
                         spacing: 20
 
-                        // CỘT 1: Trạng thái Robot
+                        // COLUMN 1: Robot Status
                         GridLayout {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignTop
@@ -351,7 +379,7 @@ Item {
 
                         Rectangle { width: 1; Layout.fillHeight: true; color: "#134357" }
 
-                        // CỘT 2: Thông tin mực & cân
+                        // COLUMN 2: Ink & Scale Info
                         GridLayout {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignTop
@@ -369,7 +397,7 @@ Item {
 
                         Rectangle { width: 1; Layout.fillHeight: true; color: "#134357" }
 
-                        // CỘT 3: Control Mode
+                        // COLUMN 3: Control Mode
                         ColumnLayout {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignTop
@@ -422,7 +450,7 @@ Item {
                         Layout.fillHeight: false
                         Text { text: "INPUT ROW"; color: "#5cf4f1"; font.pixelSize: 17; font.bold: true }
                         Text {
-                            text: cameraPageRoot.rowLocked ? "🔒 Chờ lấy khay..." : (cameraPageRoot.ctrlMode === "camera_ai" ? "(AI auto)" : "Chọn rồi nhấn PICK_INPUT")
+                            text: cameraPageRoot.rowLocked ? "🔒 Waiting for tray..." : (cameraPageRoot.ctrlMode === "camera_ai" ? "(AI auto)" : "Select then press PICK_INPUT")
                             color: cameraPageRoot.rowLocked ? "#ef4444" : "#6b7280"
                             font.pixelSize: 17
                         }
@@ -472,7 +500,7 @@ Item {
                         Layout.fillHeight: false
                         Text { text: "OUTPUT SLOT"; color: "#5cf4f1"; font.pixelSize: 17; font.bold: true }
                         Text {
-                            text: robotController.selectedSlot > 0 ? ("Đã chọn slot " + robotController.selectedSlot) : "Chọn vị trí đặt khay output"
+                            text: robotController.selectedSlot > 0 ? ("Selected slot " + robotController.selectedSlot) : "Select output tray position"
                             color: "#6b7280"; font.pixelSize: 17
                         }
                     }
