@@ -11,18 +11,18 @@ Item {
     property bool modeLocked: false
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
 
-    readonly property color cPanel:       "#081e29"
-    readonly property color cPanel2:      "#0a2238"   // dark navy blue — match camera systems tone (was #051a1a teal-black)
-    readonly property color cBorder:      "#134357"
-    readonly property color cText:        "#e8e8f0"
-    readonly property color cMuted:       "#8888aa"
-    readonly property color cAccent:      "#4f6cff"
-    readonly property color cOk:          "#00e676"
-    readonly property color cOkBg:        Qt.rgba(0.0, 0.90, 0.46, 0.15)
+    readonly property color cPanel:       "#b30d1527"
+    readonly property color cPanel2:      "#b3090d16"
+    readonly property color cBorder:      "#4d00ffff"
+    readonly property color cText:        "#ffffff"
+    readonly property color cMuted:       "#6b7280"
+    readonly property color cAccent:      "#00ffff"
+    readonly property color cOk:          "#10b981"
+    readonly property color cOkBg:        Qt.rgba(0.06, 0.73, 0.51, 0.15)
     readonly property color cWarn:        "#ffa726"
     readonly property color cWarnBg:      Qt.rgba(1.0, 0.65, 0.15, 0.15)
-    readonly property color cBad:         "#ff5252"
-    readonly property color cBadBg:       Qt.rgba(1.0, 0.32, 0.32, 0.15)
+    readonly property color cBad:         "#ef4444"
+    readonly property color cBadBg:       Qt.rgba(0.94, 0.27, 0.27, 0.15)
 
     function classifyPressure(val, lowT, highT, limitT) {
         if (val < lowT) return "low";
@@ -126,8 +126,11 @@ Item {
                         onClicked: stackView.push(cartridgePage)
                         background: Rectangle {
                             radius: 6
-                            color: cartSysBtn.pressed ? "#273287" : (cartSysBtn.hovered ? "#3443af" : "#4d61f6")
-                            Behavior on color { ColorAnimation { duration: 100 } }
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: cartSysBtn.pressed ? "#3faad0" : (cartSysBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                                GradientStop { position: 1.0; color: cartSysBtn.pressed ? "#273ea6" : (cartSysBtn.hovered ? "#324ecf" : "#3b58ff") }
+                            }
                         }
                         contentItem: Text {
                             text: parent.text; font: parent.font
@@ -254,10 +257,11 @@ Item {
                 spacing: 8
 
                 Rectangle {
-                    color: "#081e29"
+                    color: cPanel
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    border.color: "#134357"
+                    border.color: cBorder
+                    border.width: 1
                     radius: 6
                     clip: true
 
@@ -284,8 +288,9 @@ Item {
                 Layout.fillHeight: true
                 Layout.preferredWidth: 400
                 Layout.maximumWidth: 400
-                color: "#081e29"
-                border.color: "#134357"
+                color: cPanel
+                border.color: cBorder
+                border.width: 1
                 radius: 6
 
                 ColumnLayout {
@@ -352,8 +357,9 @@ Item {
                 Layout.fillHeight: true
                 Layout.fillWidth: true
                 Layout.minimumWidth: 300
-                color: "#081e29"
-                border.color: "#134357"
+                color: cPanel
+                border.color: cBorder
+                border.width: 1
                 radius: 6
 
                 ColumnLayout {
@@ -617,10 +623,13 @@ Item {
                     Rectangle {
                         id: emBtn
                         Layout.fillWidth: true; height: 56; radius: 5
-                        color: emMA.pressed ? "#7f1d1d" : (emMA.containsMouse ? "#991b1b" : "#b91c1c")
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: emMA.pressed ? "#991b1b" : (emMA.containsMouse ? "#b91c1c" : "#dc2626") }
+                            GradientStop { position: 1.0; color: emMA.pressed ? "#7f1d1d" : (emMA.containsMouse ? "#991b1b" : "#b91c1c") }
+                        }
                         scale: emMA.pressed ? 0.95 : 1.0
                         Behavior on scale { NumberAnimation { duration: 100 } }
-                        Behavior on color { ColorAnimation { duration: 100 } }
                         Text { anchors.centerIn: parent; text: "⛔ EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
                         MouseArea {
                             id: emMA
@@ -636,10 +645,13 @@ Item {
                         Rectangle {
                             id: stopBtn
                             Layout.fillWidth: true; height: 52; radius: 5
-                            color: stopResetMA.pressed ? "#991b1b" : (stopResetMA.containsMouse ? "#b91c1c" : "#dc2626")
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: stopResetMA.pressed ? "#991b1b" : (stopResetMA.containsMouse ? "#b91c1c" : "#dc2626") }
+                                GradientStop { position: 1.0; color: stopResetMA.pressed ? "#7f1d1d" : (stopResetMA.containsMouse ? "#991b1b" : "#b91c1c") }
+                            }
                             scale: stopResetMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Behavior on color { ColorAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#ffffff"; font.pixelSize: 20; font.bold: true }
                             MouseArea {
                                 id: stopResetMA
@@ -652,10 +664,13 @@ Item {
                         Rectangle {
                             id: enBtn
                             Layout.fillWidth: true; height: 52; radius: 5
-                            color: enMA.pressed ? "#273287" : (enMA.containsMouse ? "#3443af" : "#4d61f6")
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: enMA.pressed ? "#3faad0" : (enMA.containsMouse ? "#4dd2ff" : "#54d3ff") }
+                                GradientStop { position: 1.0; color: enMA.pressed ? "#273ea6" : (enMA.containsMouse ? "#324ecf" : "#3b58ff") }
+                            }
                             scale: enMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Behavior on color { ColorAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "ENABLE"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
                             MouseArea {
                                 id: enMA
@@ -668,10 +683,13 @@ Item {
                         Rectangle {
                             id: startBtn
                             Layout.fillWidth: true; height: 52; radius: 5
-                            color: startMA.pressed ? "#15803d" : (startMA.containsMouse ? "#16a34a" : "#22c55e")
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: startMA.pressed ? "#166534" : (startMA.containsMouse ? "#15803d" : "#22c55e") }
+                                GradientStop { position: 1.0; color: startMA.pressed ? "#14532d" : (startMA.containsMouse ? "#166534" : "#16a34a") }
+                            }
                             scale: startMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Behavior on color { ColorAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "🚀 START"; color: "#ffffff"; font.pixelSize: 20; font.bold: true }
                             MouseArea {
                                 id: startMA
@@ -698,10 +716,13 @@ Item {
                         Rectangle {
                             id: pauseBtn
                             Layout.fillWidth: true; height: 52; radius: 5
-                            color: pauseMA.pressed ? "#273287" : (pauseMA.containsMouse ? "#3443af" : "#4d61f6")
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: pauseMA.pressed ? "#3faad0" : (pauseMA.containsMouse ? "#4dd2ff" : "#54d3ff") }
+                                GradientStop { position: 1.0; color: pauseMA.pressed ? "#273ea6" : (pauseMA.containsMouse ? "#324ecf" : "#3b58ff") }
+                            }
                             scale: pauseMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Behavior on color { ColorAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "PAUSE"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
                             MouseArea {
                                 id: pauseMA
@@ -714,10 +735,13 @@ Item {
                         Rectangle {
                             id: resBtn
                             Layout.fillWidth: true; height: 52; radius: 5
-                            color: resMA.pressed ? "#273287" : (resMA.containsMouse ? "#3443af" : "#4d61f6")
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: resMA.pressed ? "#3faad0" : (resMA.containsMouse ? "#4dd2ff" : "#54d3ff") }
+                                GradientStop { position: 1.0; color: resMA.pressed ? "#273ea6" : (resMA.containsMouse ? "#324ecf" : "#3b58ff") }
+                            }
                             scale: resMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Behavior on color { ColorAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "RESUME"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
                             MouseArea {
                                 id: resMA
@@ -730,10 +754,13 @@ Item {
                         Rectangle {
                             id: clrBtn
                             Layout.fillWidth: true; height: 52; radius: 5
-                            color: clrMA.pressed ? "#273287" : (clrMA.containsMouse ? "#3443af" : "#4d61f6")
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: clrMA.pressed ? "#3faad0" : (clrMA.containsMouse ? "#4dd2ff" : "#54d3ff") }
+                                GradientStop { position: 1.0; color: clrMA.pressed ? "#273ea6" : (clrMA.containsMouse ? "#324ecf" : "#3b58ff") }
+                            }
                             scale: clrMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Behavior on color { ColorAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
                             MouseArea {
                                 id: clrMA

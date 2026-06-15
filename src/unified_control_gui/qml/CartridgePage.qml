@@ -41,20 +41,23 @@
         property int topH:    Math.floor(outerH * rowRatio) - gap
         property int logH:    outerH - topH - gap
 
-        readonly property color cBg:     "#0c0c1d"
-        readonly property color cBg2:    "#081e29"
-        readonly property color cCard:   "#051a1a"
-        readonly property color cBorder: "#134357"
-        readonly property color cAccent: "#4f6cff"
-        readonly property color cGreen:  "#00e676"
-        readonly property color cRed:    "#ff5252"
+        readonly property color cBg:     "transparent"
+        readonly property color cBg2:    "#b30a2238"
+        readonly property color cCard:   "#b30d1527"
+        readonly property color cBorder: "#4d00ffff"
+        readonly property color cAccent: "#00ffff"
+        readonly property color cGreen:  "#10b981"
+        readonly property color cRed:    "#ef4444"
         readonly property color cOrange: "#ffa726"
-        readonly property color cCyan:   "#26c6da"
+        readonly property color cCyan:   "#00ffff"
         readonly property color cYellow: "#ffd740"
-        readonly property color cDim:    "#8888aa"
-        readonly property color cText:   "#e8e8f0"
+        readonly property color cDim:    "#6b7280"
+        readonly property color cText:   "#ffffff"
 
-        Rectangle { anchors.fill: parent; color: root.cBg }
+        Rectangle {
+            anchors.fill: parent
+            color: "transparent"
+        }
 
         // ════════════════════════════════════════════════════════════
         // HEADER
@@ -63,7 +66,7 @@
             id: header
             anchors { top: parent.top; left: parent.left; right: parent.right }
             height: root.headerH
-            color: "#141428"; border.color: root.cBorder; z: 10
+            color: "transparent"; border.color: "transparent"; z: 10
 
             RowLayout {
                 anchors.fill: parent
@@ -74,7 +77,13 @@
                     id: backBtn
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
                     onClicked: stackView.pop()
-                    background: Rectangle { radius: 6; color: "transparent"; border.color: "#134357"; border.width: 2 }
+                    background: Rectangle {
+                        radius: 6
+                        color: backBtn.pressed ? "#3faad0" : (backBtn.hovered ? "#1b2c50" : "transparent")
+                        border.color: backBtn.hovered ? "#54d3ff" : "#3b58ff"
+                        border.width: 2
+                        Behavior on color { ColorAnimation { duration: 100 } }
+                    }
                     contentItem: Image {
                         source: "qrc:/icons/qml/icons/reply_arrow.svg"
                         width: 24; height: 24
@@ -85,7 +94,7 @@
                 Item { width: 6 }
                 Text {
                     text: "ROS2 - CARTRIDGE PROVISION SYSTEM"
-                    color: "#6cf"
+                    color: root.cAccent
                     font.pixelSize: 24; font.bold: true; font.letterSpacing: 1.5
                 }
                 Item { Layout.fillWidth: true }
@@ -157,7 +166,7 @@
                         id: mpLbl
                         anchors.centerIn: parent
                         text: modePill.isIdle ? "⚠  SELECT MODE" : modePill.m.toUpperCase()
-                        color: "#6cf"
+                        color: root.cAccent
                         font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
                     }
                 }
@@ -170,12 +179,14 @@
                     onClicked: cartridgeController.resetFaults()
                     background: Rectangle {
                         radius: 6
-                        color: faultsBtn.hovered ? "#332e0a" : "transparent"
-                        border.color: "#ffd740"; border.width: 2
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: faultsBtn.pressed ? "#3faad0" : (faultsBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                            GradientStop { position: 1.0; color: faultsBtn.pressed ? "#273ea6" : (faultsBtn.hovered ? "#324ecf" : "#3b58ff") }
+                        }
                     }
                     contentItem: Text {
-                        text: parent.text; font: parent.font; color: "#ffd740"
+                        text: parent.text; font: parent.font; color: "#ffffff"
                         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                     }
                 }
@@ -186,9 +197,10 @@
                     onClicked: Qt.quit()
                     background: Rectangle {
                         radius: 6
-                        color: closeBtn.hovered ? "#5a0a0a" : "transparent"
-                        border.color: "#134357"; border.width: 2
-                        Behavior on color { ColorAnimation { duration: 120 } }
+                        color: closeBtn.pressed ? "#3faad0" : (closeBtn.hovered ? "#1b2c50" : "transparent")
+                        border.color: closeBtn.hovered ? "#54d3ff" : "#3b58ff"
+                        border.width: 2
+                        Behavior on color { ColorAnimation { duration: 100 } }
                     }
                     contentItem: Image {
                         source: "qrc:/icons/qml/icons/power_settings.svg"
@@ -240,21 +252,33 @@
                     Layout.alignment: Qt.AlignHCenter
                     spacing: 20
                     Button {
+                        id: trayPlacedBtn
                         text: "TRAY PLACED"
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 120; Layout.preferredHeight: 35
-                        background: Rectangle { color: root.cOrange; radius: 5 }
-                        contentItem: Text { text: parent.text; font: parent.font; color: "#000"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        background: Rectangle {
+                            color: trayPlacedBtn.pressed ? "#273287" : (trayPlacedBtn.hovered ? "#3443af" : "#4d61f6")
+                            radius: 5
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                        }
+                        contentItem: Text { text: parent.text; font: parent.font; color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: {
                             cartridgeController.confirmOutput();
                             // outputWarningPopup.close();
                         }
                     }
                     Button {
+                        id: waitMoreBtn
                         text: "WAIT MORE"
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 100; Layout.preferredHeight: 35
-                        background: Rectangle { color: "#134357"; radius: 5; border.color: "#2a3a4a"; border.width: 1 }
+                        background: Rectangle {
+                            color: waitMoreBtn.pressed ? "#273287" : (waitMoreBtn.hovered ? "#161c40" : "transparent")
+                            radius: 5
+                            border.color: waitMoreBtn.hovered ? "#4d61f6" : "#3443af"
+                            border.width: 1
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                        }
                         contentItem: Text { text: parent.text; font: parent.font; color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: {
                             // outputWarningPopup.close();
@@ -621,7 +645,7 @@
 
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1;
-                                        lbl: "START"; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen;
+                                        role: "success"; lbl: "START";
                                         onClicked: {
                                             mainWindow.checkInkAndRun(function() {
                                                 var inkMap = mainWindow.parseKvPipe(hpController.inkStatus);
@@ -636,9 +660,9 @@
                                             });
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.resumeSystem() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; role: "accent"; lbl: "RESUME"; onClicked: cartridgeController.resumeSystem() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; role: "danger"; lbl: "STOP"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; role: "accent"; lbl: "PAUSE"; onClicked: cartridgeController.pauseSystem() }
                                 }
                             }
                         }
@@ -669,16 +693,14 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 3; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   blinking: cartridgeController.uiHint === "press_homing"; onClicked: cartridgeController.gotoState("HOMING") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 1\nKhay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 3\nKhay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; role: "accent"; lbl: "HOMING"; blinking: cartridgeController.uiHint === "press_homing"; onClicked: cartridgeController.gotoState("HOMING") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; role: "accent"; lbl: "STATE 1\nKhay In"; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; role: "accent"; lbl: "STATE 3\nKhay Out"; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
 
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
                                         lbl: cartridgeController.currentMode === "jog" ? "STATE MODE" : "STOP STATE"
-                                        bg: cartridgeController.currentMode === "jog" ? "#0a332e" : "#4d1a1a"
-                                        bc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
-                                        tc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
+                                        role: cartridgeController.currentMode === "jog" ? "success" : "danger"
                                         onClicked: {
                                             if (cartridgeController.currentMode === "jog") {
                                                 cartridgeController.setMode("manual")
@@ -688,8 +710,8 @@
                                             }
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nKhay In"; bg: "#1a2050"; bc: "#00ffff"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.gotoState("STATE2") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 4\nKhay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.gotoState("STATE4") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; role: "accent"; lbl: "STATE 2\nKhay In"; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.gotoState("STATE2") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; role: "accent"; lbl: "STATE 4\nKhay Out"; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.gotoState("STATE4") }
                                 }
                             }
                         }
@@ -720,13 +742,13 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 3; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nEXTEND";  bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; onClicked: cartridgeController.cylinderCmd(1, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nEXTEND"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; onClicked: cartridgeController.cylinderCmd(2, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nEXTEND"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; onClicked: cartridgeController.cylinderCmd(3, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nEXTEND"; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; onClicked: cartridgeController.cylinderCmd(1, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nEXTEND"; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; onClicked: cartridgeController.cylinderCmd(2, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nEXTEND"; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; onClicked: cartridgeController.cylinderCmd(3, true) }
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nRETRACT";  bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nRETRACT"; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nRETRACT"; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nRETRACT"; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nRETRACT"; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nRETRACT"; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
                                 }
                             }
                         }
@@ -881,7 +903,7 @@
                                                         Layout.fillWidth: true; Layout.preferredWidth: 1
                                                         Layout.preferredHeight: 42
                                                         padV: 9; padH: 0; fontSize: 20
-                                                       bg: "#0a243a"; bc: "#6cf"; tc: "#6cf"
+
                                                         active: servoRow.jogAllowed
                                                         onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"-", cardItem.jogVelMms) }
                                                         onReleased: cartridgeController.jogStop(model.sid)
@@ -891,7 +913,7 @@
                                                         Layout.fillWidth: true; Layout.preferredWidth: 1
                                                         Layout.preferredHeight: 42
                                                         padV: 9; padH: 0; fontSize: 20
-                                                        bg: "#0a243a"; bc: "#6cf"; tc: "#6cf"
+ 
                                                         active: servoRow.jogAllowed
                                                         onPressed: { if(servoRow.jogAllowed) cartridgeController.jogServo(model.sid,"+", cardItem.jogVelMms) }
                                                         onReleased: cartridgeController.jogStop(model.sid)
@@ -903,8 +925,8 @@
                                             Row {
                                                 spacing: 6
                                                 width: parent.width
-                                                CBtn { lbl:"HOMING"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
-                                                CBtn { lbl:"CLEAR"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:"#4d3a0a"; bc:root.cOrange; tc:root.cOrange; onClicked: cartridgeController.clearServo(model.sid) }
+                                                CBtn { role: "success"; lbl:"HOMING"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
+                                                CBtn { role: "accent"; lbl:"CLEAR"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; onClicked: cartridgeController.clearServo(model.sid) }
                                             }
 
                                             // TARGET POSITION Row (with input & RUN button)
@@ -949,7 +971,7 @@
                                                         Layout.preferredWidth: 80
                                                         Layout.preferredHeight: 42
                                                         padV: 0; fontSize: 16
-                                                        bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; active: servoRow.jogAllowed
+                                                        role: "success"; active: servoRow.jogAllowed
                                                         onClicked: { if(servoRow.jogAllowed) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } }
                                                     }
                                                 }
@@ -972,9 +994,7 @@
                                                 w: parent.width; h: 42
                                                 padV: 9
                                                 fontSize: 18
-                                                bg: "#4d1a1a"
-                                                bc: root.cRed
-                                                tc: root.cRed
+                                                role: "danger"
                                                 onClicked: cartridgeController.jogStop(model.sid)
                                             }
                                         }
@@ -1324,7 +1344,7 @@
                                 }
 
                                 Row { spacing: 8; topPadding: 8
-                                    CBtn { lbl:"Save All"; padV:10; padH:22; fontSize: 18; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                                    CBtn { role: "success"; lbl:"Save All"; padV:10; padH:22; fontSize: 18
                                         onClicked: {
                                             for (var i = 0; i < servoRepeater2.count; i++) {
                                                 var item = servoRepeater2.itemAt(i)
@@ -1908,10 +1928,10 @@
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
                                         // Stop & Reset → IDLE
-                                        CBtn { lbl: "⏹ STOP"; width: parent.width; bg: "#4a1a00"; bc: "#FF6600"; tc: "#FF6600"; padV: 12; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                                        CBtn { role: "danger"; lbl: "⏹ STOP"; width: parent.width; padV: 12; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
 
                                         // Enable
-                                        CBtn { lbl: "ENABLE"; width: parent.width; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; padV: 10; onClicked: robotController.enableSystem(true) }
+                                        CBtn { role: "success"; lbl: "ENABLE"; width: parent.width; padV: 10; onClicked: robotController.enableSystem(true) }
 
                                         // Pause / Resume
                                         Row { spacing: 6; width: parent.width
@@ -2355,26 +2375,79 @@
             // Khi blinking=true: viền + nền nhấp nháy thu hút sự chú ý (vd hint từ
             // node Python qua uiHint). Auto-stop khi blinking=false. Animation 600ms/chu kỳ.
             property bool  blinking: false
+            property string role: "" // "accent" | "success" | "danger" | ""
 
             signal clicked(); signal pressed(); signal released()
 
             implicitWidth:  w > 0 ? w : cbrT.implicitWidth + padH * 2
             implicitHeight: h > 0 ? h : cbrT.implicitHeight + padV * 2
             radius: 4
+
+            gradient: (role === "accent" || role === "success" || role === "danger") ? btnGradient : null
+
+            Gradient {
+                id: btnGradient
+                orientation: Gradient.Horizontal
+                GradientStop {
+                    position: 0.0
+                    color: {
+                        if (!cbr.active) return "#1e293b";
+                        if (cbr._pressed) {
+                            if (role === "accent") return "#3faad0";
+                            if (role === "success") return "#166534";
+                            return "#991b1b";
+                        }
+                        if (cbr._hovered) {
+                            if (role === "accent") return "#4dd2ff";
+                            if (role === "success") return "#15803d";
+                            return "#b91c1c";
+                        }
+                        if (role === "accent") return "#54d3ff";
+                        if (role === "success") return "#22c55e";
+                        return "#dc2626";
+                    }
+                }
+                GradientStop {
+                    position: 1.0
+                    color: {
+                        if (!cbr.active) return "#0f172a";
+                        if (cbr._pressed) {
+                            if (role === "accent") return "#273ea6";
+                            if (role === "success") return "#14532d";
+                            return "#7f1d1d";
+                        }
+                        if (cbr._hovered) {
+                            if (role === "accent") return "#324ecf";
+                            if (role === "success") return "#166534";
+                            return "#991b1b";
+                        }
+                        if (role === "accent") return "#3b58ff";
+                        if (role === "success") return "#16a34a";
+                        return "#b91c1c";
+                    }
+                }
+            }
+
             color: {
-                if (!active) return bg
-                if (_pressed) return Qt.lighter(bg, 1.6)
-                if (isSelected) return bc
-                if (_hovered) return Qt.lighter(bg, 1.2)
-                return bg
+                if (role === "accent" || role === "success" || role === "danger") return "transparent";
+                if (!active) return bg;
+                if (_pressed) return Qt.lighter(bg, 1.6);
+                if (isSelected) return root.cAccent;
+                if (_hovered) return Qt.lighter(bg, 1.2);
+                return bg;
             }
             border.color: {
-                if (_pressed) return Qt.lighter(bc, 1.5)
-                if (isSelected) return Qt.lighter(bc, 1.2)
-                if (_hovered) return (bc === root.cBorder ? root.cAccent : Qt.lighter(bc, 1.3))
-                return bc
+                if (cbr.isSelected) return root.cAccent
+                var baseBorderColor = bc
+                if (role === "accent") baseBorderColor = root.cAccent
+                else if (role === "success") baseBorderColor = root.cGreen
+                else if (role === "danger") baseBorderColor = root.cRed
+
+                if (_pressed) return Qt.lighter(baseBorderColor, 1.5)
+                if (_hovered) return (baseBorderColor === root.cBorder ? root.cAccent : Qt.lighter(baseBorderColor, 1.3))
+                return baseBorderColor
             }
-            border.width: _pressed ? 2 : 1
+            border.width: cbr.isSelected ? 2 : (_pressed ? 2 : 1)
             opacity: active ? 1.0 : 0.4
             scale: isSelected ? 0.96 : (_pressed ? 0.93 : 1.0)
 
@@ -2422,7 +2495,7 @@
                 visible: cbr.isSelected
             }
 
-            Text { id: cbrT; anchors.centerIn: parent; text: cbr.lbl; color: cbr.isSelected ? "#0c0c1d" : (cbr._pressed ? Qt.lighter(cbr.tc, 1.4) : cbr.tc)
+            Text { id: cbrT; anchors.centerIn: parent; text: cbr.lbl; color: (cbr.role === "accent" || cbr.role === "success" || cbr.role === "danger") ? "#ffffff" : (cbr.isSelected ? "#090d16" : (cbr._pressed ? Qt.lighter(cbr.tc, 1.4) : cbr.tc))
                 font.pixelSize: cbr.fontSize; font.weight: Font.DemiBold; font.capitalization: Font.MixedCase
                 anchors.verticalCenterOffset: (cbr.isSelected || cbr._pressed) ? 2 : 0
                 Behavior on color { ColorAnimation { duration: 80 } }
@@ -2519,7 +2592,7 @@
                 }
 
                 Row { spacing: 6; topPadding: 8
-                    CBtn { lbl:"Save"; padV:8; padH:18; fontSize: 17; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                    CBtn { role: "success"; lbl:"Save"; padV:8; padH:18; fontSize: 17
                         onClicked: {
                             var positions = {}
                             for (var i = 0; i < cfgRepeater.count; i++) {
@@ -2640,7 +2713,7 @@
                     }
 
                     Row { spacing: 8; topPadding: 8
-                        CBtn { lbl:"Save"; padV:10; padH:22; fontSize: 18; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                        CBtn { role: "success"; lbl:"Save"; padV:10; padH:22; fontSize: 18
                             onClicked: {
                                 var positions = {}
                                 for (var i = 0; i < cfgZoneRepeater.count; i++) {

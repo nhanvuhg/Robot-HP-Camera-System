@@ -10,36 +10,36 @@ Item {
     id: prodTab
 
     // ── Theme (CartridgePage palette — bolder) ──
-    readonly property color cBg:       "#0c0c1d"
-    readonly property color cPanel:    "#0e1f2e"
-    readonly property color cCardBg:   "#0a1928"
-    readonly property color cBorder:   "#1a4a6a"
+    readonly property color cBg:       "transparent"
+    readonly property color cPanel:    "#b30d1527"
+    readonly property color cCardBg:   "#b30d1527"
+    readonly property color cBorder:   "#4d00ffff"
     readonly property color cText:     "#e8eaf0"
     readonly property color cMuted:    "#7a8fa8"
     readonly property color cOk:       "#4ade80"
     readonly property color cBad:      "#f87171"
     readonly property color cWarn:     "#fbbf24"
-    readonly property color cCyan:     "#22d3ee"
-    readonly property color cBlue:     "#60a5fa"
-    readonly property color cPurple:   "#a78bfa"
+    readonly property color cCyan:     "#1a8cd8"
+    readonly property color cBlue:     "#1a8cd8"
+    readonly property color cPurple:   "#1a8cd8"
     readonly property string monoFont: "JetBrains Mono, DejaVu Sans Mono, Consolas, monospace"
 
     readonly property string apiBase: "http://192.168.27.193:8080"
-
+ 
     // ── Data ──
     property var todayData: ({count:0, total_volume_ml:0, ok:0, ng:0, items:[]})
     property real todayRuntime: 0
     property string todayDate: Qt.formatDate(new Date(), "yyyy-MM-dd")
-
+ 
     property var dateData: ({count:0, total_volume_ml:0, ok:0, ng:0, items:[]})
     property real dateRuntime: 0
     property var rangeDays: []
-
+ 
     property var inkData: ({batches:0, total_g:0, items:[]})
-
+ 
     // ── Sub-tab navigation ──
     property int activeSection: 0   // 0=today, 1=byDate, 2=ink
-
+ 
     // ── API ──
     function apiGet(path, callback) {
         var xhr = new XMLHttpRequest()
@@ -56,7 +56,7 @@ Item {
         xhr.open("GET", apiBase + path)
         xhr.send()
     }
-
+ 
     function convertDateFormat(val) {
         if (!val) return ""
         var cleaned = val.trim().replace(/\s+/g, "")
@@ -71,7 +71,7 @@ Item {
         }
         return ""
     }
-
+ 
     function loadToday() {
         apiGet("/logs/today", function(d) {
             todayData = d
@@ -104,7 +104,7 @@ Item {
         if (code) url += "&code=" + encodeURIComponent(code)
         apiGet(url, function(r) { inkData = r })
     }
-
+ 
     onVisibleChanged: if (visible) { loadToday(); loadInk() }
     Component.onCompleted: {
         var today = Qt.formatDate(new Date(), "dd/MM/yyyy")
@@ -112,16 +112,16 @@ Item {
         dateToInput.text = today
         inkDateInput.text = today
     }
-
+ 
     Rectangle { anchors.fill: parent; color: cBg }
-
+ 
     // ═══════════════════════════════════════════════════════════════════
     // HEADER
     // ═══════════════════════════════════════════════════════════════════
     Rectangle {
         id: prodHeader
         anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
-        height: 56; color: "#101030"
+        height: 56; color: cBg
         RowLayout {
             anchors.fill: parent; anchors.leftMargin: 16; anchors.rightMargin: 16; spacing: 10
             Text {
@@ -133,25 +133,25 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 110; Layout.preferredHeight: 36; radius: 8
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#164e3a" }
-                    GradientStop { position: 1.0; color: "#0d3326" }
+                    GradientStop { position: 0.0; color: "#166534" }
+                    GradientStop { position: 1.0; color: "#15803d" }
                 }
                 border.color: cOk; border.width: 1
-                Text { anchors.centerIn: parent; text: "🔄  Reload"; color: cOk; font.pixelSize: 15; font.bold: true }
+                Text { anchors.centerIn: parent; text: "🔄  Reload"; color: "#ffffff"; font.pixelSize: 15; font.bold: true }
                 MouseArea { anchors.fill: parent; onClicked: { loadToday(); loadDate(); loadInk() } }
             }
         }
         Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: cBorder }
     }
-
+ 
     // ═══════════════════════════════════════════════════════════════════
     // SUB-TAB BAR
     // ═══════════════════════════════════════════════════════════════════
     Rectangle {
         id: subTabBar
         anchors.top: prodHeader.bottom; anchors.left: parent.left; anchors.right: parent.right
-        height: 46; color: "#0d0d24"
-
+        height: 46; color: cBg
+ 
         Row {
             anchors.verticalCenter: parent.verticalCenter; anchors.left: parent.left; anchors.leftMargin: 12
             spacing: 6
@@ -163,7 +163,7 @@ Item {
                 ]
                 Rectangle {
                     width: stLbl.implicitWidth + 32; height: 34; radius: 8
-                    color: prodTab.activeSection === modelData.idx ? "#1a3a5c" : "transparent"
+                    color: prodTab.activeSection === modelData.idx ? "#e61b2050" : "transparent"
                     border.color: prodTab.activeSection === modelData.idx ? cCyan : Qt.rgba(1,1,1,0.12)
                     border.width: prodTab.activeSection === modelData.idx ? 2 : 1
                     Text {
@@ -292,7 +292,7 @@ Item {
                     Text { text: "Usage Code:"; color: cText; font.pixelSize: 16 }
                     Rectangle {
                         width: 180; height: 38; radius: 8
-                        color: "#111830"; border.color: cBorder; border.width: 1
+                        color: "#e61b2050"; border.color: cAccent; border.width: 1
                         TextInput {
                             id: inkCodeInput
                             anchors.fill: parent; anchors.margins: 8
@@ -308,13 +308,13 @@ Item {
                     }
                     ActionBtn { label: "View"; onClicked: loadInk() }
                 }
-
+ 
                 RowLayout {
                     Layout.fillWidth: true; spacing: 10
                     StatCard { Layout.fillWidth: true; num: inkData.batches;      lbl: "Ink Batches Count";  accent: cBlue }
                     StatCard { Layout.fillWidth: true; num: inkData.total_g || 0; lbl: "Total Weight (g)";   accent: cPurple }
                 }
-
+ 
                 DataTable {
                     Layout.fillWidth: true
                     headers: ["Time", "Operator", "Usage Code", "Ink Name",
@@ -348,10 +348,10 @@ Item {
                     }
                 }
             }
-
+ 
         } // contentCol
     } // Flickable
-
+ 
     // ── Helper JS ──
     function buildFillRows(items) {
         var r = []
@@ -364,30 +364,27 @@ Item {
         }
         return r
     }
-
+ 
     // ═══════════════════════════════════════════════════════════════════
     // INLINE COMPONENTS
     // ═══════════════════════════════════════════════════════════════════
-
+ 
     // ── Stat Card: big number + label ──
     component StatCard: Rectangle {
         property var num: 0
         property string lbl: ""
         property color accent: cText
         implicitHeight: 90; radius: 10
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: "#121832" }
-            GradientStop { position: 1.0; color: "#0a1020" }
-        }
-        border.color: Qt.rgba(accent.r, accent.g, accent.b, 0.35); border.width: 1
-
+        color: cCard
+        border.color: cBorder; border.width: 1
+ 
         // Accent glow line at top
         Rectangle {
             anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
             anchors.leftMargin: 12; anchors.rightMargin: 12
             height: 3; radius: 2; color: accent; opacity: 0.6
         }
-
+ 
         ColumnLayout {
             anchors.centerIn: parent; spacing: 4
             Text {
@@ -401,12 +398,12 @@ Item {
             }
         }
     }
-
+ 
     // ── Date input box ──
     component DateBox: Rectangle {
         property alias text: dateField.text
         width: 160; height: 38; radius: 8
-        color: "#111830"; border.color: cBorder; border.width: 1
+        color: "#e61b2050"; border.color: cAccent; border.width: 1
         TextInput {
             id: dateField
             anchors.fill: parent; anchors.margins: 8
@@ -421,34 +418,35 @@ Item {
             }
         }
     }
-
+ 
     // ── Action button ──
     component ActionBtn: Rectangle {
         property string label: "Xem"
         signal clicked()
         width: 80; height: 38; radius: 8
         gradient: Gradient {
-            GradientStop { position: 0.0; color: "#1a4a6a" }
-            GradientStop { position: 1.0; color: "#0e2d44" }
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: "#4dd2ff" }
+            GradientStop { position: 1.0; color: "#3b58ff" }
         }
-        border.color: cCyan; border.width: 1
-        Text { anchors.centerIn: parent; text: label; color: cCyan; font.pixelSize: 16; font.bold: true }
+        border.color: cCyan; border.width: 0
+        Text { anchors.centerIn: parent; text: label; color: "#ffffff"; font.pixelSize: 16; font.bold: true }
         MouseArea { anchors.fill: parent; onClicked: parent.clicked() }
     }
-
+ 
     // ── Data table with headers + rows ──
     component DataTable: Rectangle {
         id: tableRoot
         property var headers: []
         property var colWidths: [] // weights
         property var rows: []
-
+ 
         color: "transparent"
         border.color: cBorder
         border.width: 1
         radius: 6
         clip: true
-
+ 
         readonly property real totalWeight: {
             var sum = 0
             for (var i = 0; i < colWidths.length; i++) {
@@ -456,26 +454,26 @@ Item {
             }
             return sum > 0 ? sum : 1
         }
-
+ 
         function getCellWidth(index, totalWidth) {
             var w = colWidths.length > index ? colWidths[index] : 1
             return (totalWidth * w / totalWeight)
         }
-
+ 
         implicitHeight: tblCol.implicitHeight
-
+ 
         ColumnLayout {
             id: tblCol
             anchors.left: parent.left
             anchors.right: parent.right
             spacing: 0
-
+ 
             // Header Row
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: 40
-                color: "#141a38"
-
+                color: cCard
+ 
                 Row {
                     anchors.fill: parent
                     spacing: 0

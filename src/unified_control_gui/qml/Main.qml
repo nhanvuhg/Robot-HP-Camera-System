@@ -10,8 +10,17 @@ ApplicationWindow {
     width: 1920
     height: 1080
     title: "ROS2 - Unified Control System"
-    color: "#0c0c1d"
+    color: "#090d16"
     visibility: Window.FullScreen
+
+    Rectangle {
+        anchors.fill: parent
+        z: -100
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#0d1527" }
+            GradientStop { position: 1.0; color: "#090d16" }
+        }
+    }
 
     property bool scaleIssueWarning: false
 
@@ -99,8 +108,8 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         width: 620; height: 400
         background: Rectangle {
-            color: "#081e29"
-            border.color: "#f59e0b"
+            color: "#e61b2050"
+            border.color: "#fbbf24"
             border.width: 2
             radius: 10
         }
@@ -199,7 +208,7 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         width: 580; height: 320
         background: Rectangle {
-            color: "#081e29"
+            color: "#e61b2050"
             border.color: "#ef4444"
             border.width: 2
             radius: 10
@@ -279,7 +288,7 @@ ApplicationWindow {
         // Thu gọn: 660x430 → 520x340
         width: 520; height: 340
         background: Rectangle {
-            color: "#1f1a05"            // dark amber base
+            color: "#e61b2050"            // translucent dark indigo
             border.color: "#facc15"     // yellow-400
             border.width: 2
             radius: 10
@@ -429,7 +438,7 @@ ApplicationWindow {
         // Yellow warning theme — đồng bộ với scaleChoicePopup.
         width: 560; height: 320
         background: Rectangle {
-            color: "#1f1a05"
+            color: "#e61b2050"
             border.color: "#facc15"
             border.width: 2
             radius: 10

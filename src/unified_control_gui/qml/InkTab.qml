@@ -70,10 +70,13 @@ Item {
         }
     }
 
-// ── Theme (CartridgePage palette) ──
-    readonly property color cBg:       "#0c0c1d"
-    readonly property color cBorder:   "#134357"
-    readonly property color cText:     "#e8e8f0"
+    readonly property color cBg:       "transparent"
+    readonly property color cBorder:   "#4d00ffff"
+    readonly property color cText:     "#ffffff"
+    readonly property color cAccent:   "#00ffff"
+    readonly property color cPanel:    "#b30d1527"
+    readonly property color cCard:     "#b3090d16"
+    readonly property color cMuted:    "#6b7280"
 
     Rectangle { anchors.fill: parent; color: cBg }
 
@@ -100,7 +103,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: "LOADCELL & INK SYSTEM"
-                            font.pixelSize: 24; font.bold: true; color: "#6cf"
+                            font.pixelSize: 24; font.bold: true; color: cAccent
                         }
                     }
                 }
@@ -119,9 +122,9 @@ Item {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 600
                 Layout.fillHeight: true
-                color: "#081e29"
-                border.color: "#134357"
-                border.width: 2
+                color: cPanel
+                border.color: cBorder
+                border.width: 1
                 radius: 8
 
                 ColumnLayout {
@@ -129,9 +132,9 @@ Item {
                     anchors.margins: 20
                     spacing: 12
 
-                    Text { text: "LIVE WEIGHT DISPLAY"; color: "#5cf4f1"; font.pixelSize: 22; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: "LIVE WEIGHT DISPLAY"; color: cAccent; font.pixelSize: 22; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                     
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#134357" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: cBorder }
                     
                     RowLayout {
                         Layout.alignment: Qt.AlignHCenter
@@ -153,15 +156,15 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 110
-                        color: "#051a1a"
-                        border.color: "#00bcd4"
+                        color: "#0a2238"
+                        border.color: cAccent
                         border.width: 2
                         radius: 8
                         
                         Text {
                             anchors.centerIn: parent
                             text: scaleController.currentWeight.toFixed(1) + " g"
-                            color: "#fff"
+                            color: "#ffffff"
                             font.pixelSize: 64
                             font.bold: true
                         }
@@ -188,7 +191,7 @@ Item {
                         Item { Layout.fillWidth: true }
                         
                         Text { text: "Profile:"; color: "#94a3b8"; font.pixelSize: 16 }
-                        Text { text: scaleController.activeProfile === "" ? "NOT SELECTED" : scaleController.activeProfile; color: "#5cf4f1"; font.pixelSize: 18; font.bold: true }
+                        Text { text: scaleController.activeProfile === "" ? "NOT SELECTED" : scaleController.activeProfile; color: cAccent; font.pixelSize: 18; font.bold: true }
                     }
 
                     RowLayout {
@@ -198,33 +201,49 @@ Item {
                         spacing: 15
                         
                         Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
+                            id: tareBtn
+                            scale: down ? 0.95 : 1.0
+                            opacity: down ? 0.8 : 1.0
+                            Behavior on scale { NumberAnimation { duration: 50 } }
                             text: "TARE"
                             Layout.fillWidth: true; Layout.preferredHeight: 50; Layout.maximumHeight: 50
                             font.pixelSize: 16; font.bold: true
                             onClicked: scaleController.tare()
-                            background: Rectangle { radius: 6; color: "#00bcd4" }
+                            background: Rectangle {
+                                radius: 6
+                                gradient: Gradient {
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: tareBtn.down ? "#3faad0" : (tareBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                                    GradientStop { position: 1.0; color: tareBtn.down ? "#273ea6" : (tareBtn.hovered ? "#324ecf" : "#3b58ff") }
+                                }
+                            }
                         }
                         Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
+                            id: resetTareBtn
+                            scale: down ? 0.95 : 1.0
+                            opacity: down ? 0.8 : 1.0
+                            Behavior on scale { NumberAnimation { duration: 50 } }
                             text: "RESET TARE"
                             Layout.fillWidth: true; Layout.preferredHeight: 50; Layout.maximumHeight: 50
                             font.pixelSize: 16; font.bold: true
                             onClicked: scaleController.resetTare()
-                            background: Rectangle { radius: 6; color: "#f59e0b" }
+                            background: Rectangle {
+                                radius: 6
+                                gradient: Gradient {
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: resetTareBtn.down ? "#d97706" : (resetTareBtn.hovered ? "#fbbf24" : "#ffa726") }
+                                    GradientStop { position: 1.0; color: resetTareBtn.down ? "#b45309" : (resetTareBtn.hovered ? "#d97706" : "#f59e0b") }
+                                }
+                            }
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#134357" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: cBorder }
                     
                     // ── MOVED: CALIBRATE SCALE ──
                     RowLayout {
                         Layout.fillWidth: true
-                        Text { text: "CALIBRATE SCALE"; color: "#5cf4f1"; font.pixelSize: 18; font.bold: true }
+                        Text { text: "CALIBRATE SCALE"; color: cAccent; font.pixelSize: 18; font.bold: true }
                         Item { Layout.fillWidth: true }
                         Text { text: "Status: " + scaleController.calStatus; color: "#f59e0b"; font.pixelSize: 14; font.bold: true }
                     }
@@ -232,8 +251,8 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 70
-                        color: "#0a1a35"
-                        border.color: "#134357"
+                        color: cCard
+                        border.color: cBorder
                         radius: 6
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 10
@@ -244,17 +263,24 @@ Item {
                             Item { Layout.fillWidth: true }
                             Button {
                                 id: setZeroBtn
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
+                                scale: down ? 0.95 : 1.0
+                                opacity: down ? 0.8 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 50 } }
                                 text: "SET ZERO"
                                 Layout.preferredWidth: 120; Layout.preferredHeight: 35
                                 font.pixelSize: 14; font.bold: true
                                 onClicked: scaleController.startCalibration()
-                                background: Rectangle { radius: 4; color: "#00bcd4" }
+                                background: Rectangle {
+                                    radius: 4
+                                    gradient: Gradient {
+                                        orientation: Gradient.Horizontal
+                                        GradientStop { position: 0.0; color: setZeroBtn.down ? "#3faad0" : (setZeroBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                                        GradientStop { position: 1.0; color: setZeroBtn.down ? "#273ea6" : (setZeroBtn.hovered ? "#324ecf" : "#3b58ff") }
+                                    }
+                                }
                                 contentItem: Text {
                                     text: setZeroBtn.text; font: setZeroBtn.font
-                                    color: "#000000"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                    color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                 }
                                 enabled: scaleController.calStatus === "IDLE" || scaleController.calStatus === "ERROR"
                             }
@@ -266,8 +292,8 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 130
-                        color: "#0a1a35"
-                        border.color: calActive ? "#10b981" : "#134357"
+                        color: cCard
+                        border.color: calActive ? "#22c55e" : cBorder
                         radius: 6
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 10; spacing: 4
@@ -307,10 +333,10 @@ Item {
                                             width: 10; height: 10; radius: 5
                                             color: {
                                                 var n = index + 1;
-                                                if (scaleController.calStatus === "DONE") return "#10b981";
-                                                if (scaleController.calStatus === "CONTINUE_CAL_2/5" && n <= 1) return "#10b981";
-                                                if (scaleController.calStatus === "CONTINUE_CAL_3/5" && n <= 2) return "#10b981";
-                                                if (scaleController.calStatus === "CONTINUE_CAL_4/5" && n <= 3) return "#10b981";
+                                                if (scaleController.calStatus === "DONE") return "#22c55e";
+                                                if (scaleController.calStatus === "CONTINUE_CAL_2/5" && n <= 1) return "#22c55e";
+                                                if (scaleController.calStatus === "CONTINUE_CAL_3/5" && n <= 2) return "#22c55e";
+                                                if (scaleController.calStatus === "CONTINUE_CAL_4/5" && n <= 3) return "#22c55e";
                                                 var activeIndex = 0;
                                                 var s = scaleController.calStatus;
                                                 if (s === "WAITING_WEIGHT") activeIndex = 1;
@@ -338,7 +364,7 @@ Item {
                                     text: scaleController.lastKnownCalWeight.toString()
                                     enabled: calActive
                                     readOnly: true
-                                    background: Rectangle { color: "#1e293b"; radius: 6; border.color: "#38bdf8"; border.width: 2 }
+                                    background: Rectangle { color: "#e61b2050"; radius: 6; border.color: cAccent; border.width: 1 }
                                     MouseArea {
                                         anchors.fill: parent
                                         onClicked: {
@@ -350,9 +376,9 @@ Item {
                                 }
                                 Button {
                                     id: applyStep2Btn
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
+                                    scale: down ? 0.95 : 1.0
+                                    opacity: down ? 0.8 : 1.0
+                                    Behavior on scale { NumberAnimation { duration: 50 } }
                                     text: scaleController.calStatus === "CONTINUE_CAL_4/5" ? "FINISH" : "APPLY"
                                     Layout.preferredWidth: 120; Layout.preferredHeight: 45
                                     font.pixelSize: 18; font.bold: true
@@ -362,11 +388,15 @@ Item {
                                     }
                                     background: Rectangle {
                                         radius: 6
-                                        color: calActive ? (scaleController.calStatus === "CONTINUE_CAL_4/5" ? "#8b5cf6" : "#00bcd4") : "#475569"
+                                        gradient: Gradient {
+                                            orientation: Gradient.Horizontal
+                                            GradientStop { position: 0.0; color: calActive ? (applyStep2Btn.down ? "#3faad0" : (applyStep2Btn.hovered ? "#4dd2ff" : "#54d3ff")) : "#475569" }
+                                            GradientStop { position: 1.0; color: calActive ? (applyStep2Btn.down ? "#273ea6" : (applyStep2Btn.hovered ? "#324ecf" : "#3b58ff")) : "#475569" }
+                                        }
                                     }
                                     contentItem: Text {
                                         text: applyStep2Btn.text; font: applyStep2Btn.font
-                                        color: "#000000"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                        color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                     }
                                     enabled: calActive
                                 }
@@ -374,56 +404,56 @@ Item {
                         }
                     }
                     Item { Layout.fillHeight: true } // SPACER TO PUSH BATCH DOWN
-
-                    Rectangle { Layout.fillWidth: true; height: 2; color: "#134357" }
-
-                    Text { text: "PRODUCTION RESULTS"; color: "#5cf4f1"; font.pixelSize: 18; font.bold: true; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
-
+ 
+                    Rectangle { Layout.fillWidth: true; height: 2; color: cBorder }
+ 
+                    Text { text: "PRODUCTION RESULTS"; color: cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
+ 
                     // ── STAT CARDS ROW ──
                     RowLayout {
                         Layout.fillWidth: true; spacing: 8
                         // TOTAL card
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 100; radius: 8
-                            color: "#0a1a2e"; border.color: "#38bdf8"; border.width: 2
+                            color: cCard; border.color: cAccent; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
                                 Text { text: "TOTAL"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: scaleController.totalBatch.toString(); color: "#fff"; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#64748b"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: scaleController.totalBatch.toString(); color: "#ffffff"; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: "batch"; color: "#b0c2ff"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // PASS card
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 100; radius: 8
-                            color: "#0a2a1a"; border.color: "#10b981"; border.width: 2
+                            color: Qt.rgba(0.13, 0.77, 0.37, 0.15); border.color: "#22c55e"; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
                                 Text { text: "✓ PASS"; color: "#6ee7b7"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: scaleController.passBatch.toString(); color: "#10b981"; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#064e3b"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: scaleController.passBatch.toString(); color: "#22c55e"; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: "batch"; color: "#166534"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // FAIL card
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 100; radius: 8
-                            color: "#2a0a0a"; border.color: "#ef4444"; border.width: 2
+                            color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: "#ef4444"; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
                                 Text { text: "✗ FAIL"; color: "#fca5a5"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: scaleController.failBatch.toString(); color: "#ef4444"; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#7f1d1d"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: "batch"; color: "#991b1b"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                     }
-
+ 
                     // ── FAIL STREAK + RESET ──
                     RowLayout {
                         Layout.fillWidth: true; spacing: 8
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 48; radius: 6
-                            color: scaleController.consecFails >= 3 ? "#2a0a0a" : "#0d1117"
-                            border.color: scaleController.consecFails >= 3 ? "#ef4444" : "#2a3a4a"; border.width: 1
+                            color: scaleController.consecFails >= 3 ? Qt.rgba(0.94, 0.27, 0.27, 0.15) : cCard
+                            border.color: scaleController.consecFails >= 3 ? "#ef4444" : cBorder; border.width: 1
                             RowLayout {
                                 anchors.centerIn: parent; spacing: 8
                                 Text { text: "⚠ CONSECUTIVE FAILS:"; color: "#94a3b8"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
@@ -431,17 +461,25 @@ Item {
                             }
                         }
                         Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
+                            id: resetBatchBtn
+                            scale: down ? 0.95 : 1.0
+                            opacity: down ? 0.8 : 1.0
+                            Behavior on scale { NumberAnimation { duration: 50 } }
                             text: "RESET BATCH"
                             Layout.preferredWidth: 130; Layout.preferredHeight: 48
                             font.pixelSize: 16; font.bold: true
                             onClicked: scaleController.resetBatch()
-                            background: Rectangle { radius: 6; color: "#4f6cff" }
+                            background: Rectangle {
+                                radius: 6
+                                gradient: Gradient {
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: resetBatchBtn.down ? "#3faad0" : (resetBatchBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                                    GradientStop { position: 1.0; color: resetBatchBtn.down ? "#273ea6" : (resetBatchBtn.hovered ? "#324ecf" : "#3b58ff") }
+                                }
+                            }
                             contentItem: Text {
                                 text: parent.text; font: parent.font
-                                color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                             }
                         }
                     }
@@ -453,9 +491,9 @@ Item {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 600
                 Layout.fillHeight: true
-                color: "#081e29" // Used #081e29 to mimic page header
-                border.color: "#134357"
-                border.width: 2
+                color: cPanel
+                border.color: cBorder
+                border.width: 1
                 radius: 8
 
                 ColumnLayout {
@@ -479,7 +517,7 @@ Item {
                             Text { text: "SELECT INK PROFILE"; color: "#5cf4f1"; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
-                                color: "#0d1117"; border.color: "#f59e0b"; border.width: 1
+                                color: "#e61b2050"; border.color: cAccent; border.width: 1
                                 ComboBox {
                                     id: inkSelector
                                     onCurrentIndexChanged: {
@@ -492,27 +530,27 @@ Item {
                                     textRole: "name"
                                     font.pixelSize: 14; font.bold: true
                                     background: Rectangle { color: "transparent" }
-                                    contentItem: Text { text: inkSelector.currentIndex >= 0 ? inkSelector.displayText : "-- Select Ink --"; font: inkSelector.font; color: "#f59e0b"; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
+                                    contentItem: Text { text: inkSelector.currentIndex >= 0 ? inkSelector.displayText : "-- Select Ink --"; font: inkSelector.font; color: cAccent; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
                                     popup: Popup {
                                         y: inkSelector.height; width: inkSelector.width; implicitHeight: contentItem.implicitHeight + 36; padding: 0
-                                        background: Rectangle { color: "#0d1117"; border.color: "#f59e0b"; border.width: 1; radius: 4 }
+                                        background: Rectangle { color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4 }
                                         contentItem: Column {
                                             width: parent.width
                                             // Table Header
                                             Rectangle {
-                                                width: parent.width; height: 30; color: "#1a2a3a"
+                                                width: parent.width; height: 30; color: cCard
                                                 Row {
                                                     anchors.fill: parent; spacing: 0
-                                                    Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: "#5cf4f1"; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: "#2a3a4a" }
-                                                    Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "INK NAME"; color: "#5cf4f1"; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: "#2a3a4a" }
-                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: "#5cf4f1"; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: "#2a3a4a" }
+                                                    Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                    Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "INK NAME"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
                                                     Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: "#ef4444"; font.pixelSize: 11; font.bold: true } }
                                                 }
                                             }
-                                            Rectangle { width: parent.width; height: 2; color: "#f59e0b" }
+                                            Rectangle { width: parent.width; height: 2; color: cAccent }
                                             // Table Rows
                                             ListView {
                                                 width: parent.width; implicitHeight: contentHeight; clip: true
@@ -526,12 +564,12 @@ Item {
                                             anchors.fill: parent
                                             Row {
                                                 anchors.fill: parent; spacing: 0
-                                                Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: (index+1).toString(); color: inkSelector.highlightedIndex === index ? "#000" : "#94a3b8"; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
-                                                Rectangle { width: 1; height: parent.height; color: "#1a2a3a" }
-                                                Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.name; color: inkSelector.highlightedIndex === index ? "#000" : "#f59e0b"; font.pixelSize: 13; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
-                                                Rectangle { width: 1; height: parent.height; color: "#1a2a3a" }
-                                                Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: model.density.toFixed(2) + " g"; color: inkSelector.highlightedIndex === index ? "#000" : "#f59e0b"; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
-                                                Rectangle { width: 1; height: parent.height; color: "#1a2a3a" }
+                                                Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: (index+1).toString(); color: inkSelector.highlightedIndex === index ? "#1a205a" : "#94a3b8"; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
+                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.name; color: inkSelector.highlightedIndex === index ? "#1a205a" : cAccent; font.pixelSize: 13; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
+                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: model.density.toFixed(2) + " g"; color: inkSelector.highlightedIndex === index ? "#1a205a" : cAccent; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
+                                                Rectangle { width: 1; height: parent.height; color: cBorder }
                                                 Item {
                                                     width: parent.width * 0.12 - 1; height: parent.height
                                                     Rectangle {
@@ -543,9 +581,9 @@ Item {
                                                     }
                                                 }
                                             }
-                                            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: "#1a2a3a" }
+                                            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: cBorder }
                                         }
-                                        background: Rectangle { color: inkSelector.highlightedIndex === index ? "#f59e0b" : "#0d1117" }
+                                        background: Rectangle { color: inkSelector.highlightedIndex === index ? cAccent : "#e61b2050" }
                                     }
                                 }
                             }
@@ -554,10 +592,10 @@ Item {
                         // Cột 2: Chọn Vỏ
                         ColumnLayout {
                             Layout.fillWidth: true
-                            Text { text: "SELECT CARTRIDGE TYPE"; color: "#5cf4f1"; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
+                            Text { text: "SELECT CARTRIDGE TYPE"; color: cAccent; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
-                                color: "#0d1117"; border.color: "#f59e0b"; border.width: 1
+                                color: "#e61b2050"; border.color: cAccent; border.width: 1
                                 ComboBox {
                                     id: cartSelector
                                     anchors.fill: parent; anchors.margins: 1
@@ -565,26 +603,26 @@ Item {
                                     textRole: "name"
                                     font.pixelSize: 14; font.bold: true
                                     background: Rectangle { color: "transparent" }
-                                    contentItem: Text { text: cartSelector.currentIndex >= 0 ? cartSelector.displayText : "-- Select Cartridge --"; font: cartSelector.font; color: "#f59e0b"; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
+                                    contentItem: Text { text: cartSelector.currentIndex >= 0 ? cartSelector.displayText : "-- Select Cartridge --"; font: cartSelector.font; color: cAccent; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
                                     popup: Popup {
                                         y: cartSelector.height; width: cartSelector.width; implicitHeight: contentItem.implicitHeight + 36; padding: 0
-                                        background: Rectangle { color: "#0d1117"; border.color: "#f59e0b"; border.width: 1; radius: 4 }
+                                        background: Rectangle { color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4 }
                                         contentItem: Column {
                                             width: parent.width
                                             Rectangle {
-                                                width: parent.width; height: 30; color: "#1a2a3a"
+                                                width: parent.width; height: 30; color: cCard
                                                 Row {
                                                     anchors.fill: parent; spacing: 0
-                                                    Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: "#5cf4f1"; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: "#2a3a4a" }
-                                                    Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART NAME"; color: "#5cf4f1"; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: "#2a3a4a" }
-                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: "#5cf4f1"; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: "#2a3a4a" }
+                                                    Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                    Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART NAME"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
                                                     Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: "#ef4444"; font.pixelSize: 11; font.bold: true } }
                                                 }
                                             }
-                                            Rectangle { width: parent.width; height: 2; color: "#f59e0b" }
+                                            Rectangle { width: parent.width; height: 2; color: cAccent }
                                             ListView {
                                                 width: parent.width; implicitHeight: contentHeight; clip: true
                                                 model: cartSelector.delegateModel
@@ -597,12 +635,12 @@ Item {
                                             anchors.fill: parent
                                             Row {
                                                 anchors.fill: parent; spacing: 0
-                                                Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: (index+1).toString(); color: cartSelector.highlightedIndex === index ? "#000" : "#94a3b8"; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
-                                                Rectangle { width: 1; height: parent.height; color: "#1a2a3a" }
-                                                Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.name; color: cartSelector.highlightedIndex === index ? "#000" : "#f59e0b"; font.pixelSize: 13; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
-                                                Rectangle { width: 1; height: parent.height; color: "#1a2a3a" }
-                                                Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: model.density.toFixed(2) + " g"; color: cartSelector.highlightedIndex === index ? "#000" : "#f59e0b"; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
-                                                Rectangle { width: 1; height: parent.height; color: "#1a2a3a" }
+                                                Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: (index+1).toString(); color: cartSelector.highlightedIndex === index ? "#1a205a" : "#94a3b8"; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
+                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.name; color: cartSelector.highlightedIndex === index ? "#1a205a" : cAccent; font.pixelSize: 13; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
+                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: model.density.toFixed(2) + " g"; color: cartSelector.highlightedIndex === index ? "#1a205a" : cAccent; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
+                                                Rectangle { width: 1; height: parent.height; color: cBorder }
                                                 Item {
                                                     width: parent.width * 0.12 - 1; height: parent.height
                                                     Rectangle {
@@ -614,9 +652,9 @@ Item {
                                                     }
                                                 }
                                             }
-                                            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: "#1a2a3a" }
+                                            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: cBorder }
                                         }
-                                        background: Rectangle { color: cartSelector.highlightedIndex === index ? "#f59e0b" : "#0d1117" }
+                                        background: Rectangle { color: cartSelector.highlightedIndex === index ? cAccent : "#e61b2050" }
                                     }
                                 }
                             }
@@ -627,51 +665,51 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 250
-                        color: "#0a0a18"; border.color: "#38bdf8"; border.width: 1; radius: 6
+                        color: cCard; border.color: cBorder; border.width: 1; radius: 6
                         
                         GridLayout {
                             anchors.fill: parent; anchors.margins: 15
                             columns: 3; rowSpacing: 15; columnSpacing: 30
-
+ 
                             // Row 1
                             RowLayout {
                                 Text { text: "INK NAME:"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true }
-                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).name : "--"; color: "#f59e0b"; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
+                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
                                 Text { text: "DENSITY:"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true }
-                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).density.toFixed(2) + " g" : "--"; color: "#f59e0b"; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
+                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).density.toFixed(2) + " g" : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
-                                Text { text: "RELATIVE ERROR (g):"; color: "#5cf4f1"; font.pixelSize: 14; font.bold: true }
+                                Text { text: "RELATIVE ERROR (g):"; color: cAccent; font.pixelSize: 14; font.bold: true }
                                 Rectangle {
-                                    width: 70; height: 35; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 1; radius: 4
+                                    width: 70; height: 35; color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4
                                     TextInput {
                                         id: relativeErrorInput
-                                        anchors.fill: parent; anchors.margins: 2; color: "#f59e0b"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.family: "monospace"
+                                        anchors.fill: parent; anchors.margins: 2; color: cAccent; font.pixelSize: 16; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.family: "monospace"
                                         text: "1.0"
                                         readOnly: true
                                         MouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = relativeErrorInput; numpadPopup.currentValue = relativeErrorInput.text; numpadPopup.open() } }
                                     }
                                 }
                             }
-
+ 
                             // Row 2
                             RowLayout {
                                 Text { text: "CARTRIDGE TYPE:"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true }
-                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: "#f59e0b"; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
+                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
                                 Text { text: "DENSITY CARTRIDGE:"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true }
-                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).density.toFixed(2) + " g" : "--"; color: "#f59e0b"; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
+                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).density.toFixed(2) + " g" : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
-                                Text { text: "ML FILL (ml):"; color: "#5cf4f1"; font.pixelSize: 14; font.bold: true }
+                                Text { text: "ML FILL (ml):"; color: cAccent; font.pixelSize: 14; font.bold: true }
                                 Rectangle {
-                                    width: 70; height: 35; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 1; radius: 4
+                                    width: 70; height: 35; color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4
                                     TextInput {
                                         id: inkCapacityInput
-                                        anchors.fill: parent; anchors.margins: 2; color: "#f59e0b"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.family: "monospace"
+                                        anchors.fill: parent; anchors.margins: 2; color: cAccent; font.pixelSize: 16; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.family: "monospace"
                                         text: scaleController.inkCapacity.toString()
                                         readOnly: true
                                         MouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = inkCapacityInput; numpadPopup.currentValue = inkCapacityInput.text; numpadPopup.open() } }
@@ -692,39 +730,47 @@ Item {
                                     }
                                 }
                             }
-
-
+ 
+ 
                             // Row 3: Current ML Fill
                             RowLayout {
                                 Text { text: "CURRENT ML FILL:"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true }
                                 Rectangle {
-                                    width: 80; height: 35; color: "#0d1117"; border.color: "#38bdf8"; border.width: 1; radius: 4
+                                    width: 80; height: 35; color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4
                                     Text {
-                                        anchors.centerIn: parent; text: scaleController.currentMlFill.toFixed(1) + " ml"; color: "#10b981"; font.pixelSize: 16; font.bold: true; font.family: "monospace"
+                                        anchors.centerIn: parent; text: scaleController.currentMlFill.toFixed(1) + " ml"; color: "#22c55e"; font.pixelSize: 16; font.bold: true; font.family: "monospace"
                                     }
                                 }
                             }
                             RowLayout {
                                 Text { text: "ID INK NAME:"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true }
-                                Text { text: mapInkNameInput.text !== "" ? mapInkNameInput.text : "--"; color: "#f59e0b"; font.pixelSize: 16; font.bold: true; font.family: "monospace" }
+                                Text { text: mapInkNameInput.text !== "" ? mapInkNameInput.text : "--"; color: cAccent; font.pixelSize: 16; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
                                 Text { text: "LOT PI/CI:"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true }
-                                Text { text: (mapLotPiInput.text !== "" ? mapLotPiInput.text : "--") + " / " + (mapLotCiInput.text !== "" ? mapLotCiInput.text : "--"); color: "#f59e0b"; font.pixelSize: 16; font.bold: true; font.family: "monospace" }
+                                Text { text: (mapLotPiInput.text !== "" ? mapLotPiInput.text : "--") + " / " + (mapLotCiInput.text !== "" ? mapLotCiInput.text : "--"); color: cAccent; font.pixelSize: 16; font.bold: true; font.family: "monospace" }
                             }
-
+ 
                             // Row 4: CONFIRM BTN & CLEAR SELECTION
                             RowLayout {
                                 Layout.columnSpan: 3; Layout.fillWidth: true; spacing: 15
                                 Item { Layout.fillWidth: true }
                                 Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
+                                    id: applyTargetBtn
+                                    scale: down ? 0.95 : 1.0
+                                    opacity: down ? 0.8 : 1.0
+                                    Behavior on scale { NumberAnimation { duration: 50 } }
                                     text: "APPLY TARGET (RUN)"
                                     Layout.preferredHeight: 50; Layout.preferredWidth: 240
-                                    background: Rectangle { color: "#00bcd4"; radius: 5 }
-                                    contentItem: Text { text: parent.text; font.pixelSize: 16; font.bold: true; color: "#000"; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
+                                    background: Rectangle {
+                                        radius: 5
+                                        gradient: Gradient {
+                                            orientation: Gradient.Horizontal
+                                            GradientStop { position: 0.0; color: applyTargetBtn.down ? "#3faad0" : (applyTargetBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                                            GradientStop { position: 1.0; color: applyTargetBtn.down ? "#273ea6" : (applyTargetBtn.hovered ? "#324ecf" : "#3b58ff") }
+                                        }
+                                    }
+                                    contentItem: Text { text: parent.text; font.pixelSize: 16; font.bold: true; color: "#ffffff"; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
                                     onClicked: {
                                         if (inkSelector.currentIndex >= 0 && cartSelector.currentIndex >= 0) {
                                             var inkN = inkModel.get(inkSelector.currentIndex).name;
@@ -739,12 +785,12 @@ Item {
                                     }
                                 }
                                 Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
+                                    scale: down ? 0.95 : 1.0
+                                    opacity: down ? 0.8 : 1.0
+                                    Behavior on scale { NumberAnimation { duration: 50 } }
                                     text: "CLEAR SELECTION"
                                     Layout.preferredHeight: 50; Layout.preferredWidth: 160
-                                    background: Rectangle { color: "#3a0a0a"; border.color: "#ef4444"; border.width: 1; radius: 5 }
+                                    background: Rectangle { color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: "#ef4444"; border.width: 1; radius: 5 }
                                     contentItem: Text { text: parent.text; font.pixelSize: 13; font.bold: true; color: "#ef4444"; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
                                     onClicked: {
                                         inkSelector.currentIndex = -1;
@@ -754,46 +800,46 @@ Item {
                             }
                         }
                     }
-
+ 
                     // --- ROW 3: TARGET CALCULATIONS ---
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 15
                         
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: "#051a1a"; border.color: "#134357"; border.width: 1; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cBorder; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
                                 Text { text: "TOTAL BATCH (g)"; color: "#94a3b8"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: scaleController.totalBatchWeight.toFixed(2); color: "#3b82f6"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: scaleController.totalBatchWeight.toFixed(2); color: cAccent; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: "#051a1a"; border.color: "#ef4444"; border.width: 1; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: "#ef4444"; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
                                 Text { text: "MIN WEIGHT (g)"; color: "#94a3b8"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: scaleController.minWeight.toFixed(2); color: "#10b981"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: scaleController.minWeight.toFixed(2); color: "#22c55e"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: "#051a1a"; border.color: "#10b981"; border.width: 1; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: "#22c55e"; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
                                 Text { text: "MAX WEIGHT (g)"; color: "#94a3b8"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                 Text { text: scaleController.maxWeight.toFixed(2); color: "#ef4444"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
                     }
-
+ 
                     // --- ROW 4: CREATE PROFILE ---
-                    Rectangle { Layout.fillWidth: true; height: 1; color: "#2a3a4a"; opacity: 0.5 }
-                    Text { text: "CREATE NEW PROFILE"; color: "#5cf4f1"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
-
+                    Rectangle { Layout.fillWidth: true; height: 1; color: cBorder }
+                    Text { text: "CREATE NEW PROFILE"; color: cAccent; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
+ 
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 20
-
+ 
                         // Create Ink
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 280; color: "transparent"; border.color: "#134357"; border.width: 2; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 280; color: cCard; border.color: cBorder; border.width: 1; radius: 6
                             GridLayout {
                                 anchors.fill: parent; anchors.margins: 15; columns: 3; columnSpacing: 15; rowSpacing: 12
                                 
@@ -803,27 +849,27 @@ Item {
                                 
                                 // Row 1 inputs
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 40; Layout.columnSpan: 2; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
-                                    TextInput { id: newInkName; anchors.fill: parent; anchors.margins: 4; color: "#fff"; font.pixelSize: 18; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true }
+                                    Layout.fillWidth: true; Layout.preferredHeight: 40; Layout.columnSpan: 2; color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4
+                                    TextInput { id: newInkName; anchors.fill: parent; anchors.margins: 4; color: "#ffffff"; font.pixelSize: 18; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true }
                                     Text { anchors.centerIn: parent; text: "--Type Ink Name--"; color: "#475569"; font.pixelSize: 15; font.italic: true; visible: newInkName.text.length === 0 && !newInkName.activeFocus }
                                 }
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
-                                    TextInput { id: newInkDensity; anchors.fill: parent; anchors.margins: 4; color: "#f59e0b"; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = newInkDensity; numpadPopup.currentValue = newInkDensity.text; numpadPopup.open() } } }
+                                    Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4
+                                    TextInput { id: newInkDensity; anchors.fill: parent; anchors.margins: 4; color: cAccent; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = newInkDensity; numpadPopup.currentValue = newInkDensity.text; numpadPopup.open() } } }
                                 }
-
+ 
                                 // Row 2 labels (Mapping)
                                 Text { text: "ID INK NAME"; color: "#94a3b8"; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.preferredWidth: 160 }
                                 Text { text: "LOT PI"; color: "#94a3b8"; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.preferredWidth: 200 }
                                 Text { text: "LOT CI"; color: "#94a3b8"; font.pixelSize: 13; font.bold: true; Layout.fillWidth: false; Layout.preferredWidth: 110 }
-
+ 
                                 // Row 2 inputs (Mapping)
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredWidth: 160; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
+                                    Layout.fillWidth: true; Layout.preferredWidth: 160; Layout.preferredHeight: 40; color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4
                                     TextInput {
                                         id: mapInkNameInput
                                         anchors.fill: parent; anchors.margins: 4
-                                        color: "#fff"; font.pixelSize: 18; font.bold: true
+                                        color: "#ffffff"; font.pixelSize: 18; font.bold: true
                                         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                         clip: true
                                     }
@@ -835,11 +881,11 @@ Item {
                                     }
                                 }
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredWidth: 200; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
+                                    Layout.fillWidth: true; Layout.preferredWidth: 200; Layout.preferredHeight: 40; color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4
                                     TextInput {
                                         id: mapLotPiInput
                                         anchors.fill: parent; anchors.margins: 4
-                                        color: "#fff"; font.pixelSize: 18; font.bold: true
+                                        color: "#ffffff"; font.pixelSize: 18; font.bold: true
                                         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                         clip: true
                                     }
@@ -851,11 +897,11 @@ Item {
                                     }
                                 }
                                 Rectangle {
-                                    Layout.fillWidth: false; Layout.preferredWidth: 110; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
+                                    Layout.fillWidth: false; Layout.preferredWidth: 110; Layout.preferredHeight: 40; color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4
                                     TextInput {
                                         id: mapLotCiInput
                                         anchors.fill: parent; anchors.margins: 4
-                                        color: "#fff"; font.pixelSize: 18; font.bold: true
+                                        color: "#ffffff"; font.pixelSize: 18; font.bold: true
                                         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                         clip: true
                                     }
@@ -866,18 +912,26 @@ Item {
                                         visible: mapLotCiInput.text.length === 0 && !mapLotCiInput.activeFocus
                                     }
                                 }
-
+ 
                                 // Row 3 Buttons: Save Profile & Apply Batch Info
                                 RowLayout {
                                     Layout.fillWidth: true; Layout.columnSpan: 3; spacing: 15
                                     Button {
+                                        id: saveInkBtn
                                         scale: down ? 0.95 : 1.0
                                         opacity: down ? 0.8 : 1.0
                                         Behavior on scale { NumberAnimation { duration: 50 } }
                                         text: "SAVE INK PROFILE"
                                         Layout.preferredHeight: 45; Layout.fillWidth: true
-                                        background: Rectangle { color: "#051a1a"; border.color: "#5cf4f1"; border.width: 2; radius: 6 }
-                                        contentItem: Text { text: parent.text; color: "#5cf4f1"; font.pixelSize: 15; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
+                                        background: Rectangle {
+                                            radius: 6
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop { position: 0.0; color: saveInkBtn.down ? "#3faad0" : (saveInkBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                                                GradientStop { position: 1.0; color: saveInkBtn.down ? "#273ea6" : (saveInkBtn.hovered ? "#324ecf" : "#3b58ff") }
+                                            }
+                                        }
+                                        contentItem: Text { text: parent.text; color: "#ffffff"; font.pixelSize: 15; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
                                         onClicked: {
                                             var d = parseFloat(newInkDensity.text.replace(",", "."));
                                             if (d > 0 && newInkName.text.trim() !== "") {
@@ -887,13 +941,21 @@ Item {
                                         }
                                     }
                                     Button {
+                                        id: applyBatchBtn
                                         scale: down ? 0.95 : 1.0
                                         opacity: down ? 0.8 : 1.0
                                         Behavior on scale { NumberAnimation { duration: 50 } }
                                         text: "APPLY BATCH INFO"
                                         Layout.preferredHeight: 45; Layout.fillWidth: true
-                                        background: Rectangle { color: "#f59e0b"; radius: 6 }
-                                        contentItem: Text { text: parent.text; color: "#000"; font.pixelSize: 15; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
+                                        background: Rectangle {
+                                            radius: 6
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop { position: 0.0; color: applyBatchBtn.down ? "#3faad0" : (applyBatchBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                                                GradientStop { position: 1.0; color: applyBatchBtn.down ? "#273ea6" : (applyBatchBtn.hovered ? "#324ecf" : "#3b58ff") }
+                                            }
+                                        }
+                                        contentItem: Text { text: parent.text; color: "#ffffff"; font.pixelSize: 15; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
                                         onClicked: {
                                             var payload = {
                                                 "action": "set_fields",
@@ -908,34 +970,43 @@ Item {
                                 }
                             }
                         }
-
+ 
                         // Create Cart
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 280; color: "transparent"; border.color: "#134357"; border.width: 2; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 280; color: cCard; border.color: cBorder; border.width: 1; radius: 6
                             GridLayout {
                                 anchors.fill: parent; anchors.margins: 15; columns: 2; columnSpacing: 15; rowSpacing: 15
                                 Text { text: "CART NAME"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: "DENSITY (g)"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                                 
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
-                                    TextInput { id: newCartName; anchors.fill: parent; anchors.margins: 4; color: "#fff"; font.pixelSize: 18; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true }
+                                    Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4
+                                    TextInput { id: newCartName; anchors.fill: parent; anchors.margins: 4; color: "#ffffff"; font.pixelSize: 18; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true }
                                     Text { anchors.centerIn: parent; text: "--Type Cart Name--"; color: "#475569"; font.pixelSize: 15; font.italic: true; visible: newCartName.text.length === 0 && !newCartName.activeFocus }
                                 }
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
-                                    TextInput { id: newCartDensity; anchors.fill: parent; anchors.margins: 4; color: "#f59e0b"; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = newCartDensity; numpadPopup.currentValue = newCartDensity.text; numpadPopup.open() } } }
+                                    Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4
+                                    TextInput { id: newCartDensity; anchors.fill: parent; anchors.margins: 4; color: cAccent; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = newCartDensity; numpadPopup.currentValue = newCartDensity.text; numpadPopup.open() } } }
                                 }
                                 
                                 Item { Layout.fillHeight: true; Layout.columnSpan: 2 }
                                 
                                 Button {
+                                    id: saveCartBtn
                                     scale: down ? 0.95 : 1.0
                                     opacity: down ? 0.8 : 1.0
                                     Behavior on scale { NumberAnimation { duration: 50 } }
                                     text: "SAVE CART PROFILE"
-                                    Layout.preferredHeight: 45; Layout.fillWidth: true; Layout.columnSpan: 2; background: Rectangle { color: "#051a1a"; border.color: "#5cf4f1"; border.width: 2; radius: 6 }
-                                    contentItem: Text { text: parent.text; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
+                                    Layout.preferredHeight: 45; Layout.fillWidth: true; Layout.columnSpan: 2
+                                    background: Rectangle {
+                                        radius: 6
+                                        gradient: Gradient {
+                                            orientation: Gradient.Horizontal
+                                            GradientStop { position: 0.0; color: saveCartBtn.down ? "#3faad0" : (saveCartBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                                            GradientStop { position: 1.0; color: saveCartBtn.down ? "#273ea6" : (saveCartBtn.hovered ? "#324ecf" : "#3b58ff") }
+                                        }
+                                    }
+                                    contentItem: Text { text: parent.text; color: "#ffffff"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
                                     onClicked: {
                                         var d = parseFloat(newCartDensity.text.replace(",", "."));
                                         if (d > 0 && newCartName.text.trim() !== "") {
@@ -960,8 +1031,8 @@ Item {
         anchors.topMargin: 6
         width: Math.min(parent.width - 40, 720); height: 38
         radius: 6
-        color: "#f59e0b"
-        border.color: "#92400e"; border.width: 1
+        color: cAccent
+        border.color: cAccent; border.width: 1
         z: 200
         RowLayout {
             anchors.fill: parent
@@ -974,12 +1045,13 @@ Item {
                 elide: Text.ElideRight
             }
             Button {
+                id: driftTareBtn
                 text: "TARE"
                 Layout.preferredWidth: 80; Layout.preferredHeight: 28
                 font.pixelSize: 13; font.bold: true
-                background: Rectangle { color: "#ffffff"; radius: 4 }
+                background: Rectangle { color: "#e61b2050"; border.color: cAccent; border.width: 1; radius: 4 }
                 contentItem: Text {
-                    text: parent.text; color: "#f59e0b"
+                    text: parent.text; color: cAccent
                     font: parent.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -988,7 +1060,7 @@ Item {
             }
         }
     }
-
+ 
     // Popups
     Popup {
         id: overloadPopup
@@ -997,26 +1069,34 @@ Item {
         width: 500; height: 200
         modal: true
         closePolicy: Popup.NoAutoClose
-        background: Rectangle { color: "#ef4444"; radius: 10 }
+        background: Rectangle { color: cCard; border.color: "#ef4444"; border.width: 2; radius: 10 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20
-            Text { text: "WARNING: OVERLOAD!"; color: "#fff"; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-            Text { text: "Scale load exceeds maximum limit. Check immediately."; color: "#fff"; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
+            Text { text: "WARNING: OVERLOAD!"; color: "#ef4444"; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+            Text { text: "Scale load exceeds maximum limit. Check immediately."; color: "#94a3b8"; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
             Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
+                id: ackOverloadBtn
+                scale: down ? 0.95 : 1.0
+                opacity: down ? 0.8 : 1.0
+                Behavior on scale { NumberAnimation { duration: 50 } }
                 text: "ACKNOWLEDGE"
                 Layout.alignment: Qt.AlignHCenter
                 font.pixelSize: 18; font.bold: true
                 onClicked: { scaleController.ackOverload(); overloadPopup.close() }
-                background: Rectangle { radius: 6; color: "#fff"; border.width: 0 }
-                contentItem: Text { text: parent.text; color: "#ef4444"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                background: Rectangle {
+                    radius: 6
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: ackOverloadBtn.down ? "#ef4444" : (ackOverloadBtn.hovered ? "#f87171" : "#ef4444") }
+                        GradientStop { position: 1.0; color: ackOverloadBtn.down ? "#b91c1c" : (ackOverloadBtn.hovered ? "#dc2626" : "#b91c1c") }
+                    }
+                }
+                contentItem: Text { text: parent.text; color: "#ffffff"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
             }
         }
     }
-
+ 
     Popup {
         id: zeroDriftPopup
         parent: Overlay.overlay
@@ -1024,16 +1104,17 @@ Item {
         width: 500; height: 200
         modal: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        background: Rectangle { color: "#f59e0b"; radius: 10 }
+        background: Rectangle { color: cCard; border.color: cAccent; border.width: 2; radius: 10 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20
-            Text { text: "Zero Drift Warning"; color: "#fff"; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-            Text { text: "Loadcell zero drift detected. Re-tare recommended."; color: "#fff"; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
+            Text { text: "Zero Drift Warning"; color: cAccent; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+            Text { text: "Loadcell zero drift detected. Re-tare recommended."; color: "#94a3b8"; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 20
                 Button {
+                    id: zeroDriftTareBtn
                     scale: down ? 0.95 : 1.0
                     opacity: down ? 0.8 : 1.0
                     Behavior on scale { NumberAnimation { duration: 50 } }
@@ -1042,8 +1123,15 @@ Item {
                     Layout.preferredHeight: 45
                     font.pixelSize: 18; font.bold: true
                     onClicked: { scaleController.tare(); zeroDriftPopup.close() }
-                    background: Rectangle { radius: 6; color: "#fff"; border.width: 0 }
-                    contentItem: Text { text: parent.text; color: "#f59e0b"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle {
+                        radius: 6
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: zeroDriftTareBtn.down ? "#3faad0" : (zeroDriftTareBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                            GradientStop { position: 1.0; color: zeroDriftTareBtn.down ? "#273ea6" : (zeroDriftTareBtn.hovered ? "#324ecf" : "#3b58ff") }
+                        }
+                    }
+                    contentItem: Text { text: parent.text; color: "#ffffff"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
                 Button {
                     scale: down ? 0.95 : 1.0
@@ -1054,19 +1142,19 @@ Item {
                     Layout.preferredHeight: 45
                     font.pixelSize: 18; font.bold: true
                     onClicked: { scaleController.dismissZeroDrift(); zeroDriftPopup.close() }
-                    background: Rectangle { radius: 6; color: "#ef4444"; border.width: 0 }
-                    contentItem: Text { text: parent.text; color: "#fff"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle { color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: "#ef4444"; border.width: 1; radius: 6 }
+                    contentItem: Text { text: parent.text; color: "#ef4444"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
             }
         }
     }
-
+ 
     Connections {
         target: scaleController
         function onOverloadAlarm() { overloadPopup.open() }
         function onZeroDriftAlarm() { zeroDriftPopup.open() }
     }
-
+ 
     // ══════════ VIRTUAL NUMERIC KEYPAD ══════════
     Popup {
         id: numpadPopup
@@ -1077,18 +1165,18 @@ Item {
         property string currentValue: "0.0"
         property bool isNewEntry: true
         onOpened: isNewEntry = true
-        background: Rectangle { color: "#0d1117"; radius: 12; border.color: "#5cf4f1"; border.width: 2 }
+        background: Rectangle { color: cCard; radius: 12; border.color: cAccent; border.width: 2 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 15; spacing: 8
-            Text { text: "ENTER VALUE (g)"; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+            Text { text: "ENTER VALUE (g)"; color: cAccent; font.pixelSize: 16; font.bold: true; Layout.alignment: Qt.AlignHCenter }
             Rectangle {
                 Layout.fillWidth: true; Layout.preferredHeight: 50; radius: 6
-                color: "#081e29"; border.color: "#f59e0b"; border.width: 2
+                color: "#e61b2050"; border.color: cAccent; border.width: 1
                 Text {
                     id: numpadDisplay
                     anchors.centerIn: parent
                     text: numpadPopup.currentValue
-                    color: "#f59e0b"; font.pixelSize: 28; font.bold: true; font.family: "monospace"
+                    color: cAccent; font.pixelSize: 28; font.bold: true; font.family: "monospace"
                 }
             }
             GridLayout {
@@ -1098,8 +1186,8 @@ Item {
                     model: ["7","8","9","4","5","6","1","2","3",".","0","⌫"]
                     Rectangle {
                         Layout.fillWidth: true; Layout.fillHeight: true; radius: 6
-                        color: numBtnMA.pressed ? "#134357" : "#0a2a3a"
-                        border.color: "#2a4a5a"; border.width: 1
+                        color: numBtnMA.pressed ? cAccent : "#e61b2050"
+                        border.color: cBorder; border.width: 1
                         scale: numBtnMA.pressed ? 0.95 : 1.0
                         Behavior on scale { NumberAnimation { duration: 50 } }
                         Text {
@@ -1143,19 +1231,20 @@ Item {
             RowLayout {
                 Layout.fillWidth: true; spacing: 10
                 Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
+                    scale: down ? 0.95 : 1.0
+                    opacity: down ? 0.8 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 50 } }
                     text: "CANCEL"; Layout.fillWidth: true; Layout.preferredHeight: 44
                     font.pixelSize: 14; font.bold: true
                     onClicked: numpadPopup.close()
-                    background: Rectangle { radius: 6; color: "#3a0a0a"; border.color: "#ef4444" }
+                    background: Rectangle { radius: 6; color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: "#ef4444" }
                     contentItem: Text { text: parent.text; font: parent.font; color: "#ef4444"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
                 Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
+                    id: numpadOkBtn
+                    scale: down ? 0.95 : 1.0
+                    opacity: down ? 0.8 : 1.0
+                    Behavior on scale { NumberAnimation { duration: 50 } }
                     text: "OK"; Layout.fillWidth: true; Layout.preferredHeight: 44
                     font.pixelSize: 14; font.bold: true
                     onClicked: {
@@ -1164,8 +1253,15 @@ Item {
                         }
                         numpadPopup.close();
                     }
-                    background: Rectangle { radius: 6; color: "#00bcd4" }
-                    contentItem: Text { text: parent.text; font: parent.font; color: "#000"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle {
+                        radius: 6
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: numpadOkBtn.down ? "#3faad0" : (numpadOkBtn.hovered ? "#4dd2ff" : "#54d3ff") }
+                            GradientStop { position: 1.0; color: numpadOkBtn.down ? "#273ea6" : (numpadOkBtn.hovered ? "#324ecf" : "#3b58ff") }
+                        }
+                    }
+                    contentItem: Text { text: parent.text; font: parent.font; color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
             }
         }

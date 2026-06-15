@@ -12,20 +12,20 @@ Item {
     id: tab
 
     // ---- Theme tokens (mirror CartridgePage palette) ----
-    readonly property color cBg:          "#0c0c1d"
-    readonly property color cPanel:       "#081e29"
-    readonly property color cPanel2:      "#0a2238"
-    readonly property color cBorder:      "#134357"
-    readonly property color cText:        "#e8e8f0"
-    readonly property color cMuted:       "#8888aa"
-    readonly property color cAccent:      "#4f6cff"
-    readonly property color cAccentSoft:  Qt.rgba(0.31, 0.42, 1.0, 0.18)
-    readonly property color cOk:          "#00e676"
-    readonly property color cOkBg:        Qt.rgba(0.0, 0.90, 0.46, 0.15)
+    readonly property color cBg:          "transparent"
+    readonly property color cPanel:       "#b30d1527"
+    readonly property color cPanel2:      "#b3090d16"
+    readonly property color cBorder:      "#4d00ffff"
+    readonly property color cText:        "#ffffff"
+    readonly property color cMuted:       "#6b7280"
+    readonly property color cAccent:      "#00ffff"
+    readonly property color cAccentSoft:  Qt.rgba(0.0, 1.0, 1.0, 0.15)
+    readonly property color cOk:          "#10b981"
+    readonly property color cOkBg:        Qt.rgba(0.06, 0.73, 0.51, 0.15)
     readonly property color cWarn:        "#ffa726"
     readonly property color cWarnBg:      Qt.rgba(1.0, 0.65, 0.15, 0.15)
-    readonly property color cBad:         "#ff5252"
-    readonly property color cBadBg:       Qt.rgba(1.0, 0.32, 0.32, 0.15)
+    readonly property color cBad:         "#ef4444"
+    readonly property color cBadBg:       Qt.rgba(0.94, 0.27, 0.27, 0.15)
     readonly property color cIdle:        "#526070"
     readonly property color cIdleBg:      Qt.rgba(0.32, 0.38, 0.44, 0.15)
 
@@ -305,7 +305,7 @@ Item {
         id: headerBar
         anchors { top: parent.top; left: parent.left; right: parent.right }
         height: 60
-        color: "#141428"
+        color: "transparent"
 
         RowLayout {
             anchors.fill: parent
