@@ -17,7 +17,8 @@ HpController::HpController(rclcpp::Node::SharedPtr node, QObject *parent)
     // String topics
     std::vector<std::string> str_topics = {
         "reconnect_cmd", "servo_command", "servo_jog", "pressure_thresholds_set",
-        "cr_parameters", "error_control", "base_pwm_recommend", "parameters_control"
+        "cr_parameters", "error_control", "base_pwm_recommend", "parameters_control",
+        "ink_batch_code"
     };
     for (const auto &topic : str_topics) {
         pub_strings_[topic] = node_->create_publisher<std_msgs::msg::String>(topic, qos);
@@ -201,6 +202,17 @@ HpController::HpController(rclcpp::Node::SharedPtr node, QObject *parent)
                 if (base_pwm_advice_ != val) {
                     base_pwm_advice_ = val;
                     emit basePwmAdviceChanged();
+                }
+            }, Qt::QueuedConnection);
+        });
+
+    sub_ink_status_ = node_->create_subscription<std_msgs::msg::String>(
+        "ink_status", qos_latched, [this](const std_msgs::msg::String::SharedPtr msg) {
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                QString val = QString::fromStdString(msg->data);
+                if (ink_status_ != val) {
+                    ink_status_ = val;
+                    emit inkStatusChanged();
                 }
             }, Qt::QueuedConnection);
         });

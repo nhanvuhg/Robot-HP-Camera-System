@@ -12,7 +12,7 @@ Item {
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
 
     readonly property color cPanel:       "#081e29"
-    readonly property color cPanel2:      "#051a1a"
+    readonly property color cPanel2:      "#0a2238"   // dark navy blue — match camera systems tone (was #051a1a teal-black)
     readonly property color cBorder:      "#134357"
     readonly property color cText:        "#e8e8f0"
     readonly property color cMuted:       "#8888aa"
@@ -463,7 +463,9 @@ Item {
                                 property bool aiMode: cameraPageRoot.ctrlMode === "camera_ai"
                                 property bool isReady: aiMode && (robotController.rowReady[index] === true)
                                 property bool isActive: robotController.selectedRow === rn
-                                property bool canSelect: !cameraPageRoot.rowLocked && cameraPageRoot.ctrlMode === "auto"
+                                // MANUAL cũng được pick row: sau STOP (soft_stop → MANUAL), operator
+                                // cần repick row trước khi PICK_INPUT thủ công. Chỉ AI mode tự chọn row.
+                                property bool canSelect: !cameraPageRoot.rowLocked && (cameraPageRoot.ctrlMode === "auto" || cameraPageRoot.ctrlMode === "manual")
                                 Layout.fillWidth: true; height: 32; radius: 5
                                 color: aiMode
                                        ? (isActive ? "#0a4020" : (isReady ? "#0d3320" : "#0d2538"))
@@ -512,7 +514,8 @@ Item {
                                 property bool aiMode: cameraPageRoot.ctrlMode === "camera_ai"
                                 property bool isReady: aiMode && (robotController.slotReady[index] === true)
                                 property bool isActive: robotController.selectedSlot === sn
-                                property bool canSelect: cameraPageRoot.ctrlMode === "auto"
+                                // Tương tự row picker: MANUAL cũng pick được sau STOP.
+                                property bool canSelect: cameraPageRoot.ctrlMode === "auto" || cameraPageRoot.ctrlMode === "manual"
                                 Layout.fillWidth: true; height: 32; radius: 5
                                 color: aiMode
                                        ? (isActive ? "#0a4020" : (isReady ? "#0d3320" : "#0d2538"))
@@ -733,14 +736,13 @@ Item {
         Layout.fillHeight: true
         implicitHeight: 50
         radius: 6
-        color:        cls === "ok"    ? cOkBg
-                    : cls === "high"  ? cWarnBg
+        // Default (no classification): dark navy blue match camera tone — chỉ đổi màu khi có warn/limit.
+        color:        cls === "high"  ? cWarnBg
                     : cls === "limit" ? cBadBg
-                    : Qt.rgba(0.01, 0.51, 0.78, 0.15)
-        border.color: cls === "ok"    ? cOk
-                    : cls === "high"  ? cWarn
+                    : cPanel2
+        border.color: cls === "high"  ? cWarn
                     : cls === "limit" ? cBad
-                    : "#0284c7"
+                    : cBorder
         border.width: 1
         RowLayout {
             anchors.fill: parent

@@ -15,6 +15,7 @@ class HpController : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString systemStatus READ systemStatus NOTIFY systemStatusChanged)
+    Q_PROPERTY(QString inkStatus READ inkStatus NOTIFY inkStatusChanged)
     Q_PROPERTY(QString dosingStatus READ dosingStatus NOTIFY dosingStatusChanged)
     Q_PROPERTY(QString fillStatus READ fillStatus NOTIFY fillStatusChanged)
     Q_PROPERTY(QString ballCycleTime READ ballCycleTime NOTIFY ballCycleTimeChanged)
@@ -43,6 +44,7 @@ public:
 
     // Getters
     QString systemStatus() const { return system_status_; }
+    QString inkStatus() const { return ink_status_; }
     QString dosingStatus() const { return dosing_status_; }
     QString fillStatus() const { return fill_status_; }
     QString ballCycleTime() const { return ball_cycle_time_; }
@@ -79,6 +81,7 @@ public slots:
 
 signals:
     void systemStatusChanged();
+    void inkStatusChanged();
     void dosingStatusChanged();
     void fillStatusChanged();
     void ballCycleTimeChanged();
@@ -129,6 +132,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_pressure_thresholds_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_error_status_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_base_pwm_advice_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_ink_status_;
     
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_pressure_s1_;
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_pressure_s2_;
@@ -154,6 +158,7 @@ private:
     QString pressure_thresholds_{""};
     QString error_status_{""};
     QString base_pwm_advice_{""};
+    QString ink_status_{""};
     double pressure_s1_{0.0};
     double pressure_s2_{0.0};
     double pressure_s3_{0.0};

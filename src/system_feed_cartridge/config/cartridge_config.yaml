@@ -13,11 +13,10 @@ servo_limits:
   1: 560.0
   2: 1050.0
   3: 400.0
-  4: 600.0
-  5: 600.0
+  4: 560.0
+  5: 1000.0
 homing_timeout: 120.0
 move_timeout: 80.0
-cylinder_timeout: 70.0
 modbus_timeout_ms: 3000
 fas_position_velocity: 0.05
 jog_velocity: 0.05
@@ -26,9 +25,10 @@ inx_home: 0
 inx_safe: -60.0
 inx_target2: 502.5
 inx_output_stack: -298.0
+# ── 2. STATE 1&2 — INY ────────────────────────────────────────────────────────
 iny_home: 0.0
 iny_safe_zone: 90.0
-iny_push_clearance_mm: 5.0
+
 target_scaninp1: 970.0
 target_scanoutp1: 990.0
 iny_scan_vel: 70.0
@@ -161,27 +161,25 @@ outy_output_zones:
   - 170.0
   - 205.0
 iny_target2: 87.0
-# ── 3. STATE 4 — OutX ────────────────────────────────────────────────────────
+# ── 3. STATE 4 — PLatform ────────────────────────────────────────────────────────
 servo3_home: 0.0
 servo3_target1: 10.0
 servo3_target2: 400
-servo3_push_position: 300.0
-servo3_jog_velocity: 50.0
 servo3_feed_velocity: 50.0
-# ── 4. STATE 4 — OutY ────────────────────────────────────────────────────────
+# ── 4. STATE 4 — OutX ────────────────────────────────────────────────────────
 outx_home: 0.0
-outx_target1: 100.0
-outx_target2: 400.0
-outx_target3: 20.0
+outx_target1: 100.0       # ──vị trí idle waitdone tray
+outx_target2: 400.0      # ──vị trí OutX để OutY hạ xuống KẸP khay tại feed   
+outx_target3: 20.0         # ──vị trí OutX để thả khay vào output stack
+# ── 4. STATE 4 — OutY ────────────────────────────────────────────────────────
 outy_home: 0.0
-outy_target1: 10.0
-outy_target2: 300.0
-outy_pick_pos: 100.0
-outy_safe_zone: 10.0
+outy_target1: 10.0    # [GIỮ] vị trí safe/raise (OutY về đây trước khi OutX chạy)
+outy_pick_pos: 100.0   # [ĐO] ⚠️ độ sâu hạ xuống kẹp khay — Cyl2 EXTEND ngay tại # vị trí này, đo sai = Cyl2 đóng nhầm vào khung
+outy_safe_zone: 30.0
 outy_search_velocity: 40.0
-outy_row_limit: 680.0
-outy_slow_vel: 120.0
-target_scanoutp2: 500.0
+
+outy_slow_vel: 20.0
+target_scanoutp2: 1000.0
 outy_scan_arm_mm: 50
 # ── S4 scan S20 (mirror iny_scan_valid_* của Pos1) ──
 # Vùng OutY hợp lệ để nhận S20 falling edge. Tune theo cơ khí thực tế khi lắp Pos2:
@@ -198,7 +196,7 @@ s4_check_servo3_safe: false
 iny_search_velocity: 30.0
 iny_slow_velocity: 20.0
 position_tolerance: 2.0
-outx_safe_position_threshold: 100.0
+
 
 
 

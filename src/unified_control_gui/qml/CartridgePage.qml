@@ -21,6 +21,11 @@
         id: root
         anchors.fill: parent
 
+        // Cho phép caller (vd stackView.push) chỉ định tab khởi tạo.
+        // 0=control, 1=config, 2=robot, 3=hp, 4=ink, 5=prod.
+        property int initialTabIndex: 0
+        Component.onCompleted: if (initialTabIndex !== 0) stack.currentIndex = initialTabIndex
+
         readonly property int headerH:  70
         readonly property int tabbarH:  44
         readonly property int gap:       4
@@ -193,7 +198,7 @@
                     }
                     ToolTip.visible: hovered
                     ToolTip.delay: 500
-                    ToolTip.text: "Tắt giao diện"
+                    ToolTip.text: "Close Interface"
                 }
                 Item { width: 4 }
             }
@@ -218,13 +223,13 @@
             contentItem: ColumnLayout {
                 spacing: 15
                 Text {
-                    text: "⚠️ CẢNH BÁO"
+                    text: "⚠️ WARNING"
                     color: root.cOrange
                     font.pixelSize: 18; font.bold: true
                     Layout.alignment: Qt.AlignHCenter
                 }
                 Text {
-                    text: "Hệ thống đang chờ khay cấp khay thành phẩm.\ Bạn đã cấp khay mới chưa?"
+                    text: "The system is waiting for the output tray.\nHave you placed a new tray?"
                     color: "white"
                     font.pixelSize: 14
                     horizontalAlignment: Text.AlignHCenter
@@ -235,7 +240,7 @@
                     Layout.alignment: Qt.AlignHCenter
                     spacing: 20
                     Button {
-                        text: "ĐÃ CẤP KHAY"
+                        text: "TRAY PLACED"
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 120; Layout.preferredHeight: 35
                         background: Rectangle { color: root.cOrange; radius: 5 }
@@ -246,7 +251,7 @@
                         }
                     }
                     Button {
-                        text: "CHỜ THÊM"
+                        text: "WAIT MORE"
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 100; Layout.preferredHeight: 35
                         background: Rectangle { color: "#134357"; radius: 5; border.color: "#2a3a4a"; border.width: 1 }
@@ -299,7 +304,7 @@
                         // notifyBanner.visible = true
                         // bannerTimer.restart()
 
-                        if (obj.title === "Da phat hien khay") {
+                        if (obj.title === "Da phat hien khay" || obj.title === "Tray detected") {
                             // outputWarningPopup.open()
                         }
                     } catch(e) {}
@@ -384,6 +389,8 @@
                         ListElement { t: "Technical System";  k: "config"  }
                         ListElement { t: "Robot Control";     k: "robot"   }
                         ListElement { t: "Fill HP Control";   k: "hp"      }
+                        ListElement { t: "Ink System";        k: "ink"     }
+                        ListElement { t: "Production Output"; k: "prod"    }
                     }
                     delegate: Rectangle {
                         height: root.tabbarH - 4; width: tabLbl.width + 52; y: 2; radius: 8
@@ -404,7 +411,7 @@
         StackLayout {
             id: stack
             anchors { top: tabbar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
-            currentIndex: 3
+            currentIndex: 0
 
             // ── PAGE 1: CONTROL DASHBOARD ────────────────────────
             Item {
@@ -495,7 +502,7 @@
                                                     if (m === "auto")   return "AUTO"
                                                     if (m === "manual") return "MANUAL"
                                                     if (m === "jog")    return "MAN_JOG"
-                                                    return "Chọn..."
+                                                    return "Select..."
                                                 }
                                                 color: {
                                                     var m = cartridgeController.currentMode
@@ -551,7 +558,7 @@
                                                 Column {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     Text { text: "AUTO"; color: root.cGreen; font.pixelSize: 15; font.bold: true }
-                                                    Text { text: "Tự động"; color: root.cDim; font.pixelSize: 11 }
+                                                    Text { text: "Automatic"; color: root.cDim; font.pixelSize: 11 }
                                                 }
                                             }
                                         }
@@ -577,7 +584,7 @@
                                                 Column {
                                                     anchors.verticalCenter: parent.verticalCenter
                                                     Text { text: "MANUAL"; color: "#5cf4f1"; font.pixelSize: 15; font.bold: true }
-                                                    Text { text: "Trực tiếp"; color: root.cDim; font.pixelSize: 11 }
+                                                    Text { text: "Direct"; color: root.cDim; font.pixelSize: 11 }
                                                 }
                                             }
                                         }
@@ -612,7 +619,23 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START";  bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.startSystem() }
+                                    CBtn {
+                                        Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1;
+                                        lbl: "START"; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen;
+                                        onClicked: {
+                                            mainWindow.checkInkAndRun(function() {
+                                                var inkMap = mainWindow.parseKvPipe(hpController.inkStatus);
+                                                var code = inkMap["CODE"] || "";
+                                                var lot_ci = inkMap["LOT_CI"] || "";
+                                                if (code.trim() !== "" && lot_ci.trim() !== "") {
+                                                    cartridgeController.startSystem();
+                                                } else {
+                                                    cartridgeController.startSystem();
+                                                    hpController.publishScreenControl("start_no_log");
+                                                }
+                                            });
+                                        }
+                                    }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; bg: "#0a332e"; bc: root.cGreen;  tc: root.cGreen;  onClicked: cartridgeController.resumeSystem() }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP";   bg: "#4d1a1a"; bc: root.cRed;    tc: root.cRed;    blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE";  bg: "#4d3a0a"; bc: root.cOrange; tc: root.cOrange; onClicked: cartridgeController.pauseSystem() }
@@ -752,11 +775,11 @@
 
                                 Repeater {
                                     model: ListModel {
-                                        ListElement { sid: 1; sname: "InX";     sdesc: "Trục X đầu vào" }
-                                        ListElement { sid: 2; sname: "InY";     sdesc: "Trục Y đầu vào" }
-                                        ListElement { sid: 3; sname: "PutTray"; sdesc: "Đẩy khay" }
-                                        ListElement { sid: 4; sname: "OutX";    sdesc: "Trục X đầu ra" }
-                                        ListElement { sid: 5; sname: "OutY";    sdesc: "Trục Y đầu ra" }
+                                        ListElement { sid: 1; sname: "InX";     sdesc: "Input X Axis" }
+                                        ListElement { sid: 2; sname: "InY";     sdesc: "Input Y Axis" }
+                                        ListElement { sid: 3; sname: "PutTray"; sdesc: "Push Tray" }
+                                        ListElement { sid: 4; sname: "OutX";    sdesc: "Output X Axis" }
+                                        ListElement { sid: 5; sname: "OutY";    sdesc: "Output Y Axis" }
                                     }
                                     delegate: Rectangle {
                                         id: cardItem
@@ -1046,7 +1069,7 @@
                                         ListElement { sid:4;  slabel:"S4";  sdesc:"Scan Stack Pos1" }
                                         ListElement { sid:5;  slabel:"S5";  sdesc:"Output det." }
                                         ListElement { sid:6;  slabel:"S6";  sdesc:"Check Tray OutP1" }
-                                        ListElement { sid:7;  slabel:"S7";  sdesc:"Khay tại Robot" }
+                                        ListElement { sid:7;  slabel:"S7";  sdesc:"Tray at Robot" }
                                         ListElement { sid:8;  slabel:"S8";  sdesc:"[Reserved]" }
                                         // [CPX 253] Module 3: I2.0–I2.7
                                         // (S11/S12 ATV Run/Fault — VFD status, không hiển thị ở grid này)
@@ -1119,6 +1142,8 @@
                 property var parsedConfig: ({})
                 property int configRevision: 0
                 property var p2FilteredLog: []
+                property var lastEditedInput: null
+                property string lastEditedPrevText: ""
 
                 function reloadConfig() {
                     try { page2Root.parsedConfig = JSON.parse(cartridgeController.configData) } catch(e) {}
@@ -1186,19 +1211,19 @@
 
                         property var servoParams: [
                             { key:"inx_home",        label:"InX Home",      desc:"S1 home" },
-                            { key:"inx_target2",     label:"InX Target",    desc:"S1 lấy khay (500mm)" },
-                            { key:"inx_output_stack",label:"InX OutPos",    desc:"Đặt khay output" },
+                            { key:"inx_target2",     label:"InX Target",    desc:"S1 load tray (500mm)" },
+                            { key:"inx_output_stack",label:"InX OutPos",    desc:"Place output tray" },
                             { key:"iny_home",        label:"InY Home",      desc:"S2 home" },
                             { key:"iny_target2",     label:"InY Place",     desc:"Robot place (200mm)" },
                             { key:"iny_safe_zone",   label:"InY SafeZone",  desc:"Safe zone" },
                             { key:"servo3_target2",  label:"S3 Feed",       desc:"Feed pos (400mm)" },
                             { key:"outx_home",       label:"OutX Home",     desc:"S4 home" },
-                            { key:"outx_target2",    label:"OutX Target2",  desc:"Lấy khay output" },
-                            { key:"outx_target3",    label:"OutX Target3",  desc:"Đặt khay robot" },
-                            { key:"outy_target1",    label:"OutY Target1",  desc:"Nâng khay (safe)" },
-                            { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Hạ gắp khay" },
-                            { key:"target_scanoutp2",label:"OUTY TgtScan",  desc:"Điểm dừng quét S20" },
-                            { key:"outy_scan_arm_mm",label:"OUTY Arm S20",  desc:"Giới hạn kích hoạt S20" }
+                            { key:"outx_target2",    label:"OutX Target2",  desc:"Load output tray" },
+                            { key:"outx_target3",    label:"OutX Target3",  desc:"Place robot tray" },
+                            { key:"outy_target1",    label:"OutY Target1",  desc:"Lift tray (safe)" },
+                            { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Lower gripper tray" },
+                            { key:"target_scanoutp2",label:"OUTY TgtScan",  desc:"S20 scan stop point" },
+                            { key:"outy_scan_arm_mm",label:"OUTY Arm S20",  desc:"S20 arm limit" }
                         ]
 
                         Flickable {
@@ -1212,15 +1237,26 @@
                                 width: parent.width
                                 spacing: 4
 
-                                Text { text: "SERVO KEY POSITIONS (mm)"; color: root.cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
+                                Text { text: "SERVO KEY POSITIONS (mm)"; color: root.cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5; width: parent.width; horizontalAlignment: Text.AlignHCenter }
                                 Row { width: parent.width; spacing: parent.width * 0.015
                                     Repeater { model: ["Parameter","Value","Description"]
-                                        delegate: Text {
-                                            text: modelData
-                                            color: root.cDim
-                                            font.pixelSize: 14; font.bold: true
+                                        delegate: Item {
                                             width: index===0 ? parent.width * 0.40 : index===1 ? parent.width * 0.22 : parent.width * 0.35
-                                            font.capitalization: Font.AllUppercase; font.letterSpacing: 1
+                                            height: paramHeaderText.implicitHeight
+                                            Item {
+                                                anchors.fill: parent
+                                                Text {
+                                                    id: paramHeaderText
+                                                    text: modelData
+                                                    color: root.cDim
+                                                    font.pixelSize: 14; font.bold: true
+                                                    font.capitalization: Font.AllUppercase; font.letterSpacing: 1
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: index===0 ? 12 : 0
+                                                    width: parent.width
+                                                    horizontalAlignment: index===1 ? Text.AlignHCenter : Text.AlignLeft
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1240,12 +1276,19 @@
                                             anchors.verticalCenter: parent.verticalCenter
                                             width: parent.width
                                             spacing: parent.width * 0.015
-                                            Text {
-                                                text: modelData.label
-                                                color: root.cCyan
-                                                font { pixelSize: 18; bold: true }
+                                            Item {
                                                 width: parent.width * 0.40
+                                                height: paramLabelText.implicitHeight
                                                 anchors.verticalCenter: parent.verticalCenter
+                                                Text {
+                                                    id: paramLabelText
+                                                    text: modelData.label
+                                                    color: root.cCyan
+                                                    font { pixelSize: 18; bold: true }
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: 12
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                }
                                             }
                                             Rectangle {
                                                 width: parent.width * 0.22; height: 36; radius: 5
@@ -1254,8 +1297,11 @@
                                                     id: sInput2
                                                     anchors { fill: parent; margins: 3 }
                                                     text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true
-                                                    color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter
+                                                    color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter
                                                     validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 2 }
+                                                    property string prevText: ""
+                                                    onActiveFocusChanged: if (activeFocus) prevText = text
+                                                    onTextChanged: if (activeFocus) { page2Root.lastEditedInput = sInput2; page2Root.lastEditedPrevText = prevText }
                                                     Connections {
                                                         function onConfigRevisionChanged() {
                                                             var v = page2Root.parsedConfig[modelData.key]
@@ -1288,6 +1334,19 @@
                                         }
                                     }
                                     CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cCard; bc:root.cBorder; tc:root.cText; onClicked: page2Root.reloadConfig() }
+                                     CBtn {
+                                         lbl:"↩ Undo"
+                                         padV:10; padH:18; fontSize: 18
+                                         bg:root.cCard; bc:root.cBorder; tc:root.cText
+                                         enabled: page2Root.lastEditedInput !== null
+                                         opacity: enabled ? 1.0 : 0.4
+                                         onClicked: {
+                                             if (page2Root.lastEditedInput !== null) {
+                                                 page2Root.lastEditedInput.text = page2Root.lastEditedPrevText
+                                                 page2Root.lastEditedInput = null
+                                             }
+                                         }
+                                     }
                                 }
                             }
                         }
@@ -1702,7 +1761,7 @@
 
                                             Text {
                                                 anchors { left: parent.left; leftMargin: 8; verticalCenter: parent.verticalCenter }
-                                                text: "📋 TOẠ ĐỘ ĐÃ LƯU (" + parent.savedPoses.length + ")"
+                                                text: "📋 SAVED COORDINATES (" + parent.savedPoses.length + ")"
                                                 color: "#5cf4f1"; font.pixelSize: 14; font.bold: true
                                             }
 
@@ -1812,14 +1871,14 @@
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: rowGripper.isOn ? "#0a332e" : root.cCard
                                                 border.color: rowGripper.isOn ? root.cGreen : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "GẮP"; color: rowGripper.isOn ? root.cGreen : root.cDim; font.pixelSize: 15; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "GRIP"; color: rowGripper.isOn ? root.cGreen : root.cDim; font.pixelSize: 15; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, true); rowGripper.isOn = true } }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: !rowGripper.isOn ? "#1a3a5a" : root.cCard
                                                 border.color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 15; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "RELEASE"; color: !rowGripper.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 15; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, false); rowGripper.isOn = false } }
                                             }
                                         }
@@ -1834,14 +1893,14 @@
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: rowPicker.isOn ? "#0a332e" : root.cCard
                                                 border.color: rowPicker.isOn ? root.cGreen : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "GẮP"; color: rowPicker.isOn ? root.cGreen : root.cDim; font.pixelSize: 15; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "GRIP"; color: rowPicker.isOn ? root.cGreen : root.cDim; font.pixelSize: 15; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, true); rowPicker.isOn = true } }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: !rowPicker.isOn ? "#1a3a5a" : root.cCard
                                                 border.color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 15; font.bold: true }
+                                                Text { anchors.centerIn: parent; text: "RELEASE"; color: !rowPicker.isOn ? Qt.lighter("#4da6ff", 1.2) : root.cDim; font.pixelSize: 15; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, false); rowPicker.isOn = false } }
                                             }
                                         }
@@ -1919,7 +1978,7 @@
                                 anchors.centerIn: parent; spacing: 20
                                 
                                 Text {
-                                    text: "🔒 MANUAL CONTROL DISABLED\nChuyển sang MANUAL mode để JOG robot"
+                                    text: "🔒 MANUAL CONTROL DISABLED\nSwitch to MANUAL mode to JOG robot"
                                     color: "#aaa"; font.pixelSize: 16; font.bold: true
                                     horizontalAlignment: Text.AlignHCenter; lineHeight: 1.5
                                     anchors.horizontalCenter: parent.horizontalCenter
@@ -2000,7 +2059,7 @@
                                             Column {
                                                 anchors.centerIn: parent; spacing: 2
                                                 Text { text: "↓ PICK INPUT"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: "(Load Khay -> Chamber)"; color: "#888"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "(Load Tray -> Chamber)"; color: "#888"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
                                             }
                                             MouseArea {
                                                 id: piMA; anchors.fill: parent
@@ -2107,7 +2166,7 @@
                             Item {
                                 width: parent.width; height: 34
                                 Text {
-                                    text: "📋 CHỌN TOẠ ĐỘ ROBOT ĐÃ LƯU"
+                                    text: "📋 SELECT SAVED ROBOT COORDINATES"
                                     color: "#5cf4f1"; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.2
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.left: parent.left
@@ -2154,7 +2213,7 @@
                                                 spacing: 4
                                                 
                                                 Text {
-                                                    text: modelData.name ? modelData.name : "Không có tên/ghi chú"
+                                                    text: modelData.name ? modelData.name : "No name/description"
                                                     color: "#f59e0b"; font.pixelSize: 22; font.bold: true
                                                     elide: Text.ElideRight
                                                 }
@@ -2265,6 +2324,12 @@
 
             // ── PAGE 4: FILL HP CONTROL (redesigned — see FillHpTab.qml) ──
             FillHpTab { }
+
+            // ── PAGE 5: INK SYSTEM ──
+            InkTab { }
+
+            // ── PAGE 6: PRODUCTION OUTPUT (statistics from fill_hp_web API) ──
+            ProductionTab { }
 
         } // StackLayout
 
@@ -2405,7 +2470,7 @@
                 Text { text: cfgCard.title; color: root.cAccent; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.5 }
 
                 Row { width: parent.width
-                    Repeater { model: ["Row","Position (mm)","Mô tả"]
+                    Repeater { model: ["Row","Position (mm)","Description"]
                         delegate: Text { text: modelData; color: root.cDim; font.pixelSize: 11; font.bold: true
                             width: index===0?46:index===1?94:parent.width-140
                             font.capitalization: Font.AllUppercase; font.letterSpacing: 1 } }
@@ -2431,7 +2496,7 @@
                                 TextInput { id: rowInput; anchors { fill: parent; margins: 4 }
                                     text: "0.0"
                                     font.pixelSize: 14; font.family: "monospace"; color: root.cYellow
-                                    horizontalAlignment: TextInput.AlignHCenter
+                                    horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter
                                     validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 2 }
                                     Connections {
                                         function onConfigRevisionChanged() {
@@ -2494,14 +2559,26 @@
                     width: parent.width
                     spacing: 6
 
-                    Text { text: cfgZoneCard.title; color: root.cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
+                    Text { text: cfgZoneCard.title; color: root.cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5; width: parent.width; horizontalAlignment: Text.AlignHCenter }
 
                     Row { width: parent.width; spacing: parent.width * 0.02
-                        Text { text: "Row"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.12; font.capitalization: Font.AllUppercase }
-                        Text { text: "Max"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
-                        Text { text: "Min"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
-                        Text { text: "Target"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
-                        Text { text: "Loc"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; font.capitalization: Font.AllUppercase }
+                        Item {
+                            width: parent.width * 0.12
+                            height: headerRowText.implicitHeight
+                            Text {
+                                id: headerRowText
+                                text: "Row"
+                                color: root.cDim
+                                font.pixelSize: 14; font.bold: true
+                                font.capitalization: Font.AllUppercase
+                                anchors.left: parent.left
+                                anchors.leftMargin: 12
+                            }
+                        }
+                        Text { text: "Max"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase; horizontalAlignment: Text.AlignHCenter }
+                        Text { text: "Min"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase; horizontalAlignment: Text.AlignHCenter }
+                        Text { text: "Target"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase; horizontalAlignment: Text.AlignHCenter }
+                        Text { text: "Loc"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; font.capitalization: Font.AllUppercase; horizontalAlignment: Text.AlignHCenter }
                     }
                     Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
@@ -2522,19 +2599,41 @@
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width
                                 spacing: parent.width * 0.02
-                                Text { text: "R"+modelData; color: root.cCyan; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; anchors.verticalCenter: parent.verticalCenter }
+                                Item {
+                                    width: parent.width * 0.12
+                                    height: rValText.implicitHeight
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    Text {
+                                        id: rValText
+                                        text: "R"+modelData
+                                        color: root.cCyan
+                                        font.pixelSize: 18; font.bold: true
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 12
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                }
 
                                 Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: root.cBg; border.color: root.cBorder
-                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                        property string prevText: ""
+                                        onActiveFocusChanged: if (activeFocus) prevText = text
+                                        onTextChanged: if (activeFocus) { page2Root.lastEditedInput = minInp; page2Root.lastEditedPrevText = prevText }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) minInp.text = String(tbl[String(modelData)][0]) } } } }
                                 Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: root.cBg; border.color: root.cBorder
-                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                        property string prevText: ""
+                                        onActiveFocusChanged: if (activeFocus) prevText = text
+                                        onTextChanged: if (activeFocus) { page2Root.lastEditedInput = maxInp; page2Root.lastEditedPrevText = prevText }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) maxInp.text = String(tbl[String(modelData)][1]) } } } }
                                 Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: root.cBg; border.color: root.cBorder
-                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                        property string prevText: ""
+                                        onActiveFocusChanged: if (activeFocus) prevText = text
+                                        onTextChanged: if (activeFocus) { page2Root.lastEditedInput = tgtInp; page2Root.lastEditedPrevText = prevText }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) tgtInp.text = String(tbl[String(modelData)][2]) } } } }
 
-                                Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; anchors.verticalCenter: parent.verticalCenter; horizontalAlignment: Text.AlignHCenter }
                             }
                             Rectangle { width: parent.width; height: 1; color: "#1e1e3a"; anchors.bottom: parent.bottom }
                         }
@@ -2558,6 +2657,19 @@
                         }
                         CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cCard; bc:root.cBorder; tc:root.cText
                             onClicked: page2Root.reloadConfig()
+                        }
+                        CBtn {
+                            lbl:"↩ Undo"
+                            padV:10; padH:18; fontSize: 18
+                            bg:root.cCard; bc:root.cBorder; tc:root.cText
+                            enabled: page2Root.lastEditedInput !== null
+                            opacity: enabled ? 1.0 : 0.4
+                            onClicked: {
+                                if (page2Root.lastEditedInput !== null) {
+                                    page2Root.lastEditedInput.text = page2Root.lastEditedPrevText
+                                    page2Root.lastEditedInput = null
+                                }
+                            }
                         }
                     }
                 }
@@ -2656,7 +2768,7 @@
             anchors.fill: parent; anchors.margins: 14; spacing: 7
 
             Text {
-                text: "Đặt tốc độ JOG"
+                text: "Set JOG Speed"
                 color: root.cText; font.pixelSize: 14; font.bold: true
                 width: parent.width; horizontalAlignment: Text.AlignHCenter
             }
@@ -2679,7 +2791,7 @@
             }
 
             Text {
-                text: "max 80 mm/s — chỉ áp dụng JOG"
+                text: "max 80 mm/s — JOG only"
                 color: root.cOrange; font.pixelSize: 9
                 width: parent.width; horizontalAlignment: Text.AlignHCenter
             }
@@ -2713,7 +2825,7 @@
             Rectangle {
                 width: parent.width; height: 38; radius: 6
                 color: root.cBg; border.color: root.cBorder
-                Text { anchors.centerIn: parent; text: "Hủy"; color: root.cDim; font.pixelSize: 13 }
+                Text { anchors.centerIn: parent; text: "Cancel"; color: root.cDim; font.pixelSize: 13 }
                 MouseArea { anchors.fill: parent; onClicked: velPopup.close() }
             }
         }
@@ -2729,12 +2841,12 @@
         Column {
             anchors.centerIn: parent; spacing: 30
             Text {
-                text: "⚠️ CẢNH BÁO CHƯA CÓ KHAY THÀNH PHẨM"
+                text: "⚠️ WARNING: NO OUTPUT TRAY"
                 color: "#ffaa00"; font.pixelSize: 22; font.bold: true
                 anchors.horizontalCenter: parent.horizontalCenter
             }
             Text {
-                text: "Hệ thống đang chờ khay Output lâu hơn 200s.\nĐã cấp khay chưa?"
+                text: "The system is waiting for the Output tray for over 200s.\nHave you placed the tray?"
                 color: "#ffffff"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter
                 anchors.horizontalCenter: parent.horizontalCenter
             }

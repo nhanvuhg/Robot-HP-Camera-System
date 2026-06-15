@@ -25,6 +25,28 @@ ApplicationWindow {
         }
     }
 
+    // ────────────────────────────────────────────────────────────
+    // DEBUG: preview popup không cần qua state machine.
+    // Ctrl+Shift+1..4 force-open từng popup để check layout/màu/font.
+    // KHÔNG gửi command lên backend — chỉ open dialog rồi đóng.
+    // ────────────────────────────────────────────────────────────
+    Shortcut {
+        sequence: "Ctrl+Shift+1"
+        onActivated: scaleChoicePopup.open()
+    }
+    Shortcut {
+        sequence: "Ctrl+Shift+2"
+        onActivated: resumeChoicePopup.open()
+    }
+    Shortcut {
+        sequence: "Ctrl+Shift+3"
+        onActivated: confirmEmptyBufferPopup.open()
+    }
+    Shortcut {
+        sequence: "Ctrl+Shift+4"
+        onActivated: notYetInkSelectedPopup.open()
+    }
+
     StackView {
         id: stackView
         anchors.fill: parent
@@ -254,38 +276,32 @@ ApplicationWindow {
         anchors.centerIn: parent
         modal: true
         closePolicy: Popup.NoAutoClose
-        width: 660; height: 430
+        // Thu gọn: 660x430 → 520x340
+        width: 520; height: 340
         background: Rectangle {
-            color: "#081e29"
-            border.color: "#ef4444"
+            color: "#1f1a05"            // dark amber base
+            border.color: "#facc15"     // yellow-400
             border.width: 2
             radius: 10
         }
 
-        Timer {
-            id: scaleStopHomingTimer
-            interval: 500
-            repeat: false
-            onTriggered: cartridgeController.gotoState("HOMING")
-        }
-
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 22
-            spacing: 14
+            anchors.margins: 16
+            spacing: 10
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: "⚠  SCALE ISSUE DETECTED"
-                color: "#ef4444"
-                font.pixelSize: 26
+                color: "#fde047"        // yellow-300
+                font.pixelSize: 30
                 font.bold: true
             }
             Text {
                 Layout.fillWidth: true
-                text: "No loadcell topic received for 150s in PROCESSING_SCALE.\nSelect how to handle this cartridge:"
-                color: "#e8e8f0"
-                font.pixelSize: 16
+                text: "No loadcell topic 150s in PROCESSING_SCALE.\nSelect how to handle this cartridge:"
+                color: "#fef3c7"        // yellow-100
+                font.pixelSize: 18
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
             }
@@ -293,12 +309,12 @@ ApplicationWindow {
 
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                spacing: 12
+                spacing: 8
 
                 Button {
-                    Layout.preferredWidth: 196; Layout.preferredHeight: 72
-                    text: "↩  BACK TO\nWAIT FILLING\n(đã lấy cartridge ra)"
-                    font.pixelSize: 13; font.bold: true
+                    Layout.preferredWidth: 156; Layout.preferredHeight: 84
+                    text: "↩  WAIT\nFILLING"
+                    font.pixelSize: 17; font.bold: true
                     background: Rectangle { color: "#0f2a4a"; border.color: "#60a5fa"; border.width: 2; radius: 6 }
                     contentItem: Text {
                         text: parent.text; color: "#93c5fd"
@@ -313,9 +329,9 @@ ApplicationWindow {
                     }
                 }
                 Button {
-                    Layout.preferredWidth: 196; Layout.preferredHeight: 72
-                    text: "✓  PLACE TO\nOUTPUT\n(force PASS)"
-                    font.pixelSize: 13; font.bold: true
+                    Layout.preferredWidth: 156; Layout.preferredHeight: 84
+                    text: "✓  PLACE\nOUTPUT"
+                    font.pixelSize: 17; font.bold: true
                     background: Rectangle { color: "#052e16"; border.color: "#4ade80"; border.width: 2; radius: 6 }
                     contentItem: Text {
                         text: parent.text; color: "#86efac"
@@ -330,12 +346,12 @@ ApplicationWindow {
                     }
                 }
                 Button {
-                    Layout.preferredWidth: 196; Layout.preferredHeight: 72
-                    text: "✗  PLACE TO\nFAIL\n(force FAIL)"
-                    font.pixelSize: 13; font.bold: true
-                    background: Rectangle { color: "#2d0a0a"; border.color: "#f87171"; border.width: 2; radius: 6 }
+                    Layout.preferredWidth: 156; Layout.preferredHeight: 84
+                    text: "✗  PLACE\nFAIL"
+                    font.pixelSize: 17; font.bold: true
+                    background: Rectangle { color: "#2d2305"; border.color: "#facc15"; border.width: 2; radius: 6 }
                     contentItem: Text {
-                        text: parent.text; color: "#fca5a5"
+                        text: parent.text; color: "#fde047"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -350,9 +366,9 @@ ApplicationWindow {
 
             Button {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: 612; Layout.preferredHeight: 52
-                text: "⏹  STOP & HOME  —  Dừng hệ thống và đưa robot về Home"
-                font.pixelSize: 15; font.bold: true
+                Layout.preferredWidth: 488; Layout.preferredHeight: 56
+                text: "⏹  STOP"
+                font.pixelSize: 19; font.bold: true
                 background: Rectangle { color: "#1a0808"; border.color: "#ef4444"; border.width: 2; radius: 6 }
                 contentItem: Text {
                     text: parent.text; color: "#ef4444"
@@ -361,10 +377,10 @@ ApplicationWindow {
                     verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: {
+                    // STOP thuần — không auto-home. User muốn dừng hoàn toàn, không trigger homing.
                     robotController.stopAndResetRobot()
                     cartridgeController.stopSystem()
                     mainWindow.scaleIssueWarning = true
-                    scaleStopHomingTimer.start()
                     scaleChoicePopup.close()
                 }
             }
@@ -410,69 +426,90 @@ ApplicationWindow {
         anchors.centerIn: parent
         modal: true
         closePolicy: Popup.NoAutoClose
-        width: 600; height: 320
+        // Yellow warning theme — đồng bộ với scaleChoicePopup.
+        width: 560; height: 320
         background: Rectangle {
-            color: "#0c0c1d"
-            border.color: "#ef4444"
+            color: "#1f1a05"
+            border.color: "#facc15"
             border.width: 2
             radius: 10
         }
-        
+
         property var confirmCallback: null
-        
+
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 25
-            spacing: 15
-            
+            anchors.margins: 18
+            spacing: 12
+
             Text {
-                text: "⚠️ WARNING: INK NOT SELECTED"
-                color: "#ef4444"
-                font.pixelSize: 24
+                text: "⚠  WARNING: INK NOT SELECTED"
+                color: "#fde047"
+                font.pixelSize: 28
                 font.bold: true
                 Layout.alignment: Qt.AlignHCenter
             }
             Text {
-                text: "Ink or Lot has not been selected for the system.\nIf you continue running, production and consumption logs WILL NOT BE SAVED."
-                color: "#e8e8f0"
-                font.pixelSize: 16
+                text: "Ink or Lot has not been selected.\nIf you continue, production & consumption logs WILL NOT be saved."
+                color: "#fef3c7"
+                font.pixelSize: 18
                 Layout.alignment: Qt.AlignHCenter
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
             }
             Item { Layout.fillHeight: true }
+
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                spacing: 20
+                spacing: 10
+
+                // Nút mới: chuyển sang tab INK System để chọn ink ngay.
                 Button {
-                    text: "✓ RUN (NO LOGGING)"
-                    font.pixelSize: 16
-                    font.bold: true
-                    onClicked: {
-                        notYetInkSelectedPopup.close()
-                        if (notYetInkSelectedPopup.confirmCallback) notYetInkSelectedPopup.confirmCallback()
-                    }
-                    background: Rectangle { radius: 6; color: "#ef4444" }
+                    Layout.preferredWidth: 168; Layout.preferredHeight: 60
+                    text: "🧪  GO TO\nINK SYSTEM"
+                    font.pixelSize: 16; font.bold: true
+                    background: Rectangle { radius: 6; color: "#0f2a4a"; border.color: "#60a5fa"; border.width: 2 }
                     contentItem: Text {
-                        text: parent.text; color: "#ffffff"
+                        text: parent.text; color: "#93c5fd"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
+                    onClicked: {
+                        notYetInkSelectedPopup.close()
+                        // Push CartridgePage với initialTabIndex=4 (Ink System).
+                        stackView.push(cartridgePage, { initialTabIndex: 4 })
+                    }
                 }
                 Button {
-                    text: "✗ CANCEL"
-                    font.pixelSize: 16
-                    font.bold: true
-                    onClicked: notYetInkSelectedPopup.close()
-                    background: Rectangle { radius: 6; color: "#374151" }
+                    Layout.preferredWidth: 168; Layout.preferredHeight: 60
+                    text: "✓  RUN\n(NO LOGGING)"
+                    font.pixelSize: 16; font.bold: true
+                    background: Rectangle { radius: 6; color: "#2d2305"; border.color: "#facc15"; border.width: 2 }
+                    contentItem: Text {
+                        text: parent.text; color: "#fde047"
+                        font: parent.font
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: {
+                        notYetInkSelectedPopup.close()
+                        if (notYetInkSelectedPopup.confirmCallback) notYetInkSelectedPopup.confirmCallback()
+                    }
+                }
+                Button {
+                    Layout.preferredWidth: 168; Layout.preferredHeight: 60
+                    text: "✗  CANCEL"
+                    font.pixelSize: 16; font.bold: true
+                    background: Rectangle { radius: 6; color: "#374151"; border.color: "#6b7280"; border.width: 2 }
                     contentItem: Text {
                         text: parent.text; color: "#e8e8f0"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
+                    onClicked: notYetInkSelectedPopup.close()
                 }
             }
         }

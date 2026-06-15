@@ -4,7 +4,7 @@ import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 
 Item {
-    id: inkPageRoot
+    id: inkTab
 
     property string currentTime: Qt.formatDateTime(new Date(), "yyyy-MM-dd hh:mm:ss")
     property bool calActive: scaleController.calStatus === "WAITING_WEIGHT" || scaleController.calStatus.startsWith("CONTINUE_CAL")
@@ -40,6 +40,43 @@ Item {
 
     property var numpadTarget: null
 
+    function parseKvPipe(raw) {
+        var out = {};
+        if (!raw) return out;
+        var parts = String(raw).split("|");
+        for (var i = 0; i < parts.length; i++) {
+            var part = parts[i];
+            var idx = part.indexOf('=');
+            var alt = part.indexOf(':');
+            var pos = idx >= 0 ? idx : alt;
+            if (pos >= 0) out[part.substring(0, pos).trim()] = part.substring(pos + 1).trim();
+        }
+        return out;
+    }
+
+    Connections {
+        target: hpController
+        function onInkStatusChanged() {
+            var map = parseKvPipe(hpController.inkStatus);
+            if (map["CODE"] !== undefined && mapInkNameInput && !mapInkNameInput.activeFocus) {
+                mapInkNameInput.text = map["CODE"];
+            }
+            if (map["LOT_PI"] !== undefined && mapLotPiInput && !mapLotPiInput.activeFocus) {
+                mapLotPiInput.text = map["LOT_PI"];
+            }
+            if (map["LOT_CI"] !== undefined && mapLotCiInput && !mapLotCiInput.activeFocus) {
+                mapLotCiInput.text = map["LOT_CI"];
+            }
+        }
+    }
+
+// ── Theme (CartridgePage palette) ──
+    readonly property color cBg:       "#0c0c1d"
+    readonly property color cBorder:   "#134357"
+    readonly property color cText:     "#e8e8f0"
+
+    Rectangle { anchors.fill: parent; color: cBg }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -58,25 +95,6 @@ Item {
                     anchors.margins: 10
                     spacing: 10
 
-                    Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
-                        text: "◂   BACK"
-                        Layout.preferredHeight: 50
-                        Layout.preferredWidth: 120
-                        font.pixelSize: 18; font.bold: true
-                        onClicked: stackView.pop()
-                        background: Rectangle {
-                            radius: 6
-                            color: "#134357"
-                        }
-                        contentItem: Text {
-                            text: parent.text; font: parent.font
-                            color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                        }
-                    }
-
                     Item {
                         Layout.fillWidth: true
                         Text {
@@ -85,8 +103,6 @@ Item {
                             font.pixelSize: 24; font.bold: true; color: "#6cf"
                         }
                     }
-                    
-                    Item { Layout.preferredWidth: 90 }
                 }
             }
         }
@@ -326,7 +342,7 @@ Item {
                                     MouseArea {
                                         anchors.fill: parent
                                         onClicked: {
-                                            inkPageRoot.numpadTarget = tfCalW;
+                                            inkTab.numpadTarget = tfCalW;
                                             numpadPopup.currentValue = tfCalW.text;
                                             numpadPopup.open();
                                         }
@@ -466,6 +482,11 @@ Item {
                                 color: "#0d1117"; border.color: "#f59e0b"; border.width: 1
                                 ComboBox {
                                     id: inkSelector
+                                    onCurrentIndexChanged: {
+                                        if (currentIndex >= 0 && mapInkNameInput) {
+                                            mapInkNameInput.text = inkModel.get(currentIndex).name;
+                                        }
+                                    }
                                     anchors.fill: parent; anchors.margins: 1
                                     model: inkModel
                                     textRole: "name"
@@ -605,7 +626,7 @@ Item {
                     // --- DETAILS AREA ---
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 190
+                        Layout.preferredHeight: 250
                         color: "#0a0a18"; border.color: "#38bdf8"; border.width: 1; radius: 6
                         
                         GridLayout {
@@ -630,7 +651,7 @@ Item {
                                         anchors.fill: parent; anchors.margins: 2; color: "#f59e0b"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.family: "monospace"
                                         text: "1.0"
                                         readOnly: true
-                                        MouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = relativeErrorInput; numpadPopup.currentValue = relativeErrorInput.text; numpadPopup.open() } }
+                                        MouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = relativeErrorInput; numpadPopup.currentValue = relativeErrorInput.text; numpadPopup.open() } }
                                     }
                                 }
                             }
@@ -653,11 +674,11 @@ Item {
                                         anchors.fill: parent; anchors.margins: 2; color: "#f59e0b"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.family: "monospace"
                                         text: scaleController.inkCapacity.toString()
                                         readOnly: true
-                                        MouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = inkCapacityInput; numpadPopup.currentValue = inkCapacityInput.text; numpadPopup.open() } }
+                                        MouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = inkCapacityInput; numpadPopup.currentValue = inkCapacityInput.text; numpadPopup.open() } }
                                         Connections {
                                             target: scaleController
                                             function onInkCapacityChanged() {
-                                                if (inkPageRoot.numpadTarget !== inkCapacityInput) {
+                                                if (inkTab.numpadTarget !== inkCapacityInput) {
                                                     inkCapacityInput.text = scaleController.inkCapacity.toString();
                                                 }
                                             }
@@ -683,10 +704,18 @@ Item {
                                     }
                                 }
                             }
+                            RowLayout {
+                                Text { text: "ID INK NAME:"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true }
+                                Text { text: mapInkNameInput.text !== "" ? mapInkNameInput.text : "--"; color: "#f59e0b"; font.pixelSize: 16; font.bold: true; font.family: "monospace" }
+                            }
+                            RowLayout {
+                                Text { text: "LOT PI/CI:"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true }
+                                Text { text: (mapLotPiInput.text !== "" ? mapLotPiInput.text : "--") + " / " + (mapLotCiInput.text !== "" ? mapLotCiInput.text : "--"); color: "#f59e0b"; font.pixelSize: 16; font.bold: true; font.family: "monospace" }
+                            }
 
                             // Row 4: CONFIRM BTN & CLEAR SELECTION
                             RowLayout {
-                                Layout.columnSpan: 2; Layout.fillWidth: true; spacing: 15
+                                Layout.columnSpan: 3; Layout.fillWidth: true; spacing: 15
                                 Item { Layout.fillWidth: true }
                                 Button {
     scale: down ? 0.95 : 1.0
@@ -754,8 +783,6 @@ Item {
                         }
                     }
 
-                    Item { Layout.fillHeight: true } // spacer
-
                     // --- ROW 4: CREATE PROFILE ---
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#2a3a4a"; opacity: 0.5 }
                     Text { text: "CREATE NEW PROFILE"; color: "#5cf4f1"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
@@ -766,34 +793,116 @@ Item {
 
                         // Create Ink
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 180; color: "transparent"; border.color: "#134357"; border.width: 2; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 280; color: "transparent"; border.color: "#134357"; border.width: 2; radius: 6
                             GridLayout {
-                                anchors.fill: parent; anchors.margins: 15; columns: 2; columnSpacing: 15; rowSpacing: 15
-                                Text { text: "INK NAME"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "DENSITY (g)"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                anchors.fill: parent; anchors.margins: 15; columns: 3; columnSpacing: 15; rowSpacing: 12
                                 
+                                // Row 1 labels
+                                Text { text: "INK NAME"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true; Layout.columnSpan: 2 }
+                                Text { text: "DENSITY (g)"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true }
+                                
+                                // Row 1 inputs
                                 Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
+                                    Layout.fillWidth: true; Layout.preferredHeight: 40; Layout.columnSpan: 2; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
                                     TextInput { id: newInkName; anchors.fill: parent; anchors.margins: 4; color: "#fff"; font.pixelSize: 18; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true }
                                     Text { anchors.centerIn: parent; text: "--Type Ink Name--"; color: "#475569"; font.pixelSize: 15; font.italic: true; visible: newInkName.text.length === 0 && !newInkName.activeFocus }
                                 }
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
-                                    TextInput { id: newInkDensity; anchors.fill: parent; anchors.margins: 4; color: "#f59e0b"; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = newInkDensity; numpadPopup.currentValue = newInkDensity.text; numpadPopup.open() } } }
+                                    TextInput { id: newInkDensity; anchors.fill: parent; anchors.margins: 4; color: "#f59e0b"; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = newInkDensity; numpadPopup.currentValue = newInkDensity.text; numpadPopup.open() } } }
                                 }
-                                
-                                Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
-                                    text: "SAVE INK"
-                                    Layout.preferredHeight: 45; Layout.fillWidth: true; Layout.columnSpan: 2; background: Rectangle { color: "#051a1a"; border.color: "#5cf4f1"; border.width: 2; radius: 6 }
-                                    contentItem: Text { text: parent.text; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
-                                    onClicked: {
-                                        var d = parseFloat(newInkDensity.text.replace(",", "."));
-                                        if (d > 0 && newInkName.text.trim() !== "") {
-                                            scaleController.createInkProfile(newInkName.text.trim(), d);
-                                            newInkName.text = ""; newInkDensity.text = "0.0";
+
+                                // Row 2 labels (Mapping)
+                                Text { text: "ID INK NAME"; color: "#94a3b8"; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.preferredWidth: 160 }
+                                Text { text: "LOT PI"; color: "#94a3b8"; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.preferredWidth: 200 }
+                                Text { text: "LOT CI"; color: "#94a3b8"; font.pixelSize: 13; font.bold: true; Layout.fillWidth: false; Layout.preferredWidth: 110 }
+
+                                // Row 2 inputs (Mapping)
+                                Rectangle {
+                                    Layout.fillWidth: true; Layout.preferredWidth: 160; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
+                                    TextInput {
+                                        id: mapInkNameInput
+                                        anchors.fill: parent; anchors.margins: 4
+                                        color: "#fff"; font.pixelSize: 18; font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                        clip: true
+                                    }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "--ID Ink Name--"
+                                        color: "#475569"; font.pixelSize: 14; font.italic: true
+                                        visible: mapInkNameInput.text.length === 0 && !mapInkNameInput.activeFocus
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.fillWidth: true; Layout.preferredWidth: 200; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
+                                    TextInput {
+                                        id: mapLotPiInput
+                                        anchors.fill: parent; anchors.margins: 4
+                                        color: "#fff"; font.pixelSize: 18; font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                        clip: true
+                                    }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "--Lot PI--"
+                                        color: "#475569"; font.pixelSize: 14; font.italic: true
+                                        visible: mapLotPiInput.text.length === 0 && !mapLotPiInput.activeFocus
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.fillWidth: false; Layout.preferredWidth: 110; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
+                                    TextInput {
+                                        id: mapLotCiInput
+                                        anchors.fill: parent; anchors.margins: 4
+                                        color: "#fff"; font.pixelSize: 18; font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                        clip: true
+                                    }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "--Lot CI--"
+                                        color: "#475569"; font.pixelSize: 14; font.italic: true
+                                        visible: mapLotCiInput.text.length === 0 && !mapLotCiInput.activeFocus
+                                    }
+                                }
+
+                                // Row 3 Buttons: Save Profile & Apply Batch Info
+                                RowLayout {
+                                    Layout.fillWidth: true; Layout.columnSpan: 3; spacing: 15
+                                    Button {
+                                        scale: down ? 0.95 : 1.0
+                                        opacity: down ? 0.8 : 1.0
+                                        Behavior on scale { NumberAnimation { duration: 50 } }
+                                        text: "SAVE INK PROFILE"
+                                        Layout.preferredHeight: 45; Layout.fillWidth: true
+                                        background: Rectangle { color: "#051a1a"; border.color: "#5cf4f1"; border.width: 2; radius: 6 }
+                                        contentItem: Text { text: parent.text; color: "#5cf4f1"; font.pixelSize: 15; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
+                                        onClicked: {
+                                            var d = parseFloat(newInkDensity.text.replace(",", "."));
+                                            if (d > 0 && newInkName.text.trim() !== "") {
+                                                scaleController.createInkProfile(newInkName.text.trim(), d);
+                                                newInkName.text = ""; newInkDensity.text = "0.0";
+                                            }
+                                        }
+                                    }
+                                    Button {
+                                        scale: down ? 0.95 : 1.0
+                                        opacity: down ? 0.8 : 1.0
+                                        Behavior on scale { NumberAnimation { duration: 50 } }
+                                        text: "APPLY BATCH INFO"
+                                        Layout.preferredHeight: 45; Layout.fillWidth: true
+                                        background: Rectangle { color: "#f59e0b"; radius: 6 }
+                                        contentItem: Text { text: parent.text; color: "#000"; font.pixelSize: 15; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
+                                        onClicked: {
+                                            var payload = {
+                                                "action": "set_fields",
+                                                "code": mapInkNameInput.text.trim(),
+                                                "lot_pi": mapLotPiInput.text.trim(),
+                                                "lot_ci": mapLotCiInput.text.trim(),
+                                                "operator": "QML"
+                                            };
+                                            hpController.publishString("ink_batch_code", JSON.stringify(payload));
                                         }
                                     }
                                 }
@@ -802,7 +911,7 @@ Item {
 
                         // Create Cart
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 180; color: "transparent"; border.color: "#134357"; border.width: 2; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 280; color: "transparent"; border.color: "#134357"; border.width: 2; radius: 6
                             GridLayout {
                                 anchors.fill: parent; anchors.margins: 15; columns: 2; columnSpacing: 15; rowSpacing: 15
                                 Text { text: "CART NAME"; color: "#94a3b8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
@@ -815,14 +924,16 @@ Item {
                                 }
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
-                                    TextInput { id: newCartDensity; anchors.fill: parent; anchors.margins: 4; color: "#f59e0b"; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = newCartDensity; numpadPopup.currentValue = newCartDensity.text; numpadPopup.open() } } }
+                                    TextInput { id: newCartDensity; anchors.fill: parent; anchors.margins: 4; color: "#f59e0b"; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = newCartDensity; numpadPopup.currentValue = newCartDensity.text; numpadPopup.open() } } }
                                 }
                                 
+                                Item { Layout.fillHeight: true; Layout.columnSpan: 2 }
+                                
                                 Button {
-    scale: down ? 0.95 : 1.0
-    opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
-                                    text: "SAVE CART"
+                                    scale: down ? 0.95 : 1.0
+                                    opacity: down ? 0.8 : 1.0
+                                    Behavior on scale { NumberAnimation { duration: 50 } }
+                                    text: "SAVE CART PROFILE"
                                     Layout.preferredHeight: 45; Layout.fillWidth: true; Layout.columnSpan: 2; background: Rectangle { color: "#051a1a"; border.color: "#5cf4f1"; border.width: 2; radius: 6 }
                                     contentItem: Text { text: parent.text; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
                                     onClicked: {
@@ -839,9 +950,7 @@ Item {
                 }
             }
         }
-    }
-
-    // ── Persistent banner: hiện khi operator chọn NO ở zero-drift popup ──
+    }    // ── Persistent banner: hiện khi operator chọn NO ở zero-drift popup ──
     // Set bởi scaleController.dismissZeroDrift(); clear khi tare() đc gọi.
     Rectangle {
         id: zeroDriftBanner
@@ -883,6 +992,7 @@ Item {
     // Popups
     Popup {
         id: overloadPopup
+        parent: Overlay.overlay
         anchors.centerIn: parent
         width: 500; height: 200
         modal: true
@@ -909,6 +1019,7 @@ Item {
 
     Popup {
         id: zeroDriftPopup
+        parent: Overlay.overlay
         anchors.centerIn: parent
         width: 500; height: 200
         modal: true
@@ -1048,8 +1159,8 @@ Item {
                     text: "OK"; Layout.fillWidth: true; Layout.preferredHeight: 44
                     font.pixelSize: 14; font.bold: true
                     onClicked: {
-                        if (inkPageRoot.numpadTarget) {
-                            inkPageRoot.numpadTarget.text = numpadPopup.currentValue;
+                        if (inkTab.numpadTarget) {
+                            inkTab.numpadTarget.text = numpadPopup.currentValue;
                         }
                         numpadPopup.close();
                     }

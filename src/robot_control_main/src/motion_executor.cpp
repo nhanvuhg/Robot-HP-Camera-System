@@ -893,17 +893,17 @@ private:
         }
         
         // --- INPUT ROW → CHAMBER: Picker bốc khay từ input stack rồi nhả vào chamber ---
-        if (!moveR(0, 0, -110,5)) return false;
+        if (!moveR(0, 0, -110,8)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại input row
-        if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 120,5)) return false;
+        if (!wait(0.5)) return false;
+        if (!moveR(0, 0, 120,8)) return false;
         if (!moveToIndex(27)) return false;
         if (!moveToIndex(28)) return false;
         if (!moveToIndex(7)) return false;
-        if (!wait(1.0)) return false;
-        if (!moveR(0, 139, 0,3)) return false;
+        if (!wait(0.5)) return false;
+        if (!moveR(0, 139, 0,8)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
-        if (!wait(2.0)) return false;
+        if (!wait(0.5)) return false;
         if (!moveR(1, -60, 0)) return false;
         if (!moveR(-10, 29, 0)) return false;
         if (!wait(0.5)) return false;
@@ -929,16 +929,16 @@ private:
         }
         
         // --- INPUT ROW → BUFFER: Picker bốc cart từ input stack rồi nhả vào buffer ---
-        if (!moveR(0, 0, -110,5)) return false;
+        if (!moveR(0, 0, -110,8)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại input row
-        if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 120,5)) return false;
+        if (!wait(0.5)) return false;
+        if (!moveR(0, 0, 120,8)) return false;
         if (!moveToIndex(27)) return false;
         if (!moveToIndex(8)) return false;
         if (!moveR(0, 0, -55)) return false;
-        if (!wait(1.0)) return false;
+        if (!wait(0.5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào buffer
-        if (!wait(1.0)) return false;
+        if (!wait(0.5)) return false;
         if (!moveR(0, 0, 70)) return false;
         if (!moveToIndex(0)) return false;
         return true;
@@ -949,12 +949,12 @@ private:
         if (!moveToIndex(7)) return false;
         if (!moveR(0, 140.5, 0)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại chamber
-        if (!wait(2.0)) return false;
+        if (!wait(0.5)) return false;
         if (!moveR(0, -170, 0)) return false;
         if (!moveToIndex(9)) return false;
         if (!moveR(0, 0, -60)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay lên scale
-        if (!wait(1.0)) return false;
+        if (!wait(0.5)) return false;
         if (!moveR(0, 0, 110)) return false;
         return true;
     }
@@ -966,24 +966,24 @@ private:
         if (!moveToIndex(10)) return false;
         if (!moveR(40, 0, 0)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay đang ở scale
-        if (!moveR(0, 0, 40,5)) return false;
+        if (!moveR(0, 0, 40,8)) return false;
         if (!moveToIndex(12)) return false;
-        if (!moveR(0, 0, -60,5)) return false;
-        if (!wait(2.0)) return false;
+        if (!moveR(0, 0, -60,8)) return false;
+        if (!wait(0.5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — đặt khay xuống vị trí trung gian
-        if (!wait(1.0)) return false;
+        if (!wait(0.5)) return false;
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — đảm bảo gripper mở trước khi pick up
-        if (!moveR(0, 0, 60,5)) return false;
+        if (!moveR(0, 0, 60,8)) return false;
         if (!moveToIndex(11)) return false;
-        if (!moveR(0, 0, -60,5)) return false;
+        if (!moveR(0, 0, -60,8)) return false;
         if (!setDigitalOutput(2, true)) return false;   // Gripper GẮP — kẹp khay tại Index 11
-        if (!wait(1.0)) return false;
-        if (!moveR(0, 0, 60,5)) return false;
+        if (!wait(0.5)) return false;
+        if (!moveR(0, 0, 60,8)) return false;
         if (!moveToIndex(13)) return false;
         if (!moveToIndex(13 + slot)) return false;
-        if (!moveR(0, 0, -30,5)) return false;
+        if (!moveR(0, 0, -30,8)) return false;
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — thả khay vào output slot
-        if (!moveR(0, 0, 30,5)) return false;
+        if (!moveR(0, 0, 30,8)) return false;
         if (!moveToIndex(13)) return false;
         if (!moveToIndex(0)) return false;
         return true;
@@ -1007,13 +1007,14 @@ private:
         if (!moveToIndex(8)) return false;
         if (!moveR(0, 0, -58)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại buffer
+        if (!wait(0.5)) return false;
         if (!moveR(0, 0, 90)) return false;
         if (!moveToIndex(28)) return false;
         if (!moveToIndex(7)) return false;
-        if (!wait(1.0)) return false;
-        if (!moveR(0, 139, 0,3)) return false;
+        if (!wait(0.5)) return false;
+        if (!moveR(0, 139, 0,8)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
-        if (!wait(2.0)) return false;
+        if (!wait(0.5)) return false;
         if (!moveR(-1, -60, 0)) return false;
         if (!moveR(-10, 29, 0)) return false;
         if (!wait(0.5)) return false;

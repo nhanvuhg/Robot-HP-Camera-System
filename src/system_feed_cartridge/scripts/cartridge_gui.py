@@ -787,7 +787,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 
 <!-- ════════════════ FILL HP CONTROL PAGE ════════════════ -->
 <div class="page" id="page-hp">
-  <iframe src="http://192.168.27.88:8080/" style="width:100%; height:100%; border:none; background:var(--bg);"></iframe>
+  <iframe src="http://192.168.27.193:8080/" style="width:100%; height:100%; border:none; background:var(--bg);"></iframe>
 </div>
 
 <div class="tc" id="tc"></div>

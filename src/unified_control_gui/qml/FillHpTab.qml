@@ -10,12 +10,11 @@ import QtQuick.Layouts 1.15
 
 Item {
     id: tab
-    anchors.fill: parent
 
     // ---- Theme tokens (mirror CartridgePage palette) ----
     readonly property color cBg:          "#0c0c1d"
     readonly property color cPanel:       "#081e29"
-    readonly property color cPanel2:      "#051a1a"
+    readonly property color cPanel2:      "#0a2238"
     readonly property color cBorder:      "#134357"
     readonly property color cText:        "#e8e8f0"
     readonly property color cMuted:       "#8888aa"
@@ -323,7 +322,18 @@ Item {
 
             TbBtn {
                 lbl: "Start"; variant: "primary"
-                onClicked: hpController.publishScreenControl("start")
+                onClicked: {
+                    mainWindow.checkInkAndRun(function() {
+                        var inkMap = mainWindow.parseKvPipe(hpController.inkStatus);
+                        var code = inkMap["CODE"] || "";
+                        var lot_ci = inkMap["LOT_CI"] || "";
+                        if (code.trim() !== "" && lot_ci.trim() !== "") {
+                            hpController.publishScreenControl("start");
+                        } else {
+                            hpController.publishScreenControl("start_no_log");
+                        }
+                    });
+                }
             }
 
             CycleChip {
@@ -372,16 +382,19 @@ Item {
     //  BODY (scrollable)
     // ====================================================================
     Flickable {
-        anchors { top: headerBar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
-        contentWidth: width
-        contentHeight: mainCol.implicitHeight + 24
+        id: bodyFlick
+        anchors.top: headerBar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        contentHeight: mainCol.childrenRect.height + mainCol.y + 12
         clip: true
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
         ColumnLayout {
             id: mainCol
             x: 12; y: 12
-            width: parent.width - 24
+            width: Math.max(200, tab.width - 24)
             spacing: 12
 
             // -- Error banner --
@@ -399,7 +412,7 @@ Item {
                     Text { text: "⛔"; font.pixelSize: 30 }
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { text: "CANH BAO HE THONG"; color: cBad; font.bold: true; font.pixelSize: 22 }
+                        Text { text: "SYSTEM ALARM"; color: cBad; font.bold: true; font.pixelSize: 22 }
                         Text {
                             text: hpController.errorStatus || "-"
                             color: cText; font.pixelSize: 21
@@ -407,7 +420,7 @@ Item {
                         }
                     }
                     TbBtn {
-                        lbl: "Xac nhan & xoa"; variant: "danger"
+                        lbl: "Ack & Clear"; variant: "danger"
                         onClicked: hpController.publishString("error_control", "clear")
                     }
                 }
@@ -428,7 +441,7 @@ Item {
                     spacing: 12
 
                     Sect {
-                        title: "Tong quan"
+                        title: "Overview"
                         Layout.fillWidth: true
                         ColumnLayout {
                             width: parent.width; spacing: 7
@@ -444,14 +457,14 @@ Item {
                                 }
                             }
                             Kv {
-                                lbl: "Phan hoi cuoi"
+                                lbl: "Last Feedback"
                                 val: hpController.manualResponse || "-"
                             }
                         }
                     }
 
                     Sect {
-                        title: "Trang thai may"
+                        title: "Machine Status"
                         Layout.fillWidth: true
                         ColumnLayout {
                             width: parent.width; spacing: 7
@@ -518,7 +531,7 @@ Item {
 
                             // Alert center
                             Sect {
-                                title: "Trung tam canh bao"
+                                title: "Alert Center"
                                 Layout.fillWidth: true
 
                                 ColumnLayout {
@@ -526,23 +539,23 @@ Item {
 
                                     RowLayout {
                                         width: parent.width; spacing: 8
-                                        Text { text: "Tat ca: " + tab.alertHistory.length;     color: cMuted; font.pixelSize: 16 }
-                                        Text { text: "Loi: "    + tab.countError;              color: cBad;   font.pixelSize: 16; font.bold: true }
-                                        Text { text: "Canh bao: " + tab.countWarning;          color: cWarn;  font.pixelSize: 16; font.bold: true }
-                                        Text { text: "Thong tin: " + tab.countInfo;            color: cAccent; font.pixelSize: 16 }
+                                        Text { text: "All: " + tab.alertHistory.length;     color: cMuted; font.pixelSize: 16 }
+                                        Text { text: "Errors: "    + tab.countError;              color: cBad;   font.pixelSize: 16; font.bold: true }
+                                        Text { text: "Warnings: " + tab.countWarning;          color: cWarn;  font.pixelSize: 16; font.bold: true }
+                                        Text { text: "Info: " + tab.countInfo;            color: cAccent; font.pixelSize: 16 }
                                         Item { Layout.fillWidth: true }
-                                        TbBtn { lbl: "Xoa lich su"; onClicked: { tab.alertHistory = []; tab.lastAlertRaw = "" } }
+                                        TbBtn { lbl: "Clear History"; onClicked: { tab.alertHistory = []; tab.lastAlertRaw = "" } }
                                     }
 
                                     RowLayout {
                                         width: parent.width; spacing: 6
                                         Repeater {
                                             model: [
-                                                { key: "all",      lbl: "Tat ca" },
-                                                { key: "critical", lbl: "Nghiem trong" },
-                                                { key: "error",    lbl: "Loi" },
-                                                { key: "warning",  lbl: "Canh bao" },
-                                                { key: "info",     lbl: "Thong tin" }
+                                                { key: "all",      lbl: "All" },
+                                                { key: "critical", lbl: "Critical" },
+                                                { key: "error",    lbl: "Error" },
+                                                { key: "warning",  lbl: "Warning" },
+                                                { key: "info",     lbl: "Info" }
                                             ]
                                             TbBtn {
                                                 lbl: modelData.lbl
@@ -561,32 +574,26 @@ Item {
                                         border.color: cOk; border.width: 1
                                         Text {
                                             anchors.centerIn: parent
-                                            text: "✅ Khong co canh bao. He thong hoat dong binh thuong."
+                                            text: "✅ No warnings. System is operating normally."
                                             color: cOk; font.pixelSize: 16; font.bold: true
                                         }
                                     }
 
-                                    Item {
+                                    ListView {
                                         visible: tab.alertHistory.length > 0
                                         width: parent.width
-                                        implicitHeight: Math.min(360, alertColumn.implicitHeight)
-                                        ScrollView {
-                                            anchors.fill: parent
-                                            clip: true
-                                            ColumnLayout {
-                                                id: alertColumn
-                                                width: parent.width
-                                                spacing: 6
-                                                Repeater {
-                                                    model: tab.filteredAlerts
-                                                    AlertRow {
-                                                        sev:     modelData.sev
-                                                        time:    modelData.time
-                                                        area:    modelData.area
-                                                        message: modelData.message
-                                                    }
-                                                }
-                                            }
+                                        implicitHeight: Math.min(360, contentHeight)
+                                        height: implicitHeight
+                                        clip: true
+                                        spacing: 6
+                                        interactive: true
+                                        model: tab.filteredAlerts
+                                        delegate: AlertRow {
+                                            width: parent.width
+                                            sev:     modelData.sev
+                                            time:    modelData.time
+                                            area:    modelData.area
+                                            message: modelData.message
                                         }
                                     }
                                 }
@@ -604,25 +611,21 @@ Item {
                                     Layout.fillHeight: true
                                     Layout.alignment: Qt.AlignTop
 
-                                    Item {
-                                        anchors.fill: parent
+                                    ColumnLayout {
+                                        width: parent.width
+                                        spacing: 6
                                         enabled: tab.modeStr === "MANUAL"
                                         opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
                                         Behavior on opacity { NumberAnimation { duration: 150 } }
-                                        ColumnLayout {
-                                            anchors.fill: parent
-                                            spacing: 6
-                                            Repeater {
-                                                model: tab.cylinderModel
-                                                IoToggle {
-                                                    Layout.fillWidth: true
-                                                    Layout.fillHeight: true
-                                                    ioId:      modelData.id
-                                                    statusKey: modelData.statusKey
-                                                    ioLabel:   modelData.label
-                                                    actA:      modelData.a
-                                                    actB:      modelData.b
-                                                }
+                                        Repeater {
+                                            model: tab.cylinderModel
+                                            IoToggle {
+                                                Layout.fillWidth: true
+                                                ioId:      modelData.id
+                                                statusKey: modelData.statusKey
+                                                ioLabel:   modelData.label
+                                                actA:      modelData.a
+                                                actB:      modelData.b
                                             }
                                         }
                                     }
@@ -758,25 +761,21 @@ Item {
                             Layout.fillHeight: true
                             Layout.minimumHeight: implicitHeight
                             Layout.alignment: Qt.AlignTop
-                            Item {
-                                anchors.fill: parent
+                            ColumnLayout {
+                                width: parent.width
+                                spacing: 3
                                 enabled: tab.modeStr === "MANUAL"
                                 opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
                                 Behavior on opacity { NumberAnimation { duration: 150 } }
-                                ColumnLayout {
-                                    anchors.fill: parent
-                                    spacing: 3
-                                    Repeater {
-                                        model: tab.valveModel
-                                        IoToggle {
-                                            Layout.fillWidth: true
-                                            Layout.fillHeight: true
-                                            ioId:      modelData.id
-                                            statusKey: modelData.statusKey
-                                            ioLabel:   modelData.label
-                                            actA:      modelData.a
-                                            actB:      modelData.b
-                                        }
+                                Repeater {
+                                    model: tab.valveModel
+                                    IoToggle {
+                                        Layout.fillWidth: true
+                                        ioId:      modelData.id
+                                        statusKey: modelData.statusKey
+                                        ioLabel:   modelData.label
+                                        actA:      modelData.a
+                                        actB:      modelData.b
                                     }
                                 }
                             }
@@ -876,7 +875,7 @@ Item {
 
                         // Settings (tabs + grid)
                         Sect {
-                            title: "Thong so dieu khien"
+                            title: "Control Parameters"
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             Layout.alignment: Qt.AlignTop
@@ -911,13 +910,13 @@ Item {
                                         spacing: 6
 
                                         TbBtn {
-                                            lbl: "♻️ Khoi phuc mac dinh"
+                                            lbl: "♻️ Restore Defaults"
                                             variant: "warn"
                                             Layout.alignment: Qt.AlignHCenter
                                             onClicked: hpController.publishString("parameters_control", "reset_defaults")
                                         }
                                         Text {
-                                            text: "Dua TAT CA thong so ve gia tri goc trong code (can quyen Admin)"
+                                            text: "Restore ALL parameters to default values in code (Admin rights required)"
                                             color: cMuted
                                             font.pixelSize: 13
                                             Layout.alignment: Qt.AlignHCenter
@@ -987,9 +986,9 @@ Item {
                             width: parent.width; spacing: 4
                             RowLayout {
                                 width: parent.width
-                                Text { text: tab.actionLog.length + " thao tac gan day"; color: cMuted; font.pixelSize: 14 }
+                                Text { text: tab.actionLog.length + " recent operations"; color: cMuted; font.pixelSize: 14 }
                                 Item { Layout.fillWidth: true }
-                                TbBtn { lbl: "Xoa log"; onClicked: { tab.actionLog = []; tab.lastActionRaw = "" } }
+                                TbBtn { lbl: "Clear Log"; onClicked: { tab.actionLog = []; tab.lastActionRaw = "" } }
                             }
                             Item {
                                 width: parent.width
@@ -1223,14 +1222,12 @@ Item {
         Layout.fillWidth: true
         implicitHeight: 50
         radius: 6
-        color:        cls === "ok"    ? cOkBg
-                    : cls === "high"  ? cWarnBg
+        color:        cls === "high"  ? cWarnBg
                     : cls === "limit" ? cBadBg
-                    : Qt.rgba(0.01, 0.51, 0.78, 0.15)
-        border.color: cls === "ok"    ? cOk
-                    : cls === "high"  ? cWarn
+                    : cPanel2
+        border.color: cls === "high"  ? cWarn
                     : cls === "limit" ? cBad
-                    : "#0284c7"
+                    : cBorder
         border.width: 1
         RowLayout {
             anchors.fill: parent
@@ -1297,12 +1294,14 @@ Item {
 
     // Alert row component for Trung tam canh bao
     component AlertRow: Rectangle {
+        id: alertRowRoot
         property string sev: "info"
         property string time: ""
         property string area: ""
         property string message: ""
         Layout.fillWidth: true
-        implicitHeight: arCol.implicitHeight + 18
+        width: parent ? parent.width : 300
+        implicitHeight: arCol.implicitHeight + 20
         radius: 6
         color:        sev === "critical" ? Qt.rgba(1.0, 0.15, 0.15, 0.18)
                     : sev === "error"    ? Qt.rgba(1.0, 0.32, 0.32, 0.10)
@@ -1316,7 +1315,9 @@ Item {
 
         RowLayout {
             id: arCol
-            anchors.fill: parent
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
             anchors.margins: 10
             spacing: 10
 
@@ -1325,13 +1326,14 @@ Item {
                 font.pixelSize: 22
             }
             ColumnLayout {
-                Layout.fillWidth: true; spacing: 2
+                Layout.fillWidth: true
+                spacing: 2
                 RowLayout {
-                    width: parent.width
+                    Layout.fillWidth: true
                     Text {
                         text: (area ? area + " · " : "") + sev.toUpperCase()
-                        color: parent.parent.parent.parent.parent.sev === "warning" ? cWarn
-                             : parent.parent.parent.parent.parent.sev === "info"    ? cAccent : cBad
+                        color: sev === "warning" ? cWarn
+                             : sev === "info"    ? cAccent : cBad
                         font.pixelSize: 14; font.bold: true
                     }
                     Item { Layout.fillWidth: true }
@@ -1343,7 +1345,7 @@ Item {
                 Text {
                     text: message; color: cText
                     font.pixelSize: 15
-                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                    wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
             }
