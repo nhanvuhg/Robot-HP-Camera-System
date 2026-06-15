@@ -1222,10 +1222,12 @@ Item {
         Layout.fillWidth: true
         implicitHeight: 50
         radius: 6
-        color:        cls === "high"  ? cWarnBg
+        color:        cls === "ok"    ? cOkBg
+                    : cls === "high"  ? cWarnBg
                     : cls === "limit" ? cBadBg
                     : cPanel2
-        border.color: cls === "high"  ? cWarn
+        border.color: cls === "ok"    ? cOk
+                    : cls === "high"  ? cWarn
                     : cls === "limit" ? cBad
                     : cBorder
         border.width: 1
