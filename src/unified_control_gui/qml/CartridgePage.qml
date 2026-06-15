@@ -548,7 +548,7 @@
                                         width: parent.width
                                         height: (parent.height - 6) / 2
                                         radius: 5
-                                        color: cartridgeController.currentMode === "auto" ? "#0e5274" : root.cCard
+                                        color: cartridgeController.currentMode === "auto" ? root.cGreen : root.cCard
                                         border.width: 0
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.82 : 1.0 }
@@ -562,8 +562,8 @@
                                         }
                                         Column {
                                             anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
-                                            Text { text: "AUTO"; color: "#d4faff"; font.pixelSize: 15; font.bold: true }
-                                            Text { text: "Automatic"; color: root.cDim; font.pixelSize: 11 }
+                                            Text { text: "AUTO"; color: cartridgeController.currentMode === "auto" ? "#0c0c1d" : "#d4faff"; font.pixelSize: 15; font.bold: true }
+                                            Text { text: "Automatic"; color: cartridgeController.currentMode === "auto" ? "#3a4a5a" : root.cDim; font.pixelSize: 11 }
                                         }
                                     }
 
@@ -572,7 +572,7 @@
                                         width: parent.width
                                         height: (parent.height - 6) / 2
                                         radius: 5
-                                        color: (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") ? "#0a3d4a" : root.cCard
+                                        color: (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") ? root.cGreen : root.cCard
                                         border.width: 0
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.82 : 1.0 }
@@ -587,8 +587,8 @@
                                         }
                                         Column {
                                             anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
-                                            Text { text: "MANUAL"; color: "#d4faff"; font.pixelSize: 15; font.bold: true }
-                                            Text { text: "Direct Control"; color: root.cDim; font.pixelSize: 11 }
+                                            Text { text: "MANUAL"; color: (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") ? "#0c0c1d" : "#d4faff"; font.pixelSize: 15; font.bold: true }
+                                            Text { text: "Direct Control"; color: (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") ? "#3a4a5a" : root.cDim; font.pixelSize: 11 }
                                         }
                                     }
                                 }
