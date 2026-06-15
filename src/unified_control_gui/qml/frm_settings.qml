@@ -9,12 +9,7 @@ Window {
     height: 480
     title: "Settings"
     flags: Qt.Window
-    color: cBg
-
-    readonly property color cBg: "#090d16"
-    readonly property color cCard: "#0d1527"
-    readonly property color cBorder: "#1e293b"
-    readonly property color cAccent: "#1a8cd8"
+    color: "#0d1117"
 
     property var availableTopics: []
     property var selectedTopics: []
@@ -59,8 +54,8 @@ Window {
             Layout.leftMargin: 30
             Layout.rightMargin: 30
             Layout.topMargin: 20
-            color: cCard
-            border.color: cBorder
+            color: "transparent"
+            border.color: "#134357"
             border.width: 1
             radius: 6
 
@@ -68,7 +63,7 @@ Window {
                 anchors.centerIn: parent
                 visible: settingsWindow.loadingTopics
                 text: "⏳ Scanning ROS2 topics..."
-                color: cAccent; font.pixelSize: 16; font.bold: true
+                color: "#5cf4f1"; font.pixelSize: 16; font.bold: true
             }
             GridLayout {
                 columns: 1
@@ -86,7 +81,7 @@ Window {
 
                         Text {
                             text: modelData.name
-                            color: cAccent
+                            color: "#5cf4f1"
                             font.pixelSize: 16
                         }
 
@@ -109,8 +104,8 @@ Window {
                             }
 
                             background: Rectangle {
-                                color: "#e61b2050"
-                                border.color: cAccent
+                                color: "transparent"
+                                border.color: "#134357"
                                 border.width: 1
                                 radius: 6
                             }
@@ -118,7 +113,7 @@ Window {
                             contentItem: Text {
                                 text: topicCombo.displayText
                                 font.pixelSize: 14
-                                color: cAccent
+                                color: "#5cf4f1"
                                 verticalAlignment: Text.AlignVCenter
                                 horizontalAlignment: Text.AlignLeft
                                 elide: Text.ElideRight
@@ -133,7 +128,6 @@ Window {
         }
 
         Button {
-            id: saveBtn
             text: "Save"
             Layout.alignment: Qt.AlignRight
             Layout.topMargin: 0
@@ -141,15 +135,11 @@ Window {
             Layout.rightMargin: 30
             Layout.preferredHeight: 40
             Layout.preferredWidth: 120
-            scale: down ? 0.95 : 1.0
-            opacity: down ? 0.8 : 1.0
-            Behavior on scale { NumberAnimation { duration: 50 } }
 
             contentItem: Text {
                 text: "Save"
-                color: "#ffffff"
+                color: "#5cf4f1"
                 font.pixelSize: 14
-                font.bold: true
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: Text.AlignHCenter
                 anchors.fill: parent
@@ -157,11 +147,9 @@ Window {
 
             background: Rectangle {
                 radius: 6
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: saveBtn.down ? "#3faad0" : (saveBtn.hovered ? "#4dd2ff" : "#54d3ff") }
-                    GradientStop { position: 1.0; color: saveBtn.down ? "#273ea6" : (saveBtn.hovered ? "#324ecf" : "#3b58ff") }
-                }
+                color: "transparent"
+                border.color: "#134357"
+                border.width: 2
             }
 
             onClicked: {

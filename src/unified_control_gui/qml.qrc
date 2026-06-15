@@ -4,8 +4,6 @@
     <file alias="CameraPage.qml">qml/CameraPage.qml</file>
     <file alias="CartridgePage.qml">qml/CartridgePage.qml</file>
     <file alias="FillHpTab.qml">qml/FillHpTab.qml</file>
-    <file alias="InkTab.qml">qml/InkTab.qml</file>
-    <file alias="ProductionTab.qml">qml/ProductionTab.qml</file>
     <file alias="CameraView.qml">qml/CameraView.qml</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
@@ -20,5 +18,6 @@
     <file>qml/icons/reply_arrow.svg</file>
     <file>qml/icons/jog_plus.png</file>
     <file>qml/icons/jog_neg.png</file>
+    <file>qml/icons/bg_servers.jpg</file>
   </qresource>
 </RCC>

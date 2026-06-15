@@ -52,6 +52,7 @@ class RobotController : public QObject
     Q_PROPERTY(bool ignoreScale READ ignoreScale WRITE setIgnoreScale NOTIFY ignoreScaleChanged)
     Q_PROPERTY(QVariantList rowReady READ rowReady NOTIFY rowReadyChanged)
     Q_PROPERTY(QVariantList slotReady READ slotReady NOTIFY slotReadyChanged)
+    Q_PROPERTY(QString errorLog READ errorLog NOTIFY errorLogChanged)
 
 public:
     explicit RobotController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);

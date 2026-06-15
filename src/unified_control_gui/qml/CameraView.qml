@@ -13,15 +13,10 @@ Item {
     property string providerId: "cam"
     property int camIndex: 0
 
-    readonly property color cBg: "#090d16"
-    readonly property color cCard: "#0d1527"
-    readonly property color cBorder: "#1e293b"
-    readonly property color cAccent: "#1a8cd8"
-
     Rectangle {
         anchors.fill: parent
-        color: cCard
-        border.color: cBorder
+        color: "#1e1e1e"
+        border.color: "#134357"
         border.width: 1
         radius: 6
 
@@ -32,7 +27,7 @@ Item {
 
             Text {
                 text: cameraName + " (" + topic + ")"
-                color: cAccent
+                color: "#6cf"
                 padding: 4
                 font.pixelSize: 14
                 Layout.fillWidth: true
@@ -44,7 +39,7 @@ Item {
                 id: previewBox
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: cBg
+                color: "#2a2a2a"
                 // border.color: "#444"
                 radius: 4
 

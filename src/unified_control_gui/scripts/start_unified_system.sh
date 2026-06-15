@@ -24,6 +24,11 @@ if [ -f "$WS/install/setup.bash" ]; then
   source "$WS/install/setup.bash" || true
   set -u
 fi
+if [ -f "$WS/install/unified_control_gui/share/unified_control_gui/local_setup.bash" ]; then
+  set +u
+  source "$WS/install/unified_control_gui/share/unified_control_gui/local_setup.bash" || true
+  set -u
+fi
 
 LOG_DIR="$WS/logs"
 mkdir -p "$LOG_DIR"

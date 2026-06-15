@@ -11,18 +11,18 @@ Item {
     property bool modeLocked: false
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
 
-    readonly property color cPanel:       "#b30d1527"
-    readonly property color cPanel2:      "#b3090d16"
-    readonly property color cBorder:      "#4d00ffff"
+    readonly property color cPanel:       "#b30d2140"
+    readonly property color cPanel2:      "#b3061024"
+    readonly property color cBorder:      "#4d7bc8f0"
     readonly property color cText:        "#ffffff"
-    readonly property color cMuted:       "#6b7280"
-    readonly property color cAccent:      "#00ffff"
-    readonly property color cOk:          "#10b981"
-    readonly property color cOkBg:        Qt.rgba(0.06, 0.73, 0.51, 0.15)
+    readonly property color cMuted:       "#8eb4d0"
+    readonly property color cAccent:      "#7bc8f0"
+    readonly property color cOk:          "#00e676"
+    readonly property color cOkBg:        Qt.rgba(0.0, 0.90, 0.46, 0.15)
     readonly property color cWarn:        "#ffa726"
     readonly property color cWarnBg:      Qt.rgba(1.0, 0.65, 0.15, 0.15)
-    readonly property color cBad:         "#ef4444"
-    readonly property color cBadBg:       Qt.rgba(0.94, 0.27, 0.27, 0.15)
+    readonly property color cBad:         "#ff5252"
+    readonly property color cBadBg:       Qt.rgba(1.0, 0.32, 0.32, 0.15)
 
     function classifyPressure(val, lowT, highT, limitT) {
         if (val < lowT) return "low";
@@ -119,22 +119,24 @@ Item {
                     }
 
                     Button {
-                        id: cartSysBtn
                         text: "CARTRIDGE SYSTEM  ▸"
                         Layout.preferredHeight: 50
                         font.pixelSize: 16; font.bold: true
                         onClicked: stackView.push(cartridgePage)
                         background: Rectangle {
                             radius: 6
+                            color: "transparent"
+                            border.color: "#5cf4f1"
+                            border.width: 2
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: cartSysBtn.pressed ? "#3faad0" : (cartSysBtn.hovered ? "#4dd2ff" : "#54d3ff") }
-                                GradientStop { position: 1.0; color: cartSysBtn.pressed ? "#273ea6" : (cartSysBtn.hovered ? "#324ecf" : "#3b58ff") }
+                                GradientStop { position: 0.0; color: "#0e5274" }
+                                GradientStop { position: 1.0; color: "#041f1f" }
                             }
                         }
                         contentItem: Text {
                             text: parent.text; font: parent.font
-                            color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                            color: "#5cf4f1"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                         }
                     }
 
@@ -157,7 +159,6 @@ Item {
                     }
 
                     Button {
-                        id: settingsBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: {
                             var comp = Qt.createComponent("frm_settings.qml")
@@ -170,27 +171,14 @@ Item {
                                 }
                             }
                         }
-                        background: Rectangle {
-                            radius: 6
-                            color: settingsBtn.pressed ? "#273287" : (settingsBtn.hovered ? "#161c40" : "transparent")
-                            border.color: settingsBtn.hovered ? "#4d61f6" : "#3443af"
-                            border.width: 2
-                            Behavior on color { ColorAnimation { duration: 100 } }
-                        }
+                        background: Rectangle { radius: 6; color: "transparent"; border.color: "#134357"; border.width: 2 }
                         contentItem: Image { source: "qrc:/icons/qml/icons/settings.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true }
                     }
 
                     Button {
-                        id: exitBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: Qt.quit()
-                        background: Rectangle {
-                            radius: 6
-                            color: exitBtn.pressed ? "#273287" : (exitBtn.hovered ? "#161c40" : "transparent")
-                            border.color: exitBtn.hovered ? "#4d61f6" : "#3443af"
-                            border.width: 2
-                            Behavior on color { ColorAnimation { duration: 100 } }
-                        }
+                        background: Rectangle { radius: 6; color: "transparent"; border.color: "#134357"; border.width: 2 }
                         contentItem: Image { source: "qrc:/icons/qml/icons/power_settings.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true }
                     }
                 }
@@ -257,11 +245,10 @@ Item {
                 spacing: 8
 
                 Rectangle {
-                    color: cPanel
+                    color: "#081e29"
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    border.color: cBorder
-                    border.width: 1
+                    border.color: "#134357"
                     radius: 6
                     clip: true
 
@@ -288,9 +275,8 @@ Item {
                 Layout.fillHeight: true
                 Layout.preferredWidth: 400
                 Layout.maximumWidth: 400
-                color: cPanel
-                border.color: cBorder
-                border.width: 1
+                color: "#081e29"
+                border.color: "#134357"
                 radius: 6
 
                 ColumnLayout {
@@ -310,9 +296,9 @@ Item {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        PCard { lbl: "S1 Chamber";   val: hpController.pressureS1; maxVal: 1200 }
-                        PCard { lbl: "S2 Cartridge"; val: hpController.pressureS2; maxVal: 1200 }
-                        PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1000 }
+                        PCard { lbl: "S1 Chamber";   val: hpController.pressureS1; maxVal: 1200; cardIndex: 0 }
+                        PCard { lbl: "S2 Cartridge"; val: hpController.pressureS2; maxVal: 1200; cardIndex: 1 }
+                        PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1000; cardIndex: 2 }
                     }
 
                     Item { height: 10 } // Spacer
@@ -344,6 +330,7 @@ Item {
                         Repeater {
                             model: 8
                             CartRow {
+                                cartIndex: index
                                 cartName: "Cart " + (index + 1)
                                 cartVal:  (hpController.cartridgePressures && hpController.cartridgePressures.length > index) ? (Number(hpController.cartridgePressures[index]) || 0) : 0
                             }
@@ -357,9 +344,8 @@ Item {
                 Layout.fillHeight: true
                 Layout.fillWidth: true
                 Layout.minimumWidth: 300
-                color: cPanel
-                border.color: cBorder
-                border.width: 1
+                color: "#081e29"
+                border.color: "#134357"
                 radius: 6
 
                 ColumnLayout {
@@ -387,13 +373,13 @@ Item {
                             columns: 2; rowSpacing: 8; columnSpacing: 10
 
                             Text { text: "Mode:"; color: "#94a3b8"; font.pixelSize: 18 }
-                            Text { text: cameraPageRoot.ctrlMode.toUpperCase(); color: cameraPageRoot.ctrlMode === "camera_ai" ? "#5cf4f1" : "#4f6cff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: cameraPageRoot.ctrlMode.toUpperCase(); color: "#d4faff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
 
                             Text { text: "Uptime:"; color: "#94a3b8"; font.pixelSize: 18 }
-                            Text { text: robotController.systemUptime; color: "#f59e0b"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: robotController.systemUptime; color: "#d4faff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
 
                             Text { text: "State Robot:"; color: "#94a3b8"; font.pixelSize: 18 }
-                            Text { text: robotController.systemStatus; color: "#10b981"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: robotController.systemStatus; color: "#d4faff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
                         }
 
                         Rectangle { width: 1; Layout.fillHeight: true; color: "#134357" }
@@ -405,13 +391,13 @@ Item {
                             columns: 2; rowSpacing: 8; columnSpacing: 10
 
                             Text { text: "Ink Name:"; color: "#94a3b8"; font.pixelSize: 18 }
-                            Text { text: scaleController.activeInkName; color: "#5cf4f1"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: scaleController.activeInkName; color: "#d4faff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
 
                             Text { text: "Cartridge Type:"; color: "#94a3b8"; font.pixelSize: 18 }
-                            Text { text: scaleController.activeCartName; color: "#f59e0b"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: scaleController.activeCartName; color: "#d4faff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
 
                             Text { text: "Weight Batch:"; color: "#94a3b8"; font.pixelSize: 18 }
-                            Text { text: scaleController.totalBatchWeight > 0 ? scaleController.totalBatchWeight.toFixed(2) + " g" : "0.00 g"; color: "#10b981"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { text: scaleController.totalBatchWeight > 0 ? scaleController.totalBatchWeight.toFixed(2) + " g" : "0.00 g"; color: "#d4faff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
                         }
 
                         Rectangle { width: 1; Layout.fillHeight: true; color: "#134357" }
@@ -423,25 +409,59 @@ Item {
                             spacing: 6
 
                             Text { text: "CONTROL MODE "; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
-                            Repeater {
-                                model: [
-                                    { key: "auto",      lbl: "AUTO",      bc: "#4f6cff" },
-                                    { key: "camera_ai", lbl: "CAMERA AI", bc: "#5cf4f1" }
-                                ]
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    property bool isSelected: cameraPageRoot.ctrlMode === modelData.key
-                                    property bool isLocked: cameraPageRoot.modeLocked || cameraPageRoot.robotBusy
-                                    Layout.fillWidth: true; height: 35; radius: 5
-                                    color: isSelected ? modelData.bc + "33" : "#0d2538"
-                                    border.color: isSelected ? modelData.bc : (isLocked ? "#2a3a4a" : "#134357"); border.width: 2
-                                    opacity: (!isSelected && isLocked) ? 0.35 : 1.0
-                                    Text { anchors.centerIn: parent; text: (isLocked && !isSelected ? "🔒 " : "") + modelData.lbl; color: isSelected ? modelData.bc : "#94a3b8"; font.pixelSize: 16; font.bold: true }
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        enabled: !parent.isLocked
-                                        onClicked: {
-                                            cameraPageRoot.ctrlMode = modelData.key
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 84
+                                radius: 22
+                                antialiasing: true
+                                color: "#0d2538"
+                                border.color: "#134357"
+                                border.width: 1
+
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 4
+                                    spacing: 0
+
+                                    Repeater {
+                                        model: [
+                                            { key: "auto",      lbl: "AUTO" },
+                                            { key: "camera_ai", lbl: "CAMERA AI" }
+                                        ]
+                                        delegate: Item {
+                                            required property var modelData
+                                            property bool isSelected: cameraPageRoot.ctrlMode === modelData.key
+                                            property bool isLocked: cameraPageRoot.modeLocked || cameraPageRoot.robotBusy
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            opacity: (!isSelected && isLocked) ? 0.35 : 1.0
+
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: height / 2
+                                                antialiasing: true
+                                                visible: parent.isSelected
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: "#5cf4f1" }
+                                                    GradientStop { position: 1.0; color: "#00bcd4" }
+                                                }
+                                            }
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: (parent.isLocked && !parent.isSelected ? "🔒 " : "") + parent.modelData.lbl
+                                                color: parent.isSelected ? "#0d2538" : "#d4faff"
+                                                font.pixelSize: 16
+                                                font.bold: true
+                                            }
+
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                enabled: !parent.isLocked
+                                                onClicked: cameraPageRoot.ctrlMode = parent.modelData.key
+                                            }
                                         }
                                     }
                                 }
@@ -469,9 +489,10 @@ Item {
                         Layout.fillHeight: false
                         Text { text: "INPUT ROW"; color: "#5cf4f1"; font.pixelSize: 17; font.bold: true }
                         Text {
-                            text: cameraPageRoot.rowLocked ? "🔒 Waiting for tray..." : (cameraPageRoot.ctrlMode === "camera_ai" ? "(AI auto)" : "Select then press PICK_INPUT")
-                            color: cameraPageRoot.rowLocked ? "#ef4444" : "#6b7280"
-                            font.pixelSize: 17
+                            Layout.fillWidth: true;
+                            font.pixelSize: 13; color: "#8888aa"; font.italic: true
+                            text: cameraPageRoot.rowLocked ? "🔒 Waiting for tray..." : (cameraPageRoot.ctrlMode === "camera_ai" ? "(AI auto)" : "Select then press PICK_CARTRIDGE")
+                            elide: Text.ElideRight
                         }
                     }
                     RowLayout {
@@ -482,9 +503,7 @@ Item {
                                 property bool aiMode: cameraPageRoot.ctrlMode === "camera_ai"
                                 property bool isReady: aiMode && (robotController.rowReady[index] === true)
                                 property bool isActive: robotController.selectedRow === rn
-                                // MANUAL cũng được pick row: sau STOP (soft_stop → MANUAL), operator
-                                // cần repick row trước khi PICK_INPUT thủ công. Chỉ AI mode tự chọn row.
-                                property bool canSelect: !cameraPageRoot.rowLocked && (cameraPageRoot.ctrlMode === "auto" || cameraPageRoot.ctrlMode === "manual")
+                                property bool canSelect: !cameraPageRoot.rowLocked && cameraPageRoot.ctrlMode === "auto"
                                 Layout.fillWidth: true; height: 32; radius: 5
                                 color: aiMode
                                        ? (isActive ? "#0a4020" : (isReady ? "#0d3320" : "#0d2538"))
@@ -533,8 +552,7 @@ Item {
                                 property bool aiMode: cameraPageRoot.ctrlMode === "camera_ai"
                                 property bool isReady: aiMode && (robotController.slotReady[index] === true)
                                 property bool isActive: robotController.selectedSlot === sn
-                                // Tương tự row picker: MANUAL cũng pick được sau STOP.
-                                property bool canSelect: cameraPageRoot.ctrlMode === "auto" || cameraPageRoot.ctrlMode === "manual"
+                                property bool canSelect: cameraPageRoot.ctrlMode === "auto"
                                 Layout.fillWidth: true; height: 32; radius: 5
                                 color: aiMode
                                        ? (isActive ? "#0a4020" : (isReady ? "#0d3320" : "#0d2538"))
@@ -572,36 +590,52 @@ Item {
                         Layout.fillWidth: true; columns: 2; rowSpacing: 5; columnSpacing: 5
                         Repeater {
                             model: [
-                                { lbl: "IN_READY",     icon: "",   bg: "#351a0a", bc: "#ffaa4f" },
-                                { lbl: "OUT_READY",    icon: "",   bg: "#351a0a", bc: "#ffaa4f" },
-                                { lbl: "PICK_INPUT",   icon: "↓",  bg: "#0a1a35", bc: "#4f6cff" },
-                                { lbl: "PICK_CHAMBER", icon: "⟳", bg: "#0a1a35", bc: "#4f6cff" },
-                                { lbl: "PLACE_OUTPUT", icon: "",   bg: "#051a1a", bc: "#00bcd4" },
-                                { lbl: "PLACE_FAIL",   icon: "",   bg: "#1a1505", bc: "#ff9800" }
+                                { lbl: "IN_READY",     displayLbl: "IN_READY",       icon: "",  bgStart: "#0e5274", bgEnd: "#072d42", bc: "#1e7090", tc: "#7bc8f0" },
+                                { lbl: "OUT_READY",    displayLbl: "OUT_READY",       icon: "",  bgStart: "#0e5274", bgEnd: "#072d42", bc: "#1e7090", tc: "#7bc8f0" },
+                                { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE",  icon: "↓", bgStart: "#3ba0cf", bgEnd: "#115c5c", bc: "#5bc8e8", tc: "#d4faff" },
+                                { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",    icon: "⟳", bgStart: "#3ba0cf", bgEnd: "#115c5c", bc: "#5bc8e8", tc: "#d4faff" },
+                                { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",    icon: "",  bgStart: "#0e5274", bgEnd: "#031e1e", bc: "#1e6a8a", tc: "#d4faff" },
+                                { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",      icon: "",  bgStart: "#0b4462", bgEnd: "#042027", bc: "#1a5070", tc: "#d4faff" }
                             ]
                             delegate: Rectangle {
                                 required property var modelData
                                 property bool isActive: (modelData.lbl === "IN_READY" && robotController.inReady) || (modelData.lbl === "OUT_READY" && robotController.outReady)
+                                readonly property bool isReadyBtn: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
+                                property color gStart: (isReadyBtn && isActive) ? "#1a5070" : modelData.bgStart
+                                property color gEnd:   (isReadyBtn && isActive) ? "#0a3040" : modelData.bgEnd
                                 Layout.fillWidth: true; height: 64; radius: 5
-                                color: isActive ? Qt.lighter(modelData.bg, 1.8) : (ma.pressed ? Qt.darker(modelData.bg, 1.3) : modelData.bg)
-                                border.color: isActive ? "#00ff00" : (ma.pressed ? Qt.lighter(modelData.bc, 1.2) : modelData.bc)
-                                border.width: isActive || ma.pressed ? 3 : 2
+                                color: "transparent"
+                                gradient: Gradient {
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: ma.pressed ? Qt.darker(gStart, 1.2) : gStart }
+                                    GradientStop { position: 1.0; color: ma.pressed ? Qt.darker(gEnd, 1.2) : gEnd }
+                                }
+                                border.color: modelData.bc
+                                border.width: 1
                                 scale: ma.pressed ? 0.95 : 1.0
-                                Behavior on color { ColorAnimation { duration: 150 } }
-                                Behavior on border.color { ColorAnimation { duration: 150 } }
                                 Behavior on scale { NumberAnimation { duration: 100 } }
                                 Row { anchors.centerIn: parent; spacing: 6
                                     Rectangle {
-                                        width: 14; height: 14; radius: 7
-                                        color: parent.parent.isActive ? "#00ff00" : "#444"
-                                        border.color: parent.parent.isActive ? "#fff" : "#222"
-                                        border.width: 1
+                                        width: 10; height: 10; radius: 5
+                                        color: parent.parent.isActive ? "#5cf4f1" : "#2a3a4a"
+                                        border.width: 0
                                         visible: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
                                         anchors.verticalCenter: parent.verticalCenter
                                         Behavior on color { ColorAnimation { duration: 200 } }
                                     }
-                                    Text { text: modelData.icon; color: modelData.bc; font.pixelSize: 22; anchors.verticalCenter: parent.verticalCenter }
-                                    Text { text: modelData.lbl; color: modelData.bc; font.pixelSize: 20; font.bold: true; anchors.verticalCenter: parent.verticalCenter }
+                                    Text {
+                                        text: modelData.icon
+                                        color: (parent.parent.isReadyBtn && parent.parent.isActive) ? "#090d16" : modelData.tc
+                                        font.pixelSize: 22
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                    Text {
+                                        text: modelData.displayLbl
+                                        color: (parent.parent.isReadyBtn && parent.parent.isActive) ? "#090d16" : modelData.tc
+                                        font.pixelSize: 20
+                                        font.bold: true
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
                                 }
                                 MouseArea { id: ma; anchors.fill: parent; onClicked: {
                                     if (modelData.lbl === "IN_READY") robotController.simulateInputTrayReady()
@@ -620,154 +654,105 @@ Item {
 
                     Text { text: "SYSTEM CONTROL"; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
 
-                    Rectangle {
-                        id: emBtn
-                        Layout.fillWidth: true; height: 56; radius: 5
+                    Rectangle { Layout.fillWidth: true; height: 56; radius: 5; color: "transparent"; border.color: "#ef4444"; border.width: 1
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: emMA.pressed ? "#991b1b" : (emMA.containsMouse ? "#b91c1c" : "#dc2626") }
-                            GradientStop { position: 1.0; color: emMA.pressed ? "#7f1d1d" : (emMA.containsMouse ? "#991b1b" : "#b91c1c") }
+                            GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker("#da2525", 1.15) : "#da2525" }
+                            GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker("#ba1b1b", 1.15) : "#ba1b1b" }
                         }
                         scale: emMA.pressed ? 0.95 : 1.0
                         Behavior on scale { NumberAnimation { duration: 100 } }
                         Text { anchors.centerIn: parent; text: "⛔ EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
-                        MouseArea {
-                            id: emMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: { cameraPageRoot.modeLocked = false; robotController.emergencyStop(true) }
-                        }
+                        MouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.emergencyStop(true) } }
                     }
 
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 5; columnSpacing: 5
 
-                        Rectangle {
-                            id: stopBtn
-                            Layout.fillWidth: true; height: 52; radius: 5
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#6a2222"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: stopResetMA.pressed ? "#991b1b" : (stopResetMA.containsMouse ? "#b91c1c" : "#dc2626") }
-                                GradientStop { position: 1.0; color: stopResetMA.pressed ? "#7f1d1d" : (stopResetMA.containsMouse ? "#991b1b" : "#b91c1c") }
+                                GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker("#8a2020", 1.15) : "#8a2020" }
+                                GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker("#4e0c0c", 1.15) : "#4e0c0c" }
                             }
                             scale: stopResetMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#ffffff"; font.pixelSize: 20; font.bold: true }
-                            MouseArea {
-                                id: stopResetMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.softStop() }
-                            }
+                            Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
+                            MouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.softStop() } }
                         }
 
-                        Rectangle {
-                            id: enBtn
-                            Layout.fillWidth: true; height: 52; radius: 5
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: enMA.pressed ? "#3faad0" : (enMA.containsMouse ? "#4dd2ff" : "#54d3ff") }
-                                GradientStop { position: 1.0; color: enMA.pressed ? "#273ea6" : (enMA.containsMouse ? "#324ecf" : "#3b58ff") }
+                                GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
+                                GradientStop { position: 1.0; color: enMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
                             }
                             scale: enMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "ENABLE"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
-                            MouseArea {
-                                id: enMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: robotController.enableSystem(true)
-                            }
+                            Text { anchors.centerIn: parent; text: "ENABLE"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
+                            MouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
                         }
 
-                        Rectangle {
-                            id: startBtn
-                            Layout.fillWidth: true; height: 52; radius: 5
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#0d6060"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: startMA.pressed ? "#166534" : (startMA.containsMouse ? "#15803d" : "#22c55e") }
-                                GradientStop { position: 1.0; color: startMA.pressed ? "#14532d" : (startMA.containsMouse ? "#166534" : "#16a34a") }
+                                GradientStop { position: 0.0; color: startMA.pressed ? Qt.darker("#0c7876", 1.15) : "#0c7876" }
+                                GradientStop { position: 1.0; color: startMA.pressed ? Qt.darker("#085f5d", 1.15) : "#085f5d" }
                             }
                             scale: startMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "🚀 START"; color: "#ffffff"; font.pixelSize: 20; font.bold: true }
-                            MouseArea {
-                                id: startMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    if (cameraPageRoot.ctrlMode === "camera_ai") {
-                                        robotController.selectRow(0)
-                                        robotController.setAiMode(true)
-                                        hpController.publishMode(0) // sync Fill HP → Auto
-                                    } else if (cameraPageRoot.ctrlMode === "auto") {
-                                        if (robotController.selectedRow <= 0) {
-                                            robotController.selectRow(1)
-                                        }
-                                        robotController.setAutoMode(true)
-                                        hpController.publishMode(0) // sync Fill HP → Auto
+                            Text { anchors.centerIn: parent; text: "▶ START"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
+                            MouseArea { id: startMA; anchors.fill: parent; onClicked: {
+                                if (cameraPageRoot.ctrlMode === "camera_ai") {
+                                    robotController.selectRow(0)
+                                    robotController.setAiMode(true)
+                                    hpController.publishMode(0) // sync Fill HP → Auto
+                                } else if (cameraPageRoot.ctrlMode === "auto") {
+                                    if (robotController.selectedRow <= 0) {
+                                        robotController.selectRow(1)
                                     }
-                                    cameraPageRoot.modeLocked = true
-                                    robotController.startSystem(true)
+                                    robotController.setAutoMode(true)
+                                    hpController.publishMode(0) // sync Fill HP → Auto
                                 }
-                            }
+                                cameraPageRoot.modeLocked = true
+                                robotController.startSystem(true)
+                            } }
                         }
 
-                        Rectangle {
-                            id: pauseBtn
-                            Layout.fillWidth: true; height: 52; radius: 5
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: pauseMA.pressed ? "#3faad0" : (pauseMA.containsMouse ? "#4dd2ff" : "#54d3ff") }
-                                GradientStop { position: 1.0; color: pauseMA.pressed ? "#273ea6" : (pauseMA.containsMouse ? "#324ecf" : "#3b58ff") }
+                                GradientStop { position: 0.0; color: pauseMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
+                                GradientStop { position: 1.0; color: pauseMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
                             }
                             scale: pauseMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "PAUSE"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
-                            MouseArea {
-                                id: pauseMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: robotController.pauseRobot()
-                            }
+                            Text { anchors.centerIn: parent; text: "PAUSE"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
+                            MouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
                         }
 
-                        Rectangle {
-                            id: resBtn
-                            Layout.fillWidth: true; height: 52; radius: 5
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: resMA.pressed ? "#3faad0" : (resMA.containsMouse ? "#4dd2ff" : "#54d3ff") }
-                                GradientStop { position: 1.0; color: resMA.pressed ? "#273ea6" : (resMA.containsMouse ? "#324ecf" : "#3b58ff") }
+                                GradientStop { position: 0.0; color: resMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
+                                GradientStop { position: 1.0; color: resMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
                             }
                             scale: resMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "RESUME"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
-                            MouseArea {
-                                id: resMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: robotController.resumeRobot()
-                            }
+                            Text { anchors.centerIn: parent; text: "RESUME"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
+                            MouseArea { id: resMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
                         }
 
-                        Rectangle {
-                            id: clrBtn
-                            Layout.fillWidth: true; height: 52; radius: 5
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: clrMA.pressed ? "#3faad0" : (clrMA.containsMouse ? "#4dd2ff" : "#54d3ff") }
-                                GradientStop { position: 1.0; color: clrMA.pressed ? "#273ea6" : (clrMA.containsMouse ? "#324ecf" : "#3b58ff") }
+                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
+                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
                             }
                             scale: clrMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
-                            MouseArea {
-                                id: clrMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: robotController.clearError()
-                            }
+                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
+                            MouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
                         }
                     }
                 }
@@ -801,30 +786,107 @@ Item {
         property string lbl: ""
         property real   val: 0
         property real   maxVal: 1000
+        property int    cardIndex: 0
         Layout.fillWidth: true
-        implicitHeight: pc.implicitHeight + 24
-        radius: 8
-        color: cPanel2; border.color: cBorder; border.width: 1
+        Layout.fillHeight: true
+        implicitHeight: 64
+        radius: 10
+        color: cPanel2
+        clip: true
+        border.width: 0
         ColumnLayout {
-            id: pc; x: 12; y: 12
-            width: parent.width - 24; spacing: 6
+            anchors.fill: parent
+            anchors.leftMargin: 16
+            anchors.rightMargin: 16
+            anchors.topMargin: 10
+            anchors.bottomMargin: 10
+            spacing: 8
             RowLayout {
-                width: parent.width
-                Text { text: lbl; color: cMuted; font.pixelSize: 21; font.bold: true }
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 8
+                Text {
+                    text: {
+                        var parts = lbl.split(" ");
+                        var head = parts[0];
+                        var tail = parts.length > 1 ? parts.slice(1).join(" ") : "";
+                        return tail.length > 0 ? (head + " · " + tail) : head;
+                    }
+                    color: cMuted
+                    font.pixelSize: 15
+                    font.bold: true
+                    Layout.alignment: Qt.AlignVCenter
+                }
                 Item { Layout.fillWidth: true }
                 RowLayout {
-                    spacing: 3
-                    Text { text: val.toFixed(1); color: cText; font.pixelSize: 30; font.bold: true; font.family: "monospace" }
-                    Text { text: "mbar"; color: cMuted; font.pixelSize: 20; font.bold: true }
+                    spacing: 4
+                    Layout.alignment: Qt.AlignVCenter
+                    Text {
+                        text: val.toFixed(1)
+                        color: cText
+                        font.pixelSize: 26
+                        font.bold: true
+                        font.family: "monospace"
+                    }
+                    Text {
+                        text: "mbar"
+                        color: cMuted
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.alignment: Qt.AlignBottom
+                        Layout.bottomMargin: 3
+                    }
                 }
             }
             Rectangle {
-                Layout.fillWidth: true; height: 8; radius: 4
-                color: cBorder
+                id: pcBarContainer
+                Layout.fillWidth: true
+                Layout.preferredHeight: 12
+                radius: height / 2
+                antialiasing: true
+                color: "#0c4663"
+                clip: true
+
                 Rectangle {
-                    height: parent.height; radius: parent.radius
+                    id: pcFilledBar
+                    height: parent.height
+                    radius: height / 2
+                    antialiasing: true
                     width: parent.width * Math.max(0, Math.min(1, val / maxVal))
-                    color: cAccent
+                    clip: true
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "#0e5274" }
+                        GradientStop { position: 1.0; color: "#041f1f" }
+                    }
+
+                    onWidthChanged: {
+                        pcShimmerAnim.restart()
+                    }
+
+                    Rectangle {
+                        id: pcBarShimmer
+                        height: parent.height
+                        width: 160
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0;  color: "#00ffffff" }
+                            GradientStop { position: 0.35; color: "#22ffffff" }
+                            GradientStop { position: 0.5;  color: "#44ffffff" }
+                            GradientStop { position: 0.65; color: "#22ffffff" }
+                            GradientStop { position: 1.0;  color: "#00ffffff" }
+                        }
+                        PropertyAnimation {
+                            id: pcShimmerAnim
+                            target: pcBarShimmer
+                            property: "x"
+                            from: -pcBarShimmer.width
+                            to: pcFilledBar.width
+                            duration: 2600 + cardIndex * 300
+                            loops: Animation.Infinite
+                            running: pcFilledBar.width > 0
+                        }
+                    }
                 }
             }
         }
@@ -833,38 +895,132 @@ Item {
     component CartRow: Rectangle {
         property string cartName: ""
         property real   cartVal: 0
+        property int    cartIndex: 0
         readonly property string cls: classifyPressure(cartVal, 280, 400, 600)
         Layout.fillWidth: true
         Layout.fillHeight: true
-        implicitHeight: 50
+        implicitHeight: 60
         radius: 6
         color:        cPanel2
-        border.color: cBorder
-        border.width: 1
-        RowLayout {
+        clip:         true
+        border.width: 0
+        ColumnLayout {
             anchors.fill: parent
-            anchors.leftMargin: 10; anchors.rightMargin: 10
-            spacing: 8
-            Text {
-                text: cartName; color: cText
-                font.pixelSize: 20; font.bold: true
-                Layout.preferredWidth: 95
-            }
-            ColumnLayout {
-                Layout.fillWidth: true; spacing: 2
-                RowLayout {
-                    width: parent.width
-                    Item { Layout.fillWidth: true }
-                    Text { text: cartVal.toFixed(0); color: cText; font.pixelSize: 22; font.bold: true; font.family: "monospace" }
-                    Text { text: "mbar"; color: cMuted; font.pixelSize: 18; font.bold: true }
+            anchors.leftMargin: 14
+            anchors.rightMargin: 14
+            anchors.topMargin: 8
+            anchors.bottomMargin: 8
+            spacing: 2
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                ColumnLayout {
+                    spacing: 0
+                    Layout.alignment: Qt.AlignVCenter
+                    Text {
+                        text: {
+                            var parts = cartName.split(" ");
+                            return parts[0].toUpperCase();
+                        }
+                        color: cMuted
+                        font.pixelSize: 11
+                        font.bold: true
+                    }
+                    Text {
+                        text: {
+                            var parts = cartName.split(" ");
+                            return parts.length > 1 ? parts[1] : "";
+                        }
+                        color: cText
+                        font.pixelSize: 16
+                        font.bold: true
+                    }
                 }
+                Item { Layout.fillWidth: true }
+                RowLayout {
+                    spacing: 4
+                    Layout.alignment: Qt.AlignVCenter
+                    Text {
+                        text: cartVal.toFixed(1)
+                        color: cText
+                        font.pixelSize: 21
+                        font.bold: true
+                        font.family: "monospace"
+                    }
+                    Text {
+                        text: "mbar"
+                        color: cMuted
+                        font.pixelSize: 13
+                        font.bold: true
+                        Layout.alignment: Qt.AlignBottom
+                        Layout.bottomMargin: 2
+                    }
+                }
+            }
+            Rectangle {
+                id: barContainer
+                Layout.fillWidth: true
+                Layout.preferredHeight: 12
+                radius: height / 2
+                antialiasing: true
+                color: "#0c4663"
+                clip: true
+
                 Rectangle {
-                    Layout.fillWidth: true; height: 6; radius: 3
-                    color: cBorder
+                    id: cartFilledBar
+                    height: parent.height
+                    radius: height / 2
+                    antialiasing: true
+                    width: parent.width * Math.max(0, Math.min(1, cartVal / 1200))
+                    clip: true
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop {
+                            position: 0.0
+                            color: {
+                                if (cls === "limit") return "#0e5274";
+                                if (cls === "high") return "#3ba0cf";
+                                if (cls === "ok") return "#90c0cf";
+                                return "#4d61f6";
+                            }
+                        }
+                        GradientStop {
+                            position: 1.0
+                            color: {
+                                if (cls === "limit") return "#041f1f";
+                                if (cls === "high") return "#125c5c";
+                                if (cls === "ok") return "#459bbd";
+                                return "#3b4ad0";
+                            }
+                        }
+                    }
+
+                    onWidthChanged: {
+                        cartShimmerAnim.restart()
+                    }
+
                     Rectangle {
-                        height: parent.height; radius: parent.radius
-                        width: parent.width * Math.max(0, Math.min(1, cartVal / 1000))
-                        color: "#4d61f6"
+                        id: cartBarShimmer
+                        height: parent.height
+                        width: 160
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0;  color: "#00ffffff" }
+                            GradientStop { position: 0.35; color: "#22ffffff" }
+                            GradientStop { position: 0.5;  color: "#44ffffff" }
+                            GradientStop { position: 0.65; color: "#22ffffff" }
+                            GradientStop { position: 1.0;  color: "#00ffffff" }
+                        }
+                        PropertyAnimation {
+                            id: cartShimmerAnim
+                            target: cartBarShimmer
+                            property: "x"
+                            from: -cartBarShimmer.width
+                            to: cartFilledBar.width
+                            duration: 2600 + cartIndex * 300
+                            loops: Animation.Infinite
+                            running: cartFilledBar.width > 0
+                        }
                     }
                 }
             }
