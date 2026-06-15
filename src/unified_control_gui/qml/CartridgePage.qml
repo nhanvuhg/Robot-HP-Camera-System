@@ -1691,14 +1691,14 @@
                                                 id: savePoseBtn
                                                 width: 90; height: 42; radius: 6
                                                 property bool saving: false
-                                                color: saving ? "#1a4d00" : (saveMA.pressed ? "#2a6a00" : "#0a3a00")
-                                                border.color: savePoseBtn.saving ? root.cGreen : (saveMA.pressed ? Qt.lighter(root.cGreen, 1.3) : "#4a8a00")
+                                                color: saving ? "#0d2a3a" : (saveMA.pressed ? "#0a405c" : root.cCard)
+                                                border.color: savePoseBtn.saving ? root.cGreen : (saveMA.pressed ? Qt.lighter(root.cGreen, 1.3) : root.cBorder)
                                                 border.width: saveMA.pressed ? 2 : 1
                                                 Behavior on color { ColorAnimation { duration: 100 } }
                                                 Text {
                                                     anchors.centerIn: parent
                                                     text: savePoseBtn.saving ? "✓ SAVED" : "💾 SAVE"
-                                                    color: savePoseBtn.saving ? root.cGreen : "#88cc44"
+                                                    color: savePoseBtn.saving ? root.cGreen : root.cCyan
                                                     font.pixelSize: 13; font.bold: true
                                                 }
                                                 MouseArea {
@@ -1861,7 +1861,7 @@
                                             spacing: 6; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
-                                                color: rowGripper.isOn ? "#0a332e" : root.cCard
+                                                color: rowGripper.isOn ? "#0d2a3a" : root.cCard
                                                 border.color: rowGripper.isOn ? root.cGreen : root.cBorder
                                                 Text { anchors.centerIn: parent; text: "GẮP"; color: rowGripper.isOn ? root.cGreen : root.cDim; font.pixelSize: 15; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, true); rowGripper.isOn = true } }
@@ -1883,7 +1883,7 @@
                                             spacing: 6; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
-                                                color: rowPicker.isOn ? "#0a332e" : root.cCard
+                                                color: rowPicker.isOn ? "#0d2a3a" : root.cCard
                                                 border.color: rowPicker.isOn ? root.cGreen : root.cBorder
                                                 Text { anchors.centerIn: parent; text: "GẮP"; color: rowPicker.isOn ? root.cGreen : root.cDim; font.pixelSize: 15; font.bold: true }
                                                 MouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, true); rowPicker.isOn = true } }
