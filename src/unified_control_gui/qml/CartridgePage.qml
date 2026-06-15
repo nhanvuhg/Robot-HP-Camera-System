@@ -37,9 +37,9 @@
         property int logH:    outerH - topH - gap
 
         readonly property color cBg:     "transparent"
-        readonly property color cBg2:    "#b30d2140"
-        readonly property color cCard:   "#b3061024"
-        readonly property color cBorder: "#4d7bc8f0"
+        readonly property color cBg2:    "#990d1e32"
+        readonly property color cCard:   "#88060f1e"
+        readonly property color cBorder: "#1affffff"
         readonly property color cAccent: "#7bc8f0"
         readonly property color cGreen:  "#00e676"
         readonly property color cRed:    "#ff5252"
@@ -48,8 +48,30 @@
         readonly property color cYellow: "#ffd740"
         readonly property color cDim:    "#8888aa"
         readonly property color cText:   "#e8e8f0"
+        readonly property color cHover:  "#40ffffff"
 
         Rectangle { anchors.fill: parent; color: root.cBg }
+
+        // Ambient glow blobs — creates depth behind glass panels
+        Canvas {
+            anchors.fill: parent
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                var g1 = ctx.createRadialGradient(width * 0.85, -height * 0.08, 0, width * 0.85, -height * 0.08, height * 0.80)
+                g1.addColorStop(0.00, "rgba(30,100,220,0.42)")
+                g1.addColorStop(0.30, "rgba(30,100,220,0.18)")
+                g1.addColorStop(0.60, "rgba(30,100,220,0.04)")
+                g1.addColorStop(1.00, "rgba(30,100,220,0.00)")
+                ctx.fillStyle = g1; ctx.fillRect(0, 0, width, height)
+                var g2 = ctx.createRadialGradient(width * 0.06, height * 1.08, 0, width * 0.06, height * 1.08, height * 0.70)
+                g2.addColorStop(0.00, "rgba(0,180,160,0.32)")
+                g2.addColorStop(0.38, "rgba(0,180,160,0.10)")
+                g2.addColorStop(0.68, "rgba(0,180,160,0.02)")
+                g2.addColorStop(1.00, "rgba(0,180,160,0.00)")
+                ctx.fillStyle = g2; ctx.fillRect(0, 0, width, height)
+            }
+        }
 
         // ════════════════════════════════════════════════════════════
         // HEADER
@@ -58,7 +80,20 @@
             id: header
             anchors { top: parent.top; left: parent.left; right: parent.right }
             height: root.headerH
-            color: "#141428"; border.color: root.cBorder; z: 10
+            color: "#cc0d1428"; border.color: root.cBorder; z: 10
+
+            // Top specular line
+            Rectangle {
+                anchors { top: parent.top; left: parent.left; right: parent.right }
+                height: 1
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0.0; color: "transparent" }
+                    GradientStop { position: 0.4; color: "#55ffffff" }
+                    GradientStop { position: 0.6; color: "#55ffffff" }
+                    GradientStop { position: 1.0; color: "transparent" }
+                }
+            }
 
             RowLayout {
                 anchors.fill: parent
@@ -484,7 +519,7 @@
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
-                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                             ColumnLayout { id: modeSelCol
                                 anchors.fill: parent; anchors.margins: 8
@@ -566,7 +601,7 @@
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
-                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
@@ -600,7 +635,7 @@
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
-                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
@@ -651,7 +686,7 @@
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cBg2; border.color: root.cBorder; radius: 6
-                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
@@ -689,7 +724,7 @@
                         width: parent.width - root.sensorW - root.gap
                         height: root.topH - topCardsRow.height - root.gap
                         color: root.cBg2; border.color: root.cBorder; radius: 6; clip: true
-                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                         Column {
                             anchors.fill: parent
@@ -748,7 +783,7 @@
                                         width: Math.floor((servoRow.width - 4*root.gap) / 5)
                                         height: servoRow.height
                                         color: root.cCard; border.color: root.cBorder; radius: 4; clip: true
-                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                                         Column {
                                             anchors.fill: parent
@@ -941,7 +976,7 @@
                         width: parent.width - root.sensorW - root.gap
                         height: root.logH
                         color: root.cBg2; border.color: root.cBorder; radius: 6
-                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                         Column {
                             anchors.fill: parent
@@ -987,7 +1022,7 @@
                         x: parent.width - root.sensorW
                         y: 0; width: root.sensorW; height: root.outerH
                         color: root.cBg2; border.color: root.cBorder; radius: 6
-                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                         ColumnLayout {
                             anchors.fill: parent
@@ -1156,7 +1191,7 @@
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         color: root.cBg2; border.color: root.cBorder; radius: 6
-                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                         property var servoParams: [
                             { key:"inx_home",        label:"InX Home",      desc:"S1 home" },
@@ -2428,7 +2463,7 @@
 
             // height fill từ Layout parent
             color: root.cBg2; border.color: root.cBorder; radius: 6
-            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
             Column {
                 id: cfgCol
@@ -2514,7 +2549,7 @@
             property var configSource: ({})
 
             color: root.cBg2; border.color: root.cBorder; radius: 6
-            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cAccent : root.cBorder }
+            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
             Flickable {
                 id: cfgZoneFlick

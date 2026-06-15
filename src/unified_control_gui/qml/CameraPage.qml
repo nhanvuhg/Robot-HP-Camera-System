@@ -11,9 +11,10 @@ Item {
     property bool modeLocked: false
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
 
-    readonly property color cPanel:       "#b30d2140"
-    readonly property color cPanel2:      "#b3061024"
-    readonly property color cBorder:      "#4d7bc8f0"
+    readonly property color cPanel:       "#990d1e32"
+    readonly property color cPanel2:      "#88060f1e"
+    readonly property color cBorder:      "#1affffff"
+    readonly property color cHover:       "#40ffffff"
     readonly property color cText:        "#ffffff"
     readonly property color cMuted:       "#8eb4d0"
     readonly property color cAccent:      "#7bc8f0"
@@ -87,6 +88,27 @@ Item {
         running: true
         repeat: true
         onTriggered: currentTime = Qt.formatDateTime(new Date(), "yyyy-MM-dd hh:mm:ss")
+    }
+
+    // Ambient glow blobs — glass depth background
+    Canvas {
+        anchors.fill: parent
+        onPaint: {
+            var ctx = getContext("2d")
+            ctx.clearRect(0, 0, width, height)
+            var g1 = ctx.createRadialGradient(width * 0.80, -height * 0.05, 0, width * 0.80, -height * 0.05, height * 0.85)
+            g1.addColorStop(0.00, "rgba(20,90,210,0.40)")
+            g1.addColorStop(0.30, "rgba(20,90,210,0.15)")
+            g1.addColorStop(0.62, "rgba(20,90,210,0.03)")
+            g1.addColorStop(1.00, "rgba(20,90,210,0.00)")
+            ctx.fillStyle = g1; ctx.fillRect(0, 0, width, height)
+            var g2 = ctx.createRadialGradient(width * 0.05, height * 1.10, 0, width * 0.05, height * 1.10, height * 0.65)
+            g2.addColorStop(0.00, "rgba(0,175,155,0.30)")
+            g2.addColorStop(0.40, "rgba(0,175,155,0.08)")
+            g2.addColorStop(0.70, "rgba(0,175,155,0.02)")
+            g2.addColorStop(1.00, "rgba(0,175,155,0.00)")
+            ctx.fillStyle = g2; ctx.fillRect(0, 0, width, height)
+        }
     }
 
     ColumnLayout {
