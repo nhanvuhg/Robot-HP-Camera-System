@@ -41,7 +41,7 @@
         readonly property color cCard:   "#88060f1e"
         readonly property color cBorder: "#1affffff"
         readonly property color cAccent: "#7bc8f0"
-        readonly property color cGreen:  "#00e676"
+        readonly property color cGreen:  "#5cf4f1"
         readonly property color cRed:    "#ff5252"
         readonly property color cOrange: "#ffa726"
         readonly property color cCyan:   "#26c6da"
@@ -662,7 +662,8 @@
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
                                         lbl: cartridgeController.currentMode === "jog" ? "STATE MODE" : "STOP STATE"
-                                        bg: cartridgeController.currentMode === "jog" ? "#0a332e" : "#4d1a1a"
+                                        bg: cartridgeController.currentMode === "jog" ? "#0d2a3a" : "#771a1a"
+                                        bgEnd: cartridgeController.currentMode === "jog" ? "#0d2a3a" : "#4e0c0c"
                                         bc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
                                         tc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
                                         onClicked: {
@@ -710,9 +711,9 @@
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nEXTEND"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; onClicked: cartridgeController.cylinderCmd(2, true) }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nEXTEND"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; onClicked: cartridgeController.cylinderCmd(3, true) }
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nRETRACT";  bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nRETRACT"; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nRETRACT"; bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nRETRACT";  bg: "#0d2a3a"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nRETRACT"; bg: "#0d2a3a"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nRETRACT"; bg: "#0d2a3a"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
                                 }
                             }
                         }
@@ -935,7 +936,7 @@
                                                         Layout.preferredWidth: 80
                                                         Layout.preferredHeight: 42
                                                         padV: 0; fontSize: 16
-                                                        bg: "#0a332e"; bc: root.cGreen; tc: root.cGreen; active: servoRow.jogAllowed
+                                                        bg: "#0d2a3a"; bc: root.cGreen; tc: root.cGreen; active: servoRow.jogAllowed
                                                         onClicked: { if(servoRow.jogAllowed) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } }
                                                     }
                                                 }
@@ -958,7 +959,8 @@
                                                 w: parent.width; h: 42
                                                 padV: 9
                                                 fontSize: 18
-                                                bg: "#4d1a1a"
+                                                bg: "#771a1a"
+                                                bgEnd: "#4e0c0c"
                                                 bc: root.cRed
                                                 tc: root.cRed
                                                 onClicked: cartridgeController.jogStop(model.sid)
@@ -1088,8 +1090,8 @@
                                         Layout.minimumHeight: 20         // ← thu nhỏ để fit đủ 20 sensor
 
                                         radius: 3
-                                        color: on_ ? "#0a332e" : root.cCard
-                                        border.color: on_ ? root.cGreen : root.cBorder
+                                        color: on_ ? "#0d2a3a" : root.cCard
+                                        border.color: on_ ? "#6cf" : root.cBorder
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
                                         HoverHandler { onHoveredChanged: if(!sBtn.on_) sBtn.border.color = hovered ? root.cCyan : root.cBorder }
@@ -1098,7 +1100,7 @@
                                             spacing: 0
                                             Text {
                                                 text: model.slabel
-                                                color: sBtn.on_ ? root.cGreen : root.cText
+                                                color: sBtn.on_ ? "#6cf" : root.cText
                                                 font.pixelSize: 13; font.bold: true
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
@@ -1111,7 +1113,7 @@
                                             Rectangle {
                                                 id: dotIndicator
                                                 width: 4; height: 4; radius: 2
-                                                color: sBtn.on_ ? root.cGreen : "#134357"
+                                                color: sBtn.on_ ? "#6cf" : "#134357"
                                                 anchors.horizontalCenter: parent.horizontalCenter
 
                                                 Repeater {
@@ -1121,7 +1123,7 @@
                                                         anchors.centerIn: parent
                                                         width: 6; height: 6; radius: 3
                                                         color: "transparent"
-                                                        border.color: root.cGreen
+                                                        border.color: "#6cf"
                                                         border.width: 1
                                                         opacity: 0
                                                         visible: sBtn.on_
@@ -1325,7 +1327,7 @@
                                 }
 
                                 Row { spacing: 8; topPadding: 8
-                                    CBtn { lbl:"Save All"; padV:10; padH:22; fontSize: 18; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                                    CBtn { lbl:"Save All"; padV:10; padH:22; fontSize: 18; bg:"#0d2a3a"; bc:root.cGreen; tc:root.cGreen
                                         onClicked: {
                                             for (var i = 0; i < servoRepeater2.count; i++) {
                                                 var item = servoRepeater2.itemAt(i)
@@ -2560,7 +2562,7 @@
                 }
 
                 Row { spacing: 6; topPadding: 8
-                    CBtn { lbl:"Save"; padV:8; padH:18; fontSize: 17; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                    CBtn { lbl:"Save"; padV:8; padH:18; fontSize: 17; bg:"#0d2a3a"; bc:root.cGreen; tc:root.cGreen
                         onClicked: {
                             var positions = {}
                             for (var i = 0; i < cfgRepeater.count; i++) {
@@ -2647,7 +2649,7 @@
                     }
 
                     Row { spacing: 8; topPadding: 8
-                        CBtn { lbl:"Save"; padV:10; padH:22; fontSize: 18; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen
+                        CBtn { lbl:"Save"; padV:10; padH:22; fontSize: 18; bg:"#0d2a3a"; bc:root.cGreen; tc:root.cGreen
                             onClicked: {
                                 var positions = {}
                                 for (var i = 0; i < cfgZoneRepeater.count; i++) {

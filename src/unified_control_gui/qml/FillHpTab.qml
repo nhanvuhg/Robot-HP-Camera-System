@@ -21,8 +21,8 @@ Item {
     readonly property color cMuted:       "#8888aa"
     readonly property color cAccent:      "#4f6cff"
     readonly property color cAccentSoft:  Qt.rgba(0.31, 0.42, 1.0, 0.18)
-    readonly property color cOk:          "#00e676"
-    readonly property color cOkBg:        Qt.rgba(0.0, 0.90, 0.46, 0.15)
+    readonly property color cOk:          "#5cf4f1"
+    readonly property color cOkBg:        Qt.rgba(0.09, 0.95, 0.94, 0.15)
     readonly property color cWarn:        "#ffa726"
     readonly property color cWarnBg:      Qt.rgba(1.0, 0.65, 0.15, 0.15)
     readonly property color cBad:         "#ff5252"
@@ -843,8 +843,8 @@ Item {
                                         width: Math.floor((sensorSect.width - 36) / 3)
                                         height: 48
                                         radius: 4
-                                        color: on_ ? "#0a332e" : tab.cPanel
-                                        border.color: on_ ? tab.cOk : tab.cBorder
+                                        color: on_ ? "#0d2a3a" : tab.cPanel
+                                        border.color: on_ ? tab.cAccent : tab.cBorder
                                         border.width: 1
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
@@ -857,7 +857,7 @@ Item {
                                             Text {
                                                 width: parent.width
                                                 text: getSensorLabel(modelData)
-                                                color: sBtn.on_ ? tab.cOk : tab.cText
+                                                color: sBtn.on_ ? tab.cAccent : tab.cText
                                                 font.pixelSize: 10
                                                 font.bold: true
                                                 wrapMode: Text.WrapAnywhere
@@ -867,7 +867,7 @@ Item {
                                             Rectangle {
                                                 id: dotIndicator
                                                 width: 6; height: 6; radius: 3
-                                                color: sBtn.on_ ? tab.cOk : "#134357"
+                                                color: sBtn.on_ ? tab.cAccent : "#134357"
                                                 anchors.horizontalCenter: parent.horizontalCenter
 
                                                 Repeater {
@@ -877,7 +877,7 @@ Item {
                                                         anchors.centerIn: parent
                                                         width: 8; height: 8; radius: 4
                                                         color: "transparent"
-                                                        border.color: tab.cOk
+                                                        border.color: tab.cAccent
                                                         border.width: 1
                                                         opacity: 0
                                                         visible: sBtn.on_
@@ -1142,7 +1142,7 @@ Item {
     component ModeBtn: TbBtn {
         property bool active: false
         variant: "default"
-        color: active ? "#0a2e22" : cPanel2
+        color: active ? "#0d2a3a" : cPanel2
         border.color: active ? cOk : cBorder
         Text {
             anchors.centerIn: parent; text: parent.lbl
