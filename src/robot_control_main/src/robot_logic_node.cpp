@@ -124,6 +124,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_homing_done_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sensors_state_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_pos2_busy_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_busy_sub_;     // /cartridge/busy — interlock Pos1
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   output_tray_full_sub_;   // /vision/output_tray/full — AI mode
 
     rclcpp::Time last_motion_hb_;
     rclcpp::Time last_vision_hb_;
@@ -688,7 +690,10 @@ void RobotLogicNode::initSubscriptions()
         "/robot/motion_busy", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) { motion_busy_ = msg->data; });
 
-    create_subscription<std_msgs::msg::Bool>(
+    // PHẢI gán vào member SharedPtr — create_subscription return SharedPtr; nếu vứt return,
+    // sub bị destruct ngay, callback không bao giờ fire. Bug history: interlock cartridge_busy_
+    // không hoạt động → motion thread chạy đè cartridge → kẹt khay.
+    cartridge_busy_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/cartridge/busy", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             cartridge_busy_ = msg->data;
@@ -710,8 +715,9 @@ void RobotLogicNode::initSubscriptions()
                 RCLCPP_INFO(get_logger(), "[INTERLOCK] 🔓 Cartridge Pos2 FREE");
         });
 
-    // AI mode: Camera báo output tray full → set waiting flag
-    create_subscription<std_msgs::msg::Bool>(
+    // AI mode: Camera báo output tray full → set waiting flag.
+    // Gán vào member: nếu không, callback chết → AI mode không reset state khi tray full.
+    output_tray_full_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/vision/output_tray/full", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             if (msg->data && use_ai_for_control_) {
@@ -942,6 +948,22 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
     bool was_waiting = waiting_for_new_input_.load();
     waiting_for_new_input_ = false;
 
+    // Clear scale results sót lại từ batch trước. Loadcell đã có latch, nhưng nếu
+    // robot crash giữa chừng, queue có thể còn 1 entry chưa consume — entry đó thuộc
+    // batch cũ, không được apply cho batch mới (cartridge_id sẽ lệch). An toàn nhất:
+    // wipe sạch khi đặt khay input mới.
+    stored_scale_result_.store(false);
+    scale_result_received_ = false;
+    {
+        std::lock_guard<std::mutex> lock(scale_result_mutex_);
+        if (!pending_scale_results_.empty()) {
+            RCLCPP_WARN(get_logger(),
+                "[TRAY_IN] 🧹 Cleared %zu stale scale results from previous batch",
+                pending_scale_results_.size());
+            pending_scale_results_.clear();
+        }
+    }
+
     // Manual mode: tracking đã set, nhưng không auto-trigger pipeline.
     // Operator phải nhấn PICK_INPUT (đã được handle bởi feed_chamber_signal_).
     if (manual_mode_.load()) {
@@ -1108,7 +1130,9 @@ void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr ms
     if (!manual_mode_) {
         if (cartridge_is_homed_) {
             RCLCPP_INFO(get_logger(), "[INIT] Cartridge is already homed. Executing Robot HOME and starting process.");
-            sendMotionAction("HOME");
+            // HOME async: callback này chạy trên executor thread. sendMotionAction (blocking)
+            // sẽ block executor 60s+ → heartbeat sub không fire → MOTION_NODE_LOST false alarm.
+            sendMotionActionAsync("HOME");
             system_started_ = true;
         } else {
             RCLCPP_INFO(get_logger(), "[INIT] Auto/AI mode — waiting for Cartridge Homing to finish before moving HOME.");
@@ -1602,7 +1626,8 @@ void RobotLogicNode::cartridgeHomingDoneCallback(const std_msgs::msg::Bool::Shar
     //    theo robot home.
     if (system_running_ && !manual_mode_ && !system_started_) {
         RCLCPP_INFO(get_logger(), "[INIT] Cartridge Homing Done. Executing Robot HOME and starting process.");
-        sendMotionAction("HOME");
+        // HOME async: cartridgeHomingDoneCallback chạy trên executor — KHÔNG block.
+        sendMotionActionAsync("HOME");
         system_started_ = true;
         notifyStateChange();
     } else {

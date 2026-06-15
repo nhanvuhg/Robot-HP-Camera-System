@@ -42,10 +42,24 @@ namespace yolo_ros_hailort_cpp
             this->class_names_ = yolo_cpp::COCO_CLASSES;
         }
 
-        this->yolo_ = std::make_unique<yolo_cpp::YoloHailoRT>(
-                this->params_.model_path,
-                this->params_.conf,
-                this->params_.nms);
+        // Retry init mỗi 3s thay vì throw chết node.
+        // Lý do: Hailo PCIe có thể chưa sẵn sàng lúc boot, hoặc HEF lock bị process khác giữ.
+        // Tự retry hồi phục được không cần systemd kick lại.
+        for (int attempt = 1; rclcpp::ok(); ++attempt) {
+            try {
+                this->yolo_ = std::make_unique<yolo_cpp::YoloHailoRT>(
+                    this->params_.model_path,
+                    this->params_.conf,
+                    this->params_.nms);
+                break;
+            } catch (const std::exception &e) {
+                RCLCPP_ERROR(this->get_logger(),
+                    "[INIT] YoloHailoRT failed (attempt %d): %s — retry in 3s",
+                    attempt, e.what());
+                std::this_thread::sleep_for(std::chrono::seconds(3));
+            }
+        }
+        if (!this->yolo_) return;  // shutdown trong lúc retry
 
         RCLCPP_INFO(this->get_logger(), "model loaded");
 
@@ -71,78 +85,87 @@ namespace yolo_ros_hailort_cpp
 
     void YoloNode::colorImageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &ptr)
     {
-        // [OPT-3] Drop frame if inference thread is busy — prevents latency accumulation
-        //         Without this, frames queue up during 10-50ms YOLO inference, causing
-        //         the subscriber to process stale frames in bursts
+        // Guard: nếu init retry chưa xong (yolo_ = nullptr) → bỏ frame.
+        if (!this->yolo_) return;
+
+        // Drop frame if inference thread is busy — prevents latency accumulation.
         if (inference_busy_.exchange(true)) {
-            return;  // Previous inference still running, drop this frame
+            return;
         }
 
-        auto img = cv_bridge::toCvCopy(ptr, "bgr8");
+        // Guard cv_bridge: toCvCopy có thể throw nếu encoding mismatch.
+        cv_bridge::CvImagePtr img;
+        try {
+            img = cv_bridge::toCvCopy(ptr, "bgr8");
+        } catch (const std::exception &e) {
+            RCLCPP_WARN(this->get_logger(), "[CVB] toCvCopy failed: %s", e.what());
+            inference_busy_.store(false);
+            return;
+        }
+        if (!img || img->image.empty()) {
+            inference_busy_.store(false);
+            return;
+        }
 
         if (inference_thread_.joinable()) {
             inference_thread_.detach();
         }
 
-        // Run inference in managed thread
+        // Run inference in managed thread. Bọc try/catch toàn bộ để exception KHÔNG
+        // kill thread mà không reset inference_busy_ → kẹt true → mọi frame sau bị drop.
         inference_thread_ = std::thread([this, img]() {
-            cv::Mat frame = img->image.clone(); // [FIX-2] Deep clone to prevent shallow copy mutation
+            try {
+                cv::Mat frame = img->image.clone();
 
-            // [HP-DYN] Read HEF input shape at runtime (was hardcoded 640x640 in funai).
-            // Required for non-square HEFs (e.g. yolov8s_trainHP5.hef = 640x384).
-            const int model_w = static_cast<int>(this->yolo_->get_input_width());
-            const int model_h = static_cast<int>(this->yolo_->get_input_height());
-            cv::Mat resized_frame;
-            cv::resize(frame, resized_frame, cv::Size(model_w, model_h));
+                const int model_w = static_cast<int>(this->yolo_->get_input_width());
+                const int model_h = static_cast<int>(this->yolo_->get_input_height());
+                cv::Mat resized_frame;
+                cv::resize(frame, resized_frame, cv::Size(model_w, model_h));
 
-            auto now = std::chrono::system_clock::now();
-            auto objects = this->yolo_->inference(resized_frame);
-            auto end = std::chrono::system_clock::now();
+                auto now = std::chrono::system_clock::now();
+                auto objects = this->yolo_->inference(resized_frame);
+                auto end = std::chrono::system_clock::now();
 
-            // [CONF-GUARD] Drop bbox co confidence duoi `conf` threshold.
-            // Phong truong hop Hailo NMS post-process khong filter chinh
-            // xac theo conf — guard nay dam bao cả ve va publish chi nhan
-            // object qualified.
-            const float conf_threshold = static_cast<float>(this->params_.conf);
-            objects.erase(
-                std::remove_if(objects.begin(), objects.end(),
-                    [conf_threshold](const yolo_cpp::Object &o) {
-                        return o.prob < conf_threshold;
-                    }),
-                objects.end());
+                const float conf_threshold = static_cast<float>(this->params_.conf);
+                objects.erase(
+                    std::remove_if(objects.begin(), objects.end(),
+                        [conf_threshold](const yolo_cpp::Object &o) {
+                            return o.prob < conf_threshold;
+                        }),
+                    objects.end());
 
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - now);
-            RCLCPP_INFO(this->get_logger(), "Inference time: %5ld ms", elapsed.count());
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - now);
+                RCLCPP_INFO(this->get_logger(), "Inference time: %5ld ms", elapsed.count());
 
-            // [FIX-7] Only spend CPU drawing objects if we actually need the visual output
-            if (this->params_.imshow_isshow || this->params_.publish_resized_image)
-            {
-                yolo_cpp::utils::draw_objects(frame, objects, this->class_names_);
-                
-                if (this->params_.imshow_isshow)
+                if (this->params_.imshow_isshow || this->params_.publish_resized_image)
                 {
-                    cv::imshow("yolo", frame);
-                    auto key = cv::waitKey(1);
-                    if (key == 27)
+                    yolo_cpp::utils::draw_objects(frame, objects, this->class_names_);
+                    if (this->params_.imshow_isshow)
                     {
-                        rclcpp::shutdown();
+                        cv::imshow("yolo", frame);
+                        auto key = cv::waitKey(1);
+                        if (key == 27) {
+                            rclcpp::shutdown();
+                        }
+                    }
+                    if (this->params_.publish_resized_image) {
+                        sensor_msgs::msg::Image::SharedPtr pub_img =
+                            cv_bridge::CvImage(img->header, "bgr8", frame).toImageMsg();
+                        this->pub_image_.publish(pub_img);
                     }
                 }
 
-                if (this->params_.publish_resized_image) {
-                    sensor_msgs::msg::Image::SharedPtr pub_img =
-                        cv_bridge::CvImage(img->header, "bgr8", frame).toImageMsg();
-                    this->pub_image_.publish(pub_img);
-                }
+                float scale_x = static_cast<float>(frame.cols) / static_cast<float>(model_w);
+                float scale_y = static_cast<float>(frame.rows) / static_cast<float>(model_h);
+
+                vision_msgs::msg::Detection2DArray detections = objects_to_detection2d(objects, img->header, scale_x, scale_y);
+                this->pub_detection2d_->publish(detections);
+            } catch (const std::exception &e) {
+                RCLCPP_ERROR(this->get_logger(), "[INFER] exception: %s", e.what());
+            } catch (...) {
+                RCLCPP_ERROR(this->get_logger(), "[INFER] unknown exception");
             }
-
-            float scale_x = static_cast<float>(frame.cols) / static_cast<float>(model_w);
-            float scale_y = static_cast<float>(frame.rows) / static_cast<float>(model_h);
-
-            vision_msgs::msg::Detection2DArray detections = objects_to_detection2d(objects, img->header, scale_x, scale_y);
-            this->pub_detection2d_->publish(detections);
-
-            inference_busy_.store(false);  // Allow next frame to be processed
+            inference_busy_.store(false);  // PHẢI luôn reset, kể cả khi exception.
         });
     }
 

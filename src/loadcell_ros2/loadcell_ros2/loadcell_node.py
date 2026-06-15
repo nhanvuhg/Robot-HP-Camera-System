@@ -16,7 +16,6 @@ Deploy:
 
 import json
 import threading
-import time
 
 import rclpy
 from rclpy.node import Node
@@ -309,11 +308,14 @@ class LoadcellNode(Node):
             else:
                 self._batch_fail += 1
                 self._consec_fails += 1
-
-        self._pub_cfails.publish(Int32(data=self._consec_fails))
-        self._publish_batch_stats()
+            consec = self._consec_fails
+            total  = self._batch_total
+            bpass  = self._batch_pass
+            bfail  = self._batch_fail
+        self._pub_cfails.publish(Int32(data=consec))
+        self._pub_batch.publish(self._str(json.dumps({'total': total, 'pass': bpass, 'fail': bfail})))
         status = 'PASS' if passed else 'FAIL'
-        self._pub_mon.publish(self._str(f'LAST:{status} total={self._batch_total}'))
+        self._pub_mon.publish(self._str(f'LAST:{status} total={total}'))
 
     # ── Subscribers callbacks ─────────────────────────────────────────
 

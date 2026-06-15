@@ -142,6 +142,12 @@ hailo_status YoloHailoRT::create_feature(hailo_vstream_info_t vstream_info, cons
 }
 
 std::vector<Object> YoloHailoRT::inference(const cv::Mat &frame) {
+    // Guard: nếu init_device() từng fail (vstreams = nullptr), bỏ qua thay vì segfault.
+    // Constructor giờ đã throw nếu fail, nhưng giữ guard này như second line of defense.
+    if (!m_vstreams_ || m_vstreams_->first.empty() || m_vstreams_->second.empty()) {
+        std::cerr << "[HailoRT] inference: vstreams not initialized — skipping" << std::endl;
+        return {};
+    }
 
     InputVStream& input_vstream = m_vstreams_->first[0];
     OutputVStream& output_vstream = m_vstreams_->second[0];
@@ -152,11 +158,20 @@ std::vector<Object> YoloHailoRT::inference(const cv::Mat &frame) {
         vstream_info.quant_info.qp_scale, vstream_info.shape.width, vstream_info);
     cv::Mat _frame = frame.clone();
     cv::resize(frame, _frame, cv::Size(input_vstream.get_info().shape.width, input_vstream.get_info().shape.height), 1);
-    input_vstream.write(MemoryView(_frame.data, input_vstream.get_frame_size()));
+
+    hailo_status w_status = input_vstream.write(MemoryView(_frame.data, input_vstream.get_frame_size()));
+    if (HAILO_SUCCESS != w_status) {
+        std::cerr << "[HailoRT] input_vstream.write failed, status=" << w_status << std::endl;
+        return {};
+    }
 
     std::vector<uint8_t>& buffer = feature->m_buffers.get_write_buffer();
-    hailo_status status = output_vstream.read(MemoryView(buffer.data(), buffer.size()));
+    hailo_status r_status = output_vstream.read(MemoryView(buffer.data(), buffer.size()));
     feature->m_buffers.release_write_buffer();
+    if (HAILO_SUCCESS != r_status) {
+        std::cerr << "[HailoRT] output_vstream.read failed, status=" << r_status << std::endl;
+        return {};
+    }
 
     return post_processing(feature, _frame, frame.rows, frame.cols);
 }
@@ -186,7 +201,14 @@ YoloHailoRT::YoloHailoRT(const std::string &model_path, const float nms, const f
     m_nms_(nms),
     m_conf_(conf)
 {
-    this->init_device(m_model_path_, m_device_, m_network_group_, m_vstreams_);
+    // Throw nếu init fail — trước đây nuốt status, frame đầu vào inference() → segfault
+    // do m_vstreams_ = nullptr. Caller (yolo_ros_hailort_cpp) chịu trách nhiệm catch & retry.
+    hailo_status st = this->init_device(m_model_path_, m_device_, m_network_group_, m_vstreams_);
+    if (HAILO_SUCCESS != st || !m_vstreams_) {
+        std::ostringstream oss;
+        oss << "YoloHailoRT init failed (model=" << model_path << ", status=" << st << ")";
+        throw std::runtime_error(oss.str());
+    }
 }
 
 } // namespace yolo_cpp

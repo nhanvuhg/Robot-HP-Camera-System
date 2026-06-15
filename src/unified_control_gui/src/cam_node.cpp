@@ -18,6 +18,26 @@ CamNode::CamNode(QQmlApplicationEngine &engine)
         configFilePath_ = config_dir + "/camera_topics.conf";
         RCLCPP_INFO(this->get_logger(), "Config file: %s", configFilePath_.c_str());
     }
+
+    // Pre-allocate providers 1 lần. Engine owns chúng — không delete thủ công bao giờ.
+    // Bug history: setup() cũ delete provider mỗi lần đổi topic → callback đang fire
+    // vẫn giữ index cũ → use-after-free khi truy cập providers_[i].
+    providers_.reserve(maxCameras_);
+    for (int i = 0; i < maxCameras_; ++i) {
+        auto *provider = new CamProvider();
+        QString providerId = QString("cam_%1").arg(i);
+        engine_->addImageProvider(providerId, provider);  // engine TAKES OWNERSHIP
+        providers_.push_back(provider);
+    }
+}
+
+CamNode::~CamNode()
+{
+    // Join discovery thread nếu đang chạy — KHÔNG detach để tránh thread sống quá engine.
+    if (discoveryThread_.joinable()) {
+        discoveryThread_.join();
+    }
+    // KHÔNG delete providers_ — QQmlEngine sở hữu, sẽ tự delete khi engine destruct.
 }
 
 void CamNode::setup(const std::vector<std::string> &topics)
@@ -25,45 +45,33 @@ void CamNode::setup(const std::vector<std::string> &topics)
     subs_.clear();
 
     std::vector<std::string> limitedTopics = topics;
-    if (limitedTopics.size() > maxCameras_)
+    if (limitedTopics.size() > static_cast<size_t>(maxCameras_))
         limitedTopics.resize(maxCameras_);
 
-    while (providers_.size() > limitedTopics.size())
-    {
-        delete providers_.back();
-        providers_.pop_back();
-    }
-
-    while (providers_.size() < limitedTopics.size())
-    {
-        QString providerId = QString("cam_%1").arg(providers_.size());
-        auto *provider = new CamProvider();
-        engine_->addImageProvider(providerId, provider);
-        providers_.push_back(provider);
-    }
+    // KHÔNG còn dynamic alloc/delete providers — chúng pre-alloc ở constructor.
 
     cameraList_.clear();
 
     for (size_t i = 0; i < limitedTopics.size(); ++i)
     {
         QString providerId = QString("cam_%1").arg(i);
-        CamProvider *provider = providers_[i];
+        CamProvider *provider = providers_[i];  // pointer ổn định, sống suốt đời CamNode
 
+        // Capture provider POINTER trực tiếp (không capture i rồi tra vector) — tránh
+        // race: nếu vector bị resize (về sau), index có thể trỏ sai. Pointer thì stable.
         auto sub = this->create_subscription<sensor_msgs::msg::Image>(
             limitedTopics[i], 10,
-            [this, i](const std::shared_ptr<const sensor_msgs::msg::Image> &msg)
+            [this, provider](const std::shared_ptr<const sensor_msgs::msg::Image> &msg)
             {
                 try
                 {
                     auto cvimg = cv_bridge::toCvCopy(msg, "bgr8")->image;
-                    // auto cv_ptr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::BGR8);
-                    // cv::Mat cvimg = cv_ptr->image;
                     QImage qimg(cvimg.data, cvimg.cols, cvimg.rows, cvimg.step, QImage::Format_BGR888);
-                    providers_[i]->setImage(qimg.copy());
+                    provider->setImage(qimg.copy());
                 }
                 catch (const std::exception &e)
                 {
-                    RCLCPP_ERROR(this->get_logger(), "Image error for cam %lu: %s", i, e.what());
+                    RCLCPP_ERROR(this->get_logger(), "Image error: %s", e.what());
                 }
             });
 
@@ -105,8 +113,12 @@ void CamNode::fetchAvailableTopicsAsync()
     if (!fetchingTopics_.compare_exchange_strong(expected, true))
         return;
 
-    // Run discovery in background thread to avoid blocking UI
-    std::thread([this]() {
+    // Join thread cũ nếu có — đảm bảo chỉ 1 thread sống tại 1 thời điểm.
+    if (discoveryThread_.joinable()) discoveryThread_.join();
+
+    // Run discovery in background thread to avoid blocking UI.
+    // Lưu handle vào member để dtor join được (KHÔNG detach).
+    discoveryThread_ = std::thread([this]() {
         QStringList result;
         try {
             auto topics_and_types = this->get_topic_names_and_types();
@@ -121,7 +133,7 @@ void CamNode::fetchAvailableTopicsAsync()
         fetchingTopics_ = false;
         // Emit via queued connection — safe to cross thread boundary
         emit availableTopicsChanged(result);
-    }).detach();
+    });
 }
 
 
@@ -138,15 +150,16 @@ void CamNode::updateCameraTopic(int index, const QString &newTopic)
 
     subs_[index].reset();
 
+    CamProvider *provider = providers_[index];  // pointer stable
     auto sub = this->create_subscription<sensor_msgs::msg::Image>(
         newTopic.toStdString(), 10,
-        [this, index](const std::shared_ptr<const sensor_msgs::msg::Image> &msg)
+        [this, provider](const std::shared_ptr<const sensor_msgs::msg::Image> &msg)
         {
             try
             {
                 auto cvimg = cv_bridge::toCvCopy(msg, "bgr8")->image;
                 QImage qimg(cvimg.data, cvimg.cols, cvimg.rows, cvimg.step, QImage::Format_BGR888);
-                providers_[index]->setImage(qimg.copy());
+                provider->setImage(qimg.copy());
             }
             catch (const std::exception &e)
             {

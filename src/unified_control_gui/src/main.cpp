@@ -53,15 +53,22 @@ int main(int argc, char *argv[])
     if (engine.rootObjects().isEmpty())
         return -1;
 
-    std::thread rosThread([=]() { 
-        rclcpp::spin(camNode); 
+    std::thread rosThread([=]() {
+        rclcpp::spin(camNode);
     });
-    rosThread.detach();
 
     std::thread hpRosThread([=]() {
         rclcpp::spin(hpNode);
     });
-    hpRosThread.detach();
 
-    return app.exec();
+    // Shutdown ordering:
+    //   1. app.exec() returns khi QML window đóng.
+    //   2. rclcpp::shutdown() đánh dấu shutdown — spin() trong 2 thread sẽ thoát.
+    //   3. join() đảm bảo cả 2 thread thực sự kết thúc trước khi engine/node destruct.
+    //  KHÔNG detach: nếu thread vẫn đang spin lúc node bị destruct sẽ crash.
+    int rc = app.exec();
+    rclcpp::shutdown();
+    if (rosThread.joinable())   rosThread.join();
+    if (hpRosThread.joinable()) hpRosThread.join();
+    return rc;
 }

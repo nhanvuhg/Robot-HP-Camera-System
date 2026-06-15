@@ -5,6 +5,8 @@
 #include <QSettings>
 #include <QTcpSocket>
 #include <QThread>
+#include <QDateTime>
+#include <QMetaObject>
 #include <sstream>
 #include <thread>
 
@@ -70,16 +72,10 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     system_start_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/start_button", 10);  // shared with cartridge
     system_pause_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/pause_button", 10);  // sync sang cartridge
     system_resume_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/system/resume_button", 10); // sync sang cartridge
-    ignore_scale_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/ignore_scale", 10);
+    ignore_scale_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/ignore_scale", rclcpp::QoS(10).reliable().transient_local());
 
-    // [STOP-PRESERVE] Track gripper/picker state real-time tu gripper_festo_node
-    // (gripper_cmd_pub_/picker_cmd_pub_ da khoi tao o tren, dung lai)
-    gripper_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
-        "/robot/gripper_status", 10,
-        [this](const std_msgs::msg::Bool::SharedPtr msg) { last_gripper_state_ = msg->data; });
-    picker_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
-        "/robot/picker_status", 10,
-        [this](const std_msgs::msg::Bool::SharedPtr msg) { last_picker_state_ = msg->data; });
+    // Duplicate sub gripper/picker đã xoá — đã khởi tạo 1 lần ở phía trên (L43-48).
+    // Tạo lại 2 lần sẽ overwrite SharedPtr → sub đầu bị destruct, callback đầu chết âm thầm.
 
     // Create subscribers
     system_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
@@ -282,6 +278,14 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
         msg.data = speed_ratio_;
         speed_ratio_pub_->publish(msg);
         qDebug() << "[STARTUP] Published initial speed ratio:" << speed_ratio_;
+
+        // Sync ignore_scale default (false) to robot_logic on GUI start
+        {
+            auto is_msg = std_msgs::msg::Bool();
+            is_msg.data = ignore_scale_;  // default false
+            if (ignore_scale_pub_) ignore_scale_pub_->publish(is_msg);
+            qDebug() << "[STARTUP] Published initial ignore_scale:" << ignore_scale_;
+        }
 
         // 2. Sync to Dobot hardware (SpeedFactor — persists until power cycle)
         if (speed_factor_client_ && speed_factor_client_->service_is_ready()) {
@@ -673,6 +677,18 @@ void RobotController::sendCartesianStep()
 
     jog_cart_target_[jog_cart_idx_] += delta;
 
+    // Guard: nếu Dobot bringup offline, ServoP service không bao giờ ack →
+    // mỗi tick 33ms tạo 1 pending future không bao giờ resolve → leak nặng.
+    if (!servo_p_client_->service_is_ready()) {
+        static qint64 last_warn = 0;
+        qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (now - last_warn > 2000) {
+            qWarning() << "[JOG] ServoP service offline — skipping cartesian step";
+            last_warn = now;
+        }
+        return;
+    }
+
     auto req = std::make_shared<dobot_msgs_v3::srv::ServoP::Request>();
     req->x  = jog_cart_target_[0];
     req->y  = jog_cart_target_[1];
@@ -715,67 +731,72 @@ void RobotController::jogStop()
 
 void RobotController::getAngles()
 {
+    if (!get_angle_client_->service_is_ready()) return;  // service offline → bỏ qua, không spam pending future
+
     auto request = std::make_shared<dobot_msgs_v3::srv::GetAngle::Request>();
 
     get_angle_client_->async_send_request(request,
         [this](rclcpp::Client<dobot_msgs_v3::srv::GetAngle>::SharedFuture future) {
+            // Parse trên executor thread, sau đó marshal kết quả về GUI thread.
+            QVariantList angles;
             try {
                 auto result = future.get();
-                // Response format: "0,{j1,j2,j3,j4,j5,j6},GetAngle();"
-                // Extract ONLY content between { and }
                 const std::string& raw = result->angle;
                 auto beg = raw.find('{');
                 auto end = raw.find('}');
                 if (beg == std::string::npos || end == std::string::npos || end <= beg) return;
                 std::string inner = raw.substr(beg + 1, end - beg - 1);
-
                 std::istringstream iss(inner);
-                QVariantList angles;
                 std::string token;
                 while (std::getline(iss, token, ',')) {
                     try { angles.append(std::stod(token)); }
                     catch (...) { angles.append(0.0); }
                 }
                 while (angles.size() < 6) angles.append(0.0);
-                joint_angles_ = angles;
-                emit jointAnglesChanged();
             } catch (const std::exception& e) {
                 qWarning() << "GetAngle failed:" << e.what();
+                return;
             }
+            QMetaObject::invokeMethod(this, [this, angles]() {
+                joint_angles_ = angles;
+                emit jointAnglesChanged();
+            }, Qt::QueuedConnection);
         });
 }
 
 void RobotController::getPose()
 {
+    if (!get_pose_client_->service_is_ready()) return;
+
     auto request = std::make_shared<dobot_msgs_v3::srv::GetPose::Request>();
     request->user = 0;
     request->tool = 0;
 
     get_pose_client_->async_send_request(request,
         [this](rclcpp::Client<dobot_msgs_v3::srv::GetPose>::SharedFuture future) {
+            QVariantList pose;
             try {
                 auto result = future.get();
-                // Response format: "0,{x,y,z,rx,ry,rz},GetPose();"
-                // Extract ONLY content between { and }
                 const std::string& raw = result->pose;
                 auto beg = raw.find('{');
                 auto end = raw.find('}');
                 if (beg == std::string::npos || end == std::string::npos || end <= beg) return;
                 std::string inner = raw.substr(beg + 1, end - beg - 1);
-
                 std::istringstream iss(inner);
-                QVariantList pose;
                 std::string token;
                 while (std::getline(iss, token, ',')) {
                     try { pose.append(std::stod(token)); }
                     catch (...) { pose.append(0.0); }
                 }
                 while (pose.size() < 6) pose.append(0.0);
-                cartesian_pose_ = pose;
-                emit cartesianPoseChanged();
             } catch (const std::exception& e) {
                 qWarning() << "GetPose failed:" << e.what();
+                return;
             }
+            QMetaObject::invokeMethod(this, [this, pose]() {
+                cartesian_pose_ = pose;
+                emit cartesianPoseChanged();
+            }, Qt::QueuedConnection);
         });
 }
 
@@ -993,27 +1014,36 @@ void RobotController::clearError()
 void RobotController::setSpeedRatio(int ratio)
 {
     qDebug() << "SetSpeedRatio:" << ratio;
+    if (!speed_factor_client_->service_is_ready()) {
+        qWarning() << "[SPEED] SpeedFactor service offline — request dropped";
+        return;
+    }
     auto request = std::make_shared<dobot_msgs_v3::srv::SpeedFactor::Request>();
     request->ratio = ratio;
     speed_factor_client_->async_send_request(request,
         [this, ratio](rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedFuture future) {
+            int res = -1;
             try {
                 auto r = future.get();
-                qDebug() << "SpeedFactor result:" << r->res;
-                if (r->res == 0) {
-                    speed_ratio_ = ratio;
-                    emit speedRatioChanged();
-                    // Persist across restarts
-                    QSettings settings("RobotControl", "ManualMode");
-                    settings.setValue("speedRatio", ratio);
-                    settings.sync();
-                    // Notify motion_executor about the new speed
-                    std_msgs::msg::Int32 smsg;
-                    smsg.data = ratio;
-                    speed_ratio_pub_->publish(smsg);
-                    qDebug() << "[SPEED] Published speed_ratio to motion_executor:" << ratio;
-                }
-            } catch (const std::exception& e) { qWarning() << "SpeedFactor failed:" << e.what(); }
+                res = r->res;
+                qDebug() << "SpeedFactor result:" << res;
+            } catch (const std::exception& e) {
+                qWarning() << "SpeedFactor failed:" << e.what();
+                return;
+            }
+            if (res != 0) return;
+            // QSettings + publisher đụng tới Qt object → marshal về GUI thread.
+            QMetaObject::invokeMethod(this, [this, ratio]() {
+                speed_ratio_ = ratio;
+                emit speedRatioChanged();
+                QSettings settings("RobotControl", "ManualMode");
+                settings.setValue("speedRatio", ratio);
+                settings.sync();
+                std_msgs::msg::Int32 smsg;
+                smsg.data = ratio;
+                speed_ratio_pub_->publish(smsg);
+                qDebug() << "[SPEED] Published speed_ratio to motion_executor:" << ratio;
+            }, Qt::QueuedConnection);
         });
 }
 
@@ -1023,19 +1053,24 @@ void RobotController::setSpeedRatio(int ratio)
 
 void RobotController::pollErrorID()
 {
+    if (!get_error_id_client_->service_is_ready()) return;
+
     auto request = std::make_shared<dobot_msgs_v3::srv::GetErrorID::Request>();
     get_error_id_client_->async_send_request(request,
         [this](rclcpp::Client<dobot_msgs_v3::srv::GetErrorID>::SharedFuture future) {
+            QString newLog;
             try {
                 auto r = future.get();
-                QString newLog = QString::fromStdString(r->error_id);
+                newLog = QString::fromStdString(r->error_id);
+            } catch (const std::exception&) {
+                return;  // silently ignore poll errors
+            }
+            QMetaObject::invokeMethod(this, [this, newLog]() {
                 if (newLog != error_log_) {
                     error_log_ = newLog;
                     emit errorLogChanged();
                 }
-            } catch (const std::exception& e) {
-                // silently ignore poll errors
-            }
+            }, Qt::QueuedConnection);
         });
 }
 

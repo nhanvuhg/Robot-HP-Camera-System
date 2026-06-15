@@ -7,6 +7,7 @@
 #include <QTextStream>
 #include <QRegularExpression>
 #include <QDateTime>
+#include <QMetaObject>
 #include <sys/types.h>
 #include <pwd.h>
 #include <unistd.h>
@@ -46,42 +47,59 @@ ScaleController::ScaleController(rclcpp::Node::SharedPtr node, QObject *parent)
     pub_ink_capacity_ = node_->create_publisher<std_msgs::msg::Float32>("/Fill_HP1/ink_capacity", 10);
 
     // Subscribers
+    // INVARIANT: tất cả callback chạy trên ROS executor thread (rosThread trong main.cpp).
+    //   Mọi thao tác state Qt + emit signal PHẢI marshal về GUI thread qua
+    //   QMetaObject::invokeMethod(this, ..., Qt::QueuedConnection). Bug history:
+    //   crash random khi QML đọc property cùng lúc executor đang write.
     sub_weight_ = node_->create_subscription<std_msgs::msg::Float32>(
         "/loadcell/weight", 10,
         [this](const std_msgs::msg::Float32::SharedPtr msg) {
-            current_weight_ = msg->data;
-            last_weight_time_ = QDateTime::currentMSecsSinceEpoch();
-            if (!scale_node_connected_) {
-                scale_node_connected_ = true;
-                emit scaleNodeConnectedChanged();
-            }
-            emit currentWeightChanged();
+            const float w = msg->data;
+            const qint64 t = QDateTime::currentMSecsSinceEpoch();
+            QMetaObject::invokeMethod(this, [this, w, t]() {
+                current_weight_ = w;
+                last_weight_time_ = t;
+                if (!scale_node_connected_) {
+                    scale_node_connected_ = true;
+                    emit scaleNodeConnectedChanged();
+                }
+                emit currentWeightChanged();
+            }, Qt::QueuedConnection);
         });
 
     sub_monitor_status_ = node_->create_subscription<std_msgs::msg::String>(
         "/weight/monitor_status", 10,
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            monitor_status_ = QString::fromStdString(msg->data);
-            emit monitorStatusChanged();
+            const QString s = QString::fromStdString(msg->data);
+            QMetaObject::invokeMethod(this, [this, s]() {
+                monitor_status_ = s;
+                emit monitorStatusChanged();
+            }, Qt::QueuedConnection);
         });
 
     sub_status_ = node_->create_subscription<std_msgs::msg::String>(
         "/loadcell/status", 10,
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            loadcell_status_ = QString::fromStdString(msg->data);
-            emit loadcellStatusChanged();
+            const QString s = QString::fromStdString(msg->data);
+            QMetaObject::invokeMethod(this, [this, s]() {
+                loadcell_status_ = s;
+                emit loadcellStatusChanged();
+            }, Qt::QueuedConnection);
         });
 
     sub_cal_status_ = node_->create_subscription<std_msgs::msg::String>(
         "/loadcell/cal_status", 10,
         [this](const std_msgs::msg::String::SharedPtr msg) {
-            cal_status_ = QString::fromStdString(msg->data);
-            emit calStatusChanged();
-            if (cal_status_ == "ERROR") {
-                emit calErrorAlarm();
-            } else if (cal_status_ == "DONE") {
-                emit calDoneAlarm();
-            }
+            const QString s = QString::fromStdString(msg->data);
+            QMetaObject::invokeMethod(this, [this, s]() {
+                cal_status_ = s;
+                emit calStatusChanged();
+                if (cal_status_ == "ERROR") {
+                    emit calErrorAlarm();
+                } else if (cal_status_ == "DONE") {
+                    emit calDoneAlarm();
+                }
+            }, Qt::QueuedConnection);
         });
 
     sub_batch_stats_ = node_->create_subscription<std_msgs::msg::String>(
@@ -89,45 +107,58 @@ ScaleController::ScaleController(rclcpp::Node::SharedPtr node, QObject *parent)
         [this](const std_msgs::msg::String::SharedPtr msg) {
             QByteArray data = QByteArray::fromStdString(msg->data);
             QJsonDocument doc = QJsonDocument::fromJson(data);
-            if (!doc.isNull() && doc.isObject()) {
-                QJsonObject obj = doc.object();
-                total_batch_ = obj["total"].toInt();
-                pass_batch_ = obj["pass"].toInt();
-                fail_batch_ = obj["fail"].toInt();
+            if (doc.isNull() || !doc.isObject()) return;
+            QJsonObject obj = doc.object();
+            const int total = obj["total"].toInt();
+            const int pass  = obj["pass"].toInt();
+            const int fail  = obj["fail"].toInt();
+            QMetaObject::invokeMethod(this, [this, total, pass, fail]() {
+                total_batch_ = total;
+                pass_batch_  = pass;
+                fail_batch_  = fail;
                 emit batchStatsChanged();
-            }
+            }, Qt::QueuedConnection);
         });
 
     sub_consec_fails_ = node_->create_subscription<std_msgs::msg::Int32>(
         "/loadcell/consecutive_fails", 10,
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
-            consec_fails_ = msg->data;
-            emit consecFailsChanged();
+            const int n = msg->data;
+            QMetaObject::invokeMethod(this, [this, n]() {
+                consec_fails_ = n;
+                emit consecFailsChanged();
+            }, Qt::QueuedConnection);
         });
 
     sub_overload_ = node_->create_subscription<std_msgs::msg::Bool>(
         "/loadcell/overload", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
-            if (msg->data) {
+            if (!msg->data) return;
+            QMetaObject::invokeMethod(this, [this]() {
                 emit overloadAlarm();
-            }
+            }, Qt::QueuedConnection);
         });
 
     sub_zero_drift_ = node_->create_subscription<std_msgs::msg::Bool>(
         "/loadcell/zero_drift_warning", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
-            bool current = msg->data;
-            if (current && !last_zero_drift_) {
-                emit zeroDriftAlarm();
-            }
-            last_zero_drift_ = current;
+            const bool current = msg->data;
+            QMetaObject::invokeMethod(this, [this, current]() {
+                if (current && !last_zero_drift_) {
+                    emit zeroDriftAlarm();
+                }
+                last_zero_drift_ = current;
+            }, Qt::QueuedConnection);
         });
 
     sub_ink_capacity_ = node_->create_subscription<std_msgs::msg::Float32>(
         "/Fill_HP1/ink_capacity_ack", 10,
         [this](const std_msgs::msg::Float32::SharedPtr msg) {
-            current_ml_fill_ = msg->data;
-            emit currentMlFillChanged();
+            const float v = msg->data;
+            QMetaObject::invokeMethod(this, [this, v]() {
+                current_ml_fill_ = v;
+                emit currentMlFillChanged();
+            }, Qt::QueuedConnection);
         });
 
     // Services

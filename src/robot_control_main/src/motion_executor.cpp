@@ -666,11 +666,14 @@ private:
         std::shared_ptr<const ExecuteMotion::Goal> goal)
     {
         (void)uuid;
-        if (motion_in_progress_) {
+        // CAS-claim cờ ngay tại handle_goal — chặn TOCTOU giữa 2 goal đến song song.
+        // executeAction sẽ KHÔNG set lại motion_in_progress_, chỉ clear khi xong.
+        bool expected = false;
+        if (!motion_in_progress_.compare_exchange_strong(expected, true)) {
             RCLCPP_WARN(get_logger(), "[ACTION] Rejecting goal: motion in progress");
             return rclcpp_action::GoalResponse::REJECT;
         }
-        RCLCPP_INFO(get_logger(), "[ACTION] Received goal: %s (slot: %d)", 
+        RCLCPP_INFO(get_logger(), "[ACTION] Received goal: %s (slot: %d)",
             goal->command.c_str(), goal->slot);
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
     }
@@ -678,15 +681,14 @@ private:
     rclcpp_action::CancelResponse handle_cancel(
         const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
     {
+        (void)goal_handle;
         RCLCPP_WARN(get_logger(), "[ACTION] Received request to cancel goal — set abort flag");
         // Set abort flag NGAY — motion helpers đang chạy sẽ thoát ở check tiếp theo.
+        // KHÔNG gọi rollbackSafe() từ đây: handle_cancel chạy trên executor thread,
+        // còn motion đang chạy trên thread riêng (handle_accepted detach). Gọi rollback
+        // ở đây sẽ chạy moveL song song với motion đang dở → Dobot reject hoặc race.
+        // Rollback được executeAction tự gọi ở fail path khi nó thoát do abort.
         abort_motion_.store(true);
-
-        // Safety: If rollback is allowed, execute it
-        if (goal_handle->get_goal()->allow_rollback) {
-            rollbackSafe();
-        }
-
         return rclcpp_action::CancelResponse::ACCEPT;
     }
 
@@ -705,6 +707,9 @@ private:
 
     void executeAction(const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
     {
+    // Wrap toàn bộ thân trong try/catch: thread này detach, nếu exception unwinds
+    // mà không reset motion_in_progress_/publishBusy thì node treo busy vĩnh viễn.
+    try {
     RCLCPP_INFO(get_logger(), "[ACTION] Executing motion goal...");
     // Reset abort flag mỗi lần goal mới — flag chỉ giữ trong scope của 1 goal.
     abort_motion_.store(false);
@@ -746,7 +751,7 @@ private:
     auto result = std::make_shared<ExecuteMotion::Result>();
     const auto goal = goal_handle->get_goal();
 
-    motion_in_progress_ = true;
+    // motion_in_progress_ đã được claim atomic ở handle_goal — không set lại.
     publishBusy(true);
 
     feedback->state = "RUNNING";
@@ -795,6 +800,29 @@ private:
 
     publishBusy(false);
     motion_in_progress_ = false;
+    }
+    catch (const std::exception & e) {
+        RCLCPP_ERROR(get_logger(), "[ACTION] Exception in executeAction: %s", e.what());
+        try {
+            auto r = std::make_shared<ExecuteMotion::Result>();
+            r->success = false;
+            r->message = std::string("EXCEPTION: ") + e.what();
+            if (goal_handle && goal_handle->is_active()) goal_handle->abort(r);
+        } catch (...) {}
+        publishBusy(false);
+        motion_in_progress_ = false;
+    }
+    catch (...) {
+        RCLCPP_ERROR(get_logger(), "[ACTION] Unknown exception in executeAction");
+        try {
+            auto r = std::make_shared<ExecuteMotion::Result>();
+            r->success = false;
+            r->message = "UNKNOWN_EXCEPTION";
+            if (goal_handle && goal_handle->is_active()) goal_handle->abort(r);
+        } catch (...) {}
+        publishBusy(false);
+        motion_in_progress_ = false;
+    }
     }
 
     void rollbackSafe()
@@ -879,7 +907,7 @@ private:
         if (!moveR(1, -60, 0)) return false;
         if (!moveR(-10, 29, 0)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, -150, 0)) return false;
+        if (!moveR(0, -230, 0)) return false;
         if (!moveToIndex(28)) return false;
         return true;
     }
@@ -949,6 +977,7 @@ private:
         if (!moveToIndex(11)) return false;
         if (!moveR(0, 0, -60,5)) return false;
         if (!setDigitalOutput(2, true)) return false;   // Gripper GẮP — kẹp khay tại Index 11
+        if (!wait(1.0)) return false;
         if (!moveR(0, 0, 60,5)) return false;
         if (!moveToIndex(13)) return false;
         if (!moveToIndex(13 + slot)) return false;
@@ -974,6 +1003,7 @@ private:
 
     bool executeBufferChamber() {
         RCLCPP_INFO(get_logger(), "[MOTION] Buffer → Chamber");
+        if (!moveToIndex(28)) return false; 
         if (!moveToIndex(8)) return false;
         if (!moveR(0, 0, -58)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại buffer
@@ -987,7 +1017,7 @@ private:
         if (!moveR(-1, -60, 0)) return false;
         if (!moveR(-10, 29, 0)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, -150, 0)) return false;
+        if (!moveR(0, -230, 0)) return false;
         if (!moveToIndex(28)) return false;
         return true;
     }
