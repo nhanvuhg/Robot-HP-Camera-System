@@ -561,9 +561,10 @@
                                             }
                                         }
                                         Column {
-                                            anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
-                                            Text { text: "AUTO"; color: cartridgeController.currentMode === "auto" ? "#0c0c1d" : "#d4faff"; font.pixelSize: 15; font.bold: true }
-                                            Text { text: "Automatic"; color: cartridgeController.currentMode === "auto" ? "#3a4a5a" : root.cDim; font.pixelSize: 11 }
+                                            anchors.centerIn: parent
+                                            spacing: 2
+                                            Text { text: "AUTO"; color: cartridgeController.currentMode === "auto" ? "#0c0c1d" : "#d4faff"; font.pixelSize: 15; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "Automatic"; color: cartridgeController.currentMode === "auto" ? "#3a4a5a" : root.cDim; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
 
@@ -586,9 +587,10 @@
                                             }
                                         }
                                         Column {
-                                            anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
-                                            Text { text: "MANUAL"; color: (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") ? "#0c0c1d" : "#d4faff"; font.pixelSize: 15; font.bold: true }
-                                            Text { text: "Direct Control"; color: (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") ? "#3a4a5a" : root.cDim; font.pixelSize: 11 }
+                                            anchors.centerIn: parent
+                                            spacing: 2
+                                            Text { text: "MANUAL"; color: (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") ? "#0c0c1d" : "#d4faff"; font.pixelSize: 15; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "Direct Control"; color: (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") ? "#3a4a5a" : root.cDim; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
                                 }
