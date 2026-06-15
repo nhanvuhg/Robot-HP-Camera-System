@@ -849,15 +849,64 @@ Item {
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
 
-                                        Text {
+                                        Column {
                                             anchors.centerIn: parent
                                             width: parent.width - 6
-                                            text: getSensorLabel(modelData)
-                                            color: sBtn.on_ ? tab.cOk : tab.cText
-                                            font.pixelSize: 10
-                                            font.bold: true
-                                            wrapMode: Text.WrapAnywhere
-                                            horizontalAlignment: Text.AlignHCenter
+                                            spacing: 4
+
+                                            Text {
+                                                width: parent.width
+                                                text: getSensorLabel(modelData)
+                                                color: sBtn.on_ ? tab.cOk : tab.cText
+                                                font.pixelSize: 10
+                                                font.bold: true
+                                                wrapMode: Text.WrapAnywhere
+                                                horizontalAlignment: Text.AlignHCenter
+                                            }
+
+                                            Rectangle {
+                                                id: dotIndicator
+                                                width: 6; height: 6; radius: 3
+                                                color: sBtn.on_ ? tab.cOk : "#134357"
+                                                anchors.horizontalCenter: parent.horizontalCenter
+
+                                                Repeater {
+                                                    model: 2
+                                                    delegate: Rectangle {
+                                                        id: ripple
+                                                        anchors.centerIn: parent
+                                                        width: 8; height: 8; radius: 4
+                                                        color: "transparent"
+                                                        border.color: tab.cOk
+                                                        border.width: 1
+                                                        opacity: 0
+                                                        visible: sBtn.on_
+
+                                                        SequentialAnimation {
+                                                            running: sBtn.on_
+                                                            loops: Animation.Infinite
+                                                            PauseAnimation { duration: index * 1000 }
+                                                            ParallelAnimation {
+                                                                 NumberAnimation {
+                                                                     target: ripple
+                                                                     property: "opacity"
+                                                                     from: 0.8; to: 0.0
+                                                                     duration: 1500
+                                                                     easing.type: Easing.OutQuad
+                                                                 }
+                                                                 NumberAnimation {
+                                                                     target: ripple
+                                                                     property: "scale"
+                                                                     from: 1.0; to: 4.0
+                                                                     duration: 1500
+                                                                     easing.type: Easing.OutQuad
+                                                                 }
+                                                            }
+                                                            PauseAnimation { duration: (1 - index) * 1000 }
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
