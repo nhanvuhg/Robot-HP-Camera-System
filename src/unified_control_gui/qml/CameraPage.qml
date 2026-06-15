@@ -119,16 +119,15 @@ Item {
                     }
 
                     Button {
+                        id: cartSysBtn
                         text: "CARTRIDGE SYSTEM  ▸"
                         Layout.preferredHeight: 50
                         font.pixelSize: 16; font.bold: true
                         onClicked: stackView.push(cartridgePage)
                         background: Rectangle {
                             radius: 6
-                            gradient: Gradient {
-                                GradientStop { position: 0.0; color: "#4f6cff" }
-                                GradientStop { position: 1.0; color: "#6c5ce7" }
-                            }
+                            color: cartSysBtn.pressed ? "#273287" : (cartSysBtn.hovered ? "#3443af" : "#4d61f6")
+                            Behavior on color { ColorAnimation { duration: 100 } }
                         }
                         contentItem: Text {
                             text: parent.text; font: parent.font
@@ -155,6 +154,7 @@ Item {
                     }
 
                     Button {
+                        id: settingsBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: {
                             var comp = Qt.createComponent("frm_settings.qml")
@@ -167,14 +167,27 @@ Item {
                                 }
                             }
                         }
-                        background: Rectangle { radius: 6; color: "transparent"; border.color: "#134357"; border.width: 2 }
+                        background: Rectangle {
+                            radius: 6
+                            color: settingsBtn.pressed ? "#273287" : (settingsBtn.hovered ? "#161c40" : "transparent")
+                            border.color: settingsBtn.hovered ? "#4d61f6" : "#3443af"
+                            border.width: 2
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                        }
                         contentItem: Image { source: "qrc:/icons/qml/icons/settings.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true }
                     }
 
                     Button {
+                        id: exitBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: Qt.quit()
-                        background: Rectangle { radius: 6; color: "transparent"; border.color: "#134357"; border.width: 2 }
+                        background: Rectangle {
+                            radius: 6
+                            color: exitBtn.pressed ? "#273287" : (exitBtn.hovered ? "#161c40" : "transparent")
+                            border.color: exitBtn.hovered ? "#4d61f6" : "#3443af"
+                            border.width: 2
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                        }
                         contentItem: Image { source: "qrc:/icons/qml/icons/power_settings.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true }
                     }
                 }
@@ -601,71 +614,133 @@ Item {
 
                     Text { text: "SYSTEM CONTROL"; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
 
-                    Rectangle { Layout.fillWidth: true; height: 56; radius: 5; color: emMA.pressed ? Qt.darker("#4d1a1a", 1.2) : "#4d1a1a"; border.color: "#ef4444"; border.width: 2
+                    Rectangle {
+                        id: emBtn
+                        Layout.fillWidth: true; height: 56; radius: 5
+                        color: emMA.pressed ? "#7f1d1d" : (emMA.containsMouse ? "#991b1b" : "#b91c1c")
                         scale: emMA.pressed ? 0.95 : 1.0
                         Behavior on scale { NumberAnimation { duration: 100 } }
-                        Text { anchors.centerIn: parent; text: "⛔ EMERGENCY STOP"; color: "#ef4444"; font.pixelSize: 21; font.bold: true }
-                        MouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.emergencyStop(true) } }
+                        Behavior on color { ColorAnimation { duration: 100 } }
+                        Text { anchors.centerIn: parent; text: "⛔ EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
+                        MouseArea {
+                            id: emMA
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: { cameraPageRoot.modeLocked = false; robotController.emergencyStop(true) }
+                        }
                     }
 
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 5; columnSpacing: 5
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: stopResetMA.pressed ? Qt.darker("#4a1a00", 1.2) : "#4a1a00"; border.color: "#FF6600"; border.width: 2
+                        Rectangle {
+                            id: stopBtn
+                            Layout.fillWidth: true; height: 52; radius: 5
+                            color: stopResetMA.pressed ? "#991b1b" : (stopResetMA.containsMouse ? "#b91c1c" : "#dc2626")
                             scale: stopResetMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#FF6600"; font.pixelSize: 20; font.bold: true }
-                            MouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.softStop() } }
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                            Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#ffffff"; font.pixelSize: 20; font.bold: true }
+                            MouseArea {
+                                id: stopResetMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.softStop() }
+                            }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: enMA.pressed ? Qt.darker("#0a2a1a", 1.2) : "#0a2a1a"; border.color: "#10b981"; border.width: 2
+                        Rectangle {
+                            id: enBtn
+                            Layout.fillWidth: true; height: 52; radius: 5
+                            color: enMA.pressed ? "#273287" : (enMA.containsMouse ? "#3443af" : "#4d61f6")
                             scale: enMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "ENABLE"; color: "#10b981"; font.pixelSize: 21; font.bold: true }
-                            MouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                            Text { anchors.centerIn: parent; text: "ENABLE"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
+                            MouseArea {
+                                id: enMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: robotController.enableSystem(true)
+                            }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: startMA.pressed ? Qt.darker("#0d3320", 1.3) : "#0d3320"; border.color: "#22c55e"; border.width: 2
+                        Rectangle {
+                            id: startBtn
+                            Layout.fillWidth: true; height: 52; radius: 5
+                            color: startMA.pressed ? "#15803d" : (startMA.containsMouse ? "#16a34a" : "#22c55e")
                             scale: startMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
                             Behavior on color { ColorAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "🚀 START"; color: "#22c55e"; font.pixelSize: 20; font.bold: true }
-                            MouseArea { id: startMA; anchors.fill: parent; onClicked: {
-                                if (cameraPageRoot.ctrlMode === "camera_ai") {
-                                    robotController.selectRow(0)
-                                    robotController.setAiMode(true)
-                                    hpController.publishMode(0) // sync Fill HP → Auto
-                                } else if (cameraPageRoot.ctrlMode === "auto") {
-                                    if (robotController.selectedRow <= 0) {
-                                        robotController.selectRow(1)
+                            Text { anchors.centerIn: parent; text: "🚀 START"; color: "#ffffff"; font.pixelSize: 20; font.bold: true }
+                            MouseArea {
+                                id: startMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    if (cameraPageRoot.ctrlMode === "camera_ai") {
+                                        robotController.selectRow(0)
+                                        robotController.setAiMode(true)
+                                        hpController.publishMode(0) // sync Fill HP → Auto
+                                    } else if (cameraPageRoot.ctrlMode === "auto") {
+                                        if (robotController.selectedRow <= 0) {
+                                            robotController.selectRow(1)
+                                        }
+                                        robotController.setAutoMode(true)
+                                        hpController.publishMode(0) // sync Fill HP → Auto
                                     }
-                                    robotController.setAutoMode(true)
-                                    hpController.publishMode(0) // sync Fill HP → Auto
+                                    cameraPageRoot.modeLocked = true
+                                    robotController.startSystem(true)
                                 }
-                                cameraPageRoot.modeLocked = true
-                                robotController.startSystem(true)
-                            } }
+                            }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: pauseMA.pressed ? Qt.darker("#1a1a00", 1.2) : "#1a1a00"; border.color: "#f59e0b"; border.width: 2
+                        Rectangle {
+                            id: pauseBtn
+                            Layout.fillWidth: true; height: 52; radius: 5
+                            color: pauseMA.pressed ? "#273287" : (pauseMA.containsMouse ? "#3443af" : "#4d61f6")
                             scale: pauseMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "PAUSE"; color: "#f59e0b"; font.pixelSize: 21; font.bold: true }
-                            MouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                            Text { anchors.centerIn: parent; text: "PAUSE"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
+                            MouseArea {
+                                id: pauseMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: robotController.pauseRobot()
+                            }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: resMA.pressed ? Qt.darker("#0a1a2a", 1.2) : "#0a1a2a"; border.color: "#5cf4f1"; border.width: 2
+                        Rectangle {
+                            id: resBtn
+                            Layout.fillWidth: true; height: 52; radius: 5
+                            color: resMA.pressed ? "#273287" : (resMA.containsMouse ? "#3443af" : "#4d61f6")
                             scale: resMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "RESUME"; color: "#5cf4f1"; font.pixelSize: 21; font.bold: true }
-                            MouseArea { id: resMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                            Text { anchors.centerIn: parent; text: "RESUME"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
+                            MouseArea {
+                                id: resMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: robotController.resumeRobot()
+                            }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: clrMA.pressed ? Qt.darker("#0a1a2a", 1.2) : "#0a1a2a"; border.color: "#4da6ff"; border.width: 2
+                        Rectangle {
+                            id: clrBtn
+                            Layout.fillWidth: true; height: 52; radius: 5
+                            color: clrMA.pressed ? "#273287" : (clrMA.containsMouse ? "#3443af" : "#4d61f6")
                             scale: clrMA.pressed ? 0.95 : 1.0
                             Behavior on scale { NumberAnimation { duration: 100 } }
-                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#4da6ff"; font.pixelSize: 21; font.bold: true }
-                            MouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
+                            Behavior on color { ColorAnimation { duration: 100 } }
+                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
+                            MouseArea {
+                                id: clrMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: robotController.clearError()
+                            }
                         }
                     }
                 }
@@ -736,14 +811,8 @@ Item {
         Layout.fillHeight: true
         implicitHeight: 50
         radius: 6
-        color:        cls === "ok"    ? cOkBg
-                    : cls === "high"  ? cWarnBg
-                    : cls === "limit" ? cBadBg
-                    : cPanel2
-        border.color: cls === "ok"    ? cOk
-                    : cls === "high"  ? cWarn
-                    : cls === "limit" ? cBad
-                    : cBorder
+        color:        cPanel2
+        border.color: cBorder
         border.width: 1
         RowLayout {
             anchors.fill: parent
@@ -768,10 +837,7 @@ Item {
                     Rectangle {
                         height: parent.height; radius: parent.radius
                         width: parent.width * Math.max(0, Math.min(1, cartVal / 1000))
-                        color: cls === "ok"    ? cOk
-                             : cls === "high"  ? cWarn
-                             : cls === "limit" ? cBad
-                             : "#0284c7"
+                        color: "#4d61f6"
                     }
                 }
             }

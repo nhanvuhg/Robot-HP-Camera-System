@@ -1222,14 +1222,8 @@ Item {
         Layout.fillWidth: true
         implicitHeight: 50
         radius: 6
-        color:        cls === "ok"    ? cOkBg
-                    : cls === "high"  ? cWarnBg
-                    : cls === "limit" ? cBadBg
-                    : cPanel2
-        border.color: cls === "ok"    ? cOk
-                    : cls === "high"  ? cWarn
-                    : cls === "limit" ? cBad
-                    : cBorder
+        color:        cPanel2
+        border.color: cBorder
         border.width: 1
         RowLayout {
             anchors.fill: parent
@@ -1254,10 +1248,7 @@ Item {
                     Rectangle {
                         height: parent.height; radius: parent.radius
                         width: parent.width * Math.max(0, Math.min(1, cartVal / 1000))
-                        color: cls === "ok"    ? cOk
-                             : cls === "high"  ? cWarn
-                             : cls === "limit" ? cBad
-                             : "#0284c7"
+                        color: "#4d61f6"
                     }
                 }
             }
