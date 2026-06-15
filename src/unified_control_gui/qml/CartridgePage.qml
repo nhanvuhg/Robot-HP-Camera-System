@@ -382,6 +382,32 @@
             border.color: "#134357"
             border.width: 1
 
+            // drag-to-switch: press anywhere on tabbar and swipe left/right
+            property real _dragPressX: 0
+            property bool _wasDrag: false
+            MouseArea {
+                id: tabDragArea
+                anchors.fill: parent
+                z: 0
+                propagateComposedEvents: true
+                onPressed: {
+                    tabbar._dragPressX = mouseX
+                    tabbar._wasDrag = false
+                    mouse.accepted = false
+                }
+                onPositionChanged: {
+                    if (Math.abs(mouseX - tabbar._dragPressX) > 30)
+                        tabbar._wasDrag = true
+                }
+                onReleased: {
+                    if (tabbar._wasDrag) {
+                        var dx = mouseX - tabbar._dragPressX
+                        if (dx < 0 && stack.currentIndex < 5) stack.currentIndex++
+                        else if (dx > 0 && stack.currentIndex > 0) stack.currentIndex--
+                    }
+                }
+            }
+
             Row {
                 anchors.fill: parent
                 anchors.margins: 4
@@ -399,6 +425,7 @@
                         property bool isSelected: stack.currentIndex === index
                         height: parent.height
                         width: (tabbar.width - 8) / 6
+                        z: 1
 
                         Rectangle {
                             anchors.fill: parent
@@ -407,8 +434,8 @@
                             visible: parent.isSelected
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: "#5cf4f1" }
-                                GradientStop { position: 1.0; color: "#00bcd4" }
+                                GradientStop { position: 0.0; color: "#59f1ef" }
+                                GradientStop { position: 1.0; color: "#06c0d4" }
                             }
                         }
                         Text {
@@ -419,7 +446,11 @@
                             font.letterSpacing: 0.5
                             color: parent.isSelected ? "#0d2538" : "#d4faff"
                         }
-                        MouseArea { anchors.fill: parent; onClicked: stack.currentIndex = index }
+                        MouseArea {
+                            anchors.fill: parent
+                            z: 2
+                            onClicked: if (!tabbar._wasDrag) stack.currentIndex = index
+                        }
                     }
                 }
             }
@@ -471,142 +502,58 @@
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // ── Dropdown Mode Selector ──────────
-                                Item {
-                                    id: modeDropdown
+                                // ── Mode Items (always visible, no dropdown) ──
+                                Column {
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
-                                    property bool expanded: modeSelCol.modeIsIdle
+                                    spacing: 6
 
-                                    // ── Thanh hiển thị (header) ──
+                                    // AUTO
                                     Rectangle {
-                                        id: modeHeader
                                         width: parent.width
-                                        height: 36
-                                        radius: 6
-                                        color: root.cCard
-                                        border.color: {
-                                            var m = cartridgeController.currentMode
-                                            if (m === "auto")   return root.cGreen
-                                            if (m === "manual") return "#5cf4f1"
-                                            if (m === "jog")    return root.cOrange
-                                            return root.cBorder
-                                        }
-                                        border.width: modeSelCol.modeIsIdle ? 1 : 2
-                                        Behavior on border.color { ColorAnimation { duration: 150 } }
-
-                                        Row {
-                                            anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
-                                            spacing: 8
-                                            Text {
-                                                id: modeIcon
-                                                text: {
-                                                    var m = cartridgeController.currentMode
-                                                    if (m === "auto")   return "●"
-                                                    if (m === "manual" || m === "jog") return "●"
-                                                    return "○"
-                                                }
-                                                color: {
-                                                    var m = cartridgeController.currentMode
-                                                    if (m === "auto")   return root.cGreen
-                                                    if (m === "manual") return "#5cf4f1"
-                                                    if (m === "jog")    return root.cOrange
-                                                    return root.cDim
-                                                }
-                                                font.pixelSize: 12
-                                                anchors.verticalCenter: parent.verticalCenter
-                                            }
-                                            Text {
-                                                text: {
-                                                    var m = cartridgeController.currentMode
-                                                    if (m === "auto")   return "AUTO"
-                                                    if (m === "manual") return "MANUAL"
-                                                    if (m === "jog")    return "MAN_JOG"
-                                                    return "Chọn..."
-                                                }
-                                                color: {
-                                                    var m = cartridgeController.currentMode
-                                                    if (m === "auto")   return root.cGreen
-                                                    if (m === "manual") return "#5cf4f1"
-                                                    if (m === "jog")    return root.cOrange
-                                                    return root.cDim
-                                                }
-                                                font.pixelSize: 20; font.bold: !modeSelCol.modeIsIdle
-                                                anchors.verticalCenter: parent.verticalCenter
-                                            }
-                                        }
-                                        // Mũi tên
-                                        Text {
-                                            anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
-                                            text: modeDropdown.expanded ? "▲" : "▼"
-                                            color: root.cDim; font.pixelSize: 10
-                                        }
-
+                                        height: (parent.height - 6) / 2
+                                        radius: 5
+                                        color: cartridgeController.currentMode === "auto" ? "#0e5274" : root.cCard
+                                        border.width: 0
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                        HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.82 : 1.0 }
                                         MouseArea {
                                             anchors.fill: parent
+                                            enabled: !modeSelCol.modeBlocked
                                             onClicked: {
-                                                if (!modeSelCol.modeBlocked)
-                                                    modeDropdown.expanded = !modeDropdown.expanded
+                                                cartridgeController.setMode("auto")
+                                                hpController.publishMode(0)
                                             }
+                                        }
+                                        Column {
+                                            anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
+                                            Text { text: "AUTO"; color: "#d4faff"; font.pixelSize: 15; font.bold: true }
+                                            Text { text: "Automatic"; color: root.cDim; font.pixelSize: 11 }
                                         }
                                     }
 
-                                    // ── Options (expanded) ──
-                                    Column {
-                                        id: modeOptions
-                                        visible: modeDropdown.expanded
-                                        anchors { top: modeHeader.bottom; topMargin: 4; left: parent.left; right: parent.right }
-                                        spacing: 4
-
-                                        // AUTO
-                                        Rectangle {
-                                            width: parent.width; height: 42; radius: 5
-                                            color: "#0d3d2e"; border.color: root.cGreen; border.width: 1
-                                            HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.85 : 1.0 }
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                onClicked: {
-                                                    cartridgeController.setMode("auto")
-                                                    hpController.publishMode(0)  // sync Fill HP → Auto
-                                                    modeDropdown.expanded = false
-                                                }
-                                            }
-                                            Row {
-                                                anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
-                                                spacing: 8
-                                                Text { text: "●"; color: root.cGreen; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
-                                                Column {
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    Text { text: "AUTO"; color: root.cGreen; font.pixelSize: 15; font.bold: true }
-                                                    Text { text: "Tự động"; color: root.cDim; font.pixelSize: 11 }
-                                                }
+                                    // MANUAL
+                                    Rectangle {
+                                        width: parent.width
+                                        height: (parent.height - 6) / 2
+                                        radius: 5
+                                        color: (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") ? "#0a3d4a" : root.cCard
+                                        border.width: 0
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                        HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.82 : 1.0 }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: !modeSelCol.modeBlocked
+                                            onClicked: {
+                                                cartridgeController.setMode("manual")
+                                                cartridgeController.startSystem()
+                                                hpController.publishMode(2)
                                             }
                                         }
-
-                                        // MANUAL
-                                        Rectangle {
-                                            width: parent.width; height: 42; radius: 5
-                                            color: "#051a1a"; border.color: "#5cf4f1"; border.width: 1
-                                            HoverHandler { onHoveredChanged: parent.opacity = hovered ? 0.85 : 1.0 }
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                onClicked: {
-                                                    cartridgeController.setMode("manual")
-                                                    cartridgeController.startSystem()
-                                                    hpController.publishMode(2)  // sync Fill HP → Manual
-                                                    modeDropdown.expanded = false
-                                                }
-                                            }
-                                            Row {
-                                                anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
-                                                spacing: 8
-                                                Text { text: "●"; color: "#5cf4f1"; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
-                                                Column {
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    Text { text: "MANUAL"; color: "#5cf4f1"; font.pixelSize: 15; font.bold: true }
-                                                    Text { text: "Trực tiếp"; color: root.cDim; font.pixelSize: 11 }
-                                                }
-                                            }
+                                        Column {
+                                            anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
+                                            Text { text: "MANUAL"; color: "#d4faff"; font.pixelSize: 15; font.bold: true }
+                                            Text { text: "Direct Control"; color: root.cDim; font.pixelSize: 11 }
                                         }
                                     }
                                 }
@@ -907,8 +854,8 @@
                                             Row {
                                                 spacing: 6
                                                 width: parent.width
-                                                CBtn { lbl:"HOMING"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:"#0a332e"; bc:root.cGreen; tc:root.cGreen; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
-                                                CBtn { lbl:"CLEAR"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:"#4d3a0a"; bc:root.cOrange; tc:root.cOrange; onClicked: cartridgeController.clearServo(model.sid) }
+                                                CBtn { lbl:"HOMING"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:root.cCard; bc:root.cAccent; tc:"#d4faff"; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
+                                                CBtn { lbl:"CLEAR";  w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:root.cCard; bc:root.cBorder; tc:"#d4faff"; onClicked: cartridgeController.clearServo(model.sid) }
                                             }
 
                                             // TARGET POSITION Row (with input & RUN button)
