@@ -127,6 +127,8 @@ public slots:
     // Scale result
     void publishScaleResult(bool pass);
 
+    Q_INVOKABLE QString captureScreenshot();
+
 signals:
     void systemStatusChanged();
     void errorMessageChanged();

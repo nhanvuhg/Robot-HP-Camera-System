@@ -372,6 +372,7 @@ Item {
     //  BODY (scrollable)
     // ====================================================================
     Flickable {
+        id: bodyScrollView
         anchors { top: headerBar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
         contentWidth: width
         contentHeight: mainCol.implicitHeight + 24
@@ -1088,7 +1089,6 @@ Item {
             id: inner
             x: 12; y: 12
             width: parent.width - 24
-            height: parent.height - 24
             spacing: 10
             Text {
                 id: ttl
@@ -1100,7 +1100,7 @@ Item {
             Item {
                 id: ci
                 Layout.fillWidth: true
-                Layout.fillHeight: true
+                Layout.fillHeight: false
                 implicitHeight: childrenRect.height
             }
         }

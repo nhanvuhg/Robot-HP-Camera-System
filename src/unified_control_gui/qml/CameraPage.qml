@@ -122,14 +122,40 @@ Item {
 
             Rectangle {
                 anchors.fill: parent
-                color: "transparent"
+                color: cPanel
+                border.color: cBorder
+                border.width: 1
+                radius: 8
+
+                // specular highlight — top edge
+                Rectangle {
+                    anchors { top: parent.top; left: parent.left; right: parent.right }
+                    height: 1
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "transparent" }
+                        GradientStop { position: 0.35; color: "#55ffffff" }
+                        GradientStop { position: 0.65; color: "#55ffffff" }
+                        GradientStop { position: 1.0;  color: "transparent" }
+                    }
+                }
 
                 RowLayout {
                     anchors.fill: parent
                     anchors.margins: 10
                     spacing: 10
 
-                    Item { Layout.preferredWidth: 60 }
+                    Button {
+                        Layout.preferredWidth: 60; Layout.preferredHeight: 50
+                        onClicked: {
+                            robotController.captureScreenshot()
+                        }
+                        background: Rectangle { radius: 6; color: "transparent"; border.color: "#1565c0"; border.width: 2 }
+                        contentItem: Text {
+                            text: "📷"; font.pixelSize: 22
+                            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                        }
+                    }
 
                     Item {
                         Layout.fillWidth: true
@@ -267,12 +293,26 @@ Item {
                 spacing: 8
 
                 Rectangle {
-                    color: "#081e29"
+                    color: cPanel
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    border.color: "#134357"
-                    radius: 6
+                    border.color: cBorder
+                    radius: 8
                     clip: true
+                    HoverHandler { onHoveredChanged: parent.border.color = hovered ? cHover : cBorder }
+
+                    // specular top edge
+                    Rectangle {
+                        anchors { top: parent.top; left: parent.left; right: parent.right }
+                        height: 1; z: 1
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: "transparent" }
+                            GradientStop { position: 0.4; color: "#33ffffff" }
+                            GradientStop { position: 0.6; color: "#33ffffff" }
+                            GradientStop { position: 1.0; color: "transparent" }
+                        }
+                    }
 
                     Column {
                         anchors.fill: parent; anchors.margins: 10
@@ -297,9 +337,24 @@ Item {
                 Layout.fillHeight: true
                 Layout.preferredWidth: 400
                 Layout.maximumWidth: 400
-                color: "#081e29"
-                border.color: "#134357"
-                radius: 6
+                color: cPanel
+                border.color: cBorder
+                border.width: 1
+                radius: 8
+                HoverHandler { onHoveredChanged: parent.border.color = hovered ? cHover : cBorder }
+
+                // specular top edge
+                Rectangle {
+                    anchors { top: parent.top; left: parent.left; right: parent.right }
+                    height: 1; z: 1
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "transparent" }
+                        GradientStop { position: 0.4; color: "#44ffffff" }
+                        GradientStop { position: 0.6; color: "#44ffffff" }
+                        GradientStop { position: 1.0; color: "transparent" }
+                    }
+                }
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -366,9 +421,24 @@ Item {
                 Layout.fillHeight: true
                 Layout.fillWidth: true
                 Layout.minimumWidth: 300
-                color: "#081e29"
-                border.color: "#134357"
-                radius: 6
+                color: cPanel
+                border.color: cBorder
+                border.width: 1
+                radius: 8
+                HoverHandler { onHoveredChanged: parent.border.color = hovered ? cHover : cBorder }
+
+                // specular top edge
+                Rectangle {
+                    anchors { top: parent.top; left: parent.left; right: parent.right }
+                    height: 1; z: 1
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "transparent" }
+                        GradientStop { position: 0.4; color: "#44ffffff" }
+                        GradientStop { position: 0.6; color: "#44ffffff" }
+                        GradientStop { position: 1.0; color: "transparent" }
+                    }
+                }
 
                 ColumnLayout {
                     anchors.fill: parent
@@ -785,7 +855,7 @@ Item {
         Item {
             height: 40; Layout.fillWidth: true
             Rectangle {
-                anchors.fill: parent; color: "#0d2538"; border.color: "#134357"
+                anchors.fill: parent; color: cPanel; border.color: cBorder; border.width: 1
                 RowLayout {
                     anchors.fill: parent; anchors.margins: 10
                     Text { text: "© 2025 RYNAN TECHNOLOGIES"; color: "#6cf"; font.pixelSize: 16; Layout.alignment: Qt.AlignVCenter }
@@ -815,7 +885,9 @@ Item {
         radius: 10
         color: cPanel2
         clip: true
-        border.width: 0
+        border.color: cBorder
+        border.width: 1
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? cHover : cBorder }
         ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 16
@@ -925,7 +997,9 @@ Item {
         radius: 6
         color:        cPanel2
         clip:         true
-        border.width: 0
+        border.color: cBorder
+        border.width: 1
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? cHover : cBorder }
         ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 14
@@ -1003,7 +1077,7 @@ Item {
                                 if (cls === "limit") return "#0e5274";
                                 if (cls === "high") return "#3ba0cf";
                                 if (cls === "ok") return "#90c0cf";
-                                return "#4d61f6";
+                                return "#0e5274";
                             }
                         }
                         GradientStop {
@@ -1012,7 +1086,7 @@ Item {
                                 if (cls === "limit") return "#041f1f";
                                 if (cls === "high") return "#125c5c";
                                 if (cls === "ok") return "#459bbd";
-                                return "#3b4ad0";
+                                return "#041f1f";
                             }
                         }
                     }

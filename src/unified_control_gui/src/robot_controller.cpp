@@ -1,5 +1,6 @@
 #include "unified_control_gui/robot_controller.hpp"
 #include <QDebug>
+#include <QDir>
 #include <QFile>
 #include <QRegularExpression>
 #include <QSettings>
@@ -7,6 +8,8 @@
 #include <QThread>
 #include <QDateTime>
 #include <QMetaObject>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <sstream>
 #include <thread>
 
@@ -322,6 +325,49 @@ void RobotController::callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::S
     request->data = value;
     client->async_send_request(request);
     emit serviceCallResult(true, "Request sent");
+}
+
+QString RobotController::captureScreenshot()
+{
+    const QString outputDir = "/home/pi/PicturesGUI";
+    if (!QDir().mkpath(outputDir)) {
+        const QString message = "Cannot create screenshot directory: " + outputDir;
+        qWarning() << message;
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+
+    const QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
+    const QString outputPath = outputDir + "/screenshot_" + timestamp + ".png";
+
+    QProcess process;
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    if (!env.contains("DISPLAY") || env.value("DISPLAY").isEmpty()) {
+        env.insert("DISPLAY", ":0");
+    }
+    if (!env.contains("XAUTHORITY") || env.value("XAUTHORITY").isEmpty()) {
+        env.insert("XAUTHORITY", "/home/pi/.Xauthority");
+    }
+    process.setProcessEnvironment(env);
+    process.start("/usr/bin/scrot", QStringList() << outputPath);
+
+    if (!process.waitForStarted(1000)) {
+        const QString message = "Cannot start scrot";
+        qWarning() << message << process.errorString();
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+    if (!process.waitForFinished(5000) || process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+        const QString err = QString::fromLocal8Bit(process.readAllStandardError()).trimmed();
+        const QString message = err.isEmpty() ? "Screenshot failed" : err;
+        qWarning() << message;
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+
+    qDebug() << "Screenshot saved:" << outputPath;
+    emit serviceCallResult(true, "Screenshot saved: " + outputPath);
+    return outputPath;
 }
 
 void RobotController::enableSystem(bool enable)

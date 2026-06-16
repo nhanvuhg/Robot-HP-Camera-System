@@ -112,6 +112,17 @@
                         fillMode: Image.PreserveAspectFit; smooth: true
                     }
                 }
+                Button {
+                    Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    onClicked: {
+                        robotController.captureScreenshot()
+                    }
+                    background: Rectangle { radius: 6; color: "transparent"; border.color: "#1565c0"; border.width: 2 }
+                    contentItem: Text {
+                        text: "📷"; font.pixelSize: 22
+                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    }
+                }
                 Item { width: 6 }
                 Text {
                     text: "ROS2 - CARTRIDGE PROVISION SYSTEM"
@@ -497,7 +508,7 @@
         StackLayout {
             id: stack
             anchors { top: tabbar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
-            currentIndex: 3
+            currentIndex: 0
 
             // ── PAGE 1: CONTROL DASHBOARD ────────────────────────
             Item {
