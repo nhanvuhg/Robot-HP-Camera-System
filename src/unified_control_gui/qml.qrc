@@ -5,6 +5,8 @@
     <file alias="CartridgePage.qml">qml/CartridgePage.qml</file>
     <file alias="FillHpTab.qml">qml/FillHpTab.qml</file>
     <file alias="CameraView.qml">qml/CameraView.qml</file>
+    <file alias="MotionButton.qml">qml/MotionButton.qml</file>
+    <file alias="MotionMouseArea.qml">qml/MotionMouseArea.qml</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
   <qresource prefix="/icons">

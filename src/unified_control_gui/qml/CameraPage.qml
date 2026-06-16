@@ -145,7 +145,7 @@ Item {
                     anchors.margins: 10
                     spacing: 10
 
-                    Button {
+                    MotionButton {
                         Layout.preferredWidth: 60; Layout.preferredHeight: 50
                         onClicked: {
                             robotController.captureScreenshot()
@@ -166,7 +166,7 @@ Item {
                         }
                     }
 
-                    Button {
+                    MotionButton {
                         text: "CARTRIDGE SYSTEM  ▸"
                         Layout.preferredHeight: 50
                         font.pixelSize: 16; font.bold: true
@@ -206,7 +206,7 @@ Item {
                         }
                     }
 
-                    Button {
+                    MotionButton {
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: {
                             var comp = Qt.createComponent("frm_settings.qml")
@@ -223,7 +223,7 @@ Item {
                         contentItem: Image { source: "qrc:/icons/qml/icons/settings.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true }
                     }
 
-                    Button {
+                    MotionButton {
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: Qt.quit()
                         background: Rectangle { radius: 6; color: "transparent"; border.color: "#134357"; border.width: 2 }
@@ -263,7 +263,7 @@ Item {
                     font.pixelSize: 14
                     elide: Text.ElideRight
                 }
-                Button {
+                MotionButton {
                     Layout.preferredWidth: 110; Layout.preferredHeight: 30
                     text: "✓  Confirm"
                     font.pixelSize: 13; font.bold: true
@@ -521,38 +521,45 @@ Item {
                                             { key: "auto",      lbl: "AUTO" },
                                             { key: "camera_ai", lbl: "CAMERA AI" }
                                         ]
-                                        delegate: Item {
+                                        delegate: MotionButton {
+                                            id: modeOption
                                             required property var modelData
                                             property bool isSelected: cameraPageRoot.ctrlMode === modelData.key
                                             property bool isLocked: cameraPageRoot.modeLocked || cameraPageRoot.robotBusy
                                             Layout.fillWidth: true
                                             Layout.fillHeight: true
+                                            hoverScale: 1.05
+                                            pressScale: 0.97
+                                            shadowColor: "#66000000"
+                                            enabled: !isLocked
                                             opacity: (!isSelected && isLocked) ? 0.35 : 1.0
+                                            onClicked: cameraPageRoot.ctrlMode = modelData.key
 
-                                            Rectangle {
-                                                anchors.fill: parent
+                                            background: Rectangle {
                                                 radius: height / 2
                                                 antialiasing: true
-                                                visible: parent.isSelected
-                                                gradient: Gradient {
+                                                color: modeOption.isSelected ? "transparent" : (modeOption.hovered ? "#14334a" : "transparent")
+                                                border.color: modeOption.isSelected ? "#63dce7" : (modeOption.hovered ? "#245c75" : "transparent")
+                                                border.width: modeOption.isSelected || (modeOption.hovered && !modeOption.isSelected) ? 1 : 0
+                                                gradient: modeOption.isSelected ? selectedModeGradient : null
+                                                Behavior on color { ColorAnimation { duration: 140 } }
+                                                Behavior on border.color { ColorAnimation { duration: 140 } }
+
+                                                Gradient {
+                                                    id: selectedModeGradient
                                                     orientation: Gradient.Horizontal
-                                                    GradientStop { position: 0.0; color: "#5cf4f1" }
-                                                    GradientStop { position: 1.0; color: "#00bcd4" }
+                                                    GradientStop { position: 0.0; color: "#2bb7c2" }
+                                                    GradientStop { position: 1.0; color: "#0f7d93" }
                                                 }
                                             }
 
-                                            Text {
-                                                anchors.centerIn: parent
-                                                text: (parent.isLocked && !parent.isSelected ? "🔒 " : "") + parent.modelData.lbl
-                                                color: parent.isSelected ? "#0d2538" : "#d4faff"
+                                            contentItem: Text {
+                                                text: (modeOption.isLocked && !modeOption.isSelected ? "🔒 " : "") + modeOption.modelData.lbl
+                                                color: modeOption.isSelected ? "#ffffff" : "#d4faff"
                                                 font.pixelSize: 16
                                                 font.bold: true
-                                            }
-
-                                            MouseArea {
-                                                anchors.fill: parent
-                                                enabled: !parent.isLocked
-                                                onClicked: cameraPageRoot.ctrlMode = parent.modelData.key
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
                                             }
                                         }
                                     }
@@ -621,7 +628,7 @@ Item {
                                            : (isActive ? "#10b981" : "#94a3b8")
                                     font.pixelSize: 18; font.bold: isActive || isReady
                                 }
-                                MouseArea { anchors.fill: parent; enabled: canSelect; onClicked: robotController.selectRow(rn) }
+                                MotionMouseArea { anchors.fill: parent; enabled: canSelect; onClicked: robotController.selectRow(rn) }
                             }
                         }
                     }
@@ -647,11 +654,11 @@ Item {
                                 property bool canSelect: cameraPageRoot.ctrlMode === "auto"
                                 Layout.fillWidth: true; height: 32; radius: 5
                                 color: aiMode
-                                       ? (isActive ? "#0a4020" : (isReady ? "#0d3320" : "#0d2538"))
-                                       : (isActive ? "#04363a" : "#0d2538")
+                                       ? (isActive ? "#0b351e" : (isReady ? "#0d2c1d" : "#0d2538"))
+                                       : (isActive ? "#073238" : "#0d2538")
                                 border.color: aiMode
-                                              ? (isActive ? "#10b981" : (isReady ? "#10b981" : "#134357"))
-                                              : (isActive ? "#00bcd4" : "#134357")
+                                              ? (isActive ? "#0fa36f" : (isReady ? "#0fa36f" : "#134357"))
+                                              : (isActive ? "#22a6b8" : "#134357")
                                 border.width: aiMode
                                               ? (isActive ? 3 : (isReady ? 2 : 1))
                                               : (isActive ? 2 : 1)
@@ -661,16 +668,25 @@ Item {
                                 Rectangle {
                                     visible: isActive
                                     anchors { top: parent.top; left: parent.left; right: parent.right }
-                                    height: 3; radius: 2; color: aiMode ? "#10b981" : "#00bcd4"
+                                    height: 3; radius: 2; color: aiMode ? "#0fa36f" : "#22a6b8"
                                 }
                                 Text {
                                     anchors.centerIn: parent; text: "O" + sn
                                     color: aiMode
-                                           ? (isActive ? "#34d399" : (isReady ? "#10b981" : "#94a3b8"))
-                                           : (isActive ? "#00bcd4" : "#94a3b8")
+                                           ? (isActive ? "#6ee7b7" : (isReady ? "#34d399" : "#94a3b8"))
+                                           : (isActive ? "#67dce7" : "#94a3b8")
                                     font.pixelSize: 16; font.bold: isActive || isReady
                                 }
-                                MouseArea { anchors.fill: parent; enabled: canSelect; onClicked: robotController.selectSlot(sn) }
+                                MotionMouseArea {
+                                    anchors.fill: parent
+                                    enabled: canSelect
+                                    hoverScale: 1.05
+                                    pressScale: 0.98
+                                    shadowColor: "#66000000"
+                                    pressedShadowColor: "#80000000"
+                                    shimmerColor: "#40ffffff"
+                                    onClicked: robotController.selectSlot(sn)
+                                }
                             }
                         }
                     }
@@ -704,8 +720,6 @@ Item {
                                 }
                                 border.color: modelData.bc
                                 border.width: 1
-                                scale: ma.pressed ? 0.95 : 1.0
-                                Behavior on scale { NumberAnimation { duration: 100 } }
                                 Row { anchors.centerIn: parent; spacing: 6
                                     Rectangle {
                                         width: 10; height: 10; radius: 5
@@ -729,7 +743,7 @@ Item {
                                         anchors.verticalCenter: parent.verticalCenter
                                     }
                                 }
-                                MouseArea { id: ma; anchors.fill: parent; onClicked: {
+                                MotionMouseArea { id: ma; anchors.fill: parent; onClicked: {
                                     if (modelData.lbl === "IN_READY") robotController.simulateInputTrayReady()
                                     else if (modelData.lbl === "OUT_READY") robotController.simulateOutputTrayReady()
                                     else if (modelData.lbl === "PICK_INPUT") robotController.simulateFeedChamber()
@@ -752,10 +766,8 @@ Item {
                             GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker("#da2525", 1.15) : "#da2525" }
                             GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker("#ba1b1b", 1.15) : "#ba1b1b" }
                         }
-                        scale: emMA.pressed ? 0.95 : 1.0
-                        Behavior on scale { NumberAnimation { duration: 100 } }
                         Text { anchors.centerIn: parent; text: "⛔ EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
-                        MouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.emergencyStop(true) } }
+                        MotionMouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.emergencyStop(true) } }
                     }
 
                     GridLayout {
@@ -767,10 +779,8 @@ Item {
                                 GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker("#8a2020", 1.15) : "#8a2020" }
                                 GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker("#4e0c0c", 1.15) : "#4e0c0c" }
                             }
-                            scale: stopResetMA.pressed ? 0.95 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
-                            MouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.softStop() } }
+                            MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.softStop() } }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
@@ -779,10 +789,8 @@ Item {
                                 GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
                                 GradientStop { position: 1.0; color: enMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
                             }
-                            scale: enMA.pressed ? 0.95 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "ENABLE"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
-                            MouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
+                            MotionMouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#0d6060"; border.width: 1
@@ -791,10 +799,8 @@ Item {
                                 GradientStop { position: 0.0; color: startMA.pressed ? Qt.darker("#0c7876", 1.15) : "#0c7876" }
                                 GradientStop { position: 1.0; color: startMA.pressed ? Qt.darker("#085f5d", 1.15) : "#085f5d" }
                             }
-                            scale: startMA.pressed ? 0.95 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "▶ START"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
-                            MouseArea { id: startMA; anchors.fill: parent; onClicked: {
+                            MotionMouseArea { id: startMA; anchors.fill: parent; onClicked: {
                                 if (cameraPageRoot.ctrlMode === "camera_ai") {
                                     robotController.selectRow(0)
                                     robotController.setAiMode(true)
@@ -817,10 +823,8 @@ Item {
                                 GradientStop { position: 0.0; color: pauseMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
                                 GradientStop { position: 1.0; color: pauseMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
                             }
-                            scale: pauseMA.pressed ? 0.95 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "PAUSE"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
-                            MouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
+                            MotionMouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
@@ -829,10 +833,8 @@ Item {
                                 GradientStop { position: 0.0; color: resMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
                                 GradientStop { position: 1.0; color: resMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
                             }
-                            scale: resMA.pressed ? 0.95 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "RESUME"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
-                            MouseArea { id: resMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
+                            MotionMouseArea { id: resMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
@@ -841,10 +843,8 @@ Item {
                                 GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
                                 GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
                             }
-                            scale: clrMA.pressed ? 0.95 : 1.0
-                            Behavior on scale { NumberAnimation { duration: 100 } }
                             Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
-                            MouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
+                            MotionMouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
                         }
                     }
                 }

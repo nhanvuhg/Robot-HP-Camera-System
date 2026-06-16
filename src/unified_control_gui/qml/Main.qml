@@ -131,7 +131,7 @@ ApplicationWindow {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 16
 
-                Button {
+                MotionButton {
                     Layout.preferredWidth: 250; Layout.preferredHeight: 60
                     text: "🔁  LOAD CHAMBER\nFROM BUFFER"
                     font.pixelSize: 15; font.bold: true
@@ -147,7 +147,7 @@ ApplicationWindow {
                         resumeChoicePopup.close()
                     }
                 }
-                Button {
+                MotionButton {
                     Layout.preferredWidth: 250; Layout.preferredHeight: 60
                     text: "🔂  LOAD CHAMBER\nFROM TRAY"
                     font.pixelSize: 15; font.bold: true
@@ -162,7 +162,7 @@ ApplicationWindow {
                 }
             }
 
-            Button {
+            MotionButton {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: 516; Layout.preferredHeight: 52
                 text: "⏹  STOP & HOME  —  Dừng hệ thống và đưa robot về Home"
@@ -225,7 +225,7 @@ ApplicationWindow {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 16
 
-                Button {
+                MotionButton {
                     Layout.preferredWidth: 240; Layout.preferredHeight: 56
                     text: "✓  Buffer is empty — CONFIRM"
                     font.pixelSize: 15; font.bold: true
@@ -242,7 +242,7 @@ ApplicationWindow {
                         resumeChoicePopup.close()
                     }
                 }
-                Button {
+                MotionButton {
                     Layout.preferredWidth: 240; Layout.preferredHeight: 56
                     text: "✗  Cancel / Back"
                     font.pixelSize: 15; font.bold: true
@@ -310,7 +310,7 @@ ApplicationWindow {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 12
 
-                Button {
+                MotionButton {
                     Layout.preferredWidth: 196; Layout.preferredHeight: 72
                     text: "↩  BACK TO\nWAIT FILLING\n(đã lấy cartridge ra)"
                     font.pixelSize: 13; font.bold: true
@@ -327,7 +327,7 @@ ApplicationWindow {
                         scaleChoicePopup.close()
                     }
                 }
-                Button {
+                MotionButton {
                     Layout.preferredWidth: 196; Layout.preferredHeight: 72
                     text: "✓  PLACE TO\nOUTPUT\n(force PASS)"
                     font.pixelSize: 13; font.bold: true
@@ -344,7 +344,7 @@ ApplicationWindow {
                         scaleChoicePopup.close()
                     }
                 }
-                Button {
+                MotionButton {
                     Layout.preferredWidth: 196; Layout.preferredHeight: 72
                     text: "✗  PLACE TO\nFAIL\n(force FAIL)"
                     font.pixelSize: 13; font.bold: true
@@ -363,7 +363,7 @@ ApplicationWindow {
                 }
             }
 
-            Button {
+            MotionButton {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: 612; Layout.preferredHeight: 52
                 text: "⏹  STOP & HOME  —  Dừng hệ thống và đưa robot về Home"
@@ -460,7 +460,7 @@ ApplicationWindow {
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 20
-                Button {
+                MotionButton {
                     text: "✓ RUN (NO LOGGING)"
                     font.pixelSize: 16
                     font.bold: true
@@ -476,7 +476,7 @@ ApplicationWindow {
                         verticalAlignment: Text.AlignVCenter
                     }
                 }
-                Button {
+                MotionButton {
                     text: "✗ CANCEL"
                     font.pixelSize: 16
                     font.bold: true

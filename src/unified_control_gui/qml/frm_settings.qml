@@ -127,7 +127,7 @@ Window {
             }
         }
 
-        Button {
+        MotionButton {
             text: "Save"
             Layout.alignment: Qt.AlignRight
             Layout.topMargin: 0

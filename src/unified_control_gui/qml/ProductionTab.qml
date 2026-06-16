@@ -138,7 +138,7 @@ Item {
                 }
                 border.color: cOk; border.width: 1
                 Text { anchors.centerIn: parent; text: "🔄  Reload"; color: "#ffffff"; font.pixelSize: 15; font.bold: true }
-                MouseArea { anchors.fill: parent; onClicked: { loadToday(); loadDate(); loadInk() } }
+                MotionMouseArea { anchors.fill: parent; onClicked: { loadToday(); loadDate(); loadInk() } }
             }
         }
         Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: cBorder }
@@ -172,7 +172,7 @@ Item {
                         color: prodTab.activeSection === modelData.idx ? cCyan : cMuted
                         font.pixelSize: 15; font.bold: prodTab.activeSection === modelData.idx
                     }
-                    MouseArea { anchors.fill: parent; onClicked: prodTab.activeSection = modelData.idx }
+                    MotionMouseArea { anchors.fill: parent; onClicked: prodTab.activeSection = modelData.idx }
                 }
             }
         }
@@ -431,7 +431,7 @@ Item {
         }
         border.color: cCyan; border.width: 0
         Text { anchors.centerIn: parent; text: label; color: "#ffffff"; font.pixelSize: 16; font.bold: true }
-        MouseArea { anchors.fill: parent; onClicked: parent.clicked() }
+        MotionMouseArea { anchors.fill: parent; onClicked: parent.clicked() }
     }
  
     // ── Data table with headers + rows ──

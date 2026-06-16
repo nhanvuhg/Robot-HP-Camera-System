@@ -1132,7 +1132,7 @@ Item {
             text: lbl; color: baseFg
             font.pixelSize: 21; font.bold: true
         }
-        MouseArea {
+        MotionMouseArea {
             id: ma; anchors.fill: parent
             hoverEnabled: true; cursorShape: Qt.PointingHandCursor
             onClicked: parent.clicked()
@@ -1433,7 +1433,7 @@ Item {
                     color: parent.parent.parent.aActive ? "#0c0c1d" : cText
                     font.pixelSize: 19; font.bold: true
                 }
-                MouseArea {
+                MotionMouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                     onClicked: hpController.publishManual(ioId, actA)
                 }
@@ -1447,7 +1447,7 @@ Item {
                     color: parent.parent.parent.bActive ? "#0c0c1d" : cText
                     font.pixelSize: 19; font.bold: true
                 }
-                MouseArea {
+                MotionMouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                     onClicked: hpController.publishManual(ioId, actB)
                 }
@@ -1475,7 +1475,7 @@ Item {
             anchors.centerIn: parent; text: lbl; color: baseFg
             font.pixelSize: 21; font.bold: true
         }
-        MouseArea {
+        MotionMouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
             onPressed:   { parent._pressed = true;  hpController.publishString("servo_jog", dir) }
@@ -1534,7 +1534,7 @@ Item {
                     anchors.centerIn: parent; text: "Set"; color: cAccent
                     font.pixelSize: 19; font.bold: true
                 }
-                MouseArea {
+                MotionMouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
                     onClicked: tab.publishSetting(item, inp.text)
                 }

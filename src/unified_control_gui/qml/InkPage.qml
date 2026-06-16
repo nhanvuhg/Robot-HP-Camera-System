@@ -58,10 +58,8 @@ Item {
                     anchors.margins: 10
                     spacing: 10
 
-                    Button {
-    scale: down ? 0.95 : 1.0
+                    MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                         text: "◂   BACK"
                         Layout.preferredHeight: 50
                         Layout.preferredWidth: 120
@@ -181,20 +179,16 @@ Item {
                         Layout.maximumHeight: 50
                         spacing: 15
                         
-                        Button {
-    scale: down ? 0.95 : 1.0
+                        MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                             text: "TARE"
                             Layout.fillWidth: true; Layout.preferredHeight: 50; Layout.maximumHeight: 50
                             font.pixelSize: 16; font.bold: true
                             onClicked: scaleController.tare()
                             background: Rectangle { radius: 6; color: "#00bcd4" }
                         }
-                        Button {
-    scale: down ? 0.95 : 1.0
+                        MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                             text: "RESET TARE"
                             Layout.fillWidth: true; Layout.preferredHeight: 50; Layout.maximumHeight: 50
                             font.pixelSize: 16; font.bold: true
@@ -226,11 +220,9 @@ Item {
                                 Text { text: "Ensure NOTHING is on the scale."; color: "#cbd5e1"; font.pixelSize: 12 }
                             }
                             Item { Layout.fillWidth: true }
-                            Button {
+                            MotionButton {
                                 id: setZeroBtn
-    scale: down ? 0.95 : 1.0
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                                 text: "SET ZERO"
                                 Layout.preferredWidth: 120; Layout.preferredHeight: 35
                                 font.pixelSize: 14; font.bold: true
@@ -323,7 +315,7 @@ Item {
                                     enabled: calActive
                                     readOnly: true
                                     background: Rectangle { color: "#1e293b"; radius: 6; border.color: "#38bdf8"; border.width: 2 }
-                                    MouseArea {
+                                    MotionMouseArea {
                                         anchors.fill: parent
                                         onClicked: {
                                             inkPageRoot.numpadTarget = tfCalW;
@@ -332,11 +324,9 @@ Item {
                                         }
                                     }
                                 }
-                                Button {
+                                MotionButton {
                                     id: applyStep2Btn
-    scale: down ? 0.95 : 1.0
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                                     text: scaleController.calStatus === "CONTINUE_CAL_4/5" ? "FINISH" : "APPLY"
                                     Layout.preferredWidth: 120; Layout.preferredHeight: 45
                                     font.pixelSize: 18; font.bold: true
@@ -414,10 +404,8 @@ Item {
                                 Text { text: scaleController.consecFails.toString(); color: scaleController.consecFails >= 3 ? "#ef4444" : "#f59e0b"; font.pixelSize: 28; font.bold: true; font.family: "monospace" }
                             }
                         }
-                        Button {
-    scale: down ? 0.95 : 1.0
+                        MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                             text: "RESET BATCH"
                             Layout.preferredWidth: 130; Layout.preferredHeight: 48
                             font.pixelSize: 16; font.bold: true
@@ -515,10 +503,8 @@ Item {
                                                     width: parent.width * 0.12 - 1; height: parent.height
                                                     Rectangle {
                                                         anchors.centerIn: parent; width: 22; height: 22; radius: 4; color: delInkMA.pressed ? "#991b1b" : "#ef4444"
-                                                        scale: delInkMA.pressed ? 0.85 : 1.0
-                                                        Behavior on scale { NumberAnimation { duration: 50 } }
                                                         Text { anchors.centerIn: parent; text: "✕"; font.bold: true; font.pixelSize: 12; color: "#fff" }
-                                                        MouseArea { id: delInkMA; anchors.fill: parent; onClicked: { scaleController.deleteInkProfile(model.name); } }
+                                                        MotionMouseArea { id: delInkMA; anchors.fill: parent; onClicked: { scaleController.deleteInkProfile(model.name); } }
                                                     }
                                                 }
                                             }
@@ -586,10 +572,8 @@ Item {
                                                     width: parent.width * 0.12 - 1; height: parent.height
                                                     Rectangle {
                                                         anchors.centerIn: parent; width: 22; height: 22; radius: 4; color: delCartMA.pressed ? "#991b1b" : "#ef4444"
-                                                        scale: delCartMA.pressed ? 0.85 : 1.0
-                                                        Behavior on scale { NumberAnimation { duration: 50 } }
                                                         Text { anchors.centerIn: parent; text: "✕"; font.bold: true; font.pixelSize: 12; color: "#fff" }
-                                                        MouseArea { id: delCartMA; anchors.fill: parent; onClicked: { scaleController.deleteCartProfile(model.name); } }
+                                                        MotionMouseArea { id: delCartMA; anchors.fill: parent; onClicked: { scaleController.deleteCartProfile(model.name); } }
                                                     }
                                                 }
                                             }
@@ -630,7 +614,7 @@ Item {
                                         anchors.fill: parent; anchors.margins: 2; color: "#f59e0b"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.family: "monospace"
                                         text: "1.0"
                                         readOnly: true
-                                        MouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = relativeErrorInput; numpadPopup.currentValue = relativeErrorInput.text; numpadPopup.open() } }
+                                        MotionMouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = relativeErrorInput; numpadPopup.currentValue = relativeErrorInput.text; numpadPopup.open() } }
                                     }
                                 }
                             }
@@ -653,7 +637,7 @@ Item {
                                         anchors.fill: parent; anchors.margins: 2; color: "#f59e0b"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.family: "monospace"
                                         text: scaleController.inkCapacity.toString()
                                         readOnly: true
-                                        MouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = inkCapacityInput; numpadPopup.currentValue = inkCapacityInput.text; numpadPopup.open() } }
+                                        MotionMouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = inkCapacityInput; numpadPopup.currentValue = inkCapacityInput.text; numpadPopup.open() } }
                                         Connections {
                                             target: scaleController
                                             function onInkCapacityChanged() {
@@ -688,10 +672,8 @@ Item {
                             RowLayout {
                                 Layout.columnSpan: 2; Layout.fillWidth: true; spacing: 15
                                 Item { Layout.fillWidth: true }
-                                Button {
-    scale: down ? 0.95 : 1.0
+                                MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                                     text: "APPLY TARGET (RUN)"
                                     Layout.preferredHeight: 50; Layout.preferredWidth: 240
                                     background: Rectangle { color: "#00bcd4"; radius: 5 }
@@ -709,10 +691,8 @@ Item {
                                         }
                                     }
                                 }
-                                Button {
-    scale: down ? 0.95 : 1.0
+                                MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                                     text: "CLEAR SELECTION"
                                     Layout.preferredHeight: 50; Layout.preferredWidth: 160
                                     background: Rectangle { color: "#3a0a0a"; border.color: "#ef4444"; border.width: 1; radius: 5 }
@@ -779,13 +759,11 @@ Item {
                                 }
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
-                                    TextInput { id: newInkDensity; anchors.fill: parent; anchors.margins: 4; color: "#f59e0b"; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = newInkDensity; numpadPopup.currentValue = newInkDensity.text; numpadPopup.open() } } }
+                                    TextInput { id: newInkDensity; anchors.fill: parent; anchors.margins: 4; color: "#f59e0b"; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MotionMouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = newInkDensity; numpadPopup.currentValue = newInkDensity.text; numpadPopup.open() } } }
                                 }
                                 
-                                Button {
-    scale: down ? 0.95 : 1.0
+                                MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                                     text: "SAVE INK"
                                     Layout.preferredHeight: 45; Layout.fillWidth: true; Layout.columnSpan: 2; background: Rectangle { color: "#051a1a"; border.color: "#5cf4f1"; border.width: 2; radius: 6 }
                                     contentItem: Text { text: parent.text; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
@@ -815,13 +793,11 @@ Item {
                                 }
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2; radius: 4
-                                    TextInput { id: newCartDensity; anchors.fill: parent; anchors.margins: 4; color: "#f59e0b"; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = newCartDensity; numpadPopup.currentValue = newCartDensity.text; numpadPopup.open() } } }
+                                    TextInput { id: newCartDensity; anchors.fill: parent; anchors.margins: 4; color: "#f59e0b"; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MotionMouseArea { anchors.fill: parent; onClicked: { inkPageRoot.numpadTarget = newCartDensity; numpadPopup.currentValue = newCartDensity.text; numpadPopup.open() } } }
                                 }
                                 
-                                Button {
-    scale: down ? 0.95 : 1.0
+                                MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                                     text: "SAVE CART"
                                     Layout.preferredHeight: 45; Layout.fillWidth: true; Layout.columnSpan: 2; background: Rectangle { color: "#051a1a"; border.color: "#5cf4f1"; border.width: 2; radius: 6 }
                                     contentItem: Text { text: parent.text; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
@@ -864,7 +840,7 @@ Item {
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
-            Button {
+            MotionButton {
                 text: "TARE"
                 Layout.preferredWidth: 80; Layout.preferredHeight: 28
                 font.pixelSize: 13; font.bold: true
@@ -893,10 +869,8 @@ Item {
             Text { text: "WARNING: OVERLOAD!"; color: "#fff"; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
             Text { text: "Scale load exceeds maximum limit. Check immediately."; color: "#fff"; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
-            Button {
-    scale: down ? 0.95 : 1.0
+            MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                 text: "ACKNOWLEDGE"
                 Layout.alignment: Qt.AlignHCenter
                 font.pixelSize: 18; font.bold: true
@@ -922,10 +896,8 @@ Item {
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 20
-                Button {
-                    scale: down ? 0.95 : 1.0
+                MotionButton {
                     opacity: down ? 0.8 : 1.0
-                    Behavior on scale { NumberAnimation { duration: 50 } }
                     text: "TARE NOW"
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 45
@@ -934,10 +906,8 @@ Item {
                     background: Rectangle { radius: 6; color: "#fff"; border.width: 0 }
                     contentItem: Text { text: parent.text; color: "#f59e0b"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
-                Button {
-                    scale: down ? 0.95 : 1.0
+                MotionButton {
                     opacity: down ? 0.8 : 1.0
-                    Behavior on scale { NumberAnimation { duration: 50 } }
                     text: "NO"
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 45
@@ -989,13 +959,11 @@ Item {
                         Layout.fillWidth: true; Layout.fillHeight: true; radius: 6
                         color: numBtnMA.pressed ? "#134357" : "#0a2a3a"
                         border.color: "#2a4a5a"; border.width: 1
-                        scale: numBtnMA.pressed ? 0.95 : 1.0
-                        Behavior on scale { NumberAnimation { duration: 50 } }
                         Text {
                             anchors.centerIn: parent
                             text: modelData; color: "#fff"; font.pixelSize: 22; font.bold: true
                         }
-                        MouseArea {
+                        MotionMouseArea {
                             id: numBtnMA; anchors.fill: parent
                             onClicked: {
                                 if (modelData === "⌫") {
@@ -1031,20 +999,16 @@ Item {
             }
             RowLayout {
                 Layout.fillWidth: true; spacing: 10
-                Button {
-    scale: down ? 0.95 : 1.0
+                MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                     text: "CANCEL"; Layout.fillWidth: true; Layout.preferredHeight: 44
                     font.pixelSize: 14; font.bold: true
                     onClicked: numpadPopup.close()
                     background: Rectangle { radius: 6; color: "#3a0a0a"; border.color: "#ef4444" }
                     contentItem: Text { text: parent.text; font: parent.font; color: "#ef4444"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
-                Button {
-    scale: down ? 0.95 : 1.0
+                MotionButton {
     opacity: down ? 0.8 : 1.0
-    Behavior on scale { NumberAnimation { duration: 50 } }
                     text: "OK"; Layout.fillWidth: true; Layout.preferredHeight: 44
                     font.pixelSize: 14; font.bold: true
                     onClicked: {
