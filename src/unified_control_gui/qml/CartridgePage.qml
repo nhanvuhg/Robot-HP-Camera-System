@@ -3,6 +3,7 @@
     import QtQuick.Layouts 1.15
 
     // NOTE: "cartridge systems" refers strictly to this "ROS2 - CARTRIDGE PROVISION SYSTEM" page (CartridgePage.qml).
+    // UI styling can change freely, but keep button logic intact unless the request explicitly says to change behavior.
 
     // ─── CSS VARIABLES (from cartridge_gui.py) ──────────────────────────────────
     // --bg:       #0c0c1d   page background
@@ -20,6 +21,8 @@
     Item {
         id: root
         anchors.fill: parent
+        focus: true
+        activeFocusOnTab: true
 
         readonly property int headerH:  70
         readonly property int tabbarH:  44
@@ -35,6 +38,9 @@
         property int centerW: outerW - ctrlW - sensorW - gap * 2
         property int topH:    Math.floor(outerH * rowRatio) - gap
         property int logH:    outerH - topH - gap
+        property int previousStackIndex: 0
+        property int slideDirection: 1
+        property int screenDragStartIndex: 0
 
         readonly property color cBg:     "transparent"
         readonly property color cBg2:    "#990d1e32"
@@ -49,8 +55,29 @@
         readonly property color cDim:    "#8888aa"
         readonly property color cText:   "#e8e8f0"
         readonly property color cHover:  "#40ffffff"
-
+        readonly property color cUnifiedBtn: Qt.lighter("#0d2a3a", 1.12)
+        readonly property color cBlueWhiteBtn: "#5baeb2"
+        readonly property color cBlueWhiteSelected: "#102e42"
+        readonly property color cBlueWhiteIdle: "#28949a"
+        readonly property color cBlueWhiteBorder: "#7acdd0"
+        readonly property color cBlueWhiteText: "#eaffff"
+        readonly property color cBlueWhiteSubText: "#b8dde0"
+        readonly property color cStateAuxBtn: "#3f8185"
+        readonly property color cStateAuxBorder: "#5eabad"
+        readonly property color cStateAuxText: "#d4f0f1"
         property bool jogStopStateHint: false
+        property bool homingCommandLocked: false
+
+        function homingBusy() {
+            return homingCommandLocked || cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1
+        }
+
+        function cancelHoming() {
+            root.homingCommandLocked = false
+            homingLockFailsafeTimer.stop()
+            cartridgeController.abortToJog()
+            cartridgeController.softStop()
+        }
 
         function showJogStopStateHint() {
             jogStopStateHint = true
@@ -68,6 +95,54 @@
             repeat: false
             onTriggered: root.jogStopStateHint = false
         }
+
+        Timer {
+            id: homingLockFailsafeTimer
+            interval: 8000
+            repeat: false
+            onTriggered: {
+                if (cartridgeController.systemState.toLowerCase().indexOf("homing") === -1)
+                    root.homingCommandLocked = false
+            }
+        }
+
+        Connections {
+            target: cartridgeController
+            function onSystemStateChanged() {
+                if (cartridgeController.systemState.toLowerCase().indexOf("homing") === -1)
+                    root.homingCommandLocked = false
+            }
+        }
+
+        function setStackIndex(nextIndex) {
+            var clamped = Math.max(0, Math.min(5, nextIndex))
+            if (clamped === stack.currentIndex)
+                return
+
+            previousStackIndex = stack.currentIndex
+            slideDirection = clamped > previousStackIndex ? 1 : -1
+            stack.currentIndex = clamped
+            stackSlide.x = slideDirection * Math.min(140, Math.max(70, stack.width * 0.10))
+            stack.opacity = 0.68
+            stackSlideAnim.restart()
+        }
+
+        Shortcut {
+            sequence: "Left"
+            context: Qt.WindowShortcut
+            enabled: root.visible && stack.currentIndex > 0
+            onActivated: root.setStackIndex(stack.currentIndex - 1)
+        }
+
+        Shortcut {
+            sequence: "Right"
+            context: Qt.WindowShortcut
+            enabled: root.visible && stack.currentIndex < 5
+            onActivated: root.setStackIndex(stack.currentIndex + 1)
+        }
+
+        Component.onCompleted: forceActiveFocus()
+        onVisibleChanged: if (visible) forceActiveFocus()
 
         Rectangle { anchors.fill: parent; color: root.cBg }
 
@@ -449,31 +524,62 @@
 
             // drag-to-switch: press anywhere on tabbar and swipe left/right
             property real _dragPressX: 0
+            property real _dragCurrentX: 0
             property bool _wasDrag: false
             MotionMouseArea {
                 id: tabDragArea
                 anchors.fill: parent
-                z: 0
+                z: 10
                 motionEnabled: false
                 shadowEnabled: false
                 shimmerEnabled: false
-                propagateComposedEvents: true
                 onPressed: {
                     tabbar._dragPressX = mouseX
+                    tabbar._dragCurrentX = mouseX
                     tabbar._wasDrag = false
-                    mouse.accepted = false
                 }
                 onPositionChanged: {
+                    tabbar._dragCurrentX = mouseX
                     if (Math.abs(mouseX - tabbar._dragPressX) > 30)
                         tabbar._wasDrag = true
                 }
                 onReleased: {
                     if (tabbar._wasDrag) {
                         var dx = mouseX - tabbar._dragPressX
-                        if (dx < 0 && stack.currentIndex < 5) stack.currentIndex++
-                        else if (dx > 0 && stack.currentIndex > 0) stack.currentIndex--
+                        if (dx < 0 && stack.currentIndex < 5) root.setStackIndex(stack.currentIndex + 1)
+                        else if (dx > 0 && stack.currentIndex > 0) root.setStackIndex(stack.currentIndex - 1)
+                    } else {
+                        var tabWidth = (tabbar.width - 8) / 6
+                        var clickedIndex = Math.floor(Math.max(0, Math.min(tabbar.width - 9, mouseX - 4)) / tabWidth)
+                        root.setStackIndex(clickedIndex)
                     }
+                    tabbar._dragCurrentX = mouseX
                 }
+                onCanceled: {
+                    tabbar._wasDrag = false
+                    tabbar._dragCurrentX = tabbar._dragPressX
+                }
+            }
+
+            Rectangle {
+                id: tabGrip
+                width: Math.max(44, (tabbar.width - 8) / 6 - 22)
+                height: 4
+                radius: 2
+                y: tabbar.height - 8
+                property real tabWidth: (tabbar.width - 8) / 6
+                property real dragPreviewOffset: tabDragArea.pressed && tabbar._wasDrag
+                                                 ? Math.max(-tabWidth, Math.min(tabWidth, tabbar._dragCurrentX - tabbar._dragPressX)) * 0.28
+                                                 : 0
+                x: 4 + stack.currentIndex * tabWidth + (tabWidth - width) / 2 + dragPreviewOffset
+                z: 3
+                color: "#5cf4f1"
+                opacity: tabDragArea.pressed ? 1.0 : 0.82
+                scale: tabDragArea.pressed ? 1.14 : 1.0
+                transformOrigin: Item.Center
+                Behavior on x { NumberAnimation { duration: 210; easing.type: Easing.OutCubic } }
+                Behavior on opacity { NumberAnimation { duration: 120 } }
+                Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
             }
 
             Row {
@@ -498,7 +604,7 @@
                         hoverScale: 1.05
                         pressScale: 0.976
                         shadowColor: "#66000000"
-                        onClicked: if (!tabbar._wasDrag) stack.currentIndex = index
+                        onClicked: if (!tabbar._wasDrag) root.setStackIndex(index)
 
                         background: Rectangle {
                             radius: height / 2
@@ -539,6 +645,48 @@
             id: stack
             anchors { top: tabbar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
             currentIndex: 0
+            transform: Translate { id: stackSlide; x: 0 }
+
+            DragHandler {
+                id: screenSwipeHandler
+                target: null
+                acceptedButtons: Qt.LeftButton
+                grabPermissions: PointerHandler.CanTakeOverFromAnything
+                xAxis.enabled: true
+                yAxis.enabled: false
+
+                onActiveChanged: {
+                    if (active) {
+                        root.screenDragStartIndex = stack.currentIndex
+                    } else {
+                        var dx = activeTranslation.x
+                        if (Math.abs(dx) > 90) {
+                            if (dx < 0 && root.screenDragStartIndex < 5)
+                                root.setStackIndex(root.screenDragStartIndex + 1)
+                            else if (dx > 0 && root.screenDragStartIndex > 0)
+                                root.setStackIndex(root.screenDragStartIndex - 1)
+                        }
+                    }
+                }
+            }
+
+            ParallelAnimation {
+                id: stackSlideAnim
+                NumberAnimation {
+                    target: stackSlide
+                    property: "x"
+                    to: 0
+                    duration: 240
+                    easing.type: Easing.OutCubic
+                }
+                NumberAnimation {
+                    target: stack
+                    property: "opacity"
+                    to: 1.0
+                    duration: 180
+                    easing.type: Easing.OutQuad
+                }
+            }
 
             // ── PAGE 1: CONTROL DASHBOARD ────────────────────────
             Item {
@@ -574,7 +722,7 @@
                                 }
 
                                 Text {
-                                    text: "MODE SELECTION"; color: "#6cf"
+                                    text: "MODE SELECTION"; color: "#5cf4f1"
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -590,11 +738,17 @@
                                         height: (parent.height - 6) / 2
                                         radius: 5
                                         property bool isModeSelected: cartridgeController.currentMode === "auto"
-                                        color: isModeSelected ? "#40ffffff" : root.cCard
-                                        border.color: isModeSelected ? "#40ffffff" : root.cBorder
-                                        border.width: isModeSelected ? 1 : 0
+                                        color: isModeSelected ? "#5cf4f1" : "transparent"
+                                        border.color: isModeSelected ? "#86bccb" : "#b9dfe1"
+                                        border.width: 1
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: parent.radius
+                                            visible: parent.isModeSelected
+                                            color: "#8094a3b8"
+                                        }
                                         MotionMouseArea {
                                             anchors.fill: parent
                                             enabled: !modeSelCol.modeBlocked
@@ -610,8 +764,8 @@
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            Text { text: "AUTO"; color: parent.parent.isModeSelected ? "#e8fff3" : "#d4faff"; font.pixelSize: 15; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                            Text { text: "Automatic"; color: parent.parent.isModeSelected ? "#9ccbb2" : root.cDim; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "AUTO"; color: parent.parent.isModeSelected ? "#05303a" : "#8eb4d0"; font.pixelSize: 15; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "Automatic"; color: parent.parent.isModeSelected ? "#0c5a66" : "#8eb4d0"; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
 
@@ -621,11 +775,17 @@
                                         height: (parent.height - 6) / 2
                                         radius: 5
                                         property bool isModeSelected: cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog"
-                                        color: isModeSelected ? "#40ffffff" : root.cCard
-                                        border.color: isModeSelected ? "#40ffffff" : root.cBorder
-                                        border.width: isModeSelected ? 1 : 0
+                                        color: isModeSelected ? "#5cf4f1" : "transparent"
+                                        border.color: isModeSelected ? "#86bccb" : "#b9dfe1"
+                                        border.width: 1
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: parent.radius
+                                            visible: parent.isModeSelected
+                                            color: "#8094a3b8"
+                                        }
                                         MotionMouseArea {
                                             anchors.fill: parent
                                             enabled: !modeSelCol.modeBlocked
@@ -642,8 +802,8 @@
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            Text { text: "MANUAL"; color: parent.parent.isModeSelected ? "#e8fff3" : "#d4faff"; font.pixelSize: 15; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                            Text { text: "Direct Control"; color: parent.parent.isModeSelected ? "#9ccbb2" : root.cDim; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "MANUAL"; color: parent.parent.isModeSelected ? "#05303a" : "#8eb4d0"; font.pixelSize: 15; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "Direct Control"; color: parent.parent.isModeSelected ? "#0c5a66" : "#8eb4d0"; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
                                 }
@@ -667,7 +827,7 @@
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
-                                    text: "SYSTEM CONTROL"; color: "#6cf"
+                                    text: "SYSTEM CONTROL"; color: "#5cf4f1"
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -676,9 +836,20 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START";  bg: "#0b7876"; bgEnd: "#095f5d"; bc: root.cAccent; tc: "#d4faff"; onClicked: cartridgeController.startSystem() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START";  bg: "#0b7876"; bgEnd: "#095f5d"; bc: root.cAccent; tc: "#d4faff"; onClicked: {
+                                            if (cartridgeController.currentMode === "auto") {
+                                                cartridgeController.setMode("auto")
+                                                robotController.setAutoMode(true)
+                                                hpController.publishMode(0)
+                                            } else if (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") {
+                                                cartridgeController.setMode("manual")
+                                                robotController.setManualMode(true)
+                                                hpController.publishMode(2)
+                                            }
+                                            cartridgeController.startSystem()
+                                        } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; bg: "#0a405c"; bgEnd: "#052b3d"; bc: root.cAccent; tc: "#d4faff"; onClicked: cartridgeController.resumeSystem() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP";   bg: "#771a1a"; bgEnd: "#4e0c0c"; bc: root.cRed;    tc: "#d4faff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP";   bg: "#771a1a"; bgEnd: "#4e0c0c"; bc: root.cRed;    tc: "#d4faff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: { root.cancelHoming(); robotController.softStopAndManual(); cartridgeController.stopSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE";  bg: "#0a405c"; bgEnd: "#052b3d"; bc: root.cAccent; tc: "#d4faff"; onClicked: cartridgeController.pauseSystem() }
                                 }
                             }
@@ -701,7 +872,7 @@
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
-                                    text: "STATE NAVIGATION"; color: "#6cf"
+                                    text: "STATE NAVIGATION"; color: "#5cf4f1"
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -710,20 +881,36 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 3; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOMING";  bg: root.cCard;   bc: root.cBorder; tc: root.cText;   blinking: cartridgeController.uiHint === "press_homing"; onClicked: cartridgeController.gotoState("HOMING") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 1\nKhay In"; bg: "#1a2050"; bc: "#26c6da"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 3\nKhay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
+                                    CBtn {
+                                        Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
+                                        lbl: "HOMING"
+                                        bg: root.cStateAuxBtn
+                                        bc: root.cStateAuxBorder
+                                        tc: root.cStateAuxText
+                                        isSelected: root.homingBusy()
+                                        clickEnabled: !root.homingBusy()
+                                        blinking: cartridgeController.uiHint === "press_homing"
+                                        onClicked: {
+                                            root.homingCommandLocked = true
+                                            homingLockFailsafeTimer.restart()
+                                            robotController.gotoState("HOMING")
+                                            cartridgeController.gotoState("HOMING")
+                                        }
+                                    }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 1\nKhay In"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 3\nKhay Out"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
 
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
                                         lbl: cartridgeController.currentMode === "jog" ? "STATE MODE" : "STOP STATE"
-                                        bg: cartridgeController.currentMode === "jog" ? "#0d2a3a" : "#771a1a"
-                                        bgEnd: cartridgeController.currentMode === "jog" ? "#0d2a3a" : "#4e0c0c"
-                                        bc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
-                                        tc: cartridgeController.currentMode === "jog" ? root.cGreen  : root.cRed
-                                        blinking: root.jogStopStateHint
+                                        bg: "#771a1a"
+                                        bgEnd: "#4e0c0c"
+                                        bc: root.cRed
+                                        tc: "#d4faff"
+                                        isSelected: cartridgeController.currentMode === "jog" || cartridgeController.systemState.toLowerCase().indexOf("jog") !== -1
                                         onClicked: {
                                             root.jogStopStateHint = false
+                                            root.cancelHoming()
                                             if (cartridgeController.currentMode === "jog") {
                                                 cartridgeController.setMode("manual")
                                                 hpController.publishMode(2)  // sync Fill HP → Manual
@@ -732,8 +919,8 @@
                                             }
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nKhay In"; bg: "#1a2050"; bc: "#26c6da"; tc: root.cAccent; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.gotoState("STATE2") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 4\nKhay Out"; bg: "#1a2050"; bc: root.cGreen; tc: root.cGreen; active: cartridgeController.currentMode === "manual"; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.gotoState("STATE4") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nKhay In"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.gotoState("STATE2") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 4\nKhay Out"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.gotoState("STATE4") }
                                 }
                             }
                         }
@@ -764,13 +951,13 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 3; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nEXTEND";  bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; onClicked: cartridgeController.cylinderCmd(1, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nEXTEND"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; onClicked: cartridgeController.cylinderCmd(2, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nEXTEND"; bg: "#1a2050"; bc: root.cAccent; tc: root.cAccent; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; onClicked: cartridgeController.cylinderCmd(3, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nEXTEND";  bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; onClicked: cartridgeController.cylinderCmd(1, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nEXTEND"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; onClicked: cartridgeController.cylinderCmd(2, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nEXTEND"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; onClicked: cartridgeController.cylinderCmd(3, true) }
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nRETRACT";  bg: "#0d2a3a"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nRETRACT"; bg: "#0d2a3a"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nRETRACT"; bg: "#0d2a3a"; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nRETRACT";  bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nRETRACT"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nRETRACT"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
                                 }
                             }
                         }
@@ -1027,17 +1214,17 @@
                                             }
 
                                             // STOP button (full width safety button at bottom)
-                                            CBtn {
-                                                lbl: "STOP"
-                                                w: parent.width; h: 42
-                                                padV: 9
-                                                fontSize: 18
-                                                bg: "#771a1a"
-                                                bgEnd: "#4e0c0c"
-                                                bc: root.cRed
-                                                tc: root.cRed
-                                                onClicked: cartridgeController.jogStop(model.sid)
-                                            }
+                                                CBtn {
+                                                    lbl: "STOP"
+                                                    w: parent.width; h: 42
+                                                    padV: 9
+                                                    fontSize: 18
+                                                    bg: "#771a1a"
+                                                    bgEnd: "#4e0c0c"
+                                                    bc: root.cRed
+                                                    tc: root.cRed
+                                                    onClicked: cartridgeController.jogStop(model.sid)
+                                                }
                                         }
                                      }
                                  }
@@ -1060,7 +1247,7 @@
                             RowLayout { width: parent.width; height: 24
                                 Text { text: "LOG ACTIVITY"; color: "#6cf"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; padV:4; padH:10; fontSize: 15; bg:root.cCard; bc:root.cBorder; tc:root.cText; onClicked: cartridgeController.clearLog() }
+                                CBtn { lbl:"Clear"; padV:4; padH:10; fontSize: 15; bg:root.cWarnBlueBg; bgEnd:root.cWarnBlueBgEnd; bc:root.cWarnBlueBorder; tc:root.cWarnBlueText; onClicked: cartridgeController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 18 - 4
@@ -2438,6 +2625,7 @@
             property color bc:    root.cBorder
             property color tc:    root.cText
             property bool  active: true
+            property bool  clickEnabled: active
             property int   padV: 6
             property int   padH: 12
             property int   fontSize: 16
@@ -2457,14 +2645,14 @@
             radius: 4
             color: bgEnd !== bg ? "transparent" : (
                 !active ? bg :
-                _pressed ? Qt.lighter(bg, 1.12) :
-                isSelected ? Qt.rgba(bc.r, bc.g, bc.b, 0.24) :
+                _pressed ? Qt.darker(bg, 2.15) :
+                isSelected ? Qt.darker(bg, 2.05) :
                 _hovered ? Qt.lighter(bg, 1.06) :
                 bg
             )
             border.color: {
-                if (_pressed) return Qt.lighter(bc, 1.12)
-                if (isSelected) return bc
+                if (_pressed) return Qt.darker(bc, 1.32)
+                if (isSelected) return Qt.darker(bc, 1.25)
                 if (_hovered) return Qt.lighter(bc, 1.08)
                 return bc
             }
@@ -2483,8 +2671,8 @@
                 z: -1
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: cbr._pressed ? Qt.lighter(cbr.bg, 1.06) : cbr.bg }
-                    GradientStop { position: 1.0; color: cbr._pressed ? Qt.lighter(cbr.bgEnd, 1.06) : cbr.bgEnd }
+                    GradientStop { position: 0.0; color: cbr._pressed ? Qt.darker(cbr.bg, 1.28) : cbr.bg }
+                    GradientStop { position: 1.0; color: cbr._pressed ? Qt.darker(cbr.bgEnd, 1.28) : cbr.bgEnd }
                 }
             }
 
@@ -2545,11 +2733,14 @@
             }
 
             MotionMouseArea { anchors.fill: parent; hoverEnabled: true
+                enabled: cbr.clickEnabled
                 hoverScale: 1.05
                 pressScale: 0.976
                 shadowEnabled: false
-                shimmerEnabled: false
-                onClicked:       { if(cbr.active) cbr.clicked() }
+                shimmerEnabled: cbr.active
+                shimmerWhilePressed: true
+                shimmerColor: "#55d4faff"
+                onClicked:       { if(cbr.clickEnabled) cbr.clicked() }
                 onPressed:       { cbr._pressed = true;  cbr.pressed() }
                 onReleased:      { cbr._pressed = false; cbr.released() }
                 onEntered:       cbr._hovered = true

@@ -161,8 +161,8 @@ Item {
                         Layout.fillWidth: true
                         Text {
                             anchors.centerIn: parent
-                            text: "ROS2 - ROBOT CONTROL SYSTEM"
-                            font.pixelSize: 24; font.bold: true; color: "#6cf"
+                            text: "ROS 2 - INKOBOT MONITORING SYSTEM"
+                            font.pixelSize: 24; font.bold: true; color: "#5cf4f1"
                         }
                     }
 
@@ -600,33 +600,33 @@ Item {
                             delegate: Rectangle {
                                 property int rn: index + 1
                                 property bool aiMode: cameraPageRoot.ctrlMode === "camera_ai"
-                                property bool isReady: aiMode && (robotController.rowReady[index] === true)
                                 property bool isActive: robotController.selectedRow === rn
+                                property bool isAiDetected: aiMode && (robotController.rowReady[index] === true)
                                 property bool canSelect: !cameraPageRoot.rowLocked && cameraPageRoot.ctrlMode === "auto"
                                 Layout.fillWidth: true; height: 32; radius: 5
                                 color: aiMode
-                                       ? (isActive ? "#0a4020" : (isReady ? "#0d3320" : "#0d2538"))
-                                       : (isActive ? "#0a4020" : "#0d2538")
+                                       ? (isAiDetected ? Qt.rgba(0.36, 0.96, 0.95, 0.22) : "transparent")
+                                       : (isActive ? "#0a3b42" : "#0d2538")
                                 border.color: aiMode
-                                              ? (isActive ? "#10b981" : (isReady ? "#10b981" : "#134357"))
-                                              : (isActive ? "#10b981" : "#134357")
+                                              ? (isAiDetected ? "#5cf4f1" : "#134357")
+                                              : (isActive ? "#5cf4f1" : "#134357")
                                 border.width: aiMode
-                                              ? (isActive ? 3 : (isReady ? 2 : 1))
+                                              ? (isAiDetected ? 2 : 1)
                                               : (isActive ? 2 : 1)
                                 opacity: aiMode
-                                         ? (isReady || isActive ? 1.0 : 0.45)
+                                         ? 1.0
                                          : (canSelect ? 1.0 : (isActive ? 1.0 : 0.45))
                                 Rectangle {
-                                    visible: isActive
+                                    visible: isAiDetected || (!aiMode && isActive)
                                     anchors { top: parent.top; left: parent.left; right: parent.right }
-                                    height: 3; radius: 2; color: "#10b981"
+                                    height: 3; radius: 2; color: "#5cf4f1"
                                 }
                                 Text {
                                     anchors.centerIn: parent; text: "R" + rn
                                     color: aiMode
-                                           ? (isActive ? "#34d399" : (isReady ? "#10b981" : "#94a3b8"))
-                                           : (isActive ? "#10b981" : "#94a3b8")
-                                    font.pixelSize: 18; font.bold: isActive || isReady
+                                           ? (isAiDetected ? "#5cf4f1" : "#6b7280")
+                                           : (isActive ? "#5cf4f1" : "#94a3b8")
+                                    font.pixelSize: 18; font.bold: (aiMode ? isAiDetected : isActive)
                                 }
                                 MotionMouseArea { anchors.fill: parent; enabled: canSelect; onClicked: robotController.selectRow(rn) }
                             }
@@ -780,7 +780,7 @@ Item {
                                 GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker("#4e0c0c", 1.15) : "#4e0c0c" }
                             }
                             Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
-                            MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.softStop() } }
+                            MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.stopSystem() } }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
@@ -804,13 +804,16 @@ Item {
                                 if (cameraPageRoot.ctrlMode === "camera_ai") {
                                     robotController.selectRow(0)
                                     robotController.setAiMode(true)
+                                    cartridgeController.setMode("auto")
                                     hpController.publishMode(0) // sync Fill HP → Auto
                                 } else if (cameraPageRoot.ctrlMode === "auto") {
-                                    if (robotController.selectedRow <= 0) {
-                                        robotController.selectRow(1)
-                                    }
                                     robotController.setAutoMode(true)
+                                    cartridgeController.setMode("auto")
                                     hpController.publishMode(0) // sync Fill HP → Auto
+                                } else if (cameraPageRoot.ctrlMode === "manual") {
+                                    robotController.setManualMode(true)
+                                    cartridgeController.setMode("manual")
+                                    hpController.publishMode(2)
                                 }
                                 cameraPageRoot.modeLocked = true
                                 robotController.startSystem(true)
