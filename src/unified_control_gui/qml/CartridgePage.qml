@@ -1,6 +1,7 @@
-    import QtQuick 2.15
-    import QtQuick.Controls 2.15
-    import QtQuick.Layouts 1.15
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
+import QtGraphicalEffects 1.15
 
     // NOTE: "cartridge systems" refers strictly to this "ROS2 - CARTRIDGE PROVISION SYSTEM" page (CartridgePage.qml).
     // UI styling can change freely, but keep button logic intact unless the request explicitly says to change behavior.
@@ -25,14 +26,15 @@
         activeFocusOnTab: true
 
         readonly property int headerH:  70
-        readonly property int tabbarH:  44
+        readonly property int tabbarH:  64
+        readonly property int tabbarDockGap: 4
         readonly property int gap:       4
         readonly property int pad:       6
         readonly property int ctrlW:   245   // rộng hơn để chứa title font 14
         readonly property int sensorW: 250
         readonly property real rowRatio: 5.0 / (5.0 + 1.6)   // top:log = 5:1.6 → log nhỏ hơn nữa
 
-        property int gridH:   height - headerH - tabbarH
+        property int gridH:   height - headerH - tabbarH - tabbarDockGap
         property int outerW:  width  - pad * 2
         property int outerH:  gridH  - pad * 2
         property int centerW: outerW - ctrlW - sensorW - gap * 2
@@ -42,6 +44,7 @@
         property int slideDirection: 1
         property int screenDragStartIndex: 0
         property bool startCommandLocked: false
+        property bool suppressJogEchoForManual: false
 
         readonly property color cBg:     "transparent"
         readonly property color cBg2:    "#990d1e32"
@@ -66,6 +69,7 @@
         readonly property color cStateAuxBtn: "#3f8185"
         readonly property color cStateAuxBorder: "#5eabad"
         readonly property color cStateAuxText: "#d4f0f1"
+        readonly property color cFieldBorder: "#67e8f9"
         property bool jogStopStateHint: false
         property bool homingCommandLocked: false
 
@@ -113,6 +117,11 @@
                 if (cartridgeController.systemState.toLowerCase().indexOf("homing") === -1)
                     root.homingCommandLocked = false
             }
+            function onCurrentModeChanged() {
+                if (cartridgeController.currentMode === "manual") {
+                    root.suppressJogEchoForManual = false
+                }
+            }
         }
 
         function setStackIndex(nextIndex) {
@@ -144,8 +153,6 @@
 
         Component.onCompleted: forceActiveFocus()
         onVisibleChanged: if (visible) forceActiveFocus()
-
-        Rectangle { anchors.fill: parent; color: root.cBg }
 
         // Ambient glow blobs — creates depth behind glass panels
         Canvas {
@@ -513,15 +520,31 @@
         // ════════════════════════════════════════════════════════════
         Rectangle {
             id: tabbar
-            anchors { top: notifyBanner.bottom; left: parent.left; right: parent.right }
+            anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
             anchors.leftMargin: 16
             anchors.rightMargin: 16
+            anchors.bottomMargin: root.tabbarDockGap
             height: root.tabbarH
             radius: height / 2
             antialiasing: true
-            color: "#0d2538"
-            border.color: "#134357"
+            z: 20
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop { position: 0.0; color: "#48eef9fd" }
+                GradientStop { position: 0.42; color: "#36bfd6e7" }
+                GradientStop { position: 1.0; color: "#258da9c2" }
+            }
+            border.color: "#bdf5fa"
             border.width: 1
+            layer.enabled: true
+            layer.effect: DropShadow {
+                transparentBorder: true
+                radius: 34
+                samples: 41
+                horizontalOffset: 0
+                verticalOffset: 11
+                color: "#2d39516e"
+            }
 
             // drag-to-switch: press anywhere on tabbar and swipe left/right
             property real _dragPressX: 0
@@ -564,21 +587,37 @@
 
             Rectangle {
                 id: tabGrip
-                width: Math.max(44, (tabbar.width - 8) / 6 - 22)
-                height: 4
-                radius: 2
-                y: tabbar.height - 8
+                width: Math.max(74, (tabbar.width - 8) / 6 - 12)
+                height: tabbar.height - 14
+                radius: height / 2
+                y: 7
                 property real tabWidth: (tabbar.width - 8) / 6
                 property real dragPreviewOffset: tabDragArea.pressed && tabbar._wasDrag
                                                  ? Math.max(-tabWidth, Math.min(tabWidth, tabbar._dragCurrentX - tabbar._dragPressX)) * 0.28
                                                  : 0
                 x: 4 + stack.currentIndex * tabWidth + (tabWidth - width) / 2 + dragPreviewOffset
-                z: 3
-                color: "#5cf4f1"
-                opacity: tabDragArea.pressed ? 1.0 : 0.82
-                scale: tabDragArea.pressed ? 1.14 : 1.0
+                z: 0
+                gradient: Gradient {
+                    orientation: Gradient.Vertical
+                    GradientStop { position: 0.0; color: "#ffffffff" }
+                    GradientStop { position: 0.54; color: "#edf8feff" }
+                    GradientStop { position: 1.0; color: "#c5deeff7" }
+                }
+                border.color: "#c0f5fa"
+                border.width: 1
+                opacity: 1.0
+                scale: tabDragArea.pressed ? 1.01 : 1.0
                 transformOrigin: Item.Center
-                Behavior on x { NumberAnimation { duration: 210; easing.type: Easing.OutCubic } }
+                layer.enabled: true
+                layer.effect: DropShadow {
+                    transparentBorder: true
+                    radius: 18
+                    samples: 27
+                    horizontalOffset: 0
+                    verticalOffset: 5
+                    color: "#34485f9a"
+                }
+                Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                 Behavior on opacity { NumberAnimation { duration: 120 } }
                 Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
             }
@@ -599,40 +638,79 @@
                     delegate: MotionButton {
                         id: tabButton
                         property bool isSelected: stack.currentIndex === index
+                        property bool hasIcon: true
+                        property string tabIconSource: model.k === "robot"
+                                                        ? "qrc:/icons/qml/icons/bot.svg"
+                                                        : (model.k === "ink"
+                                                            ? "qrc:/icons/qml/icons/droplet.svg"
+                                                            : (model.k === "config"
+                                                               ? "qrc:/icons/qml/icons/settings.svg"
+                                                               : (model.k === "control"
+                                                                  ? "qrc:/icons/qml/icons/monitor_cog.svg"
+                                                                  : (model.k === "hp"
+                                                                     ? "qrc:/icons/qml/icons/file_sliders.svg"
+                                                                     : (model.k === "prod"
+                                                                        ? "qrc:/icons/qml/icons/monitor_cloud.svg"
+                                                                        : "")))))
                         height: parent.height
                         width: (tabbar.width - 8) / 6
                         z: 1
-                        hoverScale: 1.05
-                        pressScale: 0.976
+                        hoverScale: 1.03
+                        pressScale: 0.98
                         shadowColor: "#66000000"
                         onClicked: if (!tabbar._wasDrag) root.setStackIndex(index)
 
                         background: Rectangle {
                             radius: height / 2
                             antialiasing: true
-                            color: tabButton.isSelected ? "transparent" : (tabButton.hovered ? "#14334a" : "transparent")
-                            border.color: tabButton.isSelected ? "#63dce7" : (tabButton.hovered ? "#245c75" : "transparent")
-                            border.width: tabButton.isSelected || tabButton.hovered ? 1 : 0
-                            gradient: tabButton.isSelected ? selectedTabGradient : null
-                            Behavior on color { ColorAnimation { duration: 140 } }
-                            Behavior on border.color { ColorAnimation { duration: 140 } }
-
-                            Gradient {
-                                id: selectedTabGradient
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: "#2ab6c0" }
-                                GradientStop { position: 1.0; color: "#0f7688" }
-                            }
+                            color: tabButton.hovered && !tabButton.isSelected ? "#15ffffff" : "transparent"
+                            border.color: tabButton.isSelected ? "#00ffffff" : (tabButton.hovered ? "#34d8eef5" : "transparent")
+                            border.width: tabButton.hovered && !tabButton.isSelected ? 1 : 0
                         }
 
-                        contentItem: Text {
-                            text: model.t
-                            font.pixelSize: 17
-                            font.bold: true
-                            font.letterSpacing: 0.5
-                            color: tabButton.isSelected ? "#ffffff" : "#d4faff"
-                            horizontalAlignment: Text.AlignHCenter
-                            verticalAlignment: Text.AlignVCenter
+                        contentItem: Item {
+                            anchors.fill: parent
+
+                            Item {
+                                id: tabIconHost
+                                width: 36
+                                height: 36
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.top: parent.top
+                                anchors.topMargin: 1
+
+                                Image {
+                                    id: tabIconImage
+                                    visible: false
+                                    source: tabButton.tabIconSource
+                                    width: 34
+                                    height: 34
+                                    anchors.centerIn: parent
+                                    fillMode: Image.PreserveAspectFit
+                                }
+                                ColorOverlay {
+                                    anchors.fill: tabIconImage
+                                    source: tabIconImage
+                                    color: "#000000"
+                                }
+                            }
+
+                            Text {
+                                text: model.t
+                                font.pixelSize: 14
+                                font.bold: true
+                                font.weight: Font.DemiBold
+                                font.letterSpacing: 0
+                                color: "#000000"
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                width: tabButton.width - 4
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.top: tabIconHost.bottom
+                                anchors.topMargin: -2
+                                wrapMode: Text.NoWrap
+                                elide: Text.ElideNone
+                            }
                         }
                     }
                 }
@@ -644,7 +722,7 @@
         // ════════════════════════════════════════════════════════════
         StackLayout {
             id: stack
-            anchors { top: tabbar.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+            anchors { top: notifyBanner.bottom; left: parent.left; right: parent.right; bottom: tabbar.top }
             currentIndex: 0
             transform: Translate { id: stackSlide; x: 0 }
 
@@ -914,8 +992,8 @@
                                         isSelected: cartridgeController.currentMode === "jog" || cartridgeController.systemState.toLowerCase().indexOf("jog") !== -1
                                         onClicked: {
                                             root.jogStopStateHint = false
-                                            root.cancelHoming()
                                             if (cartridgeController.currentMode === "jog") {
+                                                root.suppressJogEchoForManual = true
                                                 cartridgeController.setMode("manual")
                                                 hpController.publishMode(2)  // sync Fill HP → Manual
                                             } else {
@@ -1085,7 +1163,7 @@
                                                     Layout.fillWidth: true
                                                     Layout.preferredHeight: 42
                                                     radius: 6
-                                                    color: "#081e29"; border.color: root.cBorder; border.width: 1
+                                                    color: root.cCard; border.color: root.cBorder; border.width: 1
                                                     Text {
                                                         id: velText
                                                         anchors.centerIn: parent
@@ -1177,7 +1255,7 @@
                                                         Layout.fillWidth: true
                                                         Layout.preferredHeight: 42
                                                         radius: 6
-                                                        color: "#081e29"; border.color: "#6cf"; border.width: 2
+                                                        color: root.cCard; border.color: "#6cf"; border.width: 2
                                                         TextInput {
                                                             id: posIn
                                                             anchors.fill: parent; anchors.margins: 4
@@ -1562,7 +1640,7 @@
                                             }
                                             Rectangle {
                                                 width: parent.width * 0.22; height: 36; radius: 5
-                                                color: root.cBg; border.color: root.cBorder
+                                                color: "#081622"; border.color: root.cFieldBorder; border.width: 2
                                                 TextInput {
                                                     id: sInput2
                                                     anchors { fill: parent; margins: 3 }
@@ -2796,7 +2874,7 @@
                             anchors.verticalCenter: parent.verticalCenter; spacing: 0
                             Text { text: "R"+modelData; color: root.cCyan; font.pixelSize: 13; font.bold: true
                                    width: 46; anchors.verticalCenter: parent.verticalCenter }
-                            Rectangle { width: 94; height: 30; radius: 4; color: root.cBg; border.color: root.cBorder
+                            Rectangle { width: 94; height: 30; radius: 4; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
                                 TextInput { id: rowInput; anchors { fill: parent; margins: 4 }
                                     text: "0.0"
                                     font.pixelSize: 14; font.family: "monospace"; color: root.cYellow
@@ -2893,13 +2971,13 @@
                                 spacing: parent.width * 0.02
                                 Text { text: "R"+modelData; color: root.cCyan; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; anchors.verticalCenter: parent.verticalCenter }
 
-                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: root.cBg; border.color: root.cBorder
+                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
                                     TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) minInp.text = String(tbl[String(modelData)][0]) } } } }
-                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: root.cBg; border.color: root.cBorder
+                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
                                     TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) maxInp.text = String(tbl[String(modelData)][1]) } } } }
-                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: root.cBg; border.color: root.cBorder
+                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
                                     TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) tgtInp.text = String(tbl[String(modelData)][2]) } } } }
 

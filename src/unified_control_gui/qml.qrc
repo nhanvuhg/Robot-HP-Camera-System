@@ -20,6 +20,11 @@
     <file>qml/icons/reply_arrow.svg</file>
     <file>qml/icons/jog_plus.png</file>
     <file>qml/icons/jog_neg.png</file>
+    <file>qml/icons/bot.svg</file>
+    <file>qml/icons/monitor_cog.svg</file>
+    <file>qml/icons/droplet.svg</file>
+    <file>qml/icons/file_sliders.svg</file>
+    <file>qml/icons/monitor_cloud.svg</file>
     <file>qml/icons/bg_servers.jpg</file>
   </qresource>
 </RCC>
