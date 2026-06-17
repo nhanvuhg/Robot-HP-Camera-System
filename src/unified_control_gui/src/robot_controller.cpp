@@ -380,6 +380,41 @@ void RobotController::stopAndResetRobot()
 {
     qDebug() << "Stop & Reset Robot";
 
+    // Reset UI-facing selection/ready state immediately so the GUI blanks out
+    // as soon as STOP is pressed.
+    if (selected_row_ != -1) {
+        selected_row_ = -1;
+        emit selectedRowChanged();
+    }
+    if (selected_slot_ != -1) {
+        selected_slot_ = -1;
+        emit selectedSlotChanged();
+    }
+    if (in_ready_) {
+        in_ready_ = false;
+        emit inReadyChanged();
+    }
+    if (out_ready_) {
+        out_ready_ = false;
+        emit outReadyChanged();
+    }
+    bool rowChanged = false;
+    for (int i = 0; i < row_ready_.size(); ++i) {
+        if (row_ready_[i].toBool()) {
+            row_ready_[i] = false;
+            rowChanged = true;
+        }
+    }
+    if (rowChanged) emit rowReadyChanged();
+    bool slotChanged = false;
+    for (int i = 0; i < slot_ready_.size(); ++i) {
+        if (slot_ready_[i].toBool()) {
+            slot_ready_[i] = false;
+            slotChanged = true;
+        }
+    }
+    if (slotChanged) emit slotReadyChanged();
+
     // [STOP-PRESERVE] Snapshot picker+gripper state ngay TRUOC khi gui STOP
     // services. Tat ca STOP services khong duoc set DO1/DO2, nhung Dobot
     // ResetRobot mot so phien ban firmware co the reset DO outputs nhu side

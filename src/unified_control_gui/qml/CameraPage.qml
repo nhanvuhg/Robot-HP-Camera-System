@@ -9,6 +9,8 @@ Item {
     property string currentTime: Qt.formatDateTime(new Date(), "yyyy-MM-dd hh:mm:ss")
     property bool rowLocked: (robotController.systemStatus || "").toUpperCase() === "INIT_LOAD_CHAMBER_DIRECT" && robotController.selectedRow >= 1
     property bool modeLocked: false
+    property bool startCommandLocked: false
+    property bool autoRowIndicatorsActive: false
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
 
     readonly property color cPanel:       "#990d1e32"
@@ -707,7 +709,7 @@ Item {
                             ]
                             delegate: Rectangle {
                                 required property var modelData
-                                property bool isActive: (modelData.lbl === "IN_READY" && robotController.inReady) || (modelData.lbl === "OUT_READY" && robotController.outReady)
+                                property bool isActive: cameraPageRoot.autoRowIndicatorsActive && ((modelData.lbl === "IN_READY" && robotController.inReady) || (modelData.lbl === "OUT_READY" && robotController.outReady))
                                 readonly property bool isReadyBtn: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
                                 property color gStart: (isReadyBtn && isActive) ? "#1a5070" : modelData.bgStart
                                 property color gEnd:   (isReadyBtn && isActive) ? "#0a3040" : modelData.bgEnd
@@ -780,7 +782,7 @@ Item {
                                 GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker("#4e0c0c", 1.15) : "#4e0c0c" }
                             }
                             Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
-                            MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.softStopAndManual(); cartridgeController.stopSystem() } }
+                            MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; cameraPageRoot.startCommandLocked = false; cameraPageRoot.autoRowIndicatorsActive = false; robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
@@ -801,6 +803,9 @@ Item {
                             }
                             Text { anchors.centerIn: parent; text: "▶ START"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
                             MotionMouseArea { id: startMA; anchors.fill: parent; onClicked: {
+                                if (cameraPageRoot.startCommandLocked)
+                                    return
+                                cameraPageRoot.startCommandLocked = true
                                 if (cameraPageRoot.ctrlMode === "camera_ai") {
                                     robotController.selectRow(0)
                                     robotController.setAiMode(true)
@@ -816,6 +821,7 @@ Item {
                                     hpController.publishMode(2)
                                 }
                                 cameraPageRoot.modeLocked = true
+                                cameraPageRoot.autoRowIndicatorsActive = true
                                 robotController.startSystem(true)
                             } }
                         }

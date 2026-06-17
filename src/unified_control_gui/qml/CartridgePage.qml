@@ -41,6 +41,7 @@
         property int previousStackIndex: 0
         property int slideDirection: 1
         property int screenDragStartIndex: 0
+        property bool startCommandLocked: false
 
         readonly property color cBg:     "transparent"
         readonly property color cBg2:    "#990d1e32"
@@ -836,7 +837,10 @@
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START";  bg: "#0b7876"; bgEnd: "#095f5d"; bc: root.cAccent; tc: "#d4faff"; onClicked: {
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START";  bg: "#0b7876"; bgEnd: "#095f5d"; bc: root.cAccent; tc: "#d4faff"; clickEnabled: !root.startCommandLocked; onClicked: {
+                                            if (root.startCommandLocked)
+                                                return
+                                            root.startCommandLocked = true
                                             if (cartridgeController.currentMode === "auto") {
                                                 cartridgeController.setMode("auto")
                                                 robotController.setAutoMode(true)
@@ -849,7 +853,7 @@
                                             cartridgeController.startSystem()
                                         } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; bg: "#0a405c"; bgEnd: "#052b3d"; bc: root.cAccent; tc: "#d4faff"; onClicked: cartridgeController.resumeSystem() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP";   bg: "#771a1a"; bgEnd: "#4e0c0c"; bc: root.cRed;    tc: "#d4faff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: { root.cancelHoming(); robotController.softStopAndManual(); cartridgeController.stopSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP";   bg: "#771a1a"; bgEnd: "#4e0c0c"; bc: root.cRed;    tc: "#d4faff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: { root.startCommandLocked = false; root.cancelHoming(); robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE";  bg: "#0a405c"; bgEnd: "#052b3d"; bc: root.cAccent; tc: "#d4faff"; onClicked: cartridgeController.pauseSystem() }
                                 }
                             }

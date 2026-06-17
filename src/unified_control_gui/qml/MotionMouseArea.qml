@@ -15,6 +15,7 @@ MouseArea {
     property bool motionEnabled: true
     property bool shadowEnabled: false
     property bool shimmerEnabled: false
+    property bool shimmerWhilePressed: false
     property bool raiseOnHover: false
 
     hoverEnabled: true
@@ -38,7 +39,11 @@ MouseArea {
     onContainsMouseChanged: applyMotion()
     onPressedChanged: {
         applyMotion()
-        if (pressed && enabled && motionEnabled && shimmerEnabled) shimmerAnim.restart()
+        if (pressed && enabled && motionEnabled && shimmerEnabled) {
+            shimmerAnim.restart()
+        } else if (!pressed && shimmerWhilePressed) {
+            shimmerAnim.stop()
+        }
     }
     onEnabledChanged: applyMotion()
     Component.onCompleted: applyMotion()
@@ -76,10 +81,10 @@ MouseArea {
         Rectangle {
             id: shimmer
             width: Math.max(parent.width * 0.34, 42)
-            height: parent.height * 2.2
-            y: -parent.height * 0.6
+            height: parent.height
+            y: 0
             opacity: 0.32
-            rotation: -22
+            rotation: 0
             antialiasing: true
             gradient: Gradient {
                 orientation: Gradient.Horizontal
@@ -100,7 +105,13 @@ MouseArea {
         to: area.width * 1.25
         duration: 780
         easing.type: Easing.InOutCubic
-        onStopped: area.applyMotion()
+        onStopped: {
+            if (area.shimmerWhilePressed && area.pressed && area.enabled && area.motionEnabled && area.shimmerEnabled) {
+                shimmerAnim.restart()
+            } else {
+                area.applyMotion()
+            }
+        }
     }
 
     NumberAnimation {

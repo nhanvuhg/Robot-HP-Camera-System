@@ -54,10 +54,10 @@ Button {
         Rectangle {
             id: shimmer
             width: Math.max(parent.width * 0.34, 42)
-            height: parent.height * 2.2
-            y: -parent.height * 0.6
+            height: parent.height
+            y: 0
             opacity: 0.32
-            rotation: -22
+            rotation: 0
             antialiasing: true
             gradient: Gradient {
                 orientation: Gradient.Horizontal
