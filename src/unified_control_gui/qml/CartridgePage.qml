@@ -74,10 +74,10 @@ import QtGraphicalEffects 1.15
         readonly property color cProvisionButtonBorder: cInReadyBorder
         readonly property color cProvisionButtonText: "#7bc8f0"
         readonly property color cFunctionLabelText: "#c7e5f4"
-        readonly property color cFunctionFieldStart: "#0e5274"
-        readonly property color cFunctionFieldEnd: "#031e1e"
-        readonly property color cFunctionFieldBorder: "#1e6a8a"
-        readonly property color cFunctionFieldText: "#d4faff"
+        readonly property color cFunctionFieldStart: "#1a7aa6"
+        readonly property color cFunctionFieldEnd: "#0c4156"
+        readonly property color cFunctionFieldBorder: "#3aa6cc"
+        readonly property color cFunctionFieldText: "#eafcff"
         readonly property real cPressDarken: 3.25
         readonly property real cPressGradientDarken: 2.15
         readonly property real cPressCustomDarken: 1.85
@@ -96,10 +96,10 @@ import QtGraphicalEffects 1.15
         readonly property color cControlPanel: Qt.rgba(0.035, 0.09, 0.14, 0.78)
         readonly property color cControlCard: Qt.rgba(0.025, 0.075, 0.12, 0.88)
         readonly property color cControlBorder: Qt.rgba(0.36, 0.90, 0.94, 0.38)
-        readonly property color cModeSelectedTop: "#17465d"
-        readonly property color cModeSelectedMid: "#0c3042"
-        readonly property color cModeSelectedBottom: "#061d2a"
-        readonly property color cModeSelectedBorder: "#58c6d0"
+        readonly property color cModeSelectedTop: "#1f6f95"
+        readonly property color cModeSelectedMid: "#13526e"
+        readonly property color cModeSelectedBottom: "#0c3a4f"
+        readonly property color cModeSelectedBorder: "#86eef7"
         readonly property color cDashCardInner: Qt.rgba(cUnifiedBtn.r, cUnifiedBtn.g, cUnifiedBtn.b, 0.82)
         readonly property color cDashCardField: Qt.rgba(cUnifiedBtn.r, cUnifiedBtn.g, cUnifiedBtn.b, 0.82)
         readonly property color cDashCardBorder: "#7f8b9a"
@@ -876,7 +876,7 @@ import QtGraphicalEffects 1.15
                                         property bool isModeSelected: cartridgeController.currentMode === "auto"
                                         color: "transparent"
                                         border.color: isModeSelected ? root.cModeSelectedBorder : "#b9dfe1"
-                                        border.width: 1
+                                        border.width: isModeSelected ? 2 : 1
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
                                         Rectangle {
@@ -920,7 +920,7 @@ import QtGraphicalEffects 1.15
                                         property bool isModeSelected: cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog"
                                         color: "transparent"
                                         border.color: isModeSelected ? root.cModeSelectedBorder : "#024649"
-                                        border.width: 1
+                                        border.width: isModeSelected ? 2 : 1
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
                                         Rectangle {
