@@ -15,6 +15,14 @@ ApplicationWindow {
 
     property bool scaleIssueWarning: false
 
+    signal synchronizedStopRequested()
+
+    function stopSynchronizedSystems() {
+        synchronizedStopRequested()
+        robotController.stopAndResetRobot()
+        cartridgeController.stopSystem()
+    }
+
     Shortcut {
         sequence: "F11"
         onActivated: {
@@ -175,8 +183,7 @@ ApplicationWindow {
                     verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: {
-                    robotController.stopAndResetRobot()
-                    cartridgeController.stopSystem()
+                    mainWindow.stopSynchronizedSystems()
                     resumeStopHomingTimer.start()
                     resumeChoicePopup.close()
                 }
@@ -376,8 +383,7 @@ ApplicationWindow {
                     verticalAlignment: Text.AlignVCenter
                 }
                 onClicked: {
-                    robotController.stopAndResetRobot()
-                    cartridgeController.stopSystem()
+                    mainWindow.stopSynchronizedSystems()
                     mainWindow.scaleIssueWarning = true
                     scaleStopHomingTimer.start()
                     scaleChoicePopup.close()

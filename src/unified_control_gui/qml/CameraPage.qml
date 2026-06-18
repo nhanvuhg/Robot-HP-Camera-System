@@ -103,6 +103,18 @@ Item {
         }
     }
 
+    Connections {
+        target: mainWindow
+        function onSynchronizedStopRequested() {
+            startModeConfirmTimer.stop()
+            cameraPageRoot.pendingStartMode = ""
+            cameraPageRoot.pendingStartUiMode = ""
+            cameraPageRoot.modeLocked = false
+            cameraPageRoot.startCommandLocked = false
+            cameraPageRoot.autoRowIndicatorsActive = false
+        }
+    }
+
     // Sync mode from Cartridge (ensures both UIs are synchronized)
     Connections {
         target: cartridgeController
@@ -868,14 +880,7 @@ Item {
                             }
                             Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
                             MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: {
-                                startModeConfirmTimer.stop()
-                                cameraPageRoot.pendingStartMode = ""
-                                cameraPageRoot.pendingStartUiMode = ""
-                                cameraPageRoot.modeLocked = false
-                                cameraPageRoot.startCommandLocked = false
-                                cameraPageRoot.autoRowIndicatorsActive = false
-                                robotController.stopAndResetRobot()
-                                cartridgeController.stopSystem()
+                                mainWindow.stopSynchronizedSystems()
                             } }
                         }
 

@@ -179,6 +179,15 @@ import QtGraphicalEffects 1.15
             }
         }
 
+        Connections {
+            target: mainWindow
+            function onSynchronizedStopRequested() {
+                root.startCommandLocked = false
+                root.homingCommandLocked = false
+                homingLockFailsafeTimer.stop()
+            }
+        }
+
         function setStackIndex(nextIndex) {
             var clamped = Math.max(0, Math.min(5, nextIndex))
             if (clamped === stack.currentIndex)
@@ -991,7 +1000,7 @@ import QtGraphicalEffects 1.15
                                             cartridgeController.startSystem()
                                         } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; bg: "#0a405c"; bgEnd: "#052b3d"; bc: root.cAccent; tc: "#d4faff"; onClicked: cartridgeController.resumeSystem() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP";   bg: "#771a1a"; bgEnd: "#4e0c0c"; bc: root.cRed;    tc: "#d4faff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: { root.startCommandLocked = false; root.cancelHoming(); robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP";   bg: "#771a1a"; bgEnd: "#4e0c0c"; bc: root.cRed;    tc: "#d4faff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: { root.cancelHoming(); mainWindow.stopSynchronizedSystems() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE";  bg: "#0a405c"; bgEnd: "#052b3d"; bc: root.cAccent; tc: "#d4faff"; onClicked: cartridgeController.pauseSystem() }
                                 }
                             }
@@ -2559,7 +2568,7 @@ import QtGraphicalEffects 1.15
                                             w: parent.width; h: 46
                                             fontSize: 15
                                             bg: "#771a1a"; bgEnd: "#4e0c0c"; bc: root.cRed; tc: root.cWhiteText
-                                            onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() }
+                                            onClicked: mainWindow.stopSynchronizedSystems()
                                         }
 
                                         CBtn {
