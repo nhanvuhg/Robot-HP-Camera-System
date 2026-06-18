@@ -209,11 +209,6 @@ void CartridgeController::moveServo(int id, double position)
 void CartridgeController::setMode(const QString &mode)
 {
     publishString(set_mode_pub_, mode);
-    // Optimistic update: hiển thị mode ngay trên GUI không cần chờ Python round-trip
-    if (current_mode_ != mode) {
-        current_mode_ = mode;
-        emit currentModeChanged();
-    }
     addLog(QString("Mode: %1").arg(mode.toUpper()), "ok");
 }
 

@@ -2570,24 +2570,6 @@ import QtGraphicalEffects 1.15
                                             onClicked: robotController.enableSystem(true)
                                         }
 
-                                        Row {
-                                            spacing: 6; width: parent.width
-                                            CBtn {
-                                                lbl: "PAUSE"
-                                                w: (parent.width - 6) / 2; h: 42
-                                                fontSize: 14
-                                                bg: root.cDashButton; bgEnd: root.cDashButtonEnd; bc: root.cDashButtonBorder; tc: root.cDashButtonText
-                                                onClicked: robotController.pauseRobot()
-                                            }
-                                            CBtn {
-                                                lbl: "RESUME"
-                                                w: (parent.width - 6) / 2; h: 42
-                                                fontSize: 14
-                                                bg: root.cDashButton; bgEnd: root.cDashButtonEnd; bc: root.cDashButtonBorder; tc: root.cDashButtonText
-                                                onClicked: robotController.resumeRobot()
-                                            }
-                                        }
-
                                         CBtn {
                                             lbl: "CLEAR ERROR"
                                             w: parent.width; h: 34
@@ -2629,137 +2611,10 @@ import QtGraphicalEffects 1.15
                                 anchors.centerIn: parent; spacing: 20
                                 
                                 Text {
-                                    text: "🔒 MANUAL CONTROL DISABLED\nChuyển sang MANUAL mode để JOG robot"
+                                    text: "🔒 MANUAL CONTROL LOCKED\nRobot đang chạy — không thể JOG"
                                     color: root.cWhiteText; font.pixelSize: 16; font.bold: true
                                     horizontalAlignment: Text.AlignHCenter; lineHeight: 1.5
                                     anchors.horizontalCenter: parent.horizontalCenter
-                                }
-
-                                Rectangle { width: 300; height: 1; color: "#444"; anchors.horizontalCenter: parent.horizontalCenter }
-
-                                Text {
-                                    text: "AUTO MODE ACTIONS"
-                                    color: root.cCardTitle; font.pixelSize: 14; font.bold: true; font.letterSpacing: 2
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                }
-
-                                Column {
-                                    spacing: 15; anchors.horizontalCenter: parent.horizontalCenter
-                                    
-                                    // ── ROW 1: TRAY READY SIGNALS ──
-                                    Row {
-                                        spacing: 15; anchors.horizontalCenter: parent.horizontalCenter
-                                        
-                                        // TRAY INPUT READY
-                                        Rectangle {
-                                            width: 160; height: 50; radius: 8
-                                            color: "transparent"
-                                            border.color: root.cDashButtonBorder
-                                            border.width: 1
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: (tiMA.pressed || robotController.inReady) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
-                                                GradientStop { position: 1.0; color: (tiMA.pressed || robotController.inReady) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
-                                            }
-                                            Behavior on color { ColorAnimation { duration: 100 } }
-                                            
-                                            Column {
-                                                anchors.centerIn: parent; spacing: 2
-                                                Text { text: "📥 TRAY INPUT READY"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: robotController.inReady ? "(ON)" : "(OFF)"; color: root.cWhiteText; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
-                                            }
-                                            MotionMouseArea {
-                                                id: tiMA; anchors.fill: parent
-                                                hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false
-                                                onClicked: robotController.simulateInputTrayReady()
-                                            }
-                                        }
-
-                                        // TRAY OUTPUT READY
-                                        Rectangle {
-                                            width: 160; height: 50; radius: 8
-                                            color: "transparent"
-                                            border.color: root.cDashButtonBorder
-                                            border.width: 1
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: (toMA.pressed || robotController.outReady) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
-                                                GradientStop { position: 1.0; color: (toMA.pressed || robotController.outReady) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
-                                            }
-                                            Behavior on color { ColorAnimation { duration: 100 } }
-                                            
-                                            Column {
-                                                anchors.centerIn: parent; spacing: 2
-                                                Text { text: "📤 TRAY OUTPUT READY"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: robotController.outReady ? "(ON)" : "(OFF)"; color: root.cWhiteText; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
-                                            }
-                                            MotionMouseArea {
-                                                id: toMA; anchors.fill: parent
-                                                hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false
-                                                onClicked: robotController.simulateOutputTrayReady()
-                                            }
-                                        }
-                                    }
-
-                                    // ── ROW 2: ACTION TRIGGERS ──
-                                    Row {
-                                        spacing: 15; anchors.horizontalCenter: parent.horizontalCenter
-                                        
-                                        // PICK INPUT
-                                        Rectangle {
-                                            width: 160; height: 50; radius: 8
-                                            color: "transparent"
-                                            border.color: root.cDashButtonBorder
-                                            border.width: 1
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: piMA.pressed ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
-                                                GradientStop { position: 1.0; color: piMA.pressed ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
-                                            }
-                                            Behavior on color { ColorAnimation { duration: 100 } }
-                                            
-                                            Column {
-                                                anchors.centerIn: parent; spacing: 2
-                                                Text { text: "↓ PICK INPUT"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: "(Load Khay -> Chamber)"; color: root.cWhiteText; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
-                                            }
-                                            MotionMouseArea {
-                                                id: piMA; anchors.fill: parent
-                                                hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false
-                                                onClicked: {
-                                                    page3Root.rowLocked = true;
-                                                    robotController.simulateFeedChamber();
-                                                }
-                                            }
-                                        }
-
-                                        // PICK CHAMBER
-                                        Rectangle {
-                                            width: 160; height: 50; radius: 8
-                                            color: "transparent"
-                                            border.color: root.cDashButtonBorder
-                                            border.width: 1
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: pcMA.pressed ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
-                                                GradientStop { position: 1.0; color: pcMA.pressed ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
-                                            }
-                                            Behavior on color { ColorAnimation { duration: 100 } }
-                                            
-                                            Column {
-                                                anchors.centerIn: parent; spacing: 2
-                                                Text { text: "⟳ PICK CHAMBER"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: "(Chamber -> Output)"; color: root.cWhiteText; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
-                                            }
-                                            MotionMouseArea {
-                                                id: pcMA; anchors.fill: parent
-                                                hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false
-                                                onClicked: robotController.simulateFillDone()
-                                            }
-                                        }
-                                    }
-
-
                                 }
                             }
                         }

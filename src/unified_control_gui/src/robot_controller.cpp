@@ -1181,9 +1181,16 @@ void RobotController::simulateFillDone()
 
 void RobotController::simulateInputTrayReady()
 {
-    qDebug() << "SimulateInputTrayReady toggling to" << !in_ready_;
+    const bool next = !in_ready_;
+    qDebug() << "SimulateInputTrayReady toggling to" << next;
+
+    // Reflect the operator command immediately. The real cartridge status topic
+    // remains authoritative and will correct this value if hardware disagrees.
+    in_ready_ = next;
+    emit inReadyChanged();
+
     auto msg = std_msgs::msg::Bool();
-    msg.data = !in_ready_;
+    msg.data = next;
     input_tray_ready_pub_->publish(msg);
     error_log_ = msg.data ? "[SIMULATION] 📥 INPUT TRAY READY (TRUE)" : "[SIMULATION] 📥 INPUT TRAY READY (FALSE)";
     emit errorLogChanged();
@@ -1191,9 +1198,16 @@ void RobotController::simulateInputTrayReady()
 
 void RobotController::simulateOutputTrayReady()
 {
-    qDebug() << "SimulateOutputTrayReady toggling to" << !out_ready_;
+    const bool next = !out_ready_;
+    qDebug() << "SimulateOutputTrayReady toggling to" << next;
+
+    // Reflect the operator command immediately. The real cartridge status topic
+    // remains authoritative and will correct this value if hardware disagrees.
+    out_ready_ = next;
+    emit outReadyChanged();
+
     auto msg = std_msgs::msg::Bool();
-    msg.data = !out_ready_;
+    msg.data = next;
     output_tray_ready_pub_->publish(msg);
     error_log_ = msg.data ? "[SIMULATION] 📤 OUTPUT TRAY READY (TRUE)" : "[SIMULATION] 📤 OUTPUT TRAY READY (FALSE)";
     emit errorLogChanged();

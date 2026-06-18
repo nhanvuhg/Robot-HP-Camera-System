@@ -12,6 +12,8 @@ Item {
     property bool startCommandLocked: false
     property bool autoRowIndicatorsActive: false
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
+    property string pendingStartMode: ""
+    property string pendingStartUiMode: ""
 
     readonly property color cPanel:       "#990d1e32"
     readonly property color cPanel2:      "#88060f1e"
@@ -64,6 +66,32 @@ Item {
         return s !== "" && s !== "idle" && s !== "ready" && s !== "unknown" && s !== "manual"
     }
 
+    function dispatchStartAfterModeConfirmed() {
+        var requestedUiMode = pendingStartUiMode
+        if (requestedUiMode === "")
+            return
+
+        pendingStartMode = ""
+        pendingStartUiMode = ""
+        startModeConfirmTimer.stop()
+
+        if (requestedUiMode === "camera_ai") {
+            robotController.selectRow(0)
+            robotController.setAiMode(true)
+            hpController.publishMode(0)
+        } else if (requestedUiMode === "auto") {
+            robotController.setAutoMode(true)
+            hpController.publishMode(0)
+        } else if (requestedUiMode === "manual") {
+            robotController.setManualMode(true)
+            hpController.publishMode(2)
+        }
+
+        modeLocked = true
+        autoRowIndicatorsActive = true
+        robotController.startSystem(true)
+    }
+
     // Unlock row selection khi process idle/done
     Connections {
         target: robotController
@@ -80,9 +108,27 @@ Item {
         target: cartridgeController
         function onCurrentModeChanged() {
             var m = (cartridgeController.currentMode || "").toLowerCase()
-            if (m === "auto" || m === "ai" || m === "camera_ai" || m === "manual") {
+            var requestedUiMode = cameraPageRoot.pendingStartUiMode
+            if (cameraPageRoot.pendingStartMode !== "" && m === cameraPageRoot.pendingStartMode)
+                cameraPageRoot.dispatchStartAfterModeConfirmed()
+            if (requestedUiMode === "camera_ai" && m === "auto") {
+                cameraPageRoot.ctrlMode = "camera_ai"
+            } else if (m === "auto" || m === "ai" || m === "camera_ai" || m === "manual") {
                 cameraPageRoot.ctrlMode = (m === "ai") ? "camera_ai" : m;
             }
+        }
+    }
+    Timer {
+        id: startModeConfirmTimer
+        interval: 3000
+        repeat: false
+        onTriggered: {
+            console.warn("START cancelled: cartridge mode confirmation timeout")
+            cameraPageRoot.pendingStartMode = ""
+            cameraPageRoot.pendingStartUiMode = ""
+            cameraPageRoot.startCommandLocked = false
+            cameraPageRoot.modeLocked = false
+            cameraPageRoot.autoRowIndicatorsActive = false
         }
     }
     Timer {
@@ -713,7 +759,7 @@ Item {
                             ]
                             delegate: Rectangle {
                                 required property var modelData
-                                property bool isActive: cameraPageRoot.autoRowIndicatorsActive && ((modelData.lbl === "IN_READY" && robotController.inReady) || (modelData.lbl === "OUT_READY" && robotController.outReady))
+                                property bool isActive: (modelData.lbl === "IN_READY" && robotController.inReady) || (modelData.lbl === "OUT_READY" && robotController.outReady)
                                 readonly property bool isReadyBtn: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
                                 property color gStart: (isReadyBtn && isActive) ? "#1a5070" : modelData.bgStart
                                 property color gEnd:   (isReadyBtn && isActive) ? "#0a3040" : modelData.bgEnd
@@ -821,7 +867,16 @@ Item {
                                 GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker("#4e0c0c", 1.15) : "#4e0c0c" }
                             }
                             Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
-                            MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; cameraPageRoot.startCommandLocked = false; cameraPageRoot.autoRowIndicatorsActive = false; robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                            MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: {
+                                startModeConfirmTimer.stop()
+                                cameraPageRoot.pendingStartMode = ""
+                                cameraPageRoot.pendingStartUiMode = ""
+                                cameraPageRoot.modeLocked = false
+                                cameraPageRoot.startCommandLocked = false
+                                cameraPageRoot.autoRowIndicatorsActive = false
+                                robotController.stopAndResetRobot()
+                                cartridgeController.stopSystem()
+                            } }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
@@ -845,23 +900,16 @@ Item {
                                 if (cameraPageRoot.startCommandLocked)
                                     return
                                 cameraPageRoot.startCommandLocked = true
-                                if (cameraPageRoot.ctrlMode === "camera_ai") {
-                                    robotController.selectRow(0)
-                                    robotController.setAiMode(true)
-                                    cartridgeController.setMode("auto")
-                                    hpController.publishMode(0) // sync Fill HP → Auto
-                                } else if (cameraPageRoot.ctrlMode === "auto") {
-                                    robotController.setAutoMode(true)
-                                    cartridgeController.setMode("auto")
-                                    hpController.publishMode(0) // sync Fill HP → Auto
-                                } else if (cameraPageRoot.ctrlMode === "manual") {
-                                    robotController.setManualMode(true)
-                                    cartridgeController.setMode("manual")
-                                    hpController.publishMode(2)
+                                cameraPageRoot.pendingStartUiMode = cameraPageRoot.ctrlMode
+                                cameraPageRoot.pendingStartMode = cameraPageRoot.ctrlMode === "manual" ? "manual" : "auto"
+
+                                var confirmedMode = (cartridgeController.currentMode || "").toLowerCase()
+                                if (confirmedMode === cameraPageRoot.pendingStartMode) {
+                                    cameraPageRoot.dispatchStartAfterModeConfirmed()
+                                } else {
+                                    startModeConfirmTimer.restart()
+                                    cartridgeController.setMode(cameraPageRoot.pendingStartMode)
                                 }
-                                cameraPageRoot.modeLocked = true
-                                cameraPageRoot.autoRowIndicatorsActive = true
-                                robotController.startSystem(true)
                             } }
                         }
 
