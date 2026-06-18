@@ -1,0 +1,85 @@
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+
+MotionButton {
+    id: control
+
+    property int countdown: 0
+
+    signal captureRequested()
+
+    enabled: countdown === 0
+    hoverScale: 1.05
+    pressScale: 0.97
+    shadowEnabled: false
+    shimmerEnabled: true
+    shimmerColor: "#55d4faff"
+    opacity: countdown > 0 ? 0.82 : 1.0
+
+    Accessible.name: countdown > 0
+                     ? "Chụp màn hình sau " + countdown + " giây"
+                     : "Chụp màn hình sau 3 giây"
+
+    background: Rectangle {
+        radius: 6
+        color: control.pressed ? "#18374d" : "transparent"
+        border.color: "#1565c0"
+        border.width: 2
+
+        Behavior on color {
+            ColorAnimation { duration: 100 }
+        }
+    }
+
+    contentItem: Item {
+        Image {
+            id: cameraIcon
+            anchors.centerIn: parent
+            width: 34
+            height: 34
+            source: "icons/camera.svg"
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            opacity: control.countdown > 0 ? 0.22 : 1.0
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 30
+            height: 30
+            radius: 15
+            visible: control.countdown > 0
+            color: "#cc0d1e32"
+            border.color: "#7bc8f0"
+            border.width: 1
+
+            Text {
+                anchors.centerIn: parent
+                text: control.countdown
+                color: "#ffffff"
+                font.pixelSize: 18
+                font.bold: true
+            }
+        }
+    }
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: control.countdown > 0
+        onTriggered: {
+            control.countdown -= 1
+            if (control.countdown === 0)
+                control.captureRequested()
+        }
+    }
+
+    Behavior on opacity {
+        NumberAnimation { duration: 120 }
+    }
+
+    onClicked: {
+        if (countdown === 0)
+            countdown = 3
+    }
+}

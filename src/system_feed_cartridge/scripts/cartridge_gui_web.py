@@ -240,7 +240,7 @@ class GUIHandler(http.server.BaseHTTPRequestHandler):
     def _html(self, c):
         self.send_response(200); self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.send_header('Cache-Control', 'no-cache'); self._sec_headers(); self.end_headers()
-        self.wfile.write(c.encode())
+        self.wfile.write(c.replace('__REVPI_A_HOST__', REVPI_A_HOST).encode())
 
     def _json(self, data):
         self.send_response(200); self.send_header('Content-Type', 'application/json')
@@ -282,6 +282,11 @@ class GUIHandler(http.server.BaseHTTPRequestHandler):
 # ============================================================
 # HTML
 # ============================================================
+
+# IP RevPi A — đọc từ env-var REVPI_A_HOST (set trong ros2_env.sh, single
+# source of truth). Iframe loadcell web GUI dùng placeholder __REVPI_A_HOST__
+# trong HTML, được thay tại _html() trước khi serve.
+REVPI_A_HOST = os.environ.get("REVPI_A_HOST", "192.168.27.197")
 
 HTML = r"""<!DOCTYPE html>
 <html lang="vi">
@@ -787,7 +792,7 @@ body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--tex
 
 <!-- ════════════════ FILL HP CONTROL PAGE ════════════════ -->
 <div class="page" id="page-hp">
-  <iframe src="http://192.168.27.193:8080/" style="width:100%; height:100%; border:none; background:var(--bg);"></iframe>
+  <iframe src="http://__REVPI_A_HOST__:8080/" style="width:100%; height:100%; border:none; background:var(--bg);"></iframe>
 </div>
 
 <div class="tc" id="tc"></div>

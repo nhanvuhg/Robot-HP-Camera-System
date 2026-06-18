@@ -13,7 +13,12 @@
 
   IPs:
     192.168.27.247 = Raspberry Pi 5
-    192.168.27.193 = RevPi A
+    192.168.27.197 = RevPi A
+
+  ⚠ IP RevPi A phải khớp $REVPI_A_HOST trong ros2_env.sh.
+     FastDDS không support env-var trong <address>, nên file XML này phải
+     sửa tay 2 chỗ <address> bên dưới mỗi khi RevPi A đổi IP.
+     Sanity check: bash scripts/check_revpi_ip_sync.sh
 -->
 <dds>
     <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
@@ -70,13 +75,13 @@
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.193</address>
+                                <address>192.168.27.197</address>
                                 <port>12910</port>
                             </udpv4>
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.193</address>
+                                <address>192.168.27.197</address>
                                 <port>12912</port>
                             </udpv4>
                         </locator>

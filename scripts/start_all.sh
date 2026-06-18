@@ -336,7 +336,7 @@ fi
 # ══════════════════════════════════════════
 # [9] RS485 BUS NODE — RevPi A (Loadcell + VFD)
 # ══════════════════════════════════════════
-REVPI_HOST="${REVPI_HOST:-192.168.27.193}"
+REVPI_HOST="${REVPI_HOST:-${REVPI_A_HOST:-192.168.27.197}}"
 REVPI_USER="${REVPI_USER:-pi}"
 REVPI_WS="${REVPI_WS:-/home/${REVPI_USER}/ros2_jazzy}"
 
@@ -357,7 +357,7 @@ fi
 # ══════════════════════════════════════════
 # [10] LOADCELL NODE — RevPi A (4-20mA)
 # ══════════════════════════════════════════
-LOADCELL_HOST="${LOADCELL_HOST:-192.168.27.193}"
+LOADCELL_HOST="${LOADCELL_HOST:-${REVPI_A_HOST:-192.168.27.197}}"
 LOADCELL_USER="${LOADCELL_USER:-pi}"
 
 LOG_LOADCELL="$LOG_DIR/loadcell_node.log"
@@ -385,7 +385,7 @@ echo "  tail -f $LOG_ROBOT          # Robot logic"
 echo "  tail -f $LOG_GRIPPER        # Gripper"
 echo "  tail -f $LOG_CAMERA         # Camera + YOLO"
 [ -n "${PID_QML_GUI:-}" ] && echo "  tail -f $LOG_QML             # QML GUI"
-echo "  ssh pi@192.168.27.193 cat /tmp/loadcell_node.log  # Loadcell"
+echo "  ssh pi@${REVPI_A_HOST} cat /tmp/loadcell_node.log  # Loadcell"
 echo ""
 echo "🌐 Web GUI: bash start_all.sh --web"
 echo ""

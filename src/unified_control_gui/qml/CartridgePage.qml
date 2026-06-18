@@ -58,8 +58,29 @@ import QtGraphicalEffects 1.15
         readonly property color cYellow: "#ffd740"
         readonly property color cDim:    "#8888aa"
         readonly property color cText:   "#e8e8f0"
+        readonly property color cWhiteText: "#ffffff"
+        readonly property color cCardTitle: "#5cf4f1"
+        readonly property color cTabSelectedTop: Qt.rgba(0.40, 0.63, 0.77, 0.78)
+        readonly property color cTabSelectedMid: Qt.rgba(0.40, 0.63, 0.77, 0.66)
+        readonly property color cTabSelectedBottom: Qt.rgba(0.29, 0.48, 0.60, 0.56)
+        readonly property color cTabSelectedBorder: Qt.rgba(1, 1, 1, 0.12)
         readonly property color cHover:  "#40ffffff"
         readonly property color cUnifiedBtn: Qt.lighter("#0d2a3a", 1.12)
+        readonly property color cInReadyLayer: "#0e5274"
+        readonly property color cInReadyLayerEnd: "#072d42"
+        readonly property color cInReadyBorder: "#1e7090"
+        readonly property color cProvisionButton: cInReadyLayer
+        readonly property color cProvisionButtonEnd: cInReadyLayerEnd
+        readonly property color cProvisionButtonBorder: cInReadyBorder
+        readonly property color cProvisionButtonText: "#7bc8f0"
+        readonly property color cFunctionLabelText: "#c7e5f4"
+        readonly property color cFunctionFieldStart: "#0e5274"
+        readonly property color cFunctionFieldEnd: "#031e1e"
+        readonly property color cFunctionFieldBorder: "#1e6a8a"
+        readonly property color cFunctionFieldText: "#d4faff"
+        readonly property real cPressDarken: 3.25
+        readonly property real cPressGradientDarken: 2.15
+        readonly property real cPressCustomDarken: 1.85
         readonly property color cBlueWhiteBtn: "#5baeb2"
         readonly property color cBlueWhiteSelected: "#102e42"
         readonly property color cBlueWhiteIdle: "#28949a"
@@ -70,8 +91,35 @@ import QtGraphicalEffects 1.15
         readonly property color cStateAuxBorder: "#5eabad"
         readonly property color cStateAuxText: "#d4f0f1"
         readonly property color cFieldBorder: "#67e8f9"
+        readonly property color cDashPanel: Qt.rgba(0.06, 0.10, 0.16, 0.34)
+        readonly property color cDashCard: cDashPanel
+        readonly property color cDashCardInner: Qt.rgba(cUnifiedBtn.r, cUnifiedBtn.g, cUnifiedBtn.b, 0.82)
+        readonly property color cDashCardField: Qt.rgba(cUnifiedBtn.r, cUnifiedBtn.g, cUnifiedBtn.b, 0.82)
+        readonly property color cDashCardBorder: "#7f8b9a"
+        readonly property color cDashCardBorderHover: "#aeb8c5"
+        readonly property color cDashButton: cProvisionButton
+        readonly property color cDashButtonEnd: cProvisionButtonEnd
+        readonly property color cDashButtonBorder: cProvisionButtonBorder
+        readonly property color cDashButtonText: cProvisionButtonText
+        readonly property color cJogNegativeButton: "#318fb2"
+        readonly property color cJogNegativeButtonEnd: "#175b73"
+        readonly property color cJogNegativeButtonBorder: "#8bd5ea"
+        readonly property color cMovJButton: "#082f46"
+        readonly property color cMovJButtonEnd: "#02151d"
+        readonly property color cMovJButtonBorder: "#1a526d"
+        readonly property color cGetButton: "#2b86a8"
+        readonly property color cGetButtonEnd: "#0f526c"
+        readonly property color cGetButtonBorder: "#75cbe3"
         property bool jogStopStateHint: false
         property bool homingCommandLocked: false
+
+        function pressColor(colorValue) {
+            return Qt.darker(colorValue, cPressCustomDarken)
+        }
+
+        function pressGradientColor(colorValue) {
+            return Qt.darker(colorValue, cPressGradientDarken)
+        }
 
         function homingBusy() {
             return homingCommandLocked || cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1
@@ -214,21 +262,16 @@ import QtGraphicalEffects 1.15
                         fillMode: Image.PreserveAspectFit; smooth: true
                     }
                 }
-                MotionButton {
+                ScreenshotButton {
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
-                    onClicked: {
+                    onCaptureRequested: {
                         robotController.captureScreenshot()
-                    }
-                    background: Rectangle { radius: 6; color: "transparent"; border.color: "#1565c0"; border.width: 2 }
-                    contentItem: Text {
-                        text: "📷"; font.pixelSize: 22
-                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                     }
                 }
                 Item { width: 6 }
                 Text {
                     text: "ROS2 - CARTRIDGE PROVISION SYSTEM"
-                    color: "#6cf"
+                    color: root.cWhiteText
                     font.pixelSize: 24; font.bold: true; font.letterSpacing: 1.5
                 }
                 Item { Layout.fillWidth: true }
@@ -257,7 +300,7 @@ import QtGraphicalEffects 1.15
                         }
                         Text {
                             text: cartridgeController.systemState.toUpperCase().replace(/\|/g, "   •   ")
-                            color: "#6cf"
+                            color: root.cWhiteText
                             font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
                             anchors.verticalCenter: parent.verticalCenter
                         }
@@ -275,7 +318,7 @@ import QtGraphicalEffects 1.15
                             text: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? "⟳ HOMING..."
                                 : (cartridgeController.currentMode !== "" && cartridgeController.systemState === "idle") ? "✓ HOMED"
                                 : "○ NOT HOMED"
-                            color: "#6cf"
+                            color: root.cWhiteText
                             font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
                         }
                     }
@@ -300,7 +343,7 @@ import QtGraphicalEffects 1.15
                         id: mpLbl
                         anchors.centerIn: parent
                         text: modePill.isIdle ? "⚠  SELECT MODE" : modePill.m.toUpperCase()
-                        color: "#6cf"
+                        color: root.cWhiteText
                         font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
                     }
                 }
@@ -318,7 +361,7 @@ import QtGraphicalEffects 1.15
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     contentItem: Text {
-                        text: parent.text; font: parent.font; color: "#ffd740"
+                        text: parent.text; font: parent.font; color: root.cWhiteText
                         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                     }
                 }
@@ -367,13 +410,13 @@ import QtGraphicalEffects 1.15
                 spacing: 15
                 Text {
                     text: "⚠️ CẢNH BÁO"
-                    color: root.cOrange
+                    color: root.cWhiteText
                     font.pixelSize: 18; font.bold: true
                     Layout.alignment: Qt.AlignHCenter
                 }
                 Text {
                     text: "Hệ thống đang chờ khay cấp khay thành phẩm.\ Bạn đã cấp khay mới chưa?"
-                    color: "white"
+                    color: root.cWhiteText
                     font.pixelSize: 14
                     horizontalAlignment: Text.AlignHCenter
                     Layout.alignment: Qt.AlignHCenter
@@ -387,7 +430,7 @@ import QtGraphicalEffects 1.15
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 120; Layout.preferredHeight: 35
                         background: Rectangle { color: root.cOrange; radius: 5 }
-                        contentItem: Text { text: parent.text; font: parent.font; color: "#000"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        contentItem: Text { text: parent.text; font: parent.font; color: root.cWhiteText; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: {
                             cartridgeController.confirmOutput();
                             // outputWarningPopup.close();
@@ -398,7 +441,7 @@ import QtGraphicalEffects 1.15
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 100; Layout.preferredHeight: 35
                         background: Rectangle { color: "#134357"; radius: 5; border.color: "#2a3a4a"; border.width: 1 }
-                        contentItem: Text { text: parent.text; font: parent.font; color: "#fff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                        contentItem: Text { text: parent.text; font: parent.font; color: root.cWhiteText; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                         onClicked: {
                             // outputWarningPopup.close();
                         }
@@ -472,22 +515,19 @@ import QtGraphicalEffects 1.15
                         if (notifyBanner.lvl === "warn")  return "⚠"
                         return "ℹ"
                     }
+                    color: root.cWhiteText
                     font.pixelSize: 13
                 }
                 // Title
                 Text {
                     text: notifyBanner.ttl
-                    color: {
-                        if (notifyBanner.lvl === "error") return root.cRed
-                        if (notifyBanner.lvl === "warn")  return root.cOrange
-                        return root.cCyan
-                    }
+                    color: root.cWhiteText
                     font.pixelSize: 12; font.bold: true
                 }
                 // Detail (fills remaining space)
                 Text {
                     text: notifyBanner.dtl
-                    color: root.cText; font.pixelSize: 11
+                    color: root.cWhiteText; font.pixelSize: 11
                     Layout.fillWidth: true
                     elide: Text.ElideRight; opacity: 0.9
                 }
@@ -499,7 +539,7 @@ import QtGraphicalEffects 1.15
                     font.pixelSize: 10; font.bold: true
                     onClicked: { cartridgeController.resetFaults(); notifyBanner.visible = false }
                     background: Rectangle { radius: 3; color: "#3a0a0a"; border.color: root.cOrange; border.width: 1 }
-                    contentItem: Text { text: parent.text; font: parent.font; color: root.cOrange;
+                    contentItem: Text { text: parent.text; font: parent.font; color: root.cWhiteText;
                         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
                 // Dismiss button
@@ -509,7 +549,7 @@ import QtGraphicalEffects 1.15
                     font.pixelSize: 11
                     onClicked: notifyBanner.visible = false
                     background: Rectangle { radius: 3; color: "transparent"; border.color: root.cBorder; border.width: 1 }
-                    contentItem: Text { text: parent.text; font: parent.font; color: root.cDim;
+                    contentItem: Text { text: parent.text; font: parent.font; color: root.cWhiteText;
                         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
             }
@@ -530,11 +570,11 @@ import QtGraphicalEffects 1.15
             z: 20
             gradient: Gradient {
                 orientation: Gradient.Vertical
-                GradientStop { position: 0.0; color: "#48eef9fd" }
-                GradientStop { position: 0.42; color: "#36bfd6e7" }
-                GradientStop { position: 1.0; color: "#258da9c2" }
+                GradientStop { position: 0.0; color: Qt.rgba(0.12, 0.18, 0.26, 0.40) }
+                GradientStop { position: 0.42; color: root.cDashPanel }
+                GradientStop { position: 1.0; color: Qt.rgba(0.04, 0.07, 0.11, 0.30) }
             }
-            border.color: "#bdf5fa"
+            border.color: Qt.rgba(1, 1, 1, 0.12)
             border.width: 1
             layer.enabled: true
             layer.effect: DropShadow {
@@ -599,11 +639,11 @@ import QtGraphicalEffects 1.15
                 z: 0
                 gradient: Gradient {
                     orientation: Gradient.Vertical
-                    GradientStop { position: 0.0; color: "#ffffffff" }
-                    GradientStop { position: 0.54; color: "#edf8feff" }
-                    GradientStop { position: 1.0; color: "#c5deeff7" }
+                    GradientStop { position: 0.0; color: root.cTabSelectedTop }
+                    GradientStop { position: 0.54; color: root.cTabSelectedMid }
+                    GradientStop { position: 1.0; color: root.cTabSelectedBottom }
                 }
-                border.color: "#c0f5fa"
+                border.color: root.cTabSelectedBorder
                 border.width: 1
                 opacity: 1.0
                 scale: tabDragArea.pressed ? 1.01 : 1.0
@@ -615,7 +655,7 @@ import QtGraphicalEffects 1.15
                     samples: 27
                     horizontalOffset: 0
                     verticalOffset: 5
-                    color: "#34485f9a"
+                    color: "#36485d9a"
                 }
                 Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
                 Behavior on opacity { NumberAnimation { duration: 120 } }
@@ -663,7 +703,7 @@ import QtGraphicalEffects 1.15
                         background: Rectangle {
                             radius: height / 2
                             antialiasing: true
-                            color: tabButton.hovered && !tabButton.isSelected ? "#15ffffff" : "transparent"
+                            color: tabButton.pressed ? root.pressColor("#15ffffff") : (tabButton.hovered && !tabButton.isSelected ? "#15ffffff" : "transparent")
                             border.color: tabButton.isSelected ? "#00ffffff" : (tabButton.hovered ? "#34d8eef5" : "transparent")
                             border.width: tabButton.hovered && !tabButton.isSelected ? 1 : 0
                         }
@@ -691,7 +731,7 @@ import QtGraphicalEffects 1.15
                                 ColorOverlay {
                                     anchors.fill: tabIconImage
                                     source: tabIconImage
-                                    color: "#000000"
+                                    color: root.cWhiteText
                                 }
                             }
 
@@ -701,7 +741,7 @@ import QtGraphicalEffects 1.15
                                 font.bold: true
                                 font.weight: Font.DemiBold
                                 font.letterSpacing: 0
-                                color: "#000000"
+                                color: root.cWhiteText
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                                 width: tabButton.width - 4
@@ -786,7 +826,7 @@ import QtGraphicalEffects 1.15
                             Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.166
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            color: root.cBg2; border.color: root.cBorder; radius: 6
+                            color: root.cDashPanel; border.color: root.cBorder; radius: 6
                             HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                             ColumnLayout { id: modeSelCol
@@ -801,7 +841,7 @@ import QtGraphicalEffects 1.15
                                 }
 
                                 Text {
-                                    text: "MODE SELECTION"; color: "#5cf4f1"
+                                    text: "MODE SELECTION"; color: root.cCardTitle
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -813,22 +853,29 @@ import QtGraphicalEffects 1.15
 
                                     // AUTO
                                     Rectangle {
+                                        id: autoModeRect
                                         width: parent.width
                                         height: (parent.height - 6) / 2
                                         radius: 5
                                         property bool isModeSelected: cartridgeController.currentMode === "auto"
-                                        color: isModeSelected ? "#5cf4f1" : "transparent"
-                                        border.color: isModeSelected ? "#86bccb" : "#b9dfe1"
+                                        color: (autoModeMA.pressed || isModeSelected) ? root.pressColor(root.cTabSelectedMid) : "transparent"
+                                        border.color: isModeSelected ? root.cTabSelectedBorder : "#b9dfe1"
                                         border.width: 1
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
                                         Rectangle {
                                             anchors.fill: parent
                                             radius: parent.radius
-                                            visible: parent.isModeSelected
-                                            color: "#8094a3b8"
+                                            visible: parent.isModeSelected || autoModeMA.pressed
+                                            gradient: Gradient {
+                                                orientation: Gradient.Vertical
+                                                GradientStop { position: 0.0; color: (autoModeMA.pressed || autoModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedTop) : root.cTabSelectedTop }
+                                                GradientStop { position: 0.54; color: (autoModeMA.pressed || autoModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedMid) : root.cTabSelectedMid }
+                                                GradientStop { position: 1.0; color: (autoModeMA.pressed || autoModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedBottom) : root.cTabSelectedBottom }
+                                            }
                                         }
                                         MotionMouseArea {
+                                            id: autoModeMA
                                             anchors.fill: parent
                                             enabled: !modeSelCol.modeBlocked
                                             hoverScale: 1.05
@@ -843,29 +890,36 @@ import QtGraphicalEffects 1.15
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            Text { text: "AUTO"; color: parent.parent.isModeSelected ? "#05303a" : "#8eb4d0"; font.pixelSize: 15; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                            Text { text: "Automatic"; color: parent.parent.isModeSelected ? "#0c5a66" : "#8eb4d0"; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "AUTO"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "Automatic"; color: root.cWhiteText; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
 
                                     // MANUAL
                                     Rectangle {
+                                        id: manualModeRect
                                         width: parent.width
                                         height: (parent.height - 6) / 2
                                         radius: 5
                                         property bool isModeSelected: cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog"
-                                        color: isModeSelected ? "#5cf4f1" : "transparent"
-                                        border.color: isModeSelected ? "#86bccb" : "#b9dfe1"
+                                        color: (manualModeMA.pressed || isModeSelected) ? root.pressColor(root.cTabSelectedMid) : "transparent"
+                                        border.color: isModeSelected ? root.cTabSelectedBorder : "#024649"
                                         border.width: 1
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
                                         Rectangle {
                                             anchors.fill: parent
                                             radius: parent.radius
-                                            visible: parent.isModeSelected
-                                            color: "#8094a3b8"
+                                            visible: parent.isModeSelected || manualModeMA.pressed
+                                            gradient: Gradient {
+                                                orientation: Gradient.Vertical
+                                                GradientStop { position: 0.0; color: (manualModeMA.pressed || manualModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedTop) : root.cTabSelectedTop }
+                                                GradientStop { position: 0.54; color: (manualModeMA.pressed || manualModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedMid) : root.cTabSelectedMid }
+                                                GradientStop { position: 1.0; color: (manualModeMA.pressed || manualModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedBottom) : root.cTabSelectedBottom }
+                                            }
                                         }
                                         MotionMouseArea {
+                                            id: manualModeMA
                                             anchors.fill: parent
                                             enabled: !modeSelCol.modeBlocked
                                             hoverScale: 1.05
@@ -874,15 +928,14 @@ import QtGraphicalEffects 1.15
                                             shimmerEnabled: false
                                             onClicked: {
                                                 cartridgeController.setMode("manual")
-                                                cartridgeController.startSystem()
                                                 hpController.publishMode(2)
                                             }
                                         }
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            Text { text: "MANUAL"; color: parent.parent.isModeSelected ? "#05303a" : "#8eb4d0"; font.pixelSize: 15; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                            Text { text: "Direct Control"; color: parent.parent.isModeSelected ? "#0c5a66" : "#8eb4d0"; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "MANUAL"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "Direct Control"; color: root.cWhiteText; font.pixelSize: 11; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
                                 }
@@ -894,7 +947,7 @@ import QtGraphicalEffects 1.15
                             Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.208
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            color: root.cBg2; border.color: root.cBorder; radius: 6
+                            color: root.cDashPanel; border.color: root.cBorder; radius: 6
                             HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                             ColumnLayout {
@@ -906,7 +959,7 @@ import QtGraphicalEffects 1.15
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
-                                    text: "SYSTEM CONTROL"; color: "#5cf4f1"
+                                    text: "SYSTEM CONTROL"; color: root.cCardTitle
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -942,7 +995,7 @@ import QtGraphicalEffects 1.15
                             Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.313
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            color: root.cBg2; border.color: root.cBorder; radius: 6
+                            color: root.cDashPanel; border.color: root.cBorder; radius: 6
                             HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                             ColumnLayout {
@@ -954,7 +1007,7 @@ import QtGraphicalEffects 1.15
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
-                                    text: "STATE NAVIGATION"; color: "#5cf4f1"
+                                    text: "STATE NAVIGATION"; color: root.cCardTitle
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -979,8 +1032,8 @@ import QtGraphicalEffects 1.15
                                             cartridgeController.gotoState("HOMING")
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 1\nKhay In"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 3\nKhay Out"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 1\nKhay In"; bg: root.cProvisionButton; bgEnd: root.cProvisionButtonEnd; bc: root.cProvisionButtonBorder; tc: root.cProvisionButtonText; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; onClicked: cartridgeController.gotoState("STATE1") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 3\nKhay Out"; bg: root.cProvisionButton; bgEnd: root.cProvisionButtonEnd; bc: root.cProvisionButtonBorder; tc: root.cProvisionButtonText; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; onClicked: cartridgeController.gotoState("STATE3") }
 
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
@@ -1001,8 +1054,8 @@ import QtGraphicalEffects 1.15
                                             }
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nKhay In"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.gotoState("STATE2") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 4\nKhay Out"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.gotoState("STATE4") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nKhay In"; bg: root.cProvisionButton; bgEnd: root.cProvisionButtonEnd; bc: root.cProvisionButtonBorder; tc: root.cProvisionButtonText; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; onClicked: cartridgeController.gotoState("STATE2") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 4\nKhay Out"; bg: root.cProvisionButton; bgEnd: root.cProvisionButtonEnd; bc: root.cProvisionButtonBorder; tc: root.cProvisionButtonText; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; onClicked: cartridgeController.gotoState("STATE4") }
                                 }
                             }
                         }
@@ -1012,7 +1065,7 @@ import QtGraphicalEffects 1.15
                             Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.313
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            color: root.cBg2; border.color: root.cBorder; radius: 6
+                            color: root.cDashPanel; border.color: root.cBorder; radius: 6
                             HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                             ColumnLayout {
@@ -1024,7 +1077,7 @@ import QtGraphicalEffects 1.15
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
-                                    text: "CONTROL CYLINDER"; color: "#6cf"
+                                    text: "CONTROL CYLINDER"; color: root.cCardTitle
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -1033,13 +1086,13 @@ import QtGraphicalEffects 1.15
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 3; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nEXTEND";  bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; onClicked: cartridgeController.cylinderCmd(1, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nEXTEND"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; onClicked: cartridgeController.cylinderCmd(2, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nEXTEND"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; onClicked: cartridgeController.cylinderCmd(3, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nEXTEND";  bg: root.cProvisionButton; bgEnd: root.cProvisionButtonEnd; bc: root.cProvisionButtonBorder; tc: root.cProvisionButtonText; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; onClicked: cartridgeController.cylinderCmd(1, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nEXTEND"; bg: root.cProvisionButton; bgEnd: root.cProvisionButtonEnd; bc: root.cProvisionButtonBorder; tc: root.cProvisionButtonText; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; onClicked: cartridgeController.cylinderCmd(2, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nEXTEND"; bg: root.cProvisionButton; bgEnd: root.cProvisionButtonEnd; bc: root.cProvisionButtonBorder; tc: root.cProvisionButtonText; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; onClicked: cartridgeController.cylinderCmd(3, true) }
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nRETRACT";  bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nRETRACT"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nRETRACT"; bg: root.cUnifiedBtn; bc: root.cGreen; tc: root.cGreen; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nRETRACT";  bg: root.cProvisionButton; bgEnd: root.cProvisionButtonEnd; bc: root.cProvisionButtonBorder; tc: root.cProvisionButtonText; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nRETRACT"; bg: root.cProvisionButton; bgEnd: root.cProvisionButtonEnd; bc: root.cProvisionButtonBorder; tc: root.cProvisionButtonText; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nRETRACT"; bg: root.cProvisionButton; bgEnd: root.cProvisionButtonEnd; bc: root.cProvisionButtonBorder; tc: root.cProvisionButtonText; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
                                 }
                             }
                         }
@@ -1050,7 +1103,7 @@ import QtGraphicalEffects 1.15
                         y: topCardsRow.height + root.gap
                         width: parent.width - root.sensorW - root.gap
                         height: root.topH - topCardsRow.height - root.gap
-                        color: root.cBg2; border.color: root.cBorder; radius: 6; clip: true
+                        color: root.cDashPanel; border.color: root.cBorder; radius: 6; clip: true
                         HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                         Column {
@@ -1059,7 +1112,7 @@ import QtGraphicalEffects 1.15
                             spacing: 4
 
                             Row { width: parent.width; height: 24; spacing: 6
-                                Text { text: "SERVO CONTROL"; color: "#6cf"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "SERVO CONTROL"; color: root.cCardTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5; anchors.verticalCenter: parent.verticalCenter }
                                 // hidden data source — syncs jogVelMms from FAS PNU via _jog_vel topic
                                 Item {
                                     id: velDisplay
@@ -1109,8 +1162,32 @@ import QtGraphicalEffects 1.15
                                         }
                                         width: Math.floor((servoRow.width - 4*root.gap) / 5)
                                         height: servoRow.height
-                                        color: root.cCard; border.color: root.cBorder; radius: 4; clip: true
-                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
+                                        color: root.cDashCard; border.color: root.cDashCardBorder; radius: 4; clip: true
+                                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cDashCardBorderHover : root.cDashCardBorder }
+
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: parent.radius
+                                            z: -2
+                                            gradient: Gradient {
+                                                orientation: Gradient.Vertical
+                                                GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.07) }
+                                                GradientStop { position: 0.42; color: Qt.rgba(0.58, 0.64, 0.72, 0.035) }
+                                                GradientStop { position: 1.0; color: Qt.rgba(0.05, 0.07, 0.10, 0.10) }
+                                            }
+                                        }
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: parent.radius
+                                            z: -1
+                                            color: Qt.rgba(0.70, 0.75, 0.82, 0.015)
+                                        }
+                                        Rectangle {
+                                            anchors { left: parent.left; right: parent.right; top: parent.top }
+                                            height: 1
+                                            color: "#eef2f6"
+                                            opacity: 0.22
+                                        }
 
                                         Column {
                                             anchors.fill: parent
@@ -1119,8 +1196,8 @@ import QtGraphicalEffects 1.15
 
                                             // header: name + desc
                                             Column { width: parent.width; spacing: 2
-                                                Text { text: "S"+model.sid+": "+model.sname; color: root.cCyan; font.pixelSize: 20; font.bold: true; width: parent.width; horizontalAlignment: Text.AlignHCenter }
-                                                Text { text: model.sdesc; color: root.cDim; font.pixelSize: 17; width: parent.width; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
+                                                Text { text: "S"+model.sid+": "+model.sname; color: root.cCardTitle; font.pixelSize: 20; font.bold: true; width: parent.width; horizontalAlignment: Text.AlignHCenter }
+                                                Text { text: model.sdesc; color: root.cWhiteText; font.pixelSize: 17; width: parent.width; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
                                             }
 
                                             // position display — direct connect + deadband
@@ -1128,7 +1205,7 @@ import QtGraphicalEffects 1.15
                                                 id: posText
                                                 width: parent.width; horizontalAlignment: Text.AlignHCenter
                                                 text: "--"
-                                                color: root.cYellow; font.pixelSize: 22; font.bold: true
+                                                color: root.cWhiteText; font.pixelSize: 22; font.bold: true
                                                 property real lastVal: -99999
                                                 Connections {
                                                     target: cartridgeController
@@ -1151,24 +1228,28 @@ import QtGraphicalEffects 1.15
                                             RowLayout {
                                                 width: parent.width
                                                 spacing: 8
-                                                Text {
-                                                    text: "VELOCITY"
-                                                    color: root.cDim
-                                                    font.pixelSize: 16
-                                                    font.bold: true
-                                                    Layout.alignment: Qt.AlignVCenter
+                                                FunctionLabel {
+                                                    lbl: "VELOCITY"
                                                     Layout.preferredWidth: 82
+                                                    Layout.preferredHeight: 42
                                                 }
                                                 Rectangle {
                                                     Layout.fillWidth: true
                                                     Layout.preferredHeight: 42
                                                     radius: 6
-                                                    color: root.cCard; border.color: root.cBorder; border.width: 1
+                                                    color: "transparent"
+                                                    border.color: root.cFunctionFieldBorder
+                                                    border.width: 1
+                                                    gradient: Gradient {
+                                                        orientation: Gradient.Horizontal
+                                                        GradientStop { position: 0.0; color: root.cFunctionFieldStart }
+                                                        GradientStop { position: 1.0; color: root.cFunctionFieldEnd }
+                                                    }
                                                     Text {
                                                         id: velText
                                                         anchors.centerIn: parent
                                                         text: cardItem.jogVelMms > 0 ? (cardItem.jogVelMms / 1000.0).toFixed(3) + " m/s" : "–"
-                                                        color: root.cCyan
+                                                        color: root.cFunctionFieldText
                                                         font.pixelSize: 16; font.bold: true; font.family: "monospace"
                                                     }
                                                 }
@@ -1178,24 +1259,22 @@ import QtGraphicalEffects 1.15
                                             RowLayout {
                                                 width: parent.width
                                                 spacing: 8
-                                                Text {
-                                                    text: "JOG"
-                                                    color: root.cDim
-                                                    font.pixelSize: 16
-                                                    font.bold: true
-                                                    Layout.alignment: Qt.AlignVCenter
+                                                FunctionLabel {
+                                                    lbl: "JOG"
                                                     Layout.preferredWidth: 82
+                                                    Layout.preferredHeight: 42
                                                 }
                                                 RowLayout {
                                                     Layout.fillWidth: true
                                                     spacing: 8
-                                                    CBtn {
-                                                        iconSource: "qrc:/icons/qml/icons/jog_neg.png"
-                                                        Layout.fillWidth: true; Layout.preferredWidth: 1
-                                                        Layout.preferredHeight: 42
-                                                        padV: 9; padH: 0; fontSize: 20
-                                                       bg: "#0a243a"; bc: "#6cf"; tc: "#6cf"
-                                                        active: servoRow.jogAllowed
+                                                CBtn {
+                                                    iconSource: "qrc:/icons/qml/icons/jog_neg.png"
+                                                    Layout.fillWidth: true; Layout.preferredWidth: 1
+                                                    Layout.preferredHeight: 42
+                                                    padV: 9; padH: 0; fontSize: 20
+                                                       bg: root.cDashButton; bgEnd: root.cDashButtonEnd; bc: root.cDashButtonBorder; tc: root.cDashButtonText
+                                                    active: servoRow.jogAllowed
+                                                    inactiveOpacity: 0.22
                                                         onPressed: {
                                                             if(servoRow.jogAllowed) {
                                                                 root.showJogStopStateHint()
@@ -1207,13 +1286,14 @@ import QtGraphicalEffects 1.15
                                                             root.fadeJogStopStateHint()
                                                         }
                                                     }
-                                                    CBtn {
-                                                        iconSource: "qrc:/icons/qml/icons/jog_plus.png"
-                                                        Layout.fillWidth: true; Layout.preferredWidth: 1
-                                                        Layout.preferredHeight: 42
-                                                        padV: 9; padH: 0; fontSize: 20
-                                                        bg: "#0a243a"; bc: "#6cf"; tc: "#6cf"
-                                                        active: servoRow.jogAllowed
+                                                CBtn {
+                                                    iconSource: "qrc:/icons/qml/icons/jog_plus.png"
+                                                    Layout.fillWidth: true; Layout.preferredWidth: 1
+                                                    Layout.preferredHeight: 42
+                                                    padV: 9; padH: 0; fontSize: 20
+                                                        bg: root.cDashButton; bgEnd: root.cDashButtonEnd; bc: root.cDashButtonBorder; tc: root.cDashButtonText
+                                                    active: servoRow.jogAllowed
+                                                    inactiveOpacity: 0.22
                                                         onPressed: {
                                                             if(servoRow.jogAllowed) {
                                                                 root.showJogStopStateHint()
@@ -1232,21 +1312,19 @@ import QtGraphicalEffects 1.15
                                             Row {
                                                 spacing: 6
                                                 width: parent.width
-                                                CBtn { lbl:"HOMING"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:root.cCard; bc:root.cAccent; tc:"#d4faff"; active:servoRow.jogAllowed; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
-                                                CBtn { lbl:"CLEAR";  w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:root.cCard; bc:root.cBorder; tc:"#d4faff"; onClicked: cartridgeController.clearServo(model.sid) }
+                                                CBtn { lbl:"HOMING"; w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:root.cStateAuxBtn; bc:root.cStateAuxBorder; tc:root.cStateAuxText; active:servoRow.jogAllowed; inactiveOpacity:0.22; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
+                                                CBtn { lbl:"CLEAR";  w:(parent.width - 6)/2; h:42; padV:9; fontSize: 16; bg:root.cDashButton; bgEnd:root.cDashButtonEnd; bc:root.cDashButtonBorder; tc:root.cDashButtonText; onClicked: cartridgeController.clearServo(model.sid) }
                                             }
 
                                             // TARGET POSITION Row (with input & RUN button)
                                             RowLayout {
                                                 width: parent.width
                                                 spacing: 8
-                                                Text {
-                                                    text: "TARGET\nPOSITION"
-                                                    color: root.cDim
-                                                    font.pixelSize: 11
-                                                    font.bold: true
-                                                    Layout.alignment: Qt.AlignVCenter
+                                                FunctionLabel {
+                                                    lbl: "TARGET\nPOSITION"
+                                                    fontSize: 11
                                                     Layout.preferredWidth: 82
+                                                    Layout.preferredHeight: 42
                                                 }
                                                 RowLayout {
                                                     Layout.fillWidth: true
@@ -1255,18 +1333,25 @@ import QtGraphicalEffects 1.15
                                                         Layout.fillWidth: true
                                                         Layout.preferredHeight: 42
                                                         radius: 6
-                                                        color: root.cCard; border.color: "#6cf"; border.width: 2
+                                                        color: "transparent"
+                                                        border.color: root.cFunctionFieldBorder
+                                                        border.width: 1
+                                                        gradient: Gradient {
+                                                            orientation: Gradient.Horizontal
+                                                            GradientStop { position: 0.0; color: root.cFunctionFieldStart }
+                                                            GradientStop { position: 1.0; color: root.cFunctionFieldEnd }
+                                                        }
                                                         TextInput {
                                                             id: posIn
                                                             anchors.fill: parent; anchors.margins: 4
                                                             text: "0.0"; font.pixelSize: 20; font.bold: true; font.family: "monospace"
-                                                            color: "#6cf"
+                                                            color: root.cFunctionFieldText
                                                             horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter
                                                         }
                                                     }
                                                     Text { 
                                                         text: "mm"
-                                                        color: "#6cf"
+                                                        color: root.cWhiteText
                                                         font.pixelSize: 15
                                                         font.bold: true
                                                         Layout.alignment: Qt.AlignBottom
@@ -1278,7 +1363,8 @@ import QtGraphicalEffects 1.15
                                                         Layout.preferredWidth: 80
                                                         Layout.preferredHeight: 42
                                                         padV: 0; fontSize: 16
-                                                        bg: "#0d2a3a"; bc: root.cGreen; tc: root.cGreen; active: servoRow.jogAllowed
+                                                        bg: root.cDashButton; bgEnd: root.cDashButtonEnd; bc: root.cDashButtonBorder; tc: root.cDashButtonText; active: servoRow.jogAllowed
+                                                        inactiveOpacity: 0.22
                                                         onClicked: { if(servoRow.jogAllowed) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } }
                                                     }
                                                 }
@@ -1287,7 +1373,7 @@ import QtGraphicalEffects 1.15
                                             // Limits display
                                             Text {
                                                 text: model.sid === 1 ? "Min: -322 | Max: 560" : (model.sid === 2 ? "Min: -80 | Max: 1025" : "")
-                                                color: "#94a3b8"
+                                                color: root.cWhiteText
                                                 font.pixelSize: 13
                                                 font.bold: true
                                                 width: parent.width
@@ -1319,7 +1405,7 @@ import QtGraphicalEffects 1.15
                         x: 0; y: root.topH + root.gap
                         width: parent.width - root.sensorW - root.gap
                         height: root.logH
-                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                        color: root.cDashPanel; border.color: root.cBorder; radius: 6
                         HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                         Column {
@@ -1327,7 +1413,7 @@ import QtGraphicalEffects 1.15
                             anchors.margins: 8
                             spacing: 4
                             RowLayout { width: parent.width; height: 24
-                                Text { text: "LOG ACTIVITY"; color: "#6cf"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
+                                Text { text: "LOG ACTIVITY"; color: root.cCardTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
                                 CBtn { lbl:"Clear"; padV:4; padH:10; fontSize: 15; bg:root.cWarnBlueBg; bgEnd:root.cWarnBlueBgEnd; bc:root.cWarnBlueBorder; tc:root.cWarnBlueText; onClicked: cartridgeController.clearLog() }
                             }
@@ -1348,7 +1434,7 @@ import QtGraphicalEffects 1.15
                                             width: parent ? parent.width : 100
                                             text: "[" + entry.time + "] " + entry.msg
                                             font.pixelSize: 18; font.family: "monospace"
-                                            color: entry.type==="err" ? root.cRed : entry.type==="ok" ? root.cGreen : root.cCyan
+                                            color: root.cWhiteText
                                             wrapMode: Text.WordWrap
                                         }
                                     }
@@ -1365,7 +1451,7 @@ import QtGraphicalEffects 1.15
                     Rectangle {
                         x: parent.width - root.sensorW
                         y: 0; width: root.sensorW; height: root.outerH
-                        color: root.cBg2; border.color: root.cBorder; radius: 6
+                        color: root.cDashPanel; border.color: root.cBorder; radius: 6
                         HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                         ColumnLayout {
@@ -1376,11 +1462,11 @@ import QtGraphicalEffects 1.15
                             // ── Tiêu đề ──
                             Text {
                                 text: "SENSOR SIGNAL"
-                                color: "#6cf"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
+                                color: root.cCardTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                             }
 
                             // ── Status label ──
-                            Text { text: "STATUS"; color: root.cDim; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1 }
+                            Text { text: "STATUS"; color: root.cWhiteText; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1 }
 
                             // ── Grid sensor – fillHeight để tự co vừa chiều cao còn lại ──
                             GridLayout {
@@ -1442,13 +1528,13 @@ import QtGraphicalEffects 1.15
                                             spacing: 0
                                             Text {
                                                 text: model.slabel
-                                                color: sBtn.on_ ? "#6cf" : root.cText
+                                                color: root.cWhiteText
                                                 font.pixelSize: 13; font.bold: true
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
                                             Text {
                                                 text: model.sdesc
-                                                color: root.cDim; font.pixelSize: 10
+                                                color: root.cWhiteText; font.pixelSize: 10
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                                 visible: model.sdesc !== ""
                                             }
@@ -1603,12 +1689,12 @@ import QtGraphicalEffects 1.15
                                 width: parent.width
                                 spacing: 4
 
-                                Text { text: "SERVO KEY POSITIONS (mm)"; color: root.cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
+                                Text { text: "SERVO KEY POSITIONS (mm)"; color: root.cCardTitle; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
                                 Row { width: parent.width; spacing: parent.width * 0.015
                                     Repeater { model: ["Parameter","Value","Description"]
                                         delegate: Text {
                                             text: modelData
-                                            color: root.cDim
+                                            color: root.cWhiteText
                                             font.pixelSize: 14; font.bold: true
                                             width: index===0 ? parent.width * 0.40 : index===1 ? parent.width * 0.22 : parent.width * 0.35
                                             font.capitalization: Font.AllUppercase; font.letterSpacing: 1
@@ -1633,7 +1719,7 @@ import QtGraphicalEffects 1.15
                                             spacing: parent.width * 0.015
                                             Text {
                                                 text: modelData.label
-                                                color: root.cCyan
+                                                color: root.cWhiteText
                                                 font { pixelSize: 18; bold: true }
                                                 width: parent.width * 0.40
                                                 anchors.verticalCenter: parent.verticalCenter
@@ -1645,7 +1731,7 @@ import QtGraphicalEffects 1.15
                                                     id: sInput2
                                                     anchors { fill: parent; margins: 3 }
                                                     text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true
-                                                    color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter
+                                                    color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter
                                                     validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 2 }
                                                     Connections {
                                                         function onConfigRevisionChanged() {
@@ -1658,7 +1744,7 @@ import QtGraphicalEffects 1.15
                                             }
                                             Text {
                                                 text: modelData.desc
-                                                color: root.cDim
+                                                color: root.cWhiteText
                                                 font.pixelSize: 16
                                                 elide: Text.ElideRight
                                                 anchors.verticalCenter: parent.verticalCenter
@@ -1709,7 +1795,7 @@ import QtGraphicalEffects 1.15
                             spacing: 4
                             RowLayout {
                                 width: parent.width; height: 18
-                                Text { text: "CONFIG LOG"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
+                                Text { text: "CONFIG LOG"; color: root.cCardTitle; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
                                 CBtn { lbl:"Clear"; padV:3; padH:8; fontSize: 14; bg:root.cCard; bc:root.cBorder; tc:root.cDim; onClicked: cartridgeController.clearLog() }
                             }
@@ -1725,7 +1811,7 @@ import QtGraphicalEffects 1.15
                                         width: parent ? parent.width : 100
                                         text: "[" + modelData.time + "] " + modelData.msg
                                         font.pixelSize: 12; font.family: "monospace"
-                                        color: modelData.type==="err" ? root.cRed : modelData.type==="ok" ? root.cGreen : root.cCyan
+                                        color: root.cWhiteText
                                         wrapMode: Text.WordWrap
                                     }
                                 }
@@ -1756,19 +1842,26 @@ import QtGraphicalEffects 1.15
                         id: modeToggle
                         anchors { top: parent.top; left: parent.left; right: parent.right }
                         height: 32; radius: 5
-                        color: page3Root.manualEnabled ? "#0a1a35" : "#081e29"
-                        border.color: page3Root.manualEnabled ? "#5cf4f1" : "#2a3a4a"; border.width: 2
+                        color: root.cDashPanel
+                        border.color: page3Root.manualEnabled ? root.cDashButtonBorder : root.cDashCardBorder
+                        border.width: 1
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: page3Root.manualEnabled ? root.cDashButton : root.cDashPanel }
+                            GradientStop { position: 1.0; color: page3Root.manualEnabled ? root.cDashButtonEnd : root.cDashPanel }
+                        }
                         Behavior on color { ColorAnimation { duration: 200 } }
                         Behavior on border.color { ColorAnimation { duration: 200 } }
                         Row {
                             anchors.centerIn: parent; spacing: 8
                             Text {
                                 text: page3Root.manualEnabled ? "🔓" : "🔒"
+                                color: root.cWhiteText
                                 font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter
                             }
                             Text {
                                 text: page3Root.manualEnabled ? "MANUAL MODE" : "LOCKED — " + page3Root.currentMode.toUpperCase() + " MODE"
-                                color: page3Root.manualEnabled ? "#5cf4f1" : "#888"
+                                color: root.cWhiteText
                                 font.pixelSize: 12; font.bold: true; font.letterSpacing: 1
                                 anchors.verticalCenter: parent.verticalCenter
                             }
@@ -1799,14 +1892,14 @@ import QtGraphicalEffects 1.15
                                 // ═══ CARTESIAN ═══
                                 Rectangle {
                                     width: (parent.width - parent.parent.colGap * 2) * 0.38; height: parent.height
-                                    color: root.cBg2; border.color: root.cBorder; radius: 6
+                                    color: root.cDashPanel; border.color: root.cBorder; radius: 6
                                     Column {
                                         id: cartCol
                                         anchors { fill: parent; margins: 8 }
                                         spacing: 6
                                         Row { spacing: 6
                                             Rectangle { width: 4; height: 16; radius: 1; color: root.cAccent; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "CARTESIAN (mm)"; color: root.cAccent; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
+                                            Text { text: "CARTESIAN (mm)"; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
                                         }
                                         Repeater {
                                             id: cartRep
@@ -1825,25 +1918,40 @@ import QtGraphicalEffects 1.15
                                                 Rectangle {
                                                     id: negBtn
                                                     width: 58; height: 48; radius: 5
-                                                    color: negMA.pressed ? "#4a1d24" : root.cCard
-                                                    border.color: negMA.pressed ? "#d44747" : root.cBorder; border.width: negMA.pressed ? 2 : 1
+                                                    color: "transparent"
+                                                    border.color: root.cJogNegativeButtonBorder; border.width: 1
+                                                    gradient: Gradient {
+                                                        orientation: Gradient.Horizontal
+                                                        GradientStop { position: 0.0; color: negMA.pressed ? root.pressGradientColor(root.cJogNegativeButton) : root.cJogNegativeButton }
+                                                        GradientStop { position: 1.0; color: negMA.pressed ? root.pressGradientColor(root.cJogNegativeButtonEnd) : root.cJogNegativeButtonEnd }
+                                                    }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: negMA.pressed ? "#ff8a8a" : root.cRed; font.pixelSize: 16; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
                                                     MotionMouseArea { id: negMA; anchors.fill: parent; hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                                 Rectangle {
-                                                    width: parent.width - 120; height: 48; radius: 5; color: "#0d1117"; border.width: 2; border.color: root.cBorder
-                                                    Text { anchors.centerIn: parent; text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0.0000"; color: "#f59e0b"; font.pixelSize: 20; font.family: "monospace"; font.bold: true }
+                                                    width: parent.width - 120; height: 48; radius: 5; color: "transparent"; border.width: 1; border.color: root.cFunctionFieldBorder
+                                                    gradient: Gradient {
+                                                        orientation: Gradient.Horizontal
+                                                        GradientStop { position: 0.0; color: root.cFunctionFieldStart }
+                                                        GradientStop { position: 1.0; color: root.cFunctionFieldEnd }
+                                                    }
+                                                    Text { anchors.centerIn: parent; text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0.0000"; color: root.cWhiteText; font.pixelSize: 20; font.family: "monospace"; font.bold: true }
                                                 }
                                                 Rectangle {
                                                     id: posBtn
                                                     width: 58; height: 48; radius: 5
-                                                    color: posMA.pressed ? "#133b26" : root.cCard
-                                                    border.color: posMA.pressed ? "#1ecb70" : root.cBorder; border.width: posMA.pressed ? 2 : 1
+                                                    color: "transparent"
+                                                    border.color: root.cDashButtonBorder; border.width: 1
+                                                    gradient: Gradient {
+                                                        orientation: Gradient.Horizontal
+                                                        GradientStop { position: 0.0; color: posMA.pressed ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                        GradientStop { position: 1.0; color: posMA.pressed ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                                    }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: posMA.pressed ? "#6ee7a8" : root.cGreen; font.pixelSize: 16; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
                                                     MotionMouseArea { id: posMA; anchors.fill: parent; hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                             }
@@ -1854,12 +1962,12 @@ import QtGraphicalEffects 1.15
                                                 id: cartInputs
                                                 model: ["X","Y","Z","RX","RY","RZ"]
                                                 delegate: Column { spacing: 2; width: (cartCol.width - 15) / 6
-                                                    Text { text: modelData; color: root.cDim; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                    Text { text: modelData; color: root.cCardTitle; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                                     Rectangle {
-                                                        width: parent.width; height: 40; radius: 4; color: "#0d1117"; border.color: root.cAccent; border.width: 2
+                                                        width: parent.width; height: 40; radius: 4; color: root.cDashCardField; border.color: root.cFunctionFieldBorder; border.width: 1
                                                         TextInput { id: cartInp
                                                             anchors { fill: parent; margins: 2 }
-                                                            color: root.cText; font.pixelSize: 16; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; clip: true
+                                                            color: root.cWhiteText; font.pixelSize: 16; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; clip: true
                                                             text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0"
                                                             selectByMouse: true; verticalAlignment: Text.AlignVCenter; validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
                                                         }
@@ -1870,10 +1978,32 @@ import QtGraphicalEffects 1.15
                                         Row { spacing: 4; width: parent.width
                                             Rectangle {
                                                 width: parent.width / 2 - 2; height: 42; radius: 5
-                                                color: gpMA.pressed ? "#123c2a" : "#0a2a1a"; border.color: gpMA.pressed ? "#42d8e5" : root.cCyan
-                                                border.width: gpMA.pressed ? 2 : 1
+                                                color: "transparent"; border.color: root.cGetButtonBorder
+                                                border.width: 1
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: gpMA.pressed ? root.pressGradientColor(root.cGetButton) : root.cGetButton }
+                                                    GradientStop { position: 1.0; color: gpMA.pressed ? root.pressGradientColor(root.cGetButtonEnd) : root.cGetButtonEnd }
+                                                }
                                                 Behavior on color { ColorAnimation { duration: 80 } }
-                                                Text { anchors.centerIn: parent; text: "GET POSE"; color: gpMA.pressed ? "#8ceef4" : root.cCyan; font.pixelSize: 14; font.bold: true }
+                                                Row {
+                                                    anchors.centerIn: parent
+                                                    spacing: 6
+                                                    Image {
+                                                        source: "icons/hard_drive_download.svg"
+                                                        width: 20; height: 20
+                                                        fillMode: Image.PreserveAspectFit
+                                                        smooth: true
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                    Text {
+                                                        text: "GET POSE"
+                                                        color: root.cWhiteText
+                                                        font.pixelSize: 14
+                                                        font.bold: true
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                }
                                                 MotionMouseArea { id: gpMA; anchors.fill: parent; hoverScale: 1.05; shadowEnabled: false; shimmerEnabled: false; onClicked: {
                                                     robotController.getPose()
                                                     for (var i = 0; i < 6; i++) {
@@ -1884,10 +2014,32 @@ import QtGraphicalEffects 1.15
                                             }
                                             Rectangle {
                                                 width: parent.width / 2 - 2; height: 42; radius: 5
-                                                color: mlMA.pressed ? "#132d4f" : "#0a1a35"; border.color: mlMA.pressed ? "#6f82ff" : root.cAccent
-                                                border.width: mlMA.pressed ? 2 : 1
+                                                color: "transparent"; border.color: root.cMovJButtonBorder
+                                                border.width: 1
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: mlMA.pressed ? root.pressGradientColor(root.cMovJButton) : root.cMovJButton }
+                                                    GradientStop { position: 1.0; color: mlMA.pressed ? root.pressGradientColor(root.cMovJButtonEnd) : root.cMovJButtonEnd }
+                                                }
                                                 Behavior on color { ColorAnimation { duration: 80 } }
-                                                Text { anchors.centerIn: parent; text: "SEND MovL"; color: mlMA.pressed ? "#aab6ff" : root.cAccent; font.pixelSize: 14; font.bold: true }
+                                                Row {
+                                                    anchors.centerIn: parent
+                                                    spacing: 6
+                                                    Image {
+                                                        source: "icons/navigation.svg"
+                                                        width: 20; height: 20
+                                                        fillMode: Image.PreserveAspectFit
+                                                        smooth: true
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                    Text {
+                                                        text: "SEND MovL"
+                                                        color: root.cWhiteText
+                                                        font.pixelSize: 14
+                                                        font.bold: true
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                }
                                                 MotionMouseArea { id: mlMA; anchors.fill: parent; hoverScale: 1.05; shadowEnabled: false; shimmerEnabled: false; onClicked: {
                                                     var vals = []
                                                     for (var i = 0; i < 6; i++) vals.push(parseFloat(cartInputs.itemAt(i).children[1].children[0].text) || 0)
@@ -1901,14 +2053,14 @@ import QtGraphicalEffects 1.15
                                 // ═══ JOINT ═══
                                 Rectangle {
                                     width: (parent.width - parent.parent.colGap * 2) * 0.38; height: parent.height
-                                    color: root.cBg2; border.color: root.cBorder; radius: 6
+                                    color: root.cDashPanel; border.color: root.cBorder; radius: 6
                                     Column {
                                         id: jointCol
                                         anchors { fill: parent; margins: 8 }
                                         spacing: 6
                                         Row { spacing: 6
                                             Rectangle { width: 4; height: 16; radius: 1; color: "#5cf4f1"; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "JOINT (deg)"; color: "#5cf4f1"; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
+                                            Text { text: "JOINT (deg)"; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
                                         }
                                         Repeater {
                                             id: jointRep
@@ -1919,25 +2071,40 @@ import QtGraphicalEffects 1.15
                                                 Rectangle {
                                                     id: jnBtn
                                                     width: 58; height: 48; radius: 5
-                                                    color: jnMA.pressed ? "#4a1d24" : root.cCard
-                                                    border.color: jnMA.pressed ? "#d44747" : root.cBorder; border.width: jnMA.pressed ? 2 : 1
+                                                    color: "transparent"
+                                                    border.color: root.cJogNegativeButtonBorder; border.width: 1
+                                                    gradient: Gradient {
+                                                        orientation: Gradient.Horizontal
+                                                        GradientStop { position: 0.0; color: jnMA.pressed ? root.pressGradientColor(root.cJogNegativeButton) : root.cJogNegativeButton }
+                                                        GradientStop { position: 1.0; color: jnMA.pressed ? root.pressGradientColor(root.cJogNegativeButtonEnd) : root.cJogNegativeButtonEnd }
+                                                    }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: jnMA.pressed ? "#ff8a8a" : root.cRed; font.pixelSize: 16; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
                                                     MotionMouseArea { id: jnMA; anchors.fill: parent; hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                                 Rectangle {
-                                                    width: parent.width - 120; height: 48; radius: 5; color: "#0d1117"; border.width: 2; border.color: root.cBorder
-                                                    Text { anchors.centerIn: parent; text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0.0000"; color: "#f59e0b"; font.pixelSize: 20; font.family: "monospace"; font.bold: true }
+                                                    width: parent.width - 120; height: 48; radius: 5; color: "transparent"; border.width: 1; border.color: root.cFunctionFieldBorder
+                                                    gradient: Gradient {
+                                                        orientation: Gradient.Horizontal
+                                                        GradientStop { position: 0.0; color: root.cFunctionFieldStart }
+                                                        GradientStop { position: 1.0; color: root.cFunctionFieldEnd }
+                                                    }
+                                                    Text { anchors.centerIn: parent; text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0.0000"; color: root.cWhiteText; font.pixelSize: 20; font.family: "monospace"; font.bold: true }
                                                 }
                                                 Rectangle {
                                                     id: jpBtn
                                                     width: 58; height: 48; radius: 5
-                                                    color: jpMA.pressed ? "#133b26" : root.cCard
-                                                    border.color: jpMA.pressed ? "#1ecb70" : root.cBorder; border.width: jpMA.pressed ? 2 : 1
+                                                    color: "transparent"
+                                                    border.color: root.cDashButtonBorder; border.width: 1
+                                                    gradient: Gradient {
+                                                        orientation: Gradient.Horizontal
+                                                        GradientStop { position: 0.0; color: jpMA.pressed ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                        GradientStop { position: 1.0; color: jpMA.pressed ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                                    }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: jpMA.pressed ? "#6ee7a8" : root.cGreen; font.pixelSize: 16; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
                                                     MotionMouseArea { id: jpMA; anchors.fill: parent; hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                             }
@@ -1948,12 +2115,12 @@ import QtGraphicalEffects 1.15
                                                 id: jointInputs
                                                 model: ["J1","J2","J3","J4","J5","J6"]
                                                 delegate: Column { spacing: 2; width: (jointCol.width - 15) / 6
-                                                    Text { text: modelData; color: root.cDim; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                    Text { text: modelData; color: root.cCardTitle; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                                     Rectangle {
-                                                        width: parent.width; height: 40; radius: 4; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2
+                                                        width: parent.width; height: 40; radius: 4; color: root.cDashCardField; border.color: root.cFunctionFieldBorder; border.width: 1
                                                         TextInput {
                                                             anchors { fill: parent; margins: 2 }
-                                                            color: root.cText; font.pixelSize: 16; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true
+                                                            color: root.cWhiteText; font.pixelSize: 16; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true
                                                             text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0"
                                                             selectByMouse: true; validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
                                                         }
@@ -1964,10 +2131,32 @@ import QtGraphicalEffects 1.15
                                         Row { spacing: 4; width: parent.width
                                             Rectangle {
                                                 width: parent.width / 2 - 2; height: 42; radius: 5
-                                                color: gaMA.pressed ? "#123c2a" : "#0a2a1a"; border.color: gaMA.pressed ? "#42d8e5" : root.cCyan
-                                                border.width: gaMA.pressed ? 2 : 1
+                                                color: "transparent"; border.color: root.cGetButtonBorder
+                                                border.width: 1
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: gaMA.pressed ? root.pressGradientColor(root.cGetButton) : root.cGetButton }
+                                                    GradientStop { position: 1.0; color: gaMA.pressed ? root.pressGradientColor(root.cGetButtonEnd) : root.cGetButtonEnd }
+                                                }
                                                 Behavior on color { ColorAnimation { duration: 80 } }
-                                                Text { anchors.centerIn: parent; text: "GET ANGLES"; color: gaMA.pressed ? "#8ceef4" : root.cCyan; font.pixelSize: 14; font.bold: true }
+                                                Row {
+                                                    anchors.centerIn: parent
+                                                    spacing: 6
+                                                    Image {
+                                                        source: "icons/hard_drive_download.svg"
+                                                        width: 20; height: 20
+                                                        fillMode: Image.PreserveAspectFit
+                                                        smooth: true
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                    Text {
+                                                        text: "GET ANGLES"
+                                                        color: root.cWhiteText
+                                                        font.pixelSize: 14
+                                                        font.bold: true
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                }
                                                 MotionMouseArea { id: gaMA; anchors.fill: parent; hoverScale: 1.05; shadowEnabled: false; shimmerEnabled: false; onClicked: {
                                                     robotController.getAngles()
                                                     for (var i = 0; i < 6; i++) {
@@ -1978,10 +2167,32 @@ import QtGraphicalEffects 1.15
                                             }
                                             Rectangle {
                                                 width: parent.width / 2 - 2; height: 42; radius: 5
-                                                color: mjMA.pressed ? "#07303a" : "#051a25"; border.color: mjMA.pressed ? "#63dce7" : "#5cf4f1"
-                                                border.width: mjMA.pressed ? 2 : 1
+                                                color: "transparent"; border.color: root.cMovJButtonBorder
+                                                border.width: 1
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: mjMA.pressed ? root.pressGradientColor(root.cMovJButton) : root.cMovJButton }
+                                                    GradientStop { position: 1.0; color: mjMA.pressed ? root.pressGradientColor(root.cMovJButtonEnd) : root.cMovJButtonEnd }
+                                                }
                                                 Behavior on color { ColorAnimation { duration: 80 } }
-                                                Text { anchors.centerIn: parent; text: "SEND MovJ"; color: mjMA.pressed ? "#99f3f5" : "#5cf4f1"; font.pixelSize: 14; font.bold: true }
+                                                Row {
+                                                    anchors.centerIn: parent
+                                                    spacing: 6
+                                                    Image {
+                                                        source: "icons/navigation.svg"
+                                                        width: 20; height: 20
+                                                        fillMode: Image.PreserveAspectFit
+                                                        smooth: true
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                    Text {
+                                                        text: "SEND MovJ"
+                                                        color: root.cWhiteText
+                                                        font.pixelSize: 14
+                                                        font.bold: true
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                }
                                                 MotionMouseArea { id: mjMA; anchors.fill: parent; hoverScale: 1.05; shadowEnabled: false; shimmerEnabled: false; onClicked: {
                                                     var vals = []
                                                     for (var i = 0; i < 6; i++) vals.push(parseFloat(jointInputs.itemAt(i).children[1].children[0].text) || 0)
@@ -1992,25 +2203,25 @@ import QtGraphicalEffects 1.15
 
                                         // ── SAVE TO YAML ─────────────────────
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder; opacity: 0.5 }
-                                        Text { text: "SAVE POSE TO YAML"; color: root.cDim; font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.8 }
+                                        Text { text: "SAVE POSE TO YAML"; color: root.cCardTitle; font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.8 }
 
                                         Row { spacing: 4; width: parent.width
                                             // Name / comment input
                                             Rectangle {
                                                 id: poseNameRect
                                                 width: parent.width - 90 - 4; height: 42; radius: 6
-                                                color: "#0d1117"; border.color: "#5cf4f1"; border.width: 1
+                                                color: root.cDashCardField; border.color: root.cFunctionFieldBorder; border.width: 1
                                                 // Placeholder hint
                                                 Text {
                                                     anchors { fill: parent; leftMargin: 8; verticalCenter: parent.verticalCenter }
                                                     text: poseNameInput.text.length === 0 ? "pose name / comment..." : ""
-                                                    color: "#555"; font.pixelSize: 14; font.family: "monospace"
+                                                    color: root.cWhiteText; font.pixelSize: 14; font.family: "monospace"
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
                                                 TextInput {
                                                     id: poseNameInput
                                                     anchors { fill: parent; leftMargin: 8; rightMargin: 4; topMargin: 4; bottomMargin: 4 }
-                                                    color: root.cText; font.pixelSize: 14; font.family: "monospace"
+                                                    color: root.cWhiteText; font.pixelSize: 14; font.family: "monospace"
                                                     clip: true; selectByMouse: true; verticalAlignment: Text.AlignVCenter
                                                 }
                                             }
@@ -2019,15 +2230,43 @@ import QtGraphicalEffects 1.15
                                                 id: savePoseBtn
                                                 width: 90; height: 42; radius: 6
                                                 property bool saving: false
-                                                color: saving ? "#0d2a3a" : (saveMA.pressed ? "#0a405c" : root.cCard)
-                                                border.color: savePoseBtn.saving ? "#1ecb70" : (saveMA.pressed ? "#1ecb70" : root.cBorder)
-                                                border.width: saveMA.pressed ? 2 : 1
+                                                color: "transparent"
+                                                border.color: savePoseBtn.saving ? root.cAccent : root.cDashButtonBorder
+                                                border.width: 1
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: savePoseBtn.saving ? root.pressGradientColor(root.cDashButton) : (saveMA.pressed ? root.pressGradientColor(root.cDashButton) : root.cDashButton) }
+                                                    GradientStop { position: 1.0; color: savePoseBtn.saving ? root.pressGradientColor(root.cDashButtonEnd) : (saveMA.pressed ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd) }
+                                                }
                                                 Behavior on color { ColorAnimation { duration: 100 } }
+                                                Row {
+                                                    anchors.centerIn: parent
+                                                    spacing: 5
+                                                    visible: !savePoseBtn.saving
+
+                                                    Image {
+                                                        source: "icons/download.svg"
+                                                        width: 20
+                                                        height: 20
+                                                        fillMode: Image.PreserveAspectFit
+                                                        smooth: true
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                    Text {
+                                                        text: "SAVE"
+                                                        color: root.cWhiteText
+                                                        font.pixelSize: 13
+                                                        font.bold: true
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                    }
+                                                }
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: savePoseBtn.saving ? "✓ SAVED" : "💾 SAVE"
-                                                    color: savePoseBtn.saving ? root.cGreen : root.cCyan
-                                                    font.pixelSize: 13; font.bold: true
+                                                    visible: savePoseBtn.saving
+                                                    text: "✓ SAVED"
+                                                    color: root.cWhiteText
+                                                    font.pixelSize: 13
+                                                    font.bold: true
                                                 }
                                                     MotionMouseArea {
                                                         id: saveMA; anchors.fill: parent
@@ -2050,7 +2289,7 @@ import QtGraphicalEffects 1.15
                                                     function onJointPoseSaved(success, message) {
                                                         savePoseBtn.saving = success
                                                         saveStatusText.text = message
-                                                        saveStatusText.color = success ? root.cGreen : root.cRed
+                                                        saveStatusText.color = root.cWhiteText
                                                         saveStatusTimer.restart()
                                                     }
                                                 }
@@ -2065,17 +2304,22 @@ import QtGraphicalEffects 1.15
                                             id: saveStatusText
                                             width: parent.width; wrapMode: Text.WordWrap
                                             text: ""; font.pixelSize: 12; font.family: "monospace"
-                                            color: root.cGreen
+                                            color: root.cWhiteText
                                         }
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder; opacity: 0.5 }
-                                        Text { text: "LOAD SAVED POSE"; color: root.cDim; font.pixelSize: 11; font.bold: true; font.letterSpacing: 0.8 }
+                                        Text { text: "LOAD SAVED POSE"; color: root.cCardTitle; font.pixelSize: 11; font.bold: true; font.letterSpacing: 0.8 }
 
                                         Rectangle {
                                             id: savedPosesLoaderRect
                                             width: parent.width; height: 42; radius: 6
-                                            color: loadMA.pressed ? "#0f2c3d" : "#0d1117"
-                                            border.color: "#5cf4f1"; border.width: 1
+                                            color: "transparent"
+                                            border.color: root.cDashButtonBorder; border.width: 1
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop { position: 0.0; color: loadMA.pressed ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                GradientStop { position: 1.0; color: loadMA.pressed ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                            }
 
                                             property var savedPoses: []
                                             function refreshPoses() {
@@ -2085,14 +2329,14 @@ import QtGraphicalEffects 1.15
 
                                             Text {
                                                 anchors { left: parent.left; leftMargin: 8; verticalCenter: parent.verticalCenter }
-                                                text: "📋 TOẠ ĐỘ ĐÃ LƯU (" + parent.savedPoses.length + ")"
-                                                color: "#5cf4f1"; font.pixelSize: 14; font.bold: true
+                                                text: "TOẠ ĐỘ ĐÃ LƯU (" + parent.savedPoses.length + ")"
+                                                color: root.cWhiteText; font.pixelSize: 14; font.bold: true
                                             }
 
                                             Text {
                                                 anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
                                                 text: "▼"
-                                                color: "#5cf4f1"; font.pixelSize: 12
+                                                color: root.cWhiteText; font.pixelSize: 12
                                             }
 
                                             MotionMouseArea {
@@ -2111,55 +2355,68 @@ import QtGraphicalEffects 1.15
                                 // ═══ IO + CONTROLS ═══
                                 Rectangle {
                                     width: parent.width - (parent.width - parent.parent.colGap * 2) * 0.76 - parent.parent.colGap * 2; height: parent.height
-                                    color: root.cBg2; border.color: root.cBorder; radius: 6
+                                    color: root.cDashPanel; border.color: root.cBorder; radius: 6
                                     Column {
                                         id: ioCol
                                         anchors { fill: parent; margins: 8 }
                                         spacing: 6
                                         Row { spacing: 6
                                             Rectangle { width: 4; height: 16; radius: 1; color: root.cCyan; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "I/O CONTROL"; color: root.cCyan; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
+                                            Text { text: "I/O CONTROL"; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
                                         }
 
                                         // Step Value
-                                        Text { text: "STEP VALUE"; color: root.cDim; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "STEP VALUE"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
                                         Row { spacing: 4; width: parent.width
                                             Repeater {
                                                 model: [0.1, 1, 5, 10]
                                                 delegate: Rectangle {
+                                                    id: stepBtn
                                                     required property var modelData
                                                     width: (ioCol.width - 12) / 4; height: 34; radius: 5
-                                                    color: page3Root.stepValue === modelData ? root.cAccent : root.cCard
-                                                    border.color: page3Root.stepValue === modelData ? root.cAccent : root.cBorder; border.width: 2
-                                                    Text { anchors.centerIn: parent; text: modelData; color: page3Root.stepValue === modelData ? "#000" : root.cText; font.pixelSize: 14; font.bold: true }
-                                                    MotionMouseArea { anchors.fill: parent; onClicked: page3Root.stepValue = modelData }
+                                                    property bool selected: page3Root.stepValue === modelData
+                                                    color: "transparent"
+                                                    border.color: selected ? root.cTabSelectedBorder : root.cDashButtonBorder
+                                                    border.width: 1
+                                                    gradient: Gradient {
+                                                        orientation: Gradient.Horizontal
+                                                        GradientStop { position: 0.0; color: (stepMA.pressed || stepBtn.selected) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                        GradientStop { position: 1.0; color: (stepMA.pressed || stepBtn.selected) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                                    }
+                                                    Text { anchors.centerIn: parent; text: modelData; color: root.cWhiteText; font.pixelSize: 14; font.bold: true }
+                                                    MotionMouseArea { id: stepMA; anchors.fill: parent; onClicked: page3Root.stepValue = modelData }
                                                 }
                                             }
                                         }
 
                                         // Hardware Speed (read-only from Dobot)
-                                        Text { text: "HW SPEED"; color: root.cDim; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "HW SPEED"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
                                         Rectangle {
                                             width: parent.width; height: 36; radius: 5
-                                            color: "#0d1117"; border.color: "#2a3a4a"; border.width: 1
+                                            color: "transparent"; border.color: root.cFunctionFieldBorder; border.width: 1
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop { position: 0.0; color: root.cFunctionFieldStart }
+                                                GradientStop { position: 1.0; color: root.cFunctionFieldEnd }
+                                            }
                                             Row {
                                                 anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
                                                 spacing: 6
                                                 Text {
                                                     text: "⚙ Dobot:"
-                                                    color: root.cDim; font.pixelSize: 14
+                                                    color: root.cWhiteText; font.pixelSize: 14
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
                                                 Text {
                                                     text: robotController.hwSpeedRatio + "%"
-                                                    color: "#f59e0b"; font.pixelSize: 18; font.bold: true; font.family: "monospace"
+                                                    color: root.cWhiteText; font.pixelSize: 18; font.bold: true; font.family: "monospace"
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
                                             }
                                         }
 
                                         // Set Speed (interactive slider)
-                                        Text { text: "SET SPEED %"; color: root.cDim; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "SET SPEED %"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
                                         Row { spacing: 4; width: parent.width; height: 36
                                             Slider {
                                                 id: speedSlider
@@ -2167,14 +2424,14 @@ import QtGraphicalEffects 1.15
                                                 from: 1; to: 100; stepSize: 1; value: page3Root.speedVal
                                                 onMoved: { page3Root.speedVal = Math.round(value) }
                                                 onPressedChanged: { if (!pressed) robotController.setSpeedRatio(Math.round(value)) }
-                                                background: Rectangle { x: speedSlider.leftPadding; y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 4; width: speedSlider.availableWidth; height: 8; radius: 4; color: root.cCard; border.color: root.cBorder
+                                                background: Rectangle { x: speedSlider.leftPadding; y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 4; width: speedSlider.availableWidth; height: 8; radius: 4; color: root.cDashButtonEnd; border.color: root.cDashButtonBorder
                                                     Rectangle { width: speedSlider.visualPosition * parent.width; height: parent.height; radius: 4; color: "#5cf4f1" }
                                                 }
                                                 handle: Rectangle { x: speedSlider.leftPadding + speedSlider.visualPosition * (speedSlider.availableWidth - width); y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 8; width: 18; height: 18; radius: 9; color: "#5cf4f1"; border.color: "#fff" }
                                             }
                                             Rectangle {
-                                                width: 50; height: 34; radius: 5; color: "#0d1117"; border.color: "#5cf4f1"; border.width: 2
-                                                TextInput { anchors.centerIn: parent; width: 44; color: root.cText; font.pixelSize: 14; font.family: "monospace"; font.bold: true; horizontalAlignment: Text.AlignHCenter
+                                                width: 50; height: 34; radius: 5; color: root.cFunctionFieldEnd; border.color: root.cFunctionFieldBorder; border.width: 1
+                                                TextInput { anchors.centerIn: parent; width: 44; color: root.cWhiteText; font.pixelSize: 14; font.family: "monospace"; font.bold: true; horizontalAlignment: Text.AlignHCenter
                                                     text: page3Root.speedVal
                                                     validator: IntValidator { bottom: 1; top: 100 }
                                                     selectByMouse: true
@@ -2186,128 +2443,120 @@ import QtGraphicalEffects 1.15
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
                                         // Gripper DO1 — valve 5/3: GẮP (ch0=T,ch1=F) / NHẢ (ch0=F,ch1=T)
-                                        Text { text: "GRIPPER (DO1)"; color: root.cDim; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "GRIPPER (DO1)"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
                                         Row {
                                             id: rowGripper
                                             property bool isOn: false  // false = NHẢ (startup safe state)
                                             spacing: 6; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
-                                                color: rowGripper.isOn ? "#0d2a3a" : root.cCard
-                                                border.color: rowGripper.isOn ? root.cGreen : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "GẮP"; color: rowGripper.isOn ? root.cGreen : root.cDim; font.pixelSize: 15; font.bold: true }
-                                                MotionMouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, true); rowGripper.isOn = true } }
+                                                color: "transparent"
+                                                border.color: root.cDashButtonBorder
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: (gripOnMA.pressed || rowGripper.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                    GradientStop { position: 1.0; color: (gripOnMA.pressed || rowGripper.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                                }
+                                                Text { anchors.centerIn: parent; text: "GẮP"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: gripOnMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, true); rowGripper.isOn = true } }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
-                                                color: !rowGripper.isOn ? "#1a3a5a" : root.cCard
-                                                border.color: !rowGripper.isOn ? "#6aaeff" : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: !rowGripper.isOn ? "#6aaeff" : root.cDim; font.pixelSize: 15; font.bold: true }
-                                                MotionMouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, false); rowGripper.isOn = false } }
+                                                color: "transparent"
+                                                border.color: root.cDashButtonBorder
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: (gripOffMA.pressed || !rowGripper.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                    GradientStop { position: 1.0; color: (gripOffMA.pressed || !rowGripper.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                                }
+                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: gripOffMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, false); rowGripper.isOn = false } }
                                             }
                                         }
 
                                         // Picker DO2 — valve 5/3: GẮP (ch2=T,ch3=F) / NHẢ (ch2=F,ch3=T)
-                                        Text { text: "PICKER (DO2)"; color: root.cDim; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "PICKER (DO2)"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
                                         Row {
                                             id: rowPicker
                                             property bool isOn: false  // false = NHẢ (startup safe state)
                                             spacing: 6; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
-                                                color: rowPicker.isOn ? "#0d2a3a" : root.cCard
-                                                border.color: rowPicker.isOn ? root.cGreen : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "GẮP"; color: rowPicker.isOn ? root.cGreen : root.cDim; font.pixelSize: 15; font.bold: true }
-                                                MotionMouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, true); rowPicker.isOn = true } }
+                                                color: "transparent"
+                                                border.color: root.cDashButtonBorder
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: (pickerOnMA.pressed || rowPicker.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                    GradientStop { position: 1.0; color: (pickerOnMA.pressed || rowPicker.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                                }
+                                                Text { anchors.centerIn: parent; text: "GẮP"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: pickerOnMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, true); rowPicker.isOn = true } }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
-                                                color: !rowPicker.isOn ? "#1a3a5a" : root.cCard
-                                                border.color: !rowPicker.isOn ? "#6aaeff" : root.cBorder
-                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: !rowPicker.isOn ? "#6aaeff" : root.cDim; font.pixelSize: 15; font.bold: true }
-                                                MotionMouseArea { anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, false); rowPicker.isOn = false } }
+                                                color: "transparent"
+                                                border.color: root.cDashButtonBorder
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: (pickerOffMA.pressed || !rowPicker.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                    GradientStop { position: 1.0; color: (pickerOffMA.pressed || !rowPicker.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                                }
+                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: pickerOffMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, false); rowPicker.isOn = false } }
                                             }
                                         }
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
-                                        // Stop & Reset → IDLE
-                                        Rectangle {
-                                            width: parent.width; height: 46; radius: 5
-                                            color: "transparent"; border.width: 0
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: scStopMA.pressed ? Qt.darker("#771a1a", 1.15) : "#771a1a" }
-                                                GradientStop { position: 1.0; color: scStopMA.pressed ? Qt.darker("#4e0c0c", 1.15) : "#4e0c0c" }
-                                            }
-                                            Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#d4faff"; font.pixelSize: 15; font.bold: true }
-                                            MotionMouseArea { id: scStopMA; anchors.fill: parent; onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() } }
+                                        // System actions — same visual language as Control Dashboard
+                                        CBtn {
+                                            lbl: "STOP"
+                                            w: parent.width; h: 46
+                                            fontSize: 15
+                                            bg: "#771a1a"; bgEnd: "#4e0c0c"; bc: root.cRed; tc: root.cWhiteText
+                                            onClicked: { robotController.stopAndResetRobot(); cartridgeController.stopSystem() }
                                         }
 
-                                        // Enable
-                                        Rectangle {
-                                            width: parent.width; height: 42; radius: 5
-                                            color: "transparent"; border.width: 0
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: scEnMA.pressed ? Qt.darker("#0a405c", 1.15) : "#0a405c" }
-                                                GradientStop { position: 1.0; color: scEnMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
-                                            }
-                                            Text { anchors.centerIn: parent; text: "ENABLE"; color: "#d4faff"; font.pixelSize: 15; font.bold: true }
-                                            MotionMouseArea { id: scEnMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
+                                        CBtn {
+                                            lbl: "ENABLE"
+                                            w: parent.width; h: 42
+                                            fontSize: 15
+                                            bg: root.cDashButton; bgEnd: root.cDashButtonEnd; bc: root.cDashButtonBorder; tc: root.cDashButtonText
+                                            onClicked: robotController.enableSystem(true)
                                         }
 
-                                        // Pause / Resume
-                                        Row { spacing: 6; width: parent.width
-                                            Rectangle {
-                                                width: (parent.width - 6) / 2; height: 42; radius: 5
-                                                color: "transparent"; border.width: 0
-                                                gradient: Gradient {
-                                                    orientation: Gradient.Horizontal
-                                                    GradientStop { position: 0.0; color: scPauseMA.pressed ? Qt.darker("#0a405c", 1.15) : "#0a405c" }
-                                                    GradientStop { position: 1.0; color: scPauseMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
-                                                }
-                                                Text { anchors.centerIn: parent; text: "PAUSE"; color: "#d4faff"; font.pixelSize: 14; font.bold: true }
-                                                MotionMouseArea { id: scPauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
+                                        Row {
+                                            spacing: 6; width: parent.width
+                                            CBtn {
+                                                lbl: "PAUSE"
+                                                w: (parent.width - 6) / 2; h: 42
+                                                fontSize: 14
+                                                bg: root.cDashButton; bgEnd: root.cDashButtonEnd; bc: root.cDashButtonBorder; tc: root.cDashButtonText
+                                                onClicked: robotController.pauseRobot()
                                             }
-                                            Rectangle {
-                                                width: (parent.width - 6) / 2; height: 42; radius: 5
-                                                color: "transparent"; border.width: 0
-                                                gradient: Gradient {
-                                                    orientation: Gradient.Horizontal
-                                                    GradientStop { position: 0.0; color: scResMA.pressed ? Qt.darker("#0b7876", 1.15) : "#0b7876" }
-                                                    GradientStop { position: 1.0; color: scResMA.pressed ? Qt.darker("#095f5d", 1.15) : "#095f5d" }
-                                                }
-                                                Text { anchors.centerIn: parent; text: "RESUME"; color: "#d4faff"; font.pixelSize: 14; font.bold: true }
-                                                MotionMouseArea { id: scResMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
+                                            CBtn {
+                                                lbl: "RESUME"
+                                                w: (parent.width - 6) / 2; h: 42
+                                                fontSize: 14
+                                                bg: root.cDashButton; bgEnd: root.cDashButtonEnd; bc: root.cDashButtonBorder; tc: root.cDashButtonText
+                                                onClicked: robotController.resumeRobot()
                                             }
                                         }
 
-                                        // Clear Error
-                                        Rectangle {
-                                            width: parent.width; height: 34; radius: 4
-                                            color: "transparent"; border.width: 0
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: scCeMA.pressed ? Qt.darker("#0a405c", 1.15) : "#0a405c" }
-                                                GradientStop { position: 1.0; color: scCeMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
-                                            }
-                                            Text { anchors.centerIn: parent; text: "CLEAR ERROR"; color: "#d4faff"; font.pixelSize: 12; font.bold: true }
-                                            MotionMouseArea { id: scCeMA; anchors.fill: parent; hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.clearError() }
+                                        CBtn {
+                                            lbl: "CLEAR ERROR"
+                                            w: parent.width; h: 34
+                                            fontSize: 12
+                                            bg: root.cDashButton; bgEnd: root.cDashButtonEnd; bc: root.cDashButtonBorder; tc: root.cDashButtonText
+                                            onClicked: robotController.clearError()
                                         }
 
-                                        // E-STOP (biggest button)
-                                        Rectangle {
-                                            width: parent.width; height: 50; radius: 5
-                                            color: "transparent"
-                                            border.color: "#ef4444"; border.width: 1
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: scEsMA.pressed ? Qt.darker("#da2525", 1.15) : "#da2525" }
-                                                GradientStop { position: 1.0; color: scEsMA.pressed ? Qt.darker("#ba1b1b", 1.15) : "#ba1b1b" }
-                                            }
-                                            Text { anchors.centerIn: parent; text: "EMERGENCY\nSTOP"; color: "#ffffff"; font.pixelSize: 14; font.bold: true; horizontalAlignment: Text.AlignHCenter }
-                                            MotionMouseArea { id: scEsMA; anchors.fill: parent; onClicked: { robotController.emergencyStop(true); cartridgeController.stopSystem() } }
+                                        CBtn {
+                                            lbl: "EMERGENCY\nSTOP"
+                                            w: parent.width; h: 50
+                                            fontSize: 14
+                                            bg: "#da2525"; bgEnd: "#ba1b1b"; bc: "#ef4444"; tc: root.cWhiteText
+                                            onClicked: { robotController.emergencyStop(true); cartridgeController.stopSystem() }
                                         }
                                     }
                                 }
@@ -2336,7 +2585,7 @@ import QtGraphicalEffects 1.15
                                 
                                 Text {
                                     text: "🔒 MANUAL CONTROL DISABLED\nChuyển sang MANUAL mode để JOG robot"
-                                    color: "#aaa"; font.pixelSize: 16; font.bold: true
+                                    color: root.cWhiteText; font.pixelSize: 16; font.bold: true
                                     horizontalAlignment: Text.AlignHCenter; lineHeight: 1.5
                                     anchors.horizontalCenter: parent.horizontalCenter
                                 }
@@ -2345,7 +2594,7 @@ import QtGraphicalEffects 1.15
 
                                 Text {
                                     text: "AUTO MODE ACTIONS"
-                                    color: "#5cf4f1"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 2
+                                    color: root.cCardTitle; font.pixelSize: 14; font.bold: true; font.letterSpacing: 2
                                     anchors.horizontalCenter: parent.horizontalCenter
                                 }
 
@@ -2359,15 +2608,20 @@ import QtGraphicalEffects 1.15
                                         // TRAY INPUT READY
                                         Rectangle {
                                             width: 160; height: 50; radius: 8
-                                            color: robotController.inReady ? "#1a5a3a" : (tiMA.pressed ? "#5a3a1a" : "#351a0a")
-                                            border.color: robotController.inReady ? "#22c55e" : (tiMA.pressed ? "#ffc16f" : "#ffaa4f")
-                                            border.width: tiMA.pressed ? 3 : 2
+                                            color: "transparent"
+                                            border.color: root.cDashButtonBorder
+                                            border.width: 1
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop { position: 0.0; color: (tiMA.pressed || robotController.inReady) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                GradientStop { position: 1.0; color: (tiMA.pressed || robotController.inReady) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                            }
                                             Behavior on color { ColorAnimation { duration: 100 } }
                                             
                                             Column {
                                                 anchors.centerIn: parent; spacing: 2
-                                                Text { text: "📥 TRAY INPUT READY"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: robotController.inReady ? "(ON)" : "(OFF)"; color: robotController.inReady ? "#6ee7a8" : "#d29252"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "📥 TRAY INPUT READY"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: robotController.inReady ? "(ON)" : "(OFF)"; color: root.cWhiteText; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
                                             }
                                             MotionMouseArea {
                                                 id: tiMA; anchors.fill: parent
@@ -2379,15 +2633,20 @@ import QtGraphicalEffects 1.15
                                         // TRAY OUTPUT READY
                                         Rectangle {
                                             width: 160; height: 50; radius: 8
-                                            color: robotController.outReady ? "#1a5a3a" : (toMA.pressed ? "#5a3a1a" : "#351a0a")
-                                            border.color: robotController.outReady ? "#22c55e" : (toMA.pressed ? "#ffc16f" : "#ffaa4f")
-                                            border.width: toMA.pressed ? 3 : 2
+                                            color: "transparent"
+                                            border.color: root.cDashButtonBorder
+                                            border.width: 1
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop { position: 0.0; color: (toMA.pressed || robotController.outReady) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                GradientStop { position: 1.0; color: (toMA.pressed || robotController.outReady) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                            }
                                             Behavior on color { ColorAnimation { duration: 100 } }
                                             
                                             Column {
                                                 anchors.centerIn: parent; spacing: 2
-                                                Text { text: "📤 TRAY OUTPUT READY"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: robotController.outReady ? "(ON)" : "(OFF)"; color: robotController.outReady ? "#6ee7a8" : "#d29252"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "📤 TRAY OUTPUT READY"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: robotController.outReady ? "(ON)" : "(OFF)"; color: root.cWhiteText; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
                                             }
                                             MotionMouseArea {
                                                 id: toMA; anchors.fill: parent
@@ -2404,15 +2663,20 @@ import QtGraphicalEffects 1.15
                                         // PICK INPUT
                                         Rectangle {
                                             width: 160; height: 50; radius: 8
-                                            color: piMA.pressed ? "#1a3a5a" : "#0a1a35"
-                                            border.color: piMA.pressed ? "#7085ff" : "#4f6cff"
-                                            border.width: piMA.pressed ? 3 : 2
+                                            color: "transparent"
+                                            border.color: root.cDashButtonBorder
+                                            border.width: 1
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop { position: 0.0; color: piMA.pressed ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                GradientStop { position: 1.0; color: piMA.pressed ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                            }
                                             Behavior on color { ColorAnimation { duration: 100 } }
                                             
                                             Column {
                                                 anchors.centerIn: parent; spacing: 2
-                                                Text { text: "↓ PICK INPUT"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: "(Load Khay -> Chamber)"; color: "#888"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "↓ PICK INPUT"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "(Load Khay -> Chamber)"; color: root.cWhiteText; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
                                             }
                                             MotionMouseArea {
                                                 id: piMA; anchors.fill: parent
@@ -2427,15 +2691,20 @@ import QtGraphicalEffects 1.15
                                         // PICK CHAMBER
                                         Rectangle {
                                             width: 160; height: 50; radius: 8
-                                            color: pcMA.pressed ? "#1a3a5a" : "#0a1a35"
-                                            border.color: pcMA.pressed ? "#7085ff" : "#4f6cff"
-                                            border.width: pcMA.pressed ? 3 : 2
+                                            color: "transparent"
+                                            border.color: root.cDashButtonBorder
+                                            border.width: 1
+                                            gradient: Gradient {
+                                                orientation: Gradient.Horizontal
+                                                GradientStop { position: 0.0; color: pcMA.pressed ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                GradientStop { position: 1.0; color: pcMA.pressed ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                            }
                                             Behavior on color { ColorAnimation { duration: 100 } }
                                             
                                             Column {
                                                 anchors.centerIn: parent; spacing: 2
-                                                Text { text: "⟳ PICK CHAMBER"; color: "#fff"; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                                Text { text: "(Chamber -> Output)"; color: "#888"; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "⟳ PICK CHAMBER"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                Text { text: "(Chamber -> Output)"; color: root.cWhiteText; font.pixelSize: 10; anchors.horizontalCenter: parent.horizontalCenter }
                                             }
                                             MotionMouseArea {
                                                 id: pcMA; anchors.fill: parent
@@ -2455,15 +2724,15 @@ import QtGraphicalEffects 1.15
                     Rectangle {
                         id: robotLogBar
                         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-                        height: 160; radius: 6; color: root.cBg2; border.color: root.cBorder
+                        height: 160; radius: 6; color: root.cDashPanel; border.color: root.cBorder
                         Column {
                             anchors { fill: parent; margins: 8 }
                             spacing: 4
                             RowLayout {
                                 width: parent.width; height: 18
-                                Text { text: "ROBOT LOG"; color: root.cAccent; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
+                                Text { text: "ROBOT LOG"; color: root.cCardTitle; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; padV:3; padH:8; fontSize: 14; bg:root.cCard; bc:root.cBorder; tc:root.cDim; onClicked: robotController.clearLog() }
+                                CBtn { lbl:"Clear"; padV:3; padH:8; fontSize:14; bg:root.cDashButton; bgEnd:root.cDashButtonEnd; bc:root.cDashButtonBorder; tc:root.cDashButtonText; onClicked:robotController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 22
@@ -2477,7 +2746,7 @@ import QtGraphicalEffects 1.15
                                         width: parent ? parent.width : 100
                                         text: "[" + modelData.time + "] " + modelData.msg
                                         font.pixelSize: 12; font.family: "monospace"
-                                        color: modelData.type==="err" ? root.cRed : modelData.type==="ok" ? root.cGreen : root.cCyan
+                                        color: root.cWhiteText
                                         wrapMode: Text.WordWrap
                                     }
                                 }
@@ -2529,17 +2798,17 @@ import QtGraphicalEffects 1.15
                                 width: parent.width; height: 34
                                 Text {
                                     text: "📋 CHỌN TOẠ ĐỘ ROBOT ĐÃ LƯU"
-                                    color: "#5cf4f1"; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.2
+                                    color: root.cWhiteText; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.2
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.left: parent.left
                                 }
                                 Rectangle {
                                     width: 34; height: 34; radius: 17
-                                    color: closeMA.pressed ? "#552222" : "#221111"
+                                    color: closeMA.pressed ? root.pressColor("#552222") : "#221111"
                                     border.color: "#ff4444"
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    Text { anchors.centerIn: parent; text: "✕"; color: "#ff4444"; font.pixelSize: 18; font.bold: true }
+                                    Text { anchors.centerIn: parent; text: "✕"; color: root.cWhiteText; font.pixelSize: 18; font.bold: true }
                                     MotionMouseArea {
                                         id: closeMA; anchors.fill: parent; onClicked: poseSelectorPopup.visible = false
                                     }
@@ -2560,7 +2829,7 @@ import QtGraphicalEffects 1.15
 
                                     delegate: Rectangle {
                                         width: poseListView.width; height: 72
-                                        color: itemMA.pressed ? "#0f2c3d" : (itemMA.containsMouse ? "#0a1a26" : "#0d1117")
+                                        color: itemMA.pressed ? root.pressColor("#0f2c3d") : (itemMA.containsMouse ? "#0a1a26" : "#0d1117")
                                         border.color: itemMA.containsMouse ? "#5cf4f1" : "#1a2a3a"; border.width: 1
                                         radius: 6
 
@@ -2576,7 +2845,7 @@ import QtGraphicalEffects 1.15
                                                 
                                                 Text {
                                                     text: modelData.name ? modelData.name : "Không có tên/ghi chú"
-                                                    color: "#f59e0b"; font.pixelSize: 22; font.bold: true
+                                                    color: root.cWhiteText; font.pixelSize: 22; font.bold: true
                                                     elide: Text.ElideRight
                                                 }
                                                 
@@ -2599,13 +2868,13 @@ import QtGraphicalEffects 1.15
                                                             spacing: 4
                                                             Text {
                                                                 text: model.modelData.label + ":"
-                                                                color: "#a1a1aa"
+                                                                color: root.cWhiteText
                                                                 font { pixelSize: 18; bold: true }
                                                                 anchors.verticalCenter: parent.verticalCenter
                                                             }
                                                             Text {
                                                                 text: model.modelData.val.toFixed(2)
-                                                                color: "#e4e4e7"
+                                                                color: root.cWhiteText
                                                                 font { pixelSize: 19; family: "monospace"; bold: true }
                                                                 anchors.verticalCenter: parent.verticalCenter
                                                             }
@@ -2618,13 +2887,13 @@ import QtGraphicalEffects 1.15
                                             Rectangle {
                                                 width: 88; height: 42; radius: 6
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                color: applyMA.pressed ? "#1a5a3a" : "#0a2a1a"
-                                                border.color: applyMA.pressed ? "#1ecb70" : "#168f52"
+                                                color: applyMA.pressed ? root.pressColor("#1a5a3a") : "#0a2a1a"
+                                                border.color: "#168f52"
                                                 
                                                 Text {
                                                     anchors.centerIn: parent
                                                     text: "APPLY"
-                                                    color: "#6ee7a8"
+                                                    color: root.cWhiteText
                                                     font.pixelSize: 16; font.bold: true; font.letterSpacing: 1
                                                 }
                                                 
@@ -2696,6 +2965,26 @@ import QtGraphicalEffects 1.15
         } // StackLayout
 
         // ════════════════════════════════════════════════════════════
+        // REUSABLE: FunctionLabel — section labels inside servo cards
+        // ════════════════════════════════════════════════════════════
+        component FunctionLabel: Item {
+            id: functionLabel
+
+            property string lbl: ""
+            property int fontSize: 14
+
+            Text {
+                anchors.centerIn: parent
+                text: functionLabel.lbl
+                color: root.cFunctionLabelText
+                font.pixelSize: functionLabel.fontSize
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+
+        // ════════════════════════════════════════════════════════════
         // REUSABLE: CBtn — matches HTML .btn
         // ════════════════════════════════════════════════════════════
         component CBtn: Rectangle {
@@ -2706,8 +2995,13 @@ import QtGraphicalEffects 1.15
             property color bgEnd: bg       // when bgEnd != bg, use horizontal gradient
             property color bc:    root.cBorder
             property color tc:    root.cText
+            property bool  glassStyle: stack.currentIndex === 0
+            property color renderedBg: glassStyle ? Qt.rgba(bg.r, bg.g, bg.b, 0.82) : bg
+            property color renderedBgEnd: glassStyle ? Qt.rgba(bgEnd.r, bgEnd.g, bgEnd.b, 0.82) : bgEnd
+            property color renderedBc: glassStyle ? Qt.rgba(bc.r, bc.g, bc.b, 0.72) : bc
             property bool  active: true
             property bool  clickEnabled: active
+            property real  inactiveOpacity: 0.4
             property int   padV: 6
             property int   padH: 12
             property int   fontSize: 16
@@ -2725,21 +3019,22 @@ import QtGraphicalEffects 1.15
             implicitWidth:  w > 0 ? w : cbrT.implicitWidth + padH * 2
             implicitHeight: h > 0 ? h : cbrT.implicitHeight + padV * 2
             radius: 4
-            color: bgEnd !== bg ? "transparent" : (
-                !active ? bg :
-                _pressed ? Qt.darker(bg, 2.15) :
-                isSelected ? Qt.darker(bg, 2.05) :
-                _hovered ? Qt.lighter(bg, 1.06) :
-                bg
+            property bool _heldVisual: _pressed || isSelected
+
+            color: renderedBgEnd !== renderedBg ? "transparent" : (
+                !active ? renderedBg :
+                _pressed ? Qt.darker(renderedBg, root.cPressDarken) :
+                isSelected ? Qt.darker(renderedBg, 2.05) :
+                _hovered ? Qt.lighter(renderedBg, 1.06) :
+                renderedBg
             )
             border.color: {
-                if (_pressed) return Qt.darker(bc, 1.32)
-                if (isSelected) return Qt.darker(bc, 1.25)
-                if (_hovered) return Qt.lighter(bc, 1.08)
-                return bc
+                if (isSelected) return Qt.darker(renderedBc, 1.25)
+                if (_hovered) return Qt.lighter(renderedBc, 1.08)
+                return renderedBc
             }
-            border.width: _pressed ? 2 : 1
-            opacity: active ? 1.0 : 0.4
+            border.width: 1
+            opacity: active ? 1.0 : inactiveOpacity
 
             Behavior on color        { ColorAnimation { duration: 100 } }
             Behavior on border.color { ColorAnimation { duration: 100 } }
@@ -2749,12 +3044,25 @@ import QtGraphicalEffects 1.15
             Rectangle {
                 anchors.fill: parent
                 radius: parent.radius
-                visible: cbr.bgEnd !== cbr.bg
+                visible: cbr.renderedBgEnd !== cbr.renderedBg
                 z: -1
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: cbr._pressed ? Qt.darker(cbr.bg, 1.28) : cbr.bg }
-                    GradientStop { position: 1.0; color: cbr._pressed ? Qt.darker(cbr.bgEnd, 1.28) : cbr.bgEnd }
+                    GradientStop { position: 0.0; color: cbr._heldVisual ? Qt.darker(cbr.renderedBg, root.cPressGradientDarken) : cbr.renderedBg }
+                    GradientStop { position: 1.0; color: cbr._heldVisual ? Qt.darker(cbr.renderedBgEnd, root.cPressGradientDarken) : cbr.renderedBgEnd }
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                visible: cbr.glassStyle
+                z: -0.4
+                gradient: Gradient {
+                    orientation: Gradient.Vertical
+                    GradientStop { position: 0.0; color: cbr._heldVisual ? Qt.rgba(0, 0, 0, 0.12) : Qt.rgba(1, 1, 1, 0.18) }
+                    GradientStop { position: 0.52; color: cbr._heldVisual ? Qt.rgba(0, 0, 0, 0.08) : Qt.rgba(1, 1, 1, 0.06) }
+                    GradientStop { position: 1.0; color: cbr._heldVisual ? Qt.rgba(0, 0, 0, 0.22) : Qt.rgba(0, 0, 0, 0.08) }
                 }
             }
 
@@ -2762,9 +3070,18 @@ import QtGraphicalEffects 1.15
             Rectangle {
                 anchors.fill: parent; anchors.margins: -2
                 radius: parent.radius + 2; color: "transparent"
-                border.color: cbr._pressed ? Qt.rgba(cbr.bc.r, cbr.bc.g, cbr.bc.b, 0.18) : "transparent"
+                border.color: "transparent"
                 border.width: 3; z: -1
                 Behavior on border.color { ColorAnimation { duration: 100 } }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: "#000000"
+                opacity: cbr._pressed ? 0.26 : (cbr.isSelected ? 0.18 : 0.0)
+                visible: opacity > 0
+                Behavior on opacity { NumberAnimation { duration: 90 } }
             }
 
             // Blink overlay khi blinking=true (UI hint từ node Python)
@@ -2797,7 +3114,7 @@ import QtGraphicalEffects 1.15
                 visible: cbr.isSelected
             }
 
-            Text { id: cbrT; anchors.centerIn: parent; text: cbr.lbl; color: cbr.isSelected ? "#e8fff3" : (cbr.active ? cbr.tc : root.cDim)
+            Text { id: cbrT; anchors.centerIn: parent; text: cbr.lbl; color: root.cWhiteText
                 font.pixelSize: cbr.fontSize; font.weight: Font.DemiBold; font.capitalization: Font.MixedCase
                 anchors.verticalCenterOffset: (cbr.isSelected || cbr._pressed) ? 2 : 0
                 Behavior on color { ColorAnimation { duration: 80 } }
@@ -2811,17 +3128,25 @@ import QtGraphicalEffects 1.15
                 width: cbr.fontSize * 1.5; height: cbr.fontSize * 1.5
                 fillMode: Image.PreserveAspectFit
                 smooth: true
+                visible: false
+            }
+
+            ColorOverlay {
+                anchors.fill: cbrImg
+                source: cbrImg
+                color: root.cWhiteText
                 visible: cbr.iconSource !== ""
             }
 
             MotionMouseArea { anchors.fill: parent; hoverEnabled: true
                 enabled: cbr.clickEnabled
-                hoverScale: 1.05
-                pressScale: 0.976
+                hoverScale: cbr.glassStyle ? 1.015 : 1.03
+                pressScale: 0.985
                 shadowEnabled: false
                 shimmerEnabled: cbr.active
                 shimmerWhilePressed: true
-                shimmerColor: "#55d4faff"
+                shimmerColor: cbr.glassStyle ? "#88ffffff" : "#55d4faff"
+                raiseOnHover: false
                 onClicked:       { if(cbr.clickEnabled) cbr.clicked() }
                 onPressed:       { cbr._pressed = true;  cbr.pressed() }
                 onReleased:      { cbr._pressed = false; cbr.released() }
@@ -2849,11 +3174,11 @@ import QtGraphicalEffects 1.15
                 anchors { fill: parent; margins: 8 }
                 spacing: 2
 
-                Text { text: cfgCard.title; color: root.cAccent; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.5 }
+                Text { text: cfgCard.title; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.5 }
 
                 Row { width: parent.width
                     Repeater { model: ["Row","Position (mm)","Mô tả"]
-                        delegate: Text { text: modelData; color: root.cDim; font.pixelSize: 11; font.bold: true
+                        delegate: Text { text: modelData; color: root.cWhiteText; font.pixelSize: 11; font.bold: true
                             width: index===0?46:index===1?94:parent.width-140
                             font.capitalization: Font.AllUppercase; font.letterSpacing: 1 } }
                 }
@@ -2872,12 +3197,12 @@ import QtGraphicalEffects 1.15
 
                         Row {
                             anchors.verticalCenter: parent.verticalCenter; spacing: 0
-                            Text { text: "R"+modelData; color: root.cCyan; font.pixelSize: 13; font.bold: true
+                            Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 13; font.bold: true
                                    width: 46; anchors.verticalCenter: parent.verticalCenter }
                             Rectangle { width: 94; height: 30; radius: 4; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
                                 TextInput { id: rowInput; anchors { fill: parent; margins: 4 }
                                     text: "0.0"
-                                    font.pixelSize: 14; font.family: "monospace"; color: root.cYellow
+                                    font.pixelSize: 14; font.family: "monospace"; color: root.cWhiteText
                                     horizontalAlignment: TextInput.AlignHCenter
                                     validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 2 }
                                     Connections {
@@ -2893,7 +3218,7 @@ import QtGraphicalEffects 1.15
                             Item { width: 4 }
                             Text {
                                 text: modelData===10?"Top":modelData===1?"Bot":""
-                                color: root.cDim; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter
+                                color: root.cWhiteText; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter
                             }
                         }
                         Rectangle { width: parent.width; height: 1; color: "#1e1e3a"; anchors.bottom: parent.bottom }
@@ -2941,14 +3266,14 @@ import QtGraphicalEffects 1.15
                     width: parent.width
                     spacing: 6
 
-                    Text { text: cfgZoneCard.title; color: root.cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
+                    Text { text: cfgZoneCard.title; color: root.cCardTitle; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
 
                     Row { width: parent.width; spacing: parent.width * 0.02
-                        Text { text: "Row"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.12; font.capitalization: Font.AllUppercase }
-                        Text { text: "Max"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
-                        Text { text: "Min"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
-                        Text { text: "Target"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
-                        Text { text: "Loc"; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; font.capitalization: Font.AllUppercase }
+                        Text { text: "Row"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.12; font.capitalization: Font.AllUppercase }
+                        Text { text: "Max"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
+                        Text { text: "Min"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
+                        Text { text: "Target"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
+                        Text { text: "Loc"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; font.capitalization: Font.AllUppercase }
                     }
                     Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
@@ -2969,19 +3294,19 @@ import QtGraphicalEffects 1.15
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width
                                 spacing: parent.width * 0.02
-                                Text { text: "R"+modelData; color: root.cCyan; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; anchors.verticalCenter: parent.verticalCenter }
 
                                 Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
-                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) minInp.text = String(tbl[String(modelData)][0]) } } } }
                                 Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
-                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) maxInp.text = String(tbl[String(modelData)][1]) } } } }
                                 Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
-                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cYellow; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) tgtInp.text = String(tbl[String(modelData)][2]) } } } }
 
-                                Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cDim; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; anchors.verticalCenter: parent.verticalCenter }
                             }
                             Rectangle { width: parent.width; height: 1; color: "#1e1e3a"; anchors.bottom: parent.bottom }
                         }
@@ -3104,7 +3429,7 @@ import QtGraphicalEffects 1.15
 
             Text {
                 text: "Đặt tốc độ JOG"
-                color: root.cText; font.pixelSize: 14; font.bold: true
+                color: root.cWhiteText; font.pixelSize: 14; font.bold: true
                 width: parent.width; horizontalAlignment: Text.AlignHCenter
             }
 
@@ -3115,11 +3440,11 @@ import QtGraphicalEffects 1.15
                     anchors.centerIn: parent; spacing: 6
                     Text {
                         text: velPopup.inputStr.length > 0 ? velPopup.inputStr : "–"
-                        color: root.cText; font.pixelSize: 26; font.bold: true
+                        color: root.cWhiteText; font.pixelSize: 26; font.bold: true
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Text {
-                        text: "mm/s"; color: root.cDim; font.pixelSize: 13
+                        text: "mm/s"; color: root.cWhiteText; font.pixelSize: 13
                         anchors.verticalCenter: parent.verticalCenter
                     }
                 }
@@ -3127,7 +3452,7 @@ import QtGraphicalEffects 1.15
 
             Text {
                 text: "max 80 mm/s — chỉ áp dụng JOG"
-                color: root.cOrange; font.pixelSize: 9
+                color: root.cWhiteText; font.pixelSize: 9
                 width: parent.width; horizontalAlignment: Text.AlignHCenter
             }
 
@@ -3145,7 +3470,7 @@ import QtGraphicalEffects 1.15
                             border.color: root.cBorder; border.width: 1
                             Text {
                                 anchors.centerIn: parent
-                                text: modelData; color: root.cText
+                                text: modelData; color: root.cWhiteText
                                 font.pixelSize: 20; font.bold: true
                             }
                             MotionMouseArea {
@@ -3160,7 +3485,7 @@ import QtGraphicalEffects 1.15
             Rectangle {
                 width: parent.width; height: 38; radius: 6
                 color: root.cBg; border.color: root.cBorder
-                Text { anchors.centerIn: parent; text: "Hủy"; color: root.cDim; font.pixelSize: 13 }
+                Text { anchors.centerIn: parent; text: "Hủy"; color: root.cWhiteText; font.pixelSize: 13 }
                 MotionMouseArea { anchors.fill: parent; onClicked: velPopup.close() }
             }
         }
@@ -3177,24 +3502,24 @@ import QtGraphicalEffects 1.15
             anchors.centerIn: parent; spacing: 30
             Text {
                 text: "⚠️ CẢNH BÁO CHƯA CÓ KHAY THÀNH PHẨM"
-                color: "#ffaa00"; font.pixelSize: 22; font.bold: true
+                color: root.cWhiteText; font.pixelSize: 22; font.bold: true
                 anchors.horizontalCenter: parent.horizontalCenter
             }
             Text {
                 text: "Hệ thống đang chờ khay Output lâu hơn 200s.\nĐã cấp khay chưa?"
-                color: "#ffffff"; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter
+                color: root.cWhiteText; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter
                 anchors.horizontalCenter: parent.horizontalCenter
             }
             Row {
                 spacing: 40; anchors.horizontalCenter: parent.horizontalCenter
                 Rectangle {
                     width: 130; height: 46; radius: 6; color: "#aa0000"
-                    Text { anchors.centerIn: parent; text: "NO"; color: "white"; font.bold: true; font.pixelSize: 16 }
+                    Text { anchors.centerIn: parent; text: "NO"; color: root.cWhiteText; font.bold: true; font.pixelSize: 16 }
                     MotionMouseArea { anchors.fill: parent; onClicked: { outTrayPopup.close(); outTrayTimer.restart(); } }
                 }
                 Rectangle {
                     width: 130; height: 46; radius: 6; color: "#00aa00"
-                    Text { anchors.centerIn: parent; text: "YES"; color: "white"; font.bold: true; font.pixelSize: 16 }
+                    Text { anchors.centerIn: parent; text: "YES"; color: root.cWhiteText; font.bold: true; font.pixelSize: 16 }
                     MotionMouseArea { anchors.fill: parent; onClicked: { robotController.simulateOutputTrayReady(); outTrayPopup.close(); } }
                 }
             }

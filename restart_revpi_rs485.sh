@@ -1,6 +1,8 @@
 #!/bin/bash
 # Restart rs485_bus_node on RevPi with correct DDS config
-REVPI=192.168.27.193
+# IP RevPi A đọc từ $REVPI_A_HOST (single source of truth: ros2_env.sh).
+source /home/pi/ros2_ws/ros2_env.sh
+REVPI="${REVPI_A_HOST:-192.168.27.197}"
 
 # Step 1: kill old
 ssh -o ConnectTimeout=5 pi@$REVPI 'kill -9 $(pgrep -f rs485_bus_node) 2>/dev/null; echo step1_done'

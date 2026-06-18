@@ -147,15 +147,10 @@ Item {
                     anchors.margins: 10
                     spacing: 10
 
-                    MotionButton {
+                    ScreenshotButton {
                         Layout.preferredWidth: 60; Layout.preferredHeight: 50
-                        onClicked: {
+                        onCaptureRequested: {
                             robotController.captureScreenshot()
-                        }
-                        background: Rectangle { radius: 6; color: "transparent"; border.color: "#1565c0"; border.width: 2 }
-                        contentItem: Text {
-                            text: "📷"; font.pixelSize: 22
-                            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                         }
                     }
 
@@ -222,7 +217,16 @@ Item {
                             }
                         }
                         background: Rectangle { radius: 6; color: "transparent"; border.color: "#134357"; border.width: 2 }
-                        contentItem: Image { source: "qrc:/icons/qml/icons/settings.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true }
+                        contentItem: Item {
+                            Image {
+                                anchors.centerIn: parent
+                                source: "icons/switch_camera.svg"
+                                width: 34
+                                height: 34
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
+                            }
+                        }
                     }
 
                     MotionButton {

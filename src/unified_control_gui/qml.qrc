@@ -7,6 +7,12 @@
     <file alias="CameraView.qml">qml/CameraView.qml</file>
     <file alias="MotionButton.qml">qml/MotionButton.qml</file>
     <file alias="MotionMouseArea.qml">qml/MotionMouseArea.qml</file>
+    <file alias="ScreenshotButton.qml">qml/ScreenshotButton.qml</file>
+    <file alias="icons/camera.svg">qml/icons/camera.svg</file>
+    <file alias="icons/switch_camera.svg">qml/icons/switch_camera.svg</file>
+    <file alias="icons/download.svg">qml/icons/download.svg</file>
+    <file alias="icons/navigation.svg">qml/icons/navigation.svg</file>
+    <file alias="icons/hard_drive_download.svg">qml/icons/hard_drive_download.svg</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
   <qresource prefix="/icons">
@@ -25,6 +31,7 @@
     <file>qml/icons/droplet.svg</file>
     <file>qml/icons/file_sliders.svg</file>
     <file>qml/icons/monitor_cloud.svg</file>
+    <file>qml/icons/camera.svg</file>
     <file>qml/icons/bg_servers.jpg</file>
   </qresource>
 </RCC>
