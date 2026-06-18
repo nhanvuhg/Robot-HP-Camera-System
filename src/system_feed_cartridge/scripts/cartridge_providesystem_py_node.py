@@ -2250,12 +2250,17 @@ class CartridgeSystem(Node):
         # do _s1_abort/_cb_stop set). Sau lệnh này GUI sẽ hiện "manual" không còn "jog".
         if requested == 'manual' and getattr(self, '_jog_mode', False):
             self._jog_mode = False
-            self._sync_mode_jog()
             self.get_logger().info("[MODE] User chọn MANUAL — thoát JOG sub-state")
+
+        # LUÔN echo current_mode về GUI sau mỗi lệnh chọn mode hợp lệ — kể cả khi
+        # mode KHÔNG đổi. GUI mặc định current_mode='idle' còn backend default
+        # 'manual', nên lần đầu bấm MANUAL (old==requested=='manual') trước đây
+        # không publish → GUI kẹt 'idle', mọi nút điều khiển bị khoá. Echo vô điều
+        # kiện sửa đúng việc này; _sync_mode_jog idempotent nên an toàn gọi mọi lần.
+        self._sync_mode_jog()
 
         if old != requested:
             self._guide_logged.clear()
-            self._sync_mode_jog()  # Publish mode ngay cho GUI hiển thị
 
             # Sync to robot node
             robot_msg = Int32()
