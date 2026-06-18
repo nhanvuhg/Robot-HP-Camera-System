@@ -704,12 +704,12 @@ Item {
                         Layout.fillWidth: true; columns: 2; rowSpacing: 5; columnSpacing: 5
                         Repeater {
                             model: [
-                                { lbl: "IN_READY",     displayLbl: "IN_READY",       icon: "",  bgStart: "#0e5274", bgEnd: "#072d42", bc: "#1e7090", tc: "#7bc8f0" },
-                                { lbl: "OUT_READY",    displayLbl: "OUT_READY",       icon: "",  bgStart: "#0e5274", bgEnd: "#072d42", bc: "#1e7090", tc: "#7bc8f0" },
-                                { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE",  icon: "↓", bgStart: "#3ba0cf", bgEnd: "#115c5c", bc: "#5bc8e8", tc: "#d4faff" },
-                                { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",    icon: "⟳", bgStart: "#3ba0cf", bgEnd: "#115c5c", bc: "#5bc8e8", tc: "#d4faff" },
-                                { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",    icon: "",  bgStart: "#0e5274", bgEnd: "#031e1e", bc: "#1e6a8a", tc: "#d4faff" },
-                                { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",      icon: "",  bgStart: "#0b4462", bgEnd: "#042027", bc: "#1a5070", tc: "#d4faff" }
+                                { lbl: "IN_READY",     displayLbl: "IN_READY",       icon: "icons/between_horizontal_end.svg",  bgStart: "#0e5274", bgEnd: "#072d42", bc: "#1e7090", tc: "#7bc8f0" },
+                                { lbl: "OUT_READY",    displayLbl: "OUT_READY",       icon: "icons/between_horizontal_start.svg",  bgStart: "#0e5274", bgEnd: "#072d42", bc: "#1e7090", tc: "#7bc8f0" },
+                                { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE",  icon: "icons/arrows_up_from_line.svg", bgStart: "#3ba0cf", bgEnd: "#115c5c", bc: "#5bc8e8", tc: "#d4faff" },
+                                { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",    icon: "icons/fold_horizontal.svg", bgStart: "#3ba0cf", bgEnd: "#115c5c", bc: "#5bc8e8", tc: "#d4faff" },
+                                { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",    icon: "icons/package.svg",  bgStart: "#0e5274", bgEnd: "#031e1e", bc: "#1e6a8a", tc: "#d4faff" },
+                                { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",      icon: "icons/package_x.svg",  bgStart: "#0b4462", bgEnd: "#042027", bc: "#1a5070", tc: "#d4faff" }
                             ]
                             delegate: Rectangle {
                                 required property var modelData
@@ -726,27 +726,62 @@ Item {
                                 }
                                 border.color: modelData.bc
                                 border.width: 1
-                                Row { anchors.centerIn: parent; spacing: 6
-                                    Rectangle {
-                                        width: 10; height: 10; radius: 5
-                                        color: parent.parent.isActive ? "#5cf4f1" : "#2a3a4a"
-                                        border.width: 0
-                                        visible: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        Behavior on color { ColorAnimation { duration: 200 } }
+                                Item {
+                                    anchors.fill: parent
+
+                                    Item {
+                                        id: stateIconHost
+                                        width: 38; height: 36
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        anchors.top: parent.top
+                                        anchors.topMargin: 1
+
+                                        Image {
+                                            source: modelData.icon.indexOf(".svg") !== -1 ? modelData.icon : ""
+                                            visible: source.toString() !== ""
+                                            width: 34; height: 34
+                                            sourceSize.width: 80
+                                            sourceSize.height: 80
+                                            fillMode: Image.PreserveAspectFit
+                                            smooth: true
+                                            mipmap: true
+                                            antialiasing: true
+                                            anchors.centerIn: parent
+                                        }
+
+                                        Text {
+                                            text: modelData.icon.indexOf(".svg") === -1 ? modelData.icon : ""
+                                            visible: text !== ""
+                                            color: (parent.parent.parent.isReadyBtn && parent.parent.parent.isActive) ? "#090d16" : modelData.tc
+                                            font.pixelSize: 22
+                                            anchors.centerIn: parent
+                                        }
+
                                     }
-                                    Text {
-                                        text: modelData.icon
-                                        color: (parent.parent.isReadyBtn && parent.parent.isActive) ? "#090d16" : modelData.tc
-                                        font.pixelSize: 22
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-                                    Text {
-                                        text: modelData.displayLbl
-                                        color: (parent.parent.isReadyBtn && parent.parent.isActive) ? "#090d16" : modelData.tc
-                                        font.pixelSize: 20
-                                        font.bold: true
-                                        anchors.verticalCenter: parent.verticalCenter
+
+                                    Row {
+                                        spacing: 6
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        anchors.top: stateIconHost.bottom
+                                        anchors.bottom: parent.bottom
+
+                                        Rectangle {
+                                            width: 9; height: 9; radius: 4.5
+                                            color: parent.parent.parent.isActive ? "#5cf4f1" : "#2a3a4a"
+                                            border.color: modelData.bc
+                                            border.width: 1
+                                            visible: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            Behavior on color { ColorAnimation { duration: 200 } }
+                                        }
+
+                                        Text {
+                                            text: modelData.displayLbl
+                                            color: (parent.parent.parent.isReadyBtn && parent.parent.parent.isActive) ? "#090d16" : modelData.tc
+                                            font.pixelSize: 13
+                                            font.bold: true
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
                                     }
                                 }
                                 MotionMouseArea { id: ma; anchors.fill: parent; onClicked: {

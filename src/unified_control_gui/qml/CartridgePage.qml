@@ -93,6 +93,13 @@ import QtGraphicalEffects 1.15
         readonly property color cFieldBorder: "#67e8f9"
         readonly property color cDashPanel: Qt.rgba(0.06, 0.10, 0.16, 0.34)
         readonly property color cDashCard: cDashPanel
+        readonly property color cControlPanel: Qt.rgba(0.035, 0.09, 0.14, 0.78)
+        readonly property color cControlCard: Qt.rgba(0.025, 0.075, 0.12, 0.88)
+        readonly property color cControlBorder: Qt.rgba(0.36, 0.90, 0.94, 0.38)
+        readonly property color cModeSelectedTop: "#17465d"
+        readonly property color cModeSelectedMid: "#0c3042"
+        readonly property color cModeSelectedBottom: "#061d2a"
+        readonly property color cModeSelectedBorder: "#58c6d0"
         readonly property color cDashCardInner: Qt.rgba(cUnifiedBtn.r, cUnifiedBtn.g, cUnifiedBtn.b, 0.82)
         readonly property color cDashCardField: Qt.rgba(cUnifiedBtn.r, cUnifiedBtn.g, cUnifiedBtn.b, 0.82)
         readonly property color cDashCardBorder: "#7f8b9a"
@@ -826,8 +833,8 @@ import QtGraphicalEffects 1.15
                             Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.166
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            color: root.cDashPanel; border.color: root.cBorder; radius: 6
-                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
+                            color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
+                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cControlBorder }
 
                             ColumnLayout { id: modeSelCol
                                 anchors.fill: parent; anchors.margins: 8
@@ -858,8 +865,8 @@ import QtGraphicalEffects 1.15
                                         height: (parent.height - 6) / 2
                                         radius: 5
                                         property bool isModeSelected: cartridgeController.currentMode === "auto"
-                                        color: (autoModeMA.pressed || isModeSelected) ? root.pressColor(root.cTabSelectedMid) : "transparent"
-                                        border.color: isModeSelected ? root.cTabSelectedBorder : "#b9dfe1"
+                                        color: "transparent"
+                                        border.color: isModeSelected ? root.cModeSelectedBorder : "#b9dfe1"
                                         border.width: 1
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
@@ -869,9 +876,9 @@ import QtGraphicalEffects 1.15
                                             visible: parent.isModeSelected || autoModeMA.pressed
                                             gradient: Gradient {
                                                 orientation: Gradient.Vertical
-                                                GradientStop { position: 0.0; color: (autoModeMA.pressed || autoModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedTop) : root.cTabSelectedTop }
-                                                GradientStop { position: 0.54; color: (autoModeMA.pressed || autoModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedMid) : root.cTabSelectedMid }
-                                                GradientStop { position: 1.0; color: (autoModeMA.pressed || autoModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedBottom) : root.cTabSelectedBottom }
+                                                GradientStop { position: 0.0; color: autoModeMA.pressed ? root.pressGradientColor(root.cModeSelectedTop) : root.cModeSelectedTop }
+                                                GradientStop { position: 0.54; color: autoModeMA.pressed ? root.pressGradientColor(root.cModeSelectedMid) : root.cModeSelectedMid }
+                                                GradientStop { position: 1.0; color: autoModeMA.pressed ? root.pressGradientColor(root.cModeSelectedBottom) : root.cModeSelectedBottom }
                                             }
                                         }
                                         MotionMouseArea {
@@ -902,8 +909,8 @@ import QtGraphicalEffects 1.15
                                         height: (parent.height - 6) / 2
                                         radius: 5
                                         property bool isModeSelected: cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog"
-                                        color: (manualModeMA.pressed || isModeSelected) ? root.pressColor(root.cTabSelectedMid) : "transparent"
-                                        border.color: isModeSelected ? root.cTabSelectedBorder : "#024649"
+                                        color: "transparent"
+                                        border.color: isModeSelected ? root.cModeSelectedBorder : "#024649"
                                         border.width: 1
                                         Behavior on color { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
@@ -913,9 +920,9 @@ import QtGraphicalEffects 1.15
                                             visible: parent.isModeSelected || manualModeMA.pressed
                                             gradient: Gradient {
                                                 orientation: Gradient.Vertical
-                                                GradientStop { position: 0.0; color: (manualModeMA.pressed || manualModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedTop) : root.cTabSelectedTop }
-                                                GradientStop { position: 0.54; color: (manualModeMA.pressed || manualModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedMid) : root.cTabSelectedMid }
-                                                GradientStop { position: 1.0; color: (manualModeMA.pressed || manualModeRect.isModeSelected) ? root.pressGradientColor(root.cTabSelectedBottom) : root.cTabSelectedBottom }
+                                                GradientStop { position: 0.0; color: manualModeMA.pressed ? root.pressGradientColor(root.cModeSelectedTop) : root.cModeSelectedTop }
+                                                GradientStop { position: 0.54; color: manualModeMA.pressed ? root.pressGradientColor(root.cModeSelectedMid) : root.cModeSelectedMid }
+                                                GradientStop { position: 1.0; color: manualModeMA.pressed ? root.pressGradientColor(root.cModeSelectedBottom) : root.cModeSelectedBottom }
                                             }
                                         }
                                         MotionMouseArea {
@@ -947,8 +954,8 @@ import QtGraphicalEffects 1.15
                             Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.208
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            color: root.cDashPanel; border.color: root.cBorder; radius: 6
-                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
+                            color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
+                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cControlBorder }
 
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
@@ -995,8 +1002,8 @@ import QtGraphicalEffects 1.15
                             Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.313
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            color: root.cDashPanel; border.color: root.cBorder; radius: 6
-                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
+                            color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
+                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cControlBorder }
 
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
@@ -1065,8 +1072,8 @@ import QtGraphicalEffects 1.15
                             Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.313
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            color: root.cDashPanel; border.color: root.cBorder; radius: 6
-                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
+                            color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
+                            HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cControlBorder }
 
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
@@ -1103,8 +1110,8 @@ import QtGraphicalEffects 1.15
                         y: topCardsRow.height + root.gap
                         width: parent.width - root.sensorW - root.gap
                         height: root.topH - topCardsRow.height - root.gap
-                        color: root.cDashPanel; border.color: root.cBorder; radius: 6; clip: true
-                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
+                        color: root.cControlPanel; border.color: root.cControlBorder; radius: 6; clip: true
+                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cControlBorder }
 
                         Column {
                             anchors.fill: parent
@@ -1162,7 +1169,7 @@ import QtGraphicalEffects 1.15
                                         }
                                         width: Math.floor((servoRow.width - 4*root.gap) / 5)
                                         height: servoRow.height
-                                        color: root.cDashCard; border.color: root.cDashCardBorder; radius: 4; clip: true
+                                        color: root.cControlCard; border.color: root.cDashCardBorder; radius: 4; clip: true
                                         HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cDashCardBorderHover : root.cDashCardBorder }
 
                                         Rectangle {
@@ -1405,8 +1412,8 @@ import QtGraphicalEffects 1.15
                         x: 0; y: root.topH + root.gap
                         width: parent.width - root.sensorW - root.gap
                         height: root.logH
-                        color: root.cDashPanel; border.color: root.cBorder; radius: 6
-                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
+                        color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
+                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cControlBorder }
 
                         Column {
                             anchors.fill: parent
@@ -1451,8 +1458,8 @@ import QtGraphicalEffects 1.15
                     Rectangle {
                         x: parent.width - root.sensorW
                         y: 0; width: root.sensorW; height: root.outerH
-                        color: root.cDashPanel; border.color: root.cBorder; radius: 6
-                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
+                        color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
+                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cControlBorder }
 
                         ColumnLayout {
                             anchors.fill: parent
@@ -1841,7 +1848,9 @@ import QtGraphicalEffects 1.15
                     Rectangle {
                         id: modeToggle
                         anchors { top: parent.top; left: parent.left; right: parent.right }
-                        height: 32; radius: 5
+                        height: page3Root.manualEnabled ? 0 : 32
+                        visible: !page3Root.manualEnabled
+                        radius: 5
                         color: root.cDashPanel
                         border.color: page3Root.manualEnabled ? root.cDashButtonBorder : root.cDashCardBorder
                         border.width: 1
@@ -1860,7 +1869,7 @@ import QtGraphicalEffects 1.15
                                 font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter
                             }
                             Text {
-                                text: page3Root.manualEnabled ? "MANUAL MODE" : "LOCKED — " + page3Root.currentMode.toUpperCase() + " MODE"
+                                text: "LOCKED — " + page3Root.currentMode.toUpperCase() + " MODE"
                                 color: root.cWhiteText
                                 font.pixelSize: 12; font.bold: true; font.letterSpacing: 1
                                 anchors.verticalCenter: parent.verticalCenter
@@ -1871,7 +1880,14 @@ import QtGraphicalEffects 1.15
                     // ════════════════ CONTENT AREA ════════════════════════
                     Item {
                         id: contentArea
-                        anchors { top: modeToggle.bottom; topMargin: 8; left: parent.left; right: parent.right; bottom: robotLogBar.top; bottomMargin: 4 }
+                        anchors {
+                            top: modeToggle.bottom
+                            topMargin: page3Root.manualEnabled ? 0 : 8
+                            left: parent.left
+                            right: parent.right
+                            bottom: robotLogBar.top
+                            bottomMargin: 4
+                        }
 
 
                         // ──────────── MANUAL MODE: JOG ────────────────────
@@ -1992,8 +2008,12 @@ import QtGraphicalEffects 1.15
                                                     Image {
                                                         source: "icons/hard_drive_download.svg"
                                                         width: 20; height: 20
+                                                        sourceSize.width: 80
+                                                        sourceSize.height: 80
                                                         fillMode: Image.PreserveAspectFit
                                                         smooth: true
+                                                        mipmap: true
+                                                        antialiasing: true
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                     Text {
@@ -2145,8 +2165,12 @@ import QtGraphicalEffects 1.15
                                                     Image {
                                                         source: "icons/hard_drive_download.svg"
                                                         width: 20; height: 20
+                                                        sourceSize.width: 80
+                                                        sourceSize.height: 80
                                                         fillMode: Image.PreserveAspectFit
                                                         smooth: true
+                                                        mipmap: true
+                                                        antialiasing: true
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                     Text {
@@ -2179,10 +2203,14 @@ import QtGraphicalEffects 1.15
                                                     anchors.centerIn: parent
                                                     spacing: 6
                                                     Image {
-                                                        source: "icons/navigation.svg"
+                                                        source: "icons/send.svg"
                                                         width: 20; height: 20
+                                                        sourceSize.width: 80
+                                                        sourceSize.height: 80
                                                         fillMode: Image.PreserveAspectFit
                                                         smooth: true
+                                                        mipmap: true
+                                                        antialiasing: true
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                     Text {
@@ -2327,10 +2355,27 @@ import QtGraphicalEffects 1.15
                                             }
                                             Component.onCompleted: refreshPoses()
 
-                                            Text {
+                                            Row {
                                                 anchors { left: parent.left; leftMargin: 8; verticalCenter: parent.verticalCenter }
-                                                text: "TOẠ ĐỘ ĐÃ LƯU (" + parent.savedPoses.length + ")"
-                                                color: root.cWhiteText; font.pixelSize: 14; font.bold: true
+                                                spacing: 7
+
+                                                Image {
+                                                    source: "icons/database_search.svg"
+                                                    width: 20; height: 20
+                                                    sourceSize.width: 80
+                                                    sourceSize.height: 80
+                                                    fillMode: Image.PreserveAspectFit
+                                                    smooth: true
+                                                    mipmap: true
+                                                    antialiasing: true
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                }
+
+                                                Text {
+                                                    text: " SAVED POSITIONS (" + savedPosesLoaderRect.savedPoses.length + ")"
+                                                    color: root.cWhiteText; font.pixelSize: 14; font.bold: true
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                }
                                             }
 
                                             Text {
@@ -2996,9 +3041,9 @@ import QtGraphicalEffects 1.15
             property color bc:    root.cBorder
             property color tc:    root.cText
             property bool  glassStyle: stack.currentIndex === 0
-            property color renderedBg: glassStyle ? Qt.rgba(bg.r, bg.g, bg.b, 0.82) : bg
-            property color renderedBgEnd: glassStyle ? Qt.rgba(bgEnd.r, bgEnd.g, bgEnd.b, 0.82) : bgEnd
-            property color renderedBc: glassStyle ? Qt.rgba(bc.r, bc.g, bc.b, 0.72) : bc
+            property color renderedBg: glassStyle ? Qt.rgba(bg.r, bg.g, bg.b, 0.96) : bg
+            property color renderedBgEnd: glassStyle ? Qt.rgba(bgEnd.r, bgEnd.g, bgEnd.b, 0.96) : bgEnd
+            property color renderedBc: glassStyle ? Qt.rgba(bc.r, bc.g, bc.b, 0.90) : bc
             property bool  active: true
             property bool  clickEnabled: active
             property real  inactiveOpacity: 0.4

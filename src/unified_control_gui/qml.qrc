@@ -12,7 +12,18 @@
     <file alias="icons/switch_camera.svg">qml/icons/switch_camera.svg</file>
     <file alias="icons/download.svg">qml/icons/download.svg</file>
     <file alias="icons/navigation.svg">qml/icons/navigation.svg</file>
+    <file alias="icons/send.svg">qml/icons/send.svg</file>
     <file alias="icons/hard_drive_download.svg">qml/icons/hard_drive_download.svg</file>
+    <file alias="icons/database_search.svg">qml/icons/database_search.svg</file>
+    <file alias="icons/package.svg">qml/icons/package.svg</file>
+    <file alias="icons/package_x.svg">qml/icons/package_x.svg</file>
+    <file alias="icons/arrows_up_from_line.svg">qml/icons/arrows_up_from_line.svg</file>
+    <file alias="icons/fold_horizontal.svg">qml/icons/fold_horizontal.svg</file>
+    <file alias="icons/between_horizontal_end.svg">qml/icons/between_horizontal_end.svg</file>
+    <file alias="icons/between_horizontal_start.svg">qml/icons/between_horizontal_start.svg</file>
+    <file alias="icons/brush_cleaning.svg">qml/icons/brush_cleaning.svg</file>
+    <file alias="icons/folder_search.svg">qml/icons/folder_search.svg</file>
+    <file alias="icons/weight_tilde.svg">qml/icons/weight_tilde.svg</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
   <qresource prefix="/icons">
