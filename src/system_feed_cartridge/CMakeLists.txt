@@ -19,10 +19,6 @@ install(PROGRAMS scripts/cartridge_providesystem_py_node.py
   RENAME cartridge_providesystem_py
 )
 
-install(PROGRAMS scripts/cartridge_gui.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
 install(PROGRAMS scripts/config.py
   DESTINATION lib/${PROJECT_NAME}
 )
