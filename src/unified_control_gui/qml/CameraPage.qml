@@ -28,6 +28,26 @@ Item {
     readonly property color cWarnBg:      Qt.rgba(1.0, 0.65, 0.15, 0.15)
     readonly property color cBad:         "#ff5252"
     readonly property color cBadBg:       Qt.rgba(1.0, 0.32, 0.32, 0.15)
+    // CameraPage liquid-glass action palette.
+    readonly property color cBtnBaseStart:      "#123f58"
+    readonly property color cBtnBaseEnd:        "#071f31"
+    readonly property color cBtnBaseBorder:     "#245f7a"
+    readonly property color cBtnBaseText:       "#d6f3ff"
+    readonly property color cBtnPrimaryStart:   "#118d88"
+    readonly property color cBtnPrimaryEnd:     "#07595f"
+    readonly property color cBtnPrimaryBorder:  "#4bd6cf"
+    readonly property color cBtnActionStart:    "#278bb3"
+    readonly property color cBtnActionEnd:      "#0b5366"
+    readonly property color cBtnActionBorder:   "#62cee7"
+    readonly property color cBtnDangerStart:    "#922b34"
+    readonly property color cBtnDangerEnd:      "#4b1018"
+    readonly property color cBtnDangerBorder:   "#e25762"
+    readonly property color cBtnEmergencyStart: "#d33a43"
+    readonly property color cBtnEmergencyEnd:   "#8c111c"
+    readonly property color cBtnEmergencyBorder:"#ff6972"
+    readonly property color cBtnWarningStart:   "#a96716"
+    readonly property color cBtnWarningEnd:     "#603407"
+    readonly property color cBtnWarningBorder:  "#e4a33b"
 
     function classifyPressure(val, lowT, highT, limitT) {
         if (val < lowT) return "low";
@@ -602,8 +622,8 @@ Item {
                                             background: Rectangle {
                                                 radius: height / 2
                                                 antialiasing: true
-                                                color: modeOption.isSelected ? "transparent" : (modeOption.hovered ? "#14334a" : "transparent")
-                                                border.color: modeOption.isSelected ? "#63dce7" : (modeOption.hovered ? "#245c75" : "transparent")
+                                                color: modeOption.isSelected ? "transparent" : (modeOption.hovered ? Qt.rgba(0.15, 0.55, 0.70, 0.12) : "transparent")
+                                                border.color: modeOption.isSelected ? cBtnPrimaryBorder : (modeOption.hovered ? cBtnBaseBorder : "transparent")
                                                 border.width: modeOption.isSelected || (modeOption.hovered && !modeOption.isSelected) ? 1 : 0
                                                 gradient: modeOption.isSelected ? selectedModeGradient : null
                                                 Behavior on color { ColorAnimation { duration: 140 } }
@@ -612,8 +632,8 @@ Item {
                                                 Gradient {
                                                     id: selectedModeGradient
                                                     orientation: Gradient.Horizontal
-                                                    GradientStop { position: 0.0; color: "#2bb7c2" }
-                                                    GradientStop { position: 1.0; color: "#0f7d93" }
+                                                    GradientStop { position: 0.0; color: cBtnPrimaryStart }
+                                                    GradientStop { position: 1.0; color: cBtnPrimaryEnd }
                                                 }
                                             }
 
@@ -669,11 +689,11 @@ Item {
                                 property bool canSelect: !cameraPageRoot.rowLocked && cameraPageRoot.ctrlMode === "auto"
                                 Layout.fillWidth: true; height: 32; radius: 5
                                 color: aiMode
-                                       ? (isAiDetected ? Qt.rgba(0.36, 0.96, 0.95, 0.22) : "transparent")
-                                       : (isActive ? "#0a3b42" : "#0d2538")
+                                       ? (isAiDetected ? Qt.rgba(0.29, 0.84, 0.81, 0.20) : Qt.rgba(0.03, 0.11, 0.18, 0.50))
+                                       : (isActive ? Qt.rgba(0.07, 0.55, 0.53, 0.28) : Qt.rgba(0.03, 0.11, 0.18, 0.68))
                                 border.color: aiMode
-                                              ? (isAiDetected ? "#5cf4f1" : "#134357")
-                                              : (isActive ? "#5cf4f1" : "#134357")
+                                              ? (isAiDetected ? cBtnPrimaryBorder : cBtnBaseBorder)
+                                              : (isActive ? cBtnPrimaryBorder : cBtnBaseBorder)
                                 border.width: aiMode
                                               ? (isAiDetected ? 2 : 1)
                                               : (isActive ? 2 : 1)
@@ -718,11 +738,11 @@ Item {
                                 property bool canSelect: cameraPageRoot.ctrlMode === "auto"
                                 Layout.fillWidth: true; height: 32; radius: 5
                                 color: aiMode
-                                       ? (isActive ? "#0b351e" : (isReady ? "#0d2c1d" : "#0d2538"))
-                                       : (isActive ? "#073238" : "#0d2538")
+                                       ? (isActive ? Qt.rgba(0.06, 0.50, 0.34, 0.28) : (isReady ? Qt.rgba(0.04, 0.34, 0.25, 0.24) : Qt.rgba(0.03, 0.11, 0.18, 0.68)))
+                                       : (isActive ? Qt.rgba(0.07, 0.55, 0.53, 0.28) : Qt.rgba(0.03, 0.11, 0.18, 0.68))
                                 border.color: aiMode
-                                              ? (isActive ? "#0fa36f" : (isReady ? "#0fa36f" : "#134357"))
-                                              : (isActive ? "#22a6b8" : "#134357")
+                                              ? (isActive ? "#39d99a" : (isReady ? "#27a879" : cBtnBaseBorder))
+                                              : (isActive ? cBtnPrimaryBorder : cBtnBaseBorder)
                                 border.width: aiMode
                                               ? (isActive ? 3 : (isReady ? 2 : 1))
                                               : (isActive ? 2 : 1)
@@ -732,7 +752,7 @@ Item {
                                 Rectangle {
                                     visible: isActive
                                     anchors { top: parent.top; left: parent.left; right: parent.right }
-                                    height: 3; radius: 2; color: aiMode ? "#0fa36f" : "#22a6b8"
+                                    height: 3; radius: 2; color: aiMode ? "#39d99a" : cBtnPrimaryBorder
                                 }
                                 Text {
                                     anchors.centerIn: parent; text: "O" + sn
@@ -762,19 +782,19 @@ Item {
                         Layout.fillWidth: true; columns: 2; rowSpacing: 5; columnSpacing: 5
                         Repeater {
                             model: [
-                                { lbl: "IN_READY",     displayLbl: "IN_READY",       icon: "icons/between_horizontal_end.svg",  bgStart: "#0e5274", bgEnd: "#072d42", bc: "#1e7090", tc: "#7bc8f0" },
-                                { lbl: "OUT_READY",    displayLbl: "OUT_READY",       icon: "icons/between_horizontal_start.svg",  bgStart: "#0e5274", bgEnd: "#072d42", bc: "#1e7090", tc: "#7bc8f0" },
-                                { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE",  icon: "icons/arrows_up_from_line.svg", bgStart: "#3ba0cf", bgEnd: "#115c5c", bc: "#5bc8e8", tc: "#d4faff" },
-                                { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",    icon: "icons/fold_horizontal.svg", bgStart: "#3ba0cf", bgEnd: "#115c5c", bc: "#5bc8e8", tc: "#d4faff" },
-                                { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",    icon: "icons/package.svg",  bgStart: "#0e5274", bgEnd: "#031e1e", bc: "#1e6a8a", tc: "#d4faff" },
-                                { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",      icon: "icons/package_x.svg",  bgStart: "#0b4462", bgEnd: "#042027", bc: "#1a5070", tc: "#d4faff" }
+                                { lbl: "IN_READY",     displayLbl: "IN_READY",       icon: "icons/between_horizontal_end.svg",   bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
+                                { lbl: "OUT_READY",    displayLbl: "OUT_READY",      icon: "icons/between_horizontal_start.svg", bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
+                                { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE", icon: "icons/arrows_up_from_line.svg",      bgStart: cBtnActionStart,  bgEnd: cBtnActionEnd,  bc: cBtnActionBorder,  tc: "#ffffff" },
+                                { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",   icon: "icons/fold_horizontal.svg",         bgStart: cBtnActionStart,  bgEnd: cBtnActionEnd,  bc: cBtnActionBorder,  tc: "#ffffff" },
+                                { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",   icon: "icons/package.svg",                 bgStart: cBtnPrimaryStart, bgEnd: cBtnPrimaryEnd, bc: cBtnPrimaryBorder, tc: "#ffffff" },
+                                { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",     icon: "icons/package_x.svg",               bgStart: cBtnWarningStart, bgEnd: cBtnWarningEnd, bc: cBtnWarningBorder, tc: "#fff2d3" }
                             ]
                             delegate: Rectangle {
                                 required property var modelData
                                 property bool isActive: (modelData.lbl === "IN_READY" && robotController.inReady) || (modelData.lbl === "OUT_READY" && robotController.outReady)
                                 readonly property bool isReadyBtn: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
-                                property color gStart: (isReadyBtn && isActive) ? "#1a5070" : modelData.bgStart
-                                property color gEnd:   (isReadyBtn && isActive) ? "#0a3040" : modelData.bgEnd
+                                property color gStart: (isReadyBtn && isActive) ? cBtnPrimaryStart : modelData.bgStart
+                                property color gEnd:   (isReadyBtn && isActive) ? cBtnPrimaryEnd : modelData.bgEnd
                                 Layout.fillWidth: true; height: 64; radius: 5
                                 color: "transparent"
                                 gradient: Gradient {
@@ -784,6 +804,13 @@ Item {
                                 }
                                 border.color: modelData.bc
                                 border.width: 1
+                                Rectangle {
+                                    anchors { top: parent.top; left: parent.left; right: parent.right; margins: 1 }
+                                    height: 1
+                                    radius: 1
+                                    color: "#55ffffff"
+                                    opacity: 0.55
+                                }
                                 Item {
                                     anchors.fill: parent
 
@@ -859,11 +886,11 @@ Item {
 
                     Text { text: "SYSTEM CONTROL"; color: "#5cf4f1"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
 
-                    Rectangle { Layout.fillWidth: true; height: 56; radius: 5; color: "transparent"; border.color: "#ef4444"; border.width: 1
+                    Rectangle { Layout.fillWidth: true; height: 56; radius: 5; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 1
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker("#da2525", 1.15) : "#da2525" }
-                            GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker("#ba1b1b", 1.15) : "#ba1b1b" }
+                            GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.15) : cBtnEmergencyStart }
+                            GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker(cBtnEmergencyEnd, 1.15) : cBtnEmergencyEnd }
                         }
                         Text { anchors.centerIn: parent; text: "⛔ EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
                         MotionMouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.emergencyStop(true) } }
@@ -872,11 +899,11 @@ Item {
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 5; columnSpacing: 5
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#6a2222"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnDangerBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker("#8a2020", 1.15) : "#8a2020" }
-                                GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker("#4e0c0c", 1.15) : "#4e0c0c" }
+                                GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker(cBtnDangerStart, 1.15) : cBtnDangerStart }
+                                GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker(cBtnDangerEnd, 1.15) : cBtnDangerEnd }
                             }
                             Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
                             MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: {
@@ -884,21 +911,21 @@ Item {
                             } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
-                                GradientStop { position: 1.0; color: enMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
+                                GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
+                                GradientStop { position: 1.0; color: enMA.pressed ? Qt.darker(cBtnBaseEnd, 1.15) : cBtnBaseEnd }
                             }
                             Text { anchors.centerIn: parent; text: "ENABLE"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
                             MotionMouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#0d6060"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnPrimaryBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: startMA.pressed ? Qt.darker("#0c7876", 1.15) : "#0c7876" }
-                                GradientStop { position: 1.0; color: startMA.pressed ? Qt.darker("#085f5d", 1.15) : "#085f5d" }
+                                GradientStop { position: 0.0; color: startMA.pressed ? Qt.darker(cBtnPrimaryStart, 1.15) : cBtnPrimaryStart }
+                                GradientStop { position: 1.0; color: startMA.pressed ? Qt.darker(cBtnPrimaryEnd, 1.15) : cBtnPrimaryEnd }
                             }
                             Row {
                                 anchors.centerIn: parent
@@ -939,21 +966,21 @@ Item {
                             } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: pauseMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
-                                GradientStop { position: 1.0; color: pauseMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
+                                GradientStop { position: 0.0; color: pauseMA.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
+                                GradientStop { position: 1.0; color: pauseMA.pressed ? Qt.darker(cBtnBaseEnd, 1.15) : cBtnBaseEnd }
                             }
                             Text { anchors.centerIn: parent; text: "PAUSE"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
                             MotionMouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: resMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
-                                GradientStop { position: 1.0; color: resMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
+                                GradientStop { position: 0.0; color: resMA.pressed ? Qt.darker(cBtnActionStart, 1.15) : cBtnActionStart }
+                                GradientStop { position: 1.0; color: resMA.pressed ? Qt.darker(cBtnActionEnd, 1.15) : cBtnActionEnd }
                             }
                             Row {
                                 anchors.centerIn: parent
@@ -980,11 +1007,11 @@ Item {
                             MotionMouseArea { id: resMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: "#134357"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
-                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
+                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
+                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker(cBtnBaseEnd, 1.15) : cBtnBaseEnd }
                             }
                             Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
                             MotionMouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
