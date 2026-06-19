@@ -15,9 +15,10 @@ export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
 
 # Host của RevPi A — single source of truth cho IP RevPi A.
 # Dùng cho SSH start rs485_bus_node + loadcell_node, và iframe web GUI loadcell.
-# ĐỔI IP CHỈ TẠI 1 DÒNG NÀY (rồi chạy: bash deploy_revpi.sh để sync sang RevPi A).
+# Đổi IP bằng /home/pi/Desktop/update_revpi_ip.sh để tự đồng bộ file này,
+# fastdds_peers.xml, Start All và config trên RevPi A.
 # Lưu ý: fastdds_peers.xml là XML static, FastDDS không support env-var trong
-# <address>, nên file đó phải sửa tay 2 chỗ. Sanity check:
+# <address>, nên updater sẽ sửa các locator tương ứng. Sanity check:
 #   bash scripts/check_revpi_ip_sync.sh
 export REVPI_A_HOST="192.168.27.197"
 

@@ -16,10 +16,15 @@ if [ -z "${REVPI_A_HOST:-}" ]; then
     exit 1
 fi
 
-# Lấy mọi IP RevPi A trong XML (loại bỏ IP Pi 5 = 192.168.27.247)
-xml_ips=$(grep -oE '<address>192\.168\.27\.[0-9]+</address>' "$XML_FILE" \
+# Lấy IP Pi 5 từ phần chú thích của XML rồi loại nó khỏi danh sách RevPi.
+# Không cố định subnet để check vẫn đúng nếu DHCP chuyển RevPi sang mạng khác.
+pi5_ip=$(sed -nE \
+    's/^[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*=[[:space:]]*Raspberry Pi 5.*/\1/p' \
+    "$XML_FILE" | head -n1)
+
+xml_ips=$(grep -oE '<address>[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+</address>' "$XML_FILE" \
             | sed -E 's/<\/?address>//g' \
-            | grep -v '^192\.168\.27\.247$' \
+            | grep -v -x "${pi5_ip:-__no_pi5_ip__}" \
             | sort -u)
 
 if [ -z "$xml_ips" ]; then
@@ -41,6 +46,5 @@ if [ $mismatch -eq 0 ]; then
 fi
 
 echo ""
-echo "→ Sửa tay 2 dòng <address> trong $XML_FILE thành $REVPI_A_HOST"
-echo "→ Rồi chạy: bash deploy_revpi.sh   (sync lên RevPi A)"
+echo "→ Chạy file Desktop/update_revpi_ip.sh để đồng bộ tự động."
 exit 1

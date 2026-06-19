@@ -16,8 +16,8 @@
     192.168.27.197 = RevPi A
 
   ⚠ IP RevPi A phải khớp $REVPI_A_HOST trong ros2_env.sh.
-     FastDDS không support env-var trong <address>, nên file XML này phải
-     sửa tay 2 chỗ <address> bên dưới mỗi khi RevPi A đổi IP.
+     FastDDS không support env-var trong <address>, nên hãy chạy
+     /home/pi/Desktop/update_revpi_ip.sh mỗi khi RevPi A đổi IP.
      Sanity check: bash scripts/check_revpi_ip_sync.sh
 -->
 <dds>
