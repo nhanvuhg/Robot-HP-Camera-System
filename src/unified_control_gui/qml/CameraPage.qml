@@ -900,7 +900,28 @@ Item {
                                 GradientStop { position: 0.0; color: startMA.pressed ? Qt.darker("#0c7876", 1.15) : "#0c7876" }
                                 GradientStop { position: 1.0; color: startMA.pressed ? Qt.darker("#085f5d", 1.15) : "#085f5d" }
                             }
-                            Text { anchors.centerIn: parent; text: "▶ START"; color: "#d4faff"; font.pixelSize: 20; font.bold: true }
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                Image {
+                                    source: "icons/play.svg"
+                                    width: 28
+                                    height: 28
+                                    sourceSize.width: 96
+                                    sourceSize.height: 96
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
+                                    mipmap: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                Text {
+                                    text: "START"
+                                    color: "#d4faff"
+                                    font.pixelSize: 20
+                                    font.bold: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                            }
                             MotionMouseArea { id: startMA; anchors.fill: parent; onClicked: {
                                 if (cameraPageRoot.startCommandLocked)
                                     return
@@ -934,7 +955,28 @@ Item {
                                 GradientStop { position: 0.0; color: resMA.pressed ? Qt.darker("#0e5274", 1.15) : "#0e5274" }
                                 GradientStop { position: 1.0; color: resMA.pressed ? Qt.darker("#052b3d", 1.15) : "#052b3d" }
                             }
-                            Text { anchors.centerIn: parent; text: "RESUME"; color: "#d4faff"; font.pixelSize: 21; font.bold: true }
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                Image {
+                                    source: "icons/step_forward.svg"
+                                    width: 28
+                                    height: 28
+                                    sourceSize.width: 96
+                                    sourceSize.height: 96
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
+                                    mipmap: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                Text {
+                                    text: "RESUME"
+                                    color: "#d4faff"
+                                    font.pixelSize: 21
+                                    font.bold: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                            }
                             MotionMouseArea { id: resMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
                         }
 

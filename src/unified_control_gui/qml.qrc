@@ -8,6 +8,7 @@
     <file alias="MotionButton.qml">qml/MotionButton.qml</file>
     <file alias="MotionMouseArea.qml">qml/MotionMouseArea.qml</file>
     <file alias="ScreenshotButton.qml">qml/ScreenshotButton.qml</file>
+    <file alias="GlassHighlight.qml">qml/GlassHighlight.qml</file>
     <file alias="icons/camera.svg">qml/icons/camera.svg</file>
     <file alias="icons/switch_camera.svg">qml/icons/switch_camera.svg</file>
     <file alias="icons/download.svg">qml/icons/download.svg</file>
@@ -22,8 +23,12 @@
     <file alias="icons/between_horizontal_end.svg">qml/icons/between_horizontal_end.svg</file>
     <file alias="icons/between_horizontal_start.svg">qml/icons/between_horizontal_start.svg</file>
     <file alias="icons/brush_cleaning.svg">qml/icons/brush_cleaning.svg</file>
+    <file alias="icons/brush_cleaning_white.svg">qml/icons/brush_cleaning_white.svg</file>
     <file alias="icons/folder_search.svg">qml/icons/folder_search.svg</file>
     <file alias="icons/weight_tilde.svg">qml/icons/weight_tilde.svg</file>
+    <file alias="icons/house.svg">qml/icons/house.svg</file>
+    <file alias="icons/play.svg">qml/icons/play.svg</file>
+    <file alias="icons/step_forward.svg">qml/icons/step_forward.svg</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
   <qresource prefix="/icons">
