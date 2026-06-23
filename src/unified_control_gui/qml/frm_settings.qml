@@ -9,7 +9,7 @@ Window {
     height: 480
     title: "Settings"
     flags: Qt.Window
-    color: "#0d1117"
+    color: "#06101d"
 
     property var availableTopics: []
     property var selectedTopics: []
@@ -55,7 +55,7 @@ Window {
             Layout.rightMargin: 30
             Layout.topMargin: 20
             color: "transparent"
-            border.color: "#134357"
+            border.color: "#163a52"
             border.width: 1
             radius: 6
 
@@ -63,7 +63,7 @@ Window {
                 anchors.centerIn: parent
                 visible: settingsWindow.loadingTopics
                 text: "⏳ Scanning ROS2 topics..."
-                color: "#5cf4f1"; font.pixelSize: 16; font.bold: true
+                color: "#67d0ff"; font.pixelSize: 16; font.bold: true
             }
             GridLayout {
                 columns: 1
@@ -81,7 +81,7 @@ Window {
 
                         Text {
                             text: modelData.name
-                            color: "#5cf4f1"
+                            color: "#67d0ff"
                             font.pixelSize: 16
                         }
 
@@ -105,7 +105,7 @@ Window {
 
                             background: Rectangle {
                                 color: "transparent"
-                                border.color: "#134357"
+                                border.color: "#163a52"
                                 border.width: 1
                                 radius: 6
                             }
@@ -113,7 +113,7 @@ Window {
                             contentItem: Text {
                                 text: topicCombo.displayText
                                 font.pixelSize: 14
-                                color: "#5cf4f1"
+                                color: "#67d0ff"
                                 verticalAlignment: Text.AlignVCenter
                                 horizontalAlignment: Text.AlignLeft
                                 elide: Text.ElideRight
@@ -138,7 +138,7 @@ Window {
 
             contentItem: Text {
                 text: "Save"
-                color: "#5cf4f1"
+                color: "#67d0ff"
                 font.pixelSize: 14
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: Text.AlignHCenter
@@ -148,7 +148,7 @@ Window {
             background: Rectangle {
                 radius: 6
                 color: "transparent"
-                border.color: "#134357"
+                border.color: "#163a52"
                 border.width: 2
             }
 

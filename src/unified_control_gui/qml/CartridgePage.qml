@@ -7,13 +7,13 @@ import QtGraphicalEffects 1.15
     // UI styling can change freely, but keep button logic intact unless the request explicitly says to change behavior.
 
     // ─── CSS VARIABLES (from cartridge_gui.py) ──────────────────────────────────
-    // --bg:       #0c0c1d   page background
-    // --bg2:      #1a1a35   card background
-    // --card:     #141428   servo/sensor item bg
-    // --border:   #2a2a50
-    // --accent:   #4f6cff
-    // --green:    #00e676   --red: #ff5252   --orange: #ffa726
-    // --cyan:     #26c6da   --yellow: #ffd740   --dim: #8888aa   --text: #e8e8f0
+    // --bg:       #06101d   page background
+    // --bg2:      #0c1726   card background
+    // --card:     #06101d   servo/sensor item bg
+    // --border:   #0c1726
+    // --accent:   #6f4be0
+    // --green:    #3ed0b4   --red: #f0735c   --orange: #f5a623
+    // --cyan:     #36b6ff   --yellow: #ecc45a   --dim: #74899f   --text: #c7dcef
     //
     // GRID: 230px | 1fr | 220px  /  rows: 3fr top + 2.5fr log
     // areas: "ctrl center servo" / "log log servo"
@@ -48,43 +48,43 @@ import QtGraphicalEffects 1.15
 
         readonly property color cBg:     "transparent"
         readonly property color cBg2:    "#990d1e32"
-        readonly property color cCard:   "#88060f1e"
+        readonly property color cCard:   "#8806101d"
         readonly property color cBorder: "#1affffff"
-        readonly property color cAccent: "#7bc8f0"
-        readonly property color cGreen:  "#5cf4f1"
-        readonly property color cRed:    "#ff5252"
-        readonly property color cOrange: "#ffa726"
-        readonly property color cCyan:   "#26c6da"
-        readonly property color cYellow: "#ffd740"
-        readonly property color cDim:    "#8888aa"
-        readonly property color cText:   "#e8e8f0"
+        readonly property color cAccent: "#7fcdf5"
+        readonly property color cGreen:  "#67d0ff"
+        readonly property color cRed:    "#f0735c"
+        readonly property color cOrange: "#f5a623"
+        readonly property color cCyan:   "#36b6ff"
+        readonly property color cYellow: "#ecc45a"
+        readonly property color cDim:    "#74899f"
+        readonly property color cText:   "#c7dcef"
         readonly property color cWhiteText: "#ffffff"
-        readonly property color cCardTitle: "#5cf4f1"
+        readonly property color cCardTitle: "#67d0ff"
         readonly property color cTabSelectedTop: Qt.rgba(0.40, 0.63, 0.77, 0.78)
         readonly property color cTabSelectedMid: Qt.rgba(0.40, 0.63, 0.77, 0.66)
         readonly property color cTabSelectedBottom: Qt.rgba(0.29, 0.48, 0.60, 0.56)
         readonly property color cTabSelectedBorder: Qt.rgba(1, 1, 1, 0.12)
         readonly property color cHover:  "#40ffffff"
         // Shared liquid-glass action palette — aligned with CameraPage.
-        readonly property color cBtnBaseStart:      "#123f58"
-        readonly property color cBtnBaseEnd:        "#071f31"
-        readonly property color cBtnBaseBorder:     "#245f7a"
-        readonly property color cBtnBaseText:       "#d6f3ff"
-        readonly property color cBtnPrimaryStart:   "#118d88"
-        readonly property color cBtnPrimaryEnd:     "#07595f"
-        readonly property color cBtnPrimaryBorder:  "#4bd6cf"
-        readonly property color cBtnActionStart:    "#278bb3"
-        readonly property color cBtnActionEnd:      "#0b5366"
-        readonly property color cBtnActionBorder:   "#62cee7"
-        readonly property color cBtnWarningStart:   "#a96716"
-        readonly property color cBtnWarningEnd:     "#603407"
-        readonly property color cBtnWarningBorder:  "#e4a33b"
-        readonly property color cBtnDangerStart:    "#922b34"
-        readonly property color cBtnDangerEnd:      "#4b1018"
-        readonly property color cBtnDangerBorder:   "#e25762"
-        readonly property color cBtnEmergencyStart: "#d33a43"
-        readonly property color cBtnEmergencyEnd:   "#8c111c"
-        readonly property color cBtnEmergencyBorder:"#ff6972"
+        readonly property color cBtnBaseStart:      "#163a52"
+        readonly property color cBtnBaseEnd:        "#081627"
+        readonly property color cBtnBaseBorder:     "#1a4a6e"
+        readonly property color cBtnBaseText:       "#d6f1ff"
+        readonly property color cBtnPrimaryStart:   "#1f9e86"
+        readonly property color cBtnPrimaryEnd:     "#163a52"
+        readonly property color cBtnPrimaryBorder:  "#3ed0b4"
+        readonly property color cBtnActionStart:    "#1f86e0"
+        readonly property color cBtnActionEnd:      "#163a52"
+        readonly property color cBtnActionBorder:   "#67d0ff"
+        readonly property color cBtnWarningStart:   "#e2761b"
+        readonly property color cBtnWarningEnd:     "#e2761b"
+        readonly property color cBtnWarningBorder:  "#e2761b"
+        readonly property color cBtnDangerStart:    "#b53527"
+        readonly property color cBtnDangerEnd:      "#3a121a"
+        readonly property color cBtnDangerBorder:   "#f0735c"
+        readonly property color cBtnEmergencyStart: "#d2473a"
+        readonly property color cBtnEmergencyEnd:   "#b53527"
+        readonly property color cBtnEmergencyBorder:"#f0735c"
         readonly property color cUnifiedBtn: cBtnBaseStart
         readonly property color cInReadyLayer: cBtnBaseStart
         readonly property color cInReadyLayerEnd: cBtnBaseEnd
@@ -93,25 +93,25 @@ import QtGraphicalEffects 1.15
         readonly property color cProvisionButtonEnd: cBtnBaseEnd
         readonly property color cProvisionButtonBorder: cBtnBaseBorder
         readonly property color cProvisionButtonText: cBtnBaseText
-        readonly property color cFunctionLabelText: "#c7e5f4"
-        readonly property color cFunctionFieldStart: "#1a7aa6"
-        readonly property color cFunctionFieldEnd: "#0c4156"
-        readonly property color cFunctionFieldBorder: "#3aa6cc"
-        readonly property color cFunctionFieldText: "#eafcff"
+        readonly property color cFunctionLabelText: "#bfe0f5"
+        readonly property color cFunctionFieldStart: "#1f86e0"
+        readonly property color cFunctionFieldEnd: "#163a52"
+        readonly property color cFunctionFieldBorder: "#1f86e0"
+        readonly property color cFunctionFieldText: "#d6f1ff"
         readonly property real cPressDarken: 1.18
         readonly property real cPressGradientDarken: 1.15
         readonly property real cPressCustomDarken: 1.12
         readonly property color cBlueWhiteBtn: cBtnActionStart
-        readonly property color cBlueWhiteSelected: "#102e42"
+        readonly property color cBlueWhiteSelected: "#0c1726"
         readonly property color cBlueWhiteIdle: cBtnBaseStart
         readonly property color cBlueWhiteBorder: cBtnActionBorder
         readonly property color cBlueWhiteText: "#ffffff"
-        readonly property color cBlueWhiteSubText: "#b8dde0"
+        readonly property color cBlueWhiteSubText: "#bfe0f5"
         readonly property color cStateAuxBtn: cBtnBaseStart
         readonly property color cStateAuxBtnEnd: cBtnBaseEnd
         readonly property color cStateAuxBorder: cBtnBaseBorder
         readonly property color cStateAuxText: cBtnBaseText
-        readonly property color cFieldBorder: "#67e8f9"
+        readonly property color cFieldBorder: "#67d0ff"
         readonly property color cDashPanel: Qt.rgba(0.06, 0.10, 0.16, 0.34)
         readonly property color cDashCard: cDashPanel
         // Đồng bộ navy-teal với CameraPage: panel = cPanel, card = cPanel2,
@@ -124,7 +124,7 @@ import QtGraphicalEffects 1.15
         readonly property color cDashboardActionBorder: cBtnActionBorder
         readonly property color cDashboardActionText: "#ffffff"
         readonly property color cModeSelectedTop: cBtnPrimaryStart
-        readonly property color cModeSelectedMid: "#0b7472"
+        readonly property color cModeSelectedMid: "#163a52"
         readonly property color cModeSelectedBottom: cBtnPrimaryEnd
         readonly property color cModeSelectedBorder: cBtnPrimaryBorder
         readonly property color cDashCardInner: Qt.rgba(cUnifiedBtn.r, cUnifiedBtn.g, cUnifiedBtn.b, 0.82)
@@ -331,7 +331,7 @@ import QtGraphicalEffects 1.15
                     id: stateBadge
                     Layout.preferredHeight: 50; radius: 6
                     Layout.preferredWidth: sbRow.implicitWidth + 24
-                    color: "transparent"; border.color: "#134357"; border.width: 2
+                    color: "transparent"; border.color: "#163a52"; border.width: 2
                     Row {
                         id: sbRow
                         anchors.centerIn: parent; spacing: 8
@@ -362,7 +362,7 @@ import QtGraphicalEffects 1.15
                 Rectangle {
                     Layout.preferredHeight: 50; radius: 6
                     Layout.preferredWidth: hmRow.implicitWidth + 24
-                    color: "transparent"; border.color: "#134357"; border.width: 2
+                    color: "transparent"; border.color: "#163a52"; border.width: 2
                     Row {
                         id: hmRow
                         anchors.centerIn: parent; spacing: 6
@@ -381,7 +381,7 @@ import QtGraphicalEffects 1.15
                     property string m: cartridgeController.currentMode
                     property bool isIdle: m === "idle" || m === ""
                     Layout.preferredWidth: mpLbl.implicitWidth + 26
-                    color: "transparent"; border.color: "#134357"; border.width: 2
+                    color: "transparent"; border.color: "#163a52"; border.width: 2
 
                     // Nhấp nháy khi chưa chọn mode
                     SequentialAnimation on opacity {
@@ -463,7 +463,7 @@ import QtGraphicalEffects 1.15
             modal: true; focus: true
             closePolicy: Popup.NoAutoClose
             background: Rectangle {
-                color: "#1a0f05"
+                color: "#140d05"
                 border.color: root.cOrange
                 border.width: 2
                 radius: 10
@@ -547,8 +547,8 @@ import QtGraphicalEffects 1.15
 
             color: {
                 if (lvl === "error") return "#2a0808"
-                if (lvl === "warn")  return "#2a2008"
-                return "#081e28"
+                if (lvl === "warn")  return "#221808"
+                return "#081627"
             }
             border.color: {
                 if (lvl === "error") return root.cRed
@@ -1477,7 +1477,7 @@ import QtGraphicalEffects 1.15
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 28 - 4
-                                color: "#0a0a18"; border.color: root.cBorder; radius: 4
+                                color: "#06101d"; border.color: root.cBorder; radius: 4
                                 ListView { anchors { fill: parent; margins: 6 }
                                     model: cartridgeController.logEntries; clip: true; spacing: 2
                                     verticalLayoutDirection: ListView.BottomToTop
@@ -1577,7 +1577,7 @@ import QtGraphicalEffects 1.15
                                         Layout.minimumHeight: 20         // ← thu nhỏ để fit đủ 20 sensor
 
                                         radius: 3
-                                        color: on_ ? "#0d2a3a" : root.cCard
+                                        color: on_ ? "#081627" : root.cCard
                                         border.color: on_ ? "#6cf" : root.cBorder
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
@@ -1600,7 +1600,7 @@ import QtGraphicalEffects 1.15
                                             Rectangle {
                                                 id: dotIndicator
                                                 width: 4; height: 4; radius: 2
-                                                color: sBtn.on_ ? "#6cf" : "#134357"
+                                                color: sBtn.on_ ? "#6cf" : "#163a52"
                                                 anchors.horizontalCenter: parent.horizontalCenter
 
                                                 Repeater {
@@ -1769,7 +1769,7 @@ import QtGraphicalEffects 1.15
                                         required property var modelData
                                         required property int index
                                         width: servoInfoCol2.width; height: 46
-                                        color: index % 2 === 0 ? "transparent" : "#0d0d22"
+                                        color: index % 2 === 0 ? "transparent" : "#06101d"
                                         property alias inputText: sInput2.text
                                         property string paramKey: modelData.key
                                         Row {
@@ -1785,7 +1785,7 @@ import QtGraphicalEffects 1.15
                                             }
                                             Rectangle {
                                                 width: parent.width * 0.22; height: 36; radius: 5
-                                                color: "#081622"; border.color: root.cFieldBorder; border.width: 2
+                                                color: "#081627"; border.color: root.cFieldBorder; border.width: 2
                                                 TextInput {
                                                     id: sInput2
                                                     anchors { fill: parent; margins: 3 }
@@ -1831,7 +1831,7 @@ import QtGraphicalEffects 1.15
                         Rectangle {
                             id: servoScroll2
                             anchors { right: parent.right; top: parent.top; bottom: parent.bottom; rightMargin: 2; topMargin: 8; bottomMargin: 8 }
-                            width: 4; radius: 2; color: "#1f2937"
+                            width: 4; radius: 2; color: "#0c1726"
                             visible: servoFlickable2.height < servoFlickable2.contentHeight
 
                             Rectangle {
@@ -1860,7 +1860,7 @@ import QtGraphicalEffects 1.15
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 22
-                                color: "#0a0a18"; border.color: root.cBorder; radius: 4
+                                color: "#06101d"; border.color: root.cBorder; radius: 4
                                 ListView {
                                     anchors { fill: parent; margins: 6 }
                                     model: page2Root.p2FilteredLog
@@ -2131,7 +2131,7 @@ import QtGraphicalEffects 1.15
                                         anchors { fill: parent; margins: 8 }
                                         spacing: 6
                                         Row { spacing: 6
-                                            Rectangle { width: 4; height: 16; radius: 1; color: "#5cf4f1"; anchors.verticalCenter: parent.verticalCenter }
+                                            Rectangle { width: 4; height: 16; radius: 1; color: "#67d0ff"; anchors.verticalCenter: parent.verticalCenter }
                                             Text { text: "JOINT (deg)"; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
                                         }
                                         Repeater {
@@ -2522,9 +2522,9 @@ import QtGraphicalEffects 1.15
                                                 onMoved: { page3Root.speedVal = Math.round(value) }
                                                 onPressedChanged: { if (!pressed) robotController.setSpeedRatio(Math.round(value)) }
                                                 background: Rectangle { x: speedSlider.leftPadding; y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 4; width: speedSlider.availableWidth; height: 8; radius: 4; color: root.cDashButtonEnd; border.color: root.cDashButtonBorder
-                                                    Rectangle { width: speedSlider.visualPosition * parent.width; height: parent.height; radius: 4; color: "#5cf4f1" }
+                                                    Rectangle { width: speedSlider.visualPosition * parent.width; height: parent.height; radius: 4; color: "#67d0ff" }
                                                 }
-                                                handle: Rectangle { x: speedSlider.leftPadding + speedSlider.visualPosition * (speedSlider.availableWidth - width); y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 8; width: 18; height: 18; radius: 9; color: "#5cf4f1"; border.color: "#fff" }
+                                                handle: Rectangle { x: speedSlider.leftPadding + speedSlider.visualPosition * (speedSlider.availableWidth - width); y: speedSlider.topPadding + speedSlider.availableHeight / 2 - 8; width: 18; height: 18; radius: 9; color: "#67d0ff"; border.color: "#fff" }
                                             }
                                             Rectangle {
                                                 width: 50; height: 34; radius: 5; color: root.cFunctionFieldEnd; border.color: root.cFunctionFieldBorder; border.width: 1
@@ -2688,7 +2688,7 @@ import QtGraphicalEffects 1.15
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 22
-                                color: "#0a0a18"; border.color: root.cBorder; radius: 4
+                                color: "#06101d"; border.color: root.cBorder; radius: 4
                                 ListView {
                                     anchors { fill: parent; margins: 6 }
                                     model: robotController.logEntries
@@ -2729,8 +2729,8 @@ import QtGraphicalEffects 1.15
                         id: popupBg
                         width: parent.width * 0.9; height: parent.height * 0.8
                         anchors.centerIn: parent
-                        color: "#0a0d14"
-                        border.color: "#5cf4f1"; border.width: 2
+                        color: "#04080f"
+                        border.color: "#67d0ff"; border.width: 2
                         radius: 8
 
                         // Prevent clicking inside from closing
@@ -2756,8 +2756,8 @@ import QtGraphicalEffects 1.15
                                 }
                                 Rectangle {
                                     width: 34; height: 34; radius: 17
-                                    color: closeMA.pressed ? root.pressColor("#552222") : "#221111"
-                                    border.color: "#ff4444"
+                                    color: closeMA.pressed ? root.pressColor("#4a1e1c") : "#1c0f0e"
+                                    border.color: "#f0735c"
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
                                     Text { anchors.centerIn: parent; text: "✕"; color: root.cWhiteText; font.pixelSize: 18; font.bold: true }
@@ -2767,7 +2767,7 @@ import QtGraphicalEffects 1.15
                                 }
                             }
 
-                            Rectangle { width: parent.width; height: 1; color: "#223344" }
+                            Rectangle { width: parent.width; height: 1; color: "#14263c" }
 
                             Item {
                                 width: parent.width; height: popupBg.height - 83
@@ -2781,8 +2781,8 @@ import QtGraphicalEffects 1.15
 
                                     delegate: Rectangle {
                                         width: poseListView.width; height: 72
-                                        color: itemMA.pressed ? root.pressColor("#0f2c3d") : (itemMA.containsMouse ? "#0a1a26" : "#0d1117")
-                                        border.color: itemMA.containsMouse ? "#5cf4f1" : "#1a2a3a"; border.width: 1
+                                        color: itemMA.pressed ? root.pressColor("#0c1726") : (itemMA.containsMouse ? "#081627" : "#06101d")
+                                        border.color: itemMA.containsMouse ? "#67d0ff" : "#0c1726"; border.width: 1
                                         radius: 6
 
                                         Row {
@@ -2839,8 +2839,8 @@ import QtGraphicalEffects 1.15
                                             Rectangle {
                                                 width: 88; height: 42; radius: 6
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                color: applyMA.pressed ? root.pressColor("#1a5a3a") : "#0a2a1a"
-                                                border.color: "#168f52"
+                                                color: applyMA.pressed ? root.pressColor("#1f9e86") : "#0a2418"
+                                                border.color: "#1f9e86"
                                                 
                                                 Text {
                                                     anchors.centerIn: parent
@@ -2885,11 +2885,11 @@ import QtGraphicalEffects 1.15
                                 Rectangle {
                                     id: scrollbar
                                     anchors { right: parent.right; top: parent.top; bottom: parent.bottom; rightMargin: 2 }
-                                    width: 4; radius: 2; color: "#1f2937"
+                                    width: 4; radius: 2; color: "#0c1726"
                                     visible: poseListView.height < poseListView.contentHeight
                                     
                                     Rectangle {
-                                        width: parent.width; radius: 2; color: "#5cf4f1"
+                                        width: parent.width; radius: 2; color: "#67d0ff"
                                         height: Math.max(20, poseListView.height * (poseListView.height / poseListView.contentHeight))
                                         y: poseListView.visibleArea.yPosition * poseListView.height
                                     }
@@ -3175,7 +3175,7 @@ import QtGraphicalEffects 1.15
                         required property int modelData
                         required property int index
                         width: cfgCol.width; height: 38
-                        color: index % 2 === 0 ? "transparent" : "#0d0d22"
+                        color: index % 2 === 0 ? "transparent" : "#06101d"
                         property alias inputText: rowInput.text
                         property int rowNum: modelData
 
@@ -3183,7 +3183,7 @@ import QtGraphicalEffects 1.15
                             anchors.verticalCenter: parent.verticalCenter; spacing: 0
                             Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 13; font.bold: true
                                    width: 46; anchors.verticalCenter: parent.verticalCenter }
-                            Rectangle { width: 94; height: 30; radius: 4; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
+                            Rectangle { width: 94; height: 30; radius: 4; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
                                 TextInput { id: rowInput; anchors { fill: parent; margins: 4 }
                                     text: "0.0"
                                     font.pixelSize: 14; font.family: "monospace"; color: root.cWhiteText
@@ -3205,7 +3205,7 @@ import QtGraphicalEffects 1.15
                                 color: root.cWhiteText; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter
                             }
                         }
-                        Rectangle { width: parent.width; height: 1; color: "#1e1e3a"; anchors.bottom: parent.bottom }
+                        Rectangle { width: parent.width; height: 1; color: "#0c1726"; anchors.bottom: parent.bottom }
                     }
                 }
 
@@ -3268,7 +3268,7 @@ import QtGraphicalEffects 1.15
                             required property int modelData
                             required property int index
                             width: cfgZoneCol.width; height: 46
-                            color: index % 2 === 0 ? "transparent" : "#0d0d22"
+                            color: index % 2 === 0 ? "transparent" : "#06101d"
                             property alias minText: minInp.text
                             property alias maxText: maxInp.text
                             property alias tgtText: tgtInp.text
@@ -3280,19 +3280,19 @@ import QtGraphicalEffects 1.15
                                 spacing: parent.width * 0.02
                                 Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; anchors.verticalCenter: parent.verticalCenter }
 
-                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
+                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
                                     TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) minInp.text = String(tbl[String(modelData)][0]) } } } }
-                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
+                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
                                     TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) maxInp.text = String(tbl[String(modelData)][1]) } } } }
-                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081622"; border.color: root.cFieldBorder; border.width: 2
+                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
                                     TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
                                         Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) tgtInp.text = String(tbl[String(modelData)][2]) } } } }
 
                                 Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; anchors.verticalCenter: parent.verticalCenter }
                             }
-                            Rectangle { width: parent.width; height: 1; color: "#1e1e3a"; anchors.bottom: parent.bottom }
+                            Rectangle { width: parent.width; height: 1; color: "#0c1726"; anchors.bottom: parent.bottom }
                         }
                     }
 
@@ -3322,7 +3322,7 @@ import QtGraphicalEffects 1.15
             Rectangle {
                 id: cfgZoneScroll
                 anchors { right: parent.right; top: parent.top; bottom: parent.bottom; rightMargin: 2; topMargin: 8; bottomMargin: 8 }
-                width: 4; radius: 2; color: "#1f2937"
+                width: 4; radius: 2; color: "#0c1726"
                 visible: cfgZoneFlick.height < cfgZoneFlick.contentHeight
 
                 Rectangle {
@@ -3374,7 +3374,7 @@ import QtGraphicalEffects 1.15
         modal: true; focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         background: Rectangle {
-            color: "#0e0e22"; border.color: root.cAccent; border.width: 2; radius: 10
+            color: "#06101d"; border.color: root.cAccent; border.width: 2; radius: 10
         }
 
         property string inputStr: ""
@@ -3419,7 +3419,7 @@ import QtGraphicalEffects 1.15
 
             Rectangle {
                 width: parent.width; height: 44; radius: 6
-                color: "#1a1a3a"; border.color: root.cAccent; border.width: 1
+                color: "#0c1726"; border.color: root.cAccent; border.width: 1
                 Row {
                     anchors.centerIn: parent; spacing: 6
                     Text {
@@ -3450,7 +3450,7 @@ import QtGraphicalEffects 1.15
                         delegate: Rectangle {
                             width: 79; height: 44; radius: 6
                             color: modelData === "✓" ? root.cGreen
-                                 : modelData === "←" ? "#3a2a2a" : "#1a1a3a"
+                                 : modelData === "←" ? "#3a2a2a" : "#0c1726"
                             border.color: root.cBorder; border.width: 1
                             Text {
                                 anchors.centerIn: parent
@@ -3481,7 +3481,7 @@ import QtGraphicalEffects 1.15
         anchors.centerIn: parent
         modal: true; focus: true
         closePolicy: Popup.NoAutoClose
-        background: Rectangle { color: "#1a0a0a"; radius: 10; border.color: "#ffaa00"; border.width: 3 }
+        background: Rectangle { color: "#160a09"; radius: 10; border.color: "#f5a623"; border.width: 3 }
         Column {
             anchors.centerIn: parent; spacing: 30
             Text {
@@ -3497,12 +3497,12 @@ import QtGraphicalEffects 1.15
             Row {
                 spacing: 40; anchors.horizontalCenter: parent.horizontalCenter
                 Rectangle {
-                    width: 130; height: 46; radius: 6; color: "#aa0000"
+                    width: 130; height: 46; radius: 6; color: "#b53527"
                     Text { anchors.centerIn: parent; text: "NO"; color: root.cWhiteText; font.bold: true; font.pixelSize: 16 }
                     MotionMouseArea { anchors.fill: parent; onClicked: { outTrayPopup.close(); outTrayTimer.restart(); } }
                 }
                 Rectangle {
-                    width: 130; height: 46; radius: 6; color: "#00aa00"
+                    width: 130; height: 46; radius: 6; color: "#1f9e86"
                     Text { anchors.centerIn: parent; text: "YES"; color: root.cWhiteText; font.bold: true; font.pixelSize: 16 }
                     MotionMouseArea { anchors.fill: parent; onClicked: { robotController.simulateOutputTrayReady(); outTrayPopup.close(); } }
                 }

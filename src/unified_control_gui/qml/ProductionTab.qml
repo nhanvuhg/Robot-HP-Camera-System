@@ -14,14 +14,14 @@ Item {
     readonly property color cPanel:    "#b30d1527"
     readonly property color cCardBg:   "#b30d1527"
     readonly property color cBorder:   "#4d00ffff"
-    readonly property color cText:     "#e8eaf0"
-    readonly property color cMuted:    "#7a8fa8"
-    readonly property color cOk:       "#4ade80"
-    readonly property color cBad:      "#f87171"
-    readonly property color cWarn:     "#fbbf24"
-    readonly property color cCyan:     "#1a8cd8"
-    readonly property color cBlue:     "#1a8cd8"
-    readonly property color cPurple:   "#1a8cd8"
+    readonly property color cText:     "#c7dcef"
+    readonly property color cMuted:    "#9fb3c8"
+    readonly property color cOk:       "#3ed0b4"
+    readonly property color cBad:      "#f0735c"
+    readonly property color cWarn:     "#ecc45a"
+    readonly property color cCyan:     "#1f86e0"
+    readonly property color cBlue:     "#1f86e0"
+    readonly property color cPurple:   "#1f86e0"
     readonly property string monoFont: "JetBrains Mono, DejaVu Sans Mono, Consolas, monospace"
 
     readonly property string apiBase: "http://192.168.27.193:8080"
@@ -133,8 +133,8 @@ Item {
             Rectangle {
                 Layout.preferredWidth: 110; Layout.preferredHeight: 36; radius: 8
                 gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#166534" }
-                    GradientStop { position: 1.0; color: "#15803d" }
+                    GradientStop { position: 0.0; color: "#1f9e86" }
+                    GradientStop { position: 1.0; color: "#1f9e86" }
                 }
                 border.color: cOk; border.width: 1
                 Text { anchors.centerIn: parent; text: "🔄  Reload"; color: "#ffffff"; font.pixelSize: 15; font.bold: true }
@@ -426,8 +426,8 @@ Item {
         width: 80; height: 38; radius: 8
         gradient: Gradient {
             orientation: Gradient.Horizontal
-            GradientStop { position: 0.0; color: "#4dd2ff" }
-            GradientStop { position: 1.0; color: "#3b58ff" }
+            GradientStop { position: 0.0; color: "#36b6ff" }
+            GradientStop { position: 1.0; color: "#6f4be0" }
         }
         border.color: cCyan; border.width: 0
         Text { anchors.centerIn: parent; text: label; color: "#ffffff"; font.pixelSize: 16; font.bold: true }

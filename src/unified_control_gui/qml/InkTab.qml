@@ -74,24 +74,24 @@ Item {
     readonly property color cBg:               "transparent"
     readonly property color cBorder:           "#1affffff"
     readonly property color cText:             "#ffffff"
-    readonly property color cAccent:           "#5cf4f1"
+    readonly property color cAccent:           "#67d0ff"
     readonly property color cPanel:            "#990d1e32"
-    readonly property color cCard:             "#88060f1e"
+    readonly property color cCard:             "#8806101d"
     readonly property color cField:            Qt.rgba(0.06, 0.19, 0.26, 0.82)
-    readonly property color cFieldStrong:      "#0d2a3a"
-    readonly property color cMuted:            "#8888aa"
-    readonly property color cSubText:          "#c7e5f4"
-    readonly property color cDisabled:         "#496273"
-    readonly property color cSelectedText:     "#071820"
-    readonly property color cActionStart:      "#0e5274"
-    readonly property color cActionEnd:        "#072d42"
-    readonly property color cActionHoverStart: "#176a8f"
-    readonly property color cActionHoverEnd:   "#0b4058"
-    readonly property color cActionPressStart: "#082f46"
-    readonly property color cActionPressEnd:   "#02151d"
-    readonly property color cSuccess:          "#4ade80"
-    readonly property color cDanger:           "#ff5252"
-    readonly property color cWarning:          "#ffa726"
+    readonly property color cFieldStrong:      "#081627"
+    readonly property color cMuted:            "#74899f"
+    readonly property color cSubText:          "#bfe0f5"
+    readonly property color cDisabled:         "#74899f"
+    readonly property color cSelectedText:     "#04080f"
+    readonly property color cActionStart:      "#1a4a6e"
+    readonly property color cActionEnd:        "#0c1726"
+    readonly property color cActionHoverStart: "#1a4a6e"
+    readonly property color cActionHoverEnd:   "#163a52"
+    readonly property color cActionPressStart: "#163a52"
+    readonly property color cActionPressEnd:   "#04080f"
+    readonly property color cSuccess:          "#3ed0b4"
+    readonly property color cDanger:           "#f0735c"
+    readonly property color cWarning:          "#f5a623"
 
     Rectangle { anchors.fill: parent; color: cBg }
 
@@ -219,8 +219,8 @@ Item {
                                 radius: 6
                                 gradient: Gradient {
                                     orientation: Gradient.Horizontal
-                                    GradientStop { position: 0.0; color: resetTareBtn.down ? "#d97706" : (resetTareBtn.hovered ? "#fbbf24" : cWarning) }
-                                    GradientStop { position: 1.0; color: resetTareBtn.down ? "#b45309" : (resetTareBtn.hovered ? "#d97706" : cWarning) }
+                                    GradientStop { position: 0.0; color: resetTareBtn.down ? "#e2761b" : (resetTareBtn.hovered ? "#ecc45a" : cWarning) }
+                                    GradientStop { position: 1.0; color: resetTareBtn.down ? "#e2761b" : (resetTareBtn.hovered ? "#e2761b" : cWarning) }
                                 }
                             }
                         }
@@ -245,8 +245,8 @@ Item {
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 10
                             ColumnLayout {
-                                Text { text: "STEP 1 — Empty Scale"; color: "#fcd34d"; font.pixelSize: 14; font.bold: true }
-                                Text { text: "Ensure NOTHING is on the scale."; color: "#cbd5e1"; font.pixelSize: 12 }
+                                Text { text: "STEP 1 — Empty Scale"; color: "#ecc45a"; font.pixelSize: 14; font.bold: true }
+                                Text { text: "Ensure NOTHING is on the scale."; color: "#c7dcef"; font.pixelSize: 12 }
                             }
                             Item { Layout.fillWidth: true }
                             MotionButton {
@@ -295,7 +295,7 @@ Item {
                                             if (scaleController.calStatus === "CONTINUE_CAL_4/5") return "STEP 5 — Place Final Weight (Point 4/4)";
                                             return "STEP 2 — Place Standard Weight";
                                         }
-                                        color: "#fcd34d"
+                                        color: "#ecc45a"
                                         font.pixelSize: 13; font.bold: true
                                     }
                                     Text {
@@ -331,7 +331,7 @@ Item {
                                                 else if (s === "CONTINUE_CAL_4/5") activeIndex = 4;
                                                 
                                                 if ((s === "WAITING_WEIGHT" || s.startsWith("CONTINUE_CAL")) && n === activeIndex) return cWarning;
-                                                return "#334155";
+                                                return "#14263c";
                                             }
                                         }
                                     }
@@ -404,7 +404,7 @@ Item {
                                 anchors.centerIn: parent; spacing: 4
                                 Text { text: "TOTAL"; color: cSubText; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: scaleController.totalBatch.toString(); color: "#ffffff"; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#b0c2ff"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: "batch"; color: "#bfe0f5"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // PASS card
@@ -413,9 +413,9 @@ Item {
                             color: Qt.rgba(0.13, 0.77, 0.37, 0.15); border.color: cSuccess; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-                                Text { text: "✓ PASS"; color: "#6ee7b7"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: "✓ PASS"; color: "#3ed0b4"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: scaleController.passBatch.toString(); color: cSuccess; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#166534"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: "batch"; color: "#1f9e86"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // FAIL card
@@ -424,9 +424,9 @@ Item {
                             color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cDanger; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-                                Text { text: "✗ FAIL"; color: "#fca5a5"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: "✗ FAIL"; color: "#f5a394"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: scaleController.failBatch.toString(); color: cDanger; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#991b1b"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: "batch"; color: "#b53527"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                     }
@@ -484,7 +484,7 @@ Item {
                     spacing: 15
 
                     // Title
-                    Text { text: "INK PROFILES"; color: "#5cf4f1"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: "INK PROFILES"; color: "#67d0ff"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
                     
                     // ── MỤC CHỌN MỰC TƯƠNG TỰ 'SELECT MODE' ──
                     Rectangle { Layout.fillWidth: true; height: 1; color: cBorder; opacity: 0.5 }
@@ -496,7 +496,7 @@ Item {
                         // Cột 1: Chọn Mực
                         ColumnLayout {
                             Layout.fillWidth: true
-                            Text { text: "SELECT INK PROFILE"; color: "#5cf4f1"; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
+                            Text { text: "SELECT INK PROFILE"; color: "#67d0ff"; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
                                 color: cField; border.color: cAccent; border.width: 1
@@ -567,7 +567,7 @@ Item {
                                                 Item {
                                                     width: parent.width * 0.12 - 1; height: parent.height
                                                     Rectangle {
-                                                        anchors.centerIn: parent; width: 22; height: 22; radius: 4; color: delInkMA.pressed ? "#991b1b" : cDanger
+                                                        anchors.centerIn: parent; width: 22; height: 22; radius: 4; color: delInkMA.pressed ? "#b53527" : cDanger
                                                         Text { anchors.centerIn: parent; text: "✕"; font.bold: true; font.pixelSize: 12; color: "#fff" }
                                                         MotionMouseArea { id: delInkMA; anchors.fill: parent; onClicked: { scaleController.deleteInkProfile(model.name); } }
                                                     }
@@ -648,7 +648,7 @@ Item {
                                                 Item {
                                                     width: parent.width * 0.12 - 1; height: parent.height
                                                     Rectangle {
-                                                        anchors.centerIn: parent; width: 22; height: 22; radius: 4; color: delCartMA.pressed ? "#991b1b" : cDanger
+                                                        anchors.centerIn: parent; width: 22; height: 22; radius: 4; color: delCartMA.pressed ? "#b53527" : cDanger
                                                         Text { anchors.centerIn: parent; text: "✕"; font.bold: true; font.pixelSize: 12; color: "#fff" }
                                                         MotionMouseArea { id: delCartMA; anchors.fill: parent; onClicked: { scaleController.deleteCartProfile(model.name); } }
                                                     }
@@ -1081,7 +1081,7 @@ Item {
             spacing: 10
             Text {
                 text: "⚠  TEMPO NOT YET TARED — press TARE to clear drift"
-                color: "#1a1a1a"; font.pixelSize: 16; font.bold: true
+                color: "#0c1726"; font.pixelSize: 16; font.bold: true
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
@@ -1127,8 +1127,8 @@ Item {
                     radius: 6
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: ackOverloadBtn.down ? cDanger : (ackOverloadBtn.hovered ? "#f87171" : cDanger) }
-                        GradientStop { position: 1.0; color: ackOverloadBtn.down ? "#b91c1c" : (ackOverloadBtn.hovered ? "#dc2626" : "#b91c1c") }
+                        GradientStop { position: 0.0; color: ackOverloadBtn.down ? cDanger : (ackOverloadBtn.hovered ? "#f0735c" : cDanger) }
+                        GradientStop { position: 1.0; color: ackOverloadBtn.down ? "#b53527" : (ackOverloadBtn.hovered ? "#d2473a" : "#b53527") }
                     }
                 }
                 contentItem: Text { text: parent.text; color: "#ffffff"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
