@@ -453,7 +453,10 @@ private:
             for (size_t i = 0; i < 5; ++i) {
                 int raw_count  = row_counts[i];
                 int filtered   = row_filters_[i].filter_count(raw_count);
-                bool raw_ready = (raw_count >= INPUT_ROW_THRESHOLD);
+                // [HP] Row READY chỉ khi ĐÚNG bằng sức chứa (8). Một hàng vật lý
+                // chứa tối đa 8 cartridge → count > 8 là nhân đôi/nhiễu detection,
+                // count < 8 là hàng chưa đầy. Cả hai trường hợp → NOT ready (bỏ qua).
+                bool raw_ready = (raw_count == INPUT_ROW_THRESHOLD);
                 bool stable    = row_filters_[i].update_ready(raw_ready);
                 row_full_[i]   = stable;
                 RCLCPP_INFO(get_logger(),
