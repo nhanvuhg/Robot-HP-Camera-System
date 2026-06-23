@@ -298,7 +298,7 @@ import QtGraphicalEffects 1.15
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
                     onClicked: stackView.pop()
                     background: Rectangle {
-                        radius: 6
+                        radius: 9
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
                             GradientStop { position: 0.0; color: backBtn.pressed ? Qt.darker(root.cBtnBaseStart, 1.15) : root.cBtnBaseStart }
@@ -407,7 +407,7 @@ import QtGraphicalEffects 1.15
                     font.pixelSize: 13; font.bold: true
                     onClicked: cartridgeController.resetFaults()
                     background: Rectangle {
-                        radius: 6
+                        radius: 9
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
                             GradientStop { position: 0.0; color: faultsBtn.pressed ? Qt.darker(root.cBtnWarningStart, 1.15) : root.cBtnWarningStart }
@@ -427,7 +427,7 @@ import QtGraphicalEffects 1.15
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
                     onClicked: Qt.quit()
                     background: Rectangle {
-                        radius: 6
+                        radius: 9
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
                             GradientStop { position: 0.0; color: closeBtn.pressed ? Qt.darker(root.cBtnBaseStart, 1.15) : root.cBtnBaseStart }
@@ -492,7 +492,7 @@ import QtGraphicalEffects 1.15
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 120; Layout.preferredHeight: 35
                         background: Rectangle {
-                            radius: 5
+                            radius: 8
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: root.cBtnPrimaryStart }
@@ -511,7 +511,7 @@ import QtGraphicalEffects 1.15
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 100; Layout.preferredHeight: 35
                         background: Rectangle {
-                            radius: 5
+                            radius: 8
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: root.cBtnBaseStart }
@@ -618,7 +618,7 @@ import QtGraphicalEffects 1.15
                     font.pixelSize: 10; font.bold: true
                     onClicked: { cartridgeController.resetFaults(); notifyBanner.visible = false }
                     background: Rectangle {
-                        radius: 3
+                        radius: 6
                         color: root.cBtnWarningEnd
                         border.color: root.cBtnWarningBorder
                         border.width: 1
@@ -632,7 +632,7 @@ import QtGraphicalEffects 1.15
                     Layout.preferredWidth: 22; Layout.preferredHeight: 22
                     font.pixelSize: 11
                     onClicked: notifyBanner.visible = false
-                    background: Rectangle { radius: 3; color: root.cBtnBaseEnd; border.color: root.cBtnBaseBorder; border.width: 1 }
+                    background: Rectangle { radius: 6; color: root.cBtnBaseEnd; border.color: root.cBtnBaseBorder; border.width: 1 }
                     contentItem: Text { text: parent.text; font: parent.font; color: root.cWhiteText;
                         horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
@@ -941,7 +941,7 @@ import QtGraphicalEffects 1.15
                                         id: autoModeRect
                                         width: parent.width
                                         height: (parent.height - 6) / 2
-                                        radius: 5
+                                        radius: 8
                                         property bool isModeSelected: cartridgeController.currentMode === "auto"
                                         color: "transparent"
                                         border.color: isModeSelected ? root.cModeSelectedBorder : root.cProvisionButtonBorder
@@ -985,7 +985,7 @@ import QtGraphicalEffects 1.15
                                         id: manualModeRect
                                         width: parent.width
                                         height: (parent.height - 6) / 2
-                                        radius: 5
+                                        radius: 8
                                         property bool isModeSelected: cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog"
                                         color: "transparent"
                                         border.color: isModeSelected ? root.cModeSelectedBorder : root.cProvisionButtonBorder
@@ -1334,7 +1334,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true; Layout.preferredWidth: 1
                                                     Layout.preferredHeight: cardItem.controlH
                                                     padV: 6; padH: 0; fontSize: 18
-                                                    bg: root.cBtnActionStart; bgEnd: root.cBtnActionEnd; bc: root.cBtnActionBorder; tc: "#ffffff"
+                                                    bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText
                                                     active: servoRow.jogAllowed
                                                     inactiveOpacity: 0.22
                                                         onPressed: {
@@ -1353,7 +1353,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true; Layout.preferredWidth: 1
                                                     Layout.preferredHeight: cardItem.controlH
                                                     padV: 6; padH: 0; fontSize: 18
-                                                        bg: root.cBtnActionStart; bgEnd: root.cBtnActionEnd; bc: root.cBtnActionBorder; tc: "#ffffff"
+                                                        bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText
                                                     active: servoRow.jogAllowed
                                                     inactiveOpacity: 0.22
                                                         onPressed: {
@@ -1470,13 +1470,13 @@ import QtGraphicalEffects 1.15
                             anchors.fill: parent
                             anchors.margins: 8
                             spacing: 4
-                            RowLayout { width: parent.width; height: 24
+                            RowLayout { width: parent.width; height: 28
                                 Text { text: "LOG ACTIVITY"; color: root.cCardTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; padV:4; padH:10; fontSize: 15; bg:root.cStateAuxBtn; bgEnd:root.cStateAuxBtnEnd; bc:root.cStateAuxBorder; tc:root.cStateAuxText; onClicked: cartridgeController.clearLog() }
+                                CBtn { lbl:"Clear"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; Layout.preferredHeight: 26; padV:4; padH:10; fontSize: 15; bg:root.cBtnWarningStart; bgEnd:root.cBtnWarningEnd; bc:root.cBtnWarningBorder; tc:root.cWhiteText; onClicked: cartridgeController.clearLog() }
                             }
                             Rectangle {
-                                width: parent.width; height: parent.height - 18 - 4
+                                width: parent.width; height: parent.height - 28 - 4
                                 color: "#0a0a18"; border.color: root.cBorder; radius: 4
                                 ListView { anchors { fill: parent; margins: 6 }
                                     model: cartridgeController.logEntries; clip: true; spacing: 2
@@ -1985,7 +1985,7 @@ import QtGraphicalEffects 1.15
                                                 width: cartCol.width; height: 52; spacing: 4
                                                 Rectangle {
                                                     id: negBtn
-                                                    width: 58; height: 48; radius: 5
+                                                    width: 58; height: 48; radius: 8
                                                     color: "transparent"
                                                     border.color: root.cJogNegativeButtonBorder; border.width: 1
                                                     gradient: Gradient {
@@ -2009,7 +2009,7 @@ import QtGraphicalEffects 1.15
                                                 }
                                                 Rectangle {
                                                     id: posBtn
-                                                    width: 58; height: 48; radius: 5
+                                                    width: 58; height: 48; radius: 8
                                                     color: "transparent"
                                                     border.color: root.cDashButtonBorder; border.width: 1
                                                     gradient: Gradient {
@@ -2045,7 +2045,7 @@ import QtGraphicalEffects 1.15
                                         }
                                         Row { spacing: 4; width: parent.width
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 42; radius: 5
+                                                width: parent.width / 2 - 2; height: 42; radius: 8
                                                 color: "transparent"; border.color: root.cGetButtonBorder
                                                 border.width: 1
                                                 gradient: Gradient {
@@ -2085,7 +2085,7 @@ import QtGraphicalEffects 1.15
                                                 }}
                                             }
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 42; radius: 5
+                                                width: parent.width / 2 - 2; height: 42; radius: 8
                                                 color: "transparent"; border.color: root.cMovJButtonBorder
                                                 border.width: 1
                                                 gradient: Gradient {
@@ -2142,7 +2142,7 @@ import QtGraphicalEffects 1.15
                                                 width: jointCol.width; height: 52; spacing: 4
                                                 Rectangle {
                                                     id: jnBtn
-                                                    width: 58; height: 48; radius: 5
+                                                    width: 58; height: 48; radius: 8
                                                     color: "transparent"
                                                     border.color: root.cJogNegativeButtonBorder; border.width: 1
                                                     gradient: Gradient {
@@ -2166,7 +2166,7 @@ import QtGraphicalEffects 1.15
                                                 }
                                                 Rectangle {
                                                     id: jpBtn
-                                                    width: 58; height: 48; radius: 5
+                                                    width: 58; height: 48; radius: 8
                                                     color: "transparent"
                                                     border.color: root.cDashButtonBorder; border.width: 1
                                                     gradient: Gradient {
@@ -2202,7 +2202,7 @@ import QtGraphicalEffects 1.15
                                         }
                                         Row { spacing: 4; width: parent.width
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 42; radius: 5
+                                                width: parent.width / 2 - 2; height: 42; radius: 8
                                                 color: "transparent"; border.color: root.cGetButtonBorder
                                                 border.width: 1
                                                 gradient: Gradient {
@@ -2242,7 +2242,7 @@ import QtGraphicalEffects 1.15
                                                 }}
                                             }
                                             Rectangle {
-                                                width: parent.width / 2 - 2; height: 42; radius: 5
+                                                width: parent.width / 2 - 2; height: 42; radius: 8
                                                 color: "transparent"; border.color: root.cMovJButtonBorder
                                                 border.width: 1
                                                 gradient: Gradient {
@@ -2975,7 +2975,7 @@ import QtGraphicalEffects 1.15
 
             implicitWidth:  w > 0 ? w : cbrT.implicitWidth + padH * 2
             implicitHeight: h > 0 ? h : cbrT.implicitHeight + padV * 2
-            radius: 4
+            radius: 7
             property bool _heldVisual: _pressed
 
             // Outline (renderedBg.a==0): pressed/selected/hover hiện fill teal mờ
