@@ -2453,13 +2453,14 @@ class CartridgeSystem(Node):
 
         Lệnh hỗ trợ:
           "clear <sid>"      → Acknowledge faults (bất kỳ mode nào)
-          "<sid> stop"       → Dừng servo
+          "<sid> stop"       → Dừng servo (bất kỳ mode/state nào)
           "<sid> +"          → JOG chiều dương (chỉ MANUAL+IDLE)
           "<sid> -"          → JOG chiều âm
           "<sid> move <pos>" → Di chuyển đến pos mm
           "home <sid>"       → Homing thủ công 1 servo (thread riêng)
 
-        Bị khóa nếu đang AUTO mode hoặc bất kỳ state machine nào đang chạy.
+        Các lệnh motion ngoài STOP/CLEAR bị khóa nếu đang AUTO mode hoặc bất kỳ
+        state machine nào đang chạy.
         """
         parts = msg.data.strip().split()
         if not parts: return
@@ -2477,6 +2478,19 @@ class CartridgeSystem(Node):
                         self.get_logger().info(f"Acknowledge faults cho Servo {sid} (như FAS)")
                 except Exception as e:
                     self.get_logger().warn(f"Lỗi khi clear servo: {e}")
+            return
+
+        # SAFETY OVERRIDE: STOP từng trục phải luôn chạy được dù đang AUTO,
+        # HOMING_RUNNING, STATE 1/2/3/4, hoặc không ở JOG sub-mode. GUI Servo
+        # Control gửi "<sid> stop"; xử lý trước mọi interlock để operator luôn
+        # dừng được trục ngay trên card servo.
+        if len(parts) >= 2 and parts[1].lower() == 'stop':
+            try:
+                sid = int(parts[0])
+                self._stop(sid)
+                self.get_logger().info(f"[JOG] Servo S{sid} STOP override")
+            except Exception as e:
+                self.get_logger().warn(f"[JOG] stop parse/error: {msg.data} ({e})")
             return
 
         # Mọi lệnh JOG (kể cả RUN/target position, home thủ công, +/-) bắt buộc ở
