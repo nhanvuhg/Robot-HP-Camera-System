@@ -3763,14 +3763,14 @@ class CartridgeSystem(Node):
         """
         Quét InY từ home → target_scaninp1 (970mm) để phát hiện stack khay đầu vào.
         Logic chống nhiễu S4 (xem RULES.md RULE 3):
-          1. S4 là NC (Normally Closed) → bắt **falling edge** (s4_prev ON → now OFF)
+          1. S4 là NO (Normally Open) → bắt **rising edge** (s4_prev OFF → now ON)
           2. Gate S4 armed theo 2 điều kiện AND, re-evaluate mỗi tick:
              - InX vẫn tại inx_target2 ± position_tolerance (_at_position)
              - InY ∈ [iny_scan_valid_min_mm, iny_scan_valid_max_mm]
           3. Disarm + log warn nếu InX drift khỏi target giữa lúc scan.
 
-        Falling edge hợp lệ → tính row từ _zone_to_row → chuyển S1_INY_TO_ROW.
-        Hết hành trình mà không có falling edge:
+        Rising edge hợp lệ → tính row từ _zone_to_row → chuyển S1_INY_TO_ROW.
+        Hết hành trình mà không có rising edge:
           - Retry < limit (s1_scan_noise_retry_limit, default 1): → S1_RETRY_SCAN_HOME
           - Hết retry: notify error, về home + InX về inx_noise_recovery_mm, vào IDLE.
         """
@@ -3819,11 +3819,11 @@ class CartridgeSystem(Node):
         self._s4_armed = new_armed
 
         s4_now = self.sensor(S4_SCAN_STACK_P1)
-        # S4 là thường đóng (NC): chạm khay chuyển từ ON sang OFF -> Falling edge
-        s4_falling = self._s4_prev_in and (not s4_now)
+        # S4 là thường mở (NO): chạm khay chuyển từ OFF sang ON -> Rising edge
+        s4_rising = (not self._s4_prev_in) and s4_now
         self._s4_prev_in = s4_now
 
-        if self._s4_armed and s4_falling:
+        if self._s4_armed and s4_rising:
             trigger_pos = self._pos(2) or iny
             
             row               = self._zone_to_row(trigger_pos, self.config.iny_input_zones)
@@ -3831,7 +3831,7 @@ class CartridgeSystem(Node):
             self._current_row = row
 
             self.get_logger().info(
-                f"[S1 SCAN] S4 falling edge trigger @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm) - Moving directly"
+                f"[S1 SCAN] S4 rising edge trigger @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm) - Moving directly"
             )
             self._s5_retry = 0
             self._enter_in(SystemState.S1_INY_TO_ROW)
@@ -3840,7 +3840,7 @@ class CartridgeSystem(Node):
         timed_out = time.time() > self._step_timeout_in
         at_target = self._arrived(2) or iny >= self.config.target_scaninp1 - 2.0
         if timed_out or at_target:
-            self.get_logger().warn("[S1 SCAN] Hết hạn scan mà không có falling edge hợp lệ của S4")
+            self.get_logger().warn("[S1 SCAN] Hết hạn scan mà không có rising edge hợp lệ của S4")
             self._stop(2)
 
             if self._s1_scan_noise_retry < self._conf('s1_scan_noise_retry_limit', 1):
@@ -3903,7 +3903,7 @@ class CartridgeSystem(Node):
 
     def _s1_iny_to_row(self):
         """
-        Sau khi S4 falling edge phát hiện row N: di chuyển InY đến target
+        Sau khi S4 rising edge phát hiện row N: di chuyển InY đến target
         `iny_input_zones[N][2]` (chỉ số 2 = robot pickup position của row đó).
         Vận tốc chậm = iny_row_vel (docking).
 
@@ -4527,10 +4527,10 @@ class CartridgeSystem(Node):
               phase 2: InY → iny_output_zones[1][2] @ vel=50 (slow final approach)
               → enter S2A_INY_TARGETROW.
             Lý do: stack rỗng nên không có khay nào để S4 trigger → đi thẳng row 1.
-          - S6 ON (stack có khay): scan với S4 falling-edge + armed-gate (giống S1):
+          - S6 ON (stack có khay): scan với S4 rising-edge + armed-gate (giống S1):
               * inx_at_target (InX tại inx_output_stack)
               * iny in [iny_scan_valid_min_mm, iny_scan_valid_max_mm]
-            S4 falling edge hợp lệ → _zone_to_row(iny_output_zones) → target row →
+            S4 rising edge hợp lệ → _zone_to_row(iny_output_zones) → target row →
             enter S2A_INY_TARGETROW.
             Hết hành trình mà S4 không trigger → fallback row 1 + warn.
 
@@ -4619,7 +4619,7 @@ class CartridgeSystem(Node):
                     self._enter_in(SystemState.S2A_INY_TARGETROW)
                 return
 
-        # ── S6 ON: detect S4 (giống S1 falling-edge + armed-gate) ────
+        # ── S6 ON: detect S4 (giống S1 rising-edge + armed-gate) ────
         if self._s6_snapshot:
             inx_at_target = self._at_position(1, self.config.inx_output_stack)
             iny_in_valid  = (self.config.iny_scan_valid_min_mm
@@ -4638,11 +4638,11 @@ class CartridgeSystem(Node):
             self._s4_armed_out = new_armed
 
             s4_now = self.sensor(S4_SCAN_STACK_P1)
-            # S4 là NC: chạm khay tồn → falling edge (ON → OFF)
-            s4_falling = self._s4_prev_out and (not s4_now)
+            # S4 là NO: chạm khay tồn → rising edge (OFF → ON)
+            s4_rising = (not self._s4_prev_out) and s4_now
             self._s4_prev_out = s4_now
 
-            if self._s4_armed_out and s4_falling:
+            if self._s4_armed_out and s4_rising:
                 trigger_pos = self._pos(2) or iny
                 row = self._zone_to_row(trigger_pos, self.config.iny_output_zones)
                 if row is not None:
@@ -4658,7 +4658,7 @@ class CartridgeSystem(Node):
                         self._output_target_pos = target_mm
                         self._output_row = row
                         self.get_logger().info(
-                            f"[S2A SCAN] S4 falling edge @ {trigger_pos:.1f}mm → "
+                            f"[S2A SCAN] S4 rising edge @ {trigger_pos:.1f}mm → "
                             f"row{row} ({target_mm:.0f}mm)"
                         )
                         self._stop(2)
