@@ -208,6 +208,7 @@ class SystemState(Enum):
     # STATE 4
     S4_CHECK_OUTY_SAFE   = "s4_check_outy_safe"
     S4_OUTX_TARGET2      = "s4_outx_target2"
+    S4_CYL2_RETRACT_READY = "s4_cyl2_retract_ready"
     S4_OUTY_PICK         = "s4_outy_pick"
     S4_CYL2_EXTEND       = "s4_cyl2_extend"
     S4_CYL4_RETRACT      = "s4_cyl4_retract"
@@ -374,6 +375,8 @@ class CartridgeSystem(Node):
         self._homing_done_event  = threading.Event()
         self._homing_result      = False
         self._homing_abort       = threading.Event()  # set by STOP to cancel homing thread
+        self._servo_home_abort   = set()              # per-servo JOG home abort flags
+        self._homing_ref_offset  = {}                 # previous zero offsets for re-home near-zero check
 
         # JOG velocity — only affects JOG; state/homing velocities fixed by FAS firmware
         self._jog_velocity_ms  = 0.05   # m/s (default, overwritten by FAS read on first connect)
@@ -1453,6 +1456,7 @@ class CartridgeSystem(Node):
             self._guide_logged.clear()
         if next_state == SystemState.ERROR and self.zero_offset:
             self.zero_offset.clear()
+            self._homing_ref_offset.clear()
             self._publish_homing_done(False)  # gate vfd_logic AUTO chờ re-home
             self.get_logger().warn("[ERROR] Cleared zero_offset — cần re-home sau khi recovery")
         self.state = next_state
@@ -1837,7 +1841,7 @@ class CartridgeSystem(Node):
                     current_pos = mot.current_position()
                 self.get_logger().info(f"Homing {name} (S{sid}): current={current_pos}")
 
-                zero = self.zero_offset.get(sid, 0)
+                zero = self._homing_ref_offset.get(sid, self.zero_offset.get(sid, 0))
                 near_zero = abs(current_pos - zero) <= POSITION_TOLERANCE_HOME * COUNTS_PER_MM
 
                 if self._servo_homed_once.get(sid) and near_zero:
@@ -1928,6 +1932,16 @@ class CartridgeSystem(Node):
                                 action=['Mở FAS Editor → tab Referencing → test home thủ công',
                                         'STOP rồi HOMING lại sau khi fix'])
                             return False
+
+                    # Chốt homing: referencing_task(nonblocking) chỉ set bit
+                    # start_homing_procedure=True và KHÔNG tự clear. Nếu để bit treo
+                    # HIGH, drive coi lệnh homing còn active → trục về tới reference
+                    # xong vẫn re-trigger/dò home lại (S4 OutX xa home), home_position_set
+                    # không latch ổn định → poll timeout 120s. stop_motion_task() clear
+                    # start_homing_procedure=False để kết thúc homing (giống bản blocking
+                    # edcon wait_for_referencing_execution).
+                    with self._servo_lock:
+                        mot.stop_motion_task()
 
                     with self._servo_lock:
                         post_pos = mot.current_position()
@@ -2061,6 +2075,7 @@ class CartridgeSystem(Node):
             self._setup_cpx_valves_for_auto_ai()
             if not self.zero_offset:
                 self.get_logger().info("[START] Auto/AI mode — not homed → HOMING")
+                self._homing_ref_offset.clear()
                 # Reset drive warm-up gate — sau homing phải flush lại trước motion đầu tiên
                 self._drive_warm_t = -1.0
                 self._enter(SystemState.HOMING)
@@ -2111,6 +2126,7 @@ class CartridgeSystem(Node):
         # HOMING; manual chờ operator nhấn nút HOMING).
         if self.zero_offset:
             self.zero_offset.clear()
+            self._homing_ref_offset.clear()
             self._publish_homing_done(False)  # gate vfd_logic AUTO chờ re-home
             self.get_logger().info("[STOP] Cleared zero_offset — START lần sau sẽ phải re-home")
 
@@ -2389,6 +2405,7 @@ class CartridgeSystem(Node):
             return
         if self.zero_offset:
             self.zero_offset.clear()
+            self._homing_ref_offset.clear()
             self._publish_homing_done(False)  # gate vfd_logic AUTO chờ re-home
             self.get_logger().info(
                 f"[MODE {old_mode.upper()}→{new_mode.upper()}] Cleared zero_offset — cần re-home"
@@ -2487,6 +2504,12 @@ class CartridgeSystem(Node):
         if len(parts) >= 2 and parts[1].lower() == 'stop':
             try:
                 sid = int(parts[0])
+                self._servo_home_abort.add(sid)
+                if self.state in (SystemState.HOMING, SystemState.HOMING_RUNNING):
+                    self._homing_abort.set()
+                    self.get_logger().warn(
+                        f"[JOG] Servo S{sid} STOP during global homing -> abort homing thread"
+                    )
                 self._stop(sid)
                 self.get_logger().info(f"[JOG] Servo S{sid} STOP override")
             except Exception as e:
@@ -2529,6 +2552,7 @@ class CartridgeSystem(Node):
                 sid = int(parts[1])
                 mot = self.servos.get(sid)
                 if mot:
+                    self._servo_home_abort.discard(sid)
                     def _do(mot=mot, sid=sid):
                         self._ensure_ready(mot, sid, timeout=5.0)
                         with self._servo_lock:
@@ -2541,6 +2565,12 @@ class CartridgeSystem(Node):
                         timeout = self.config.homing_timeout
                         homed_ok = False
                         while time.time() - start < timeout:
+                            if sid in self._servo_home_abort:
+                                self.get_logger().warn(f"S{sid} JOG home aborted by servo STOP")
+                                with self._servo_lock:
+                                    mot.stop_motion_task()
+                                self._servo_home_abort.discard(sid)
+                                return
                             with self._servo_lock:
                                 ref = mot.referenced()
                             if ref:
@@ -2558,6 +2588,11 @@ class CartridgeSystem(Node):
                                 f'Servo S{sid} timeout sau {timeout}s — drive không trả referenced=True. '
                                 f'Check FAS Referencing tab / REF cam / wiring. RUN target sẽ bị từ chối.')
                             return
+                        # Chốt homing: clear bit start_homing_procedure (referencing_task
+                        # nonblocking để treo HIGH → drive có thể re-trigger dò home lại).
+                        # Mirror nhánh timeout ở trên + bản blocking edcon.
+                        with self._servo_lock:
+                            mot.stop_motion_task()
                         with self._servo_lock:
                             self.zero_offset[sid] = mot.current_position()
                         self._need_warm_up[sid] = True  # FAS quirk: cần flush trước position_task đầu tiên
@@ -2624,6 +2659,10 @@ class CartridgeSystem(Node):
                 # Clear stale event nếu thread trước đã set sau STOP nhưng main
                 # loop chưa consume (state đã về IDLE).
                 self._homing_done_event.clear()
+                # Keep the previous raw encoder zero only for the near-zero
+                # optimization. zero_offset is still cleared below so state
+                # machines stay locked until this homing run completes.
+                self._homing_ref_offset = dict(self.zero_offset)
                 self.zero_offset.clear()
                 self._publish_homing_done(False)  # vfd_logic gate AUTO chờ homing mới xong
                 self._inx_moving = self._iny_moving = False
@@ -3307,6 +3346,7 @@ class CartridgeSystem(Node):
                 self._homing_done_event.clear()
                 if self._homing_result:
                     self.get_logger().info("Homing complete (main thread transition)")
+                    self._homing_ref_offset = dict(self.zero_offset)
                     self._publish_homing_done(True)
                     # Manual mode: KHÔNG auto-set _jog_mode — giữ nguyên label "manual"
                     # để user chủ động chọn STATE chạy. JOG chỉ kích hoạt khi STOP state.
@@ -3405,6 +3445,7 @@ class CartridgeSystem(Node):
         if   s == SystemState.IDLE:                self._do_idle_s4()
         elif s == SystemState.S4_CHECK_OUTY_SAFE:  self._s4_check_outy_safe()
         elif s == SystemState.S4_OUTX_TARGET2:     self._s4_outx_target2()
+        elif s == SystemState.S4_CYL2_RETRACT_READY: self._s4_cyl2_retract_ready()
         elif s == SystemState.S4_OUTY_PICK:        self._s4_outy_pick()
         elif s == SystemState.S4_CYL2_EXTEND:      self._s4_cyl2_extend()
         elif s == SystemState.S4_CYL4_RETRACT:     self._s4_cyl4_retract()
@@ -4879,14 +4920,15 @@ class CartridgeSystem(Node):
     
     def _s3_servo3_target1(self):
         """
-        STATE 3 bước 2: Servo3 → servo3_target1 (10mm) — điểm chờ cấp khay.
-        Verify _at_position(3, servo3_target1) trước khi sang S3_CHECK_S17
+        STATE 3 bước 2: Servo3 → servo3_home (0mm) — điểm nhận & chờ cấp khay.
+        Servo3 luôn nhận khay + kiểm tra tín hiệu tại vị trí home 0.0.
+        Verify _at_position(3, servo3_home) trước khi sang S3_CHECK_S17
         (check sensor có khay trên platform).
         Timeout → _error() (vào ERROR state).
         """
         cfg = self.config
         if not self._cmd_sent_s3:
-            ok = self._nb_move(3, cfg.servo3_target1)
+            ok = self._nb_move(3, cfg.servo3_home)
             if not ok:
                 self._log_once("S3_T1_FAIL", "S3 target1 fail")
                 return
@@ -4898,8 +4940,8 @@ class CartridgeSystem(Node):
                 # → ép re-home cả 5 servo, quá khắc nghiệt khi commissioning Pos2)
                 self.get_logger().warn("[S3] SERVO3_TARGET1 timeout — resend lệnh")
                 self._cmd_sent_s3 = False
-            # [BLOCKING-FIX] verify _at_position(3, servo3_target1)
-            elif self._arrived(3) and self._at_position(3, cfg.servo3_target1):
+            # [BLOCKING-FIX] verify _at_position(3, servo3_home)
+            elif self._arrived(3) and self._at_position(3, cfg.servo3_home):
                 self._enter_s3(SystemState.S3_CHECK_S17)
 
     def _s3_check_s17(self):
@@ -4925,7 +4967,7 @@ class CartridgeSystem(Node):
     def _s3_wait_s17(self):
         """
         Chờ S17 ON (có khay trên Platform). Khi ON → S3_CHECK_S17 (confirm 2s).
-        Nếu S17 OFF mà Servo 3 ở vị trí khác 10mm -> quay về 10mm chờ.
+        Nếu S17 OFF mà Servo 3 ở vị trí khác home (0mm) -> quay về home chờ.
         Không có timeout — chờ vô hạn cho đến khi operator cấp khay.
         """
         cfg = self.config
@@ -4951,14 +4993,14 @@ class CartridgeSystem(Node):
         else:
             self._cyl4_retract_sent = False
 
-        # Nếu S17 OFF mà Servo 3 khác vị trí standby (10mm) -> quay về 10mm chờ
-        if p3 is not None and not self._at_position(3, cfg.servo3_target1, tol=5.0):
+        # Nếu S17 OFF mà Servo 3 khác vị trí home (0mm) -> quay về home chờ
+        if p3 is not None and not self._at_position(3, cfg.servo3_home, tol=5.0):
             if not self._cmd_sent_s3:
-                self.get_logger().warn(f"[S3] S17 OFF nhưng Servo3 @ {p3:.1f}mm khác {cfg.servo3_target1}mm -> lùi về chờ")
-                if self._nb_move(3, cfg.servo3_target1):
+                self.get_logger().warn(f"[S3] S17 OFF nhưng Servo3 @ {p3:.1f}mm khác home {cfg.servo3_home}mm -> lùi về chờ")
+                if self._nb_move(3, cfg.servo3_home):
                     self._cmd_sent_s3 = True
             else:
-                if self._arrived(3) and self._at_position(3, cfg.servo3_target1):
+                if self._arrived(3) and self._at_position(3, cfg.servo3_home):
                     self._cmd_sent_s3 = False
         else:
             if self._cmd_sent_s3:
@@ -5010,7 +5052,7 @@ class CartridgeSystem(Node):
         2 nhánh thoát:
           1. S18 ON sớm → STOP servo3 + S3_WAIT_S18 (confirm 5s).
           2. Servo3 tới giới hạn (target2) + S18 vẫn OFF → khay kẹt → quay về
-             servo3_target1 thử lại. Verify _at_position(3, target2) trước fallback.
+             servo3_home thử lại. Verify _at_position(3, target2) trước fallback.
         Timeout move_timeout → _error().
         """
         cfg = self.config
@@ -5029,6 +5071,18 @@ class CartridgeSystem(Node):
         if not self._cmd_sent_s3:
             ok = self._nb_move(3, cfg.servo3_target2, vel=int(cfg.servo3_feed_velocity))
             if not ok:
+                # _nb_move reject (pos > servo_limits[3] HOẶC Servo3 chưa homed) chỉ
+                # log ROS — notify GUI để operator thấy ngay thay vì state đứng im.
+                # Gate bằng _guide_logged (như _log_once) để fire đúng 1 lần, không spam 20Hz.
+                if "S3_FEED_FAIL" not in self._guide_logged:
+                    limit = self._conf('servo_limits', {}).get(3, 999.0)
+                    self._notify_step('error', 'STATE 3', 'Servo3 FEED',
+                        f'Lệnh đẩy khay bị từ chối — Servo3 không di chuyển '
+                        f'(đích servo3_target2={cfg.servo3_target2}mm)',
+                        check=[f'servo_limits[3]={limit}mm có ≥ servo3_target2={cfg.servo3_target2}mm không',
+                               'Servo3 (S3) đã HOMING chưa (zero_offset)'],
+                        action=['Sửa servo_limits[3] ≥ servo3_target2 trong cartridge_config.yaml rồi restart node',
+                                'Hoặc HOMING lại Servo3 (S3)'])
                 self._log_once("S3_FEED_FAIL", "S3 feed fail")
                 return
             self._cmd_sent_s3     = True
@@ -5050,7 +5104,7 @@ class CartridgeSystem(Node):
             # đã ở target2, tránh đọc nhầm drive flag rồi quay về 10mm vô lý.
             elif (self._arrived(3) and self._at_position(3, cfg.servo3_target2)
                   and time.time() - self._step_start_s3 > 0.5):
-                self.get_logger().warn("[S3] Servo 3 tới giới hạn (target2) chưa có S18 -> Quay về 10mm thử lại!")
+                self.get_logger().warn("[S3] Servo 3 tới giới hạn (target2) chưa có S18 -> Quay về home (0mm) thử lại!")
                 self._notify('warn', 'Lỗi cấp khay', 'Đã tới 400mm nhưng chưa thấy S18, thu về cấp lại')
                 self._enter_s3(SystemState.S3_SERVO3_TARGET1)
 
@@ -5141,7 +5195,7 @@ class CartridgeSystem(Node):
         Gate _outy_safe() re-check MỖI TICK (mirror rule _iny_safe của S1/S2 —
         không chỉ tin thứ tự bước, phòng OutY drift giữa chừng).
         Timeout → resend (pattern S1/S2). Verify _at_position trước khi sang
-        S4_OUTY_PICK (hạ OutY xuống kẹp khay).
+        S4_CYL2_RETRACT_READY để chắc Cyl2 đang thu trước khi OutY hạ gắp.
         """
         cfg = self.config
         if not self._outy_safe():
@@ -5160,7 +5214,44 @@ class CartridgeSystem(Node):
                 self._cmd_sent_s4 = False
             # [BLOCKING-FIX] verify _at_position(4, outx_target2)
             elif self._arrived(4) and self._at_position(4, cfg.outx_target2):
-                self._enter_s4(SystemState.S4_OUTY_PICK)
+                self._enter_s4(SystemState.S4_CYL2_RETRACT_READY)
+
+    def _s4_cyl2_retract_ready(self):
+        """
+        Interlock trước khi OutY hạ xuống gắp khay: Cyl2 phải đang RETRACT.
+        Theo mapping hiện tại:
+          - S21 ON  = Cyl2 retracted
+          - S22 OFF = Cyl2 không còn extended
+        Nếu chưa đúng thì gửi Cyl2 RETRACT và retry mỗi 3s, không cho vào
+        S4_OUTY_PICK cho tới khi feedback hợp lệ.
+        """
+        cyl2_ret, cyl2_ext = self._snap(S21_CYL2_RETRACTED, S22_CYL2_EXTENDED)
+        if cyl2_ret and not cyl2_ext:
+            self.get_logger().info("[S4] Cyl2 RETRACT ready: S21 ON + S22 OFF -> OutY PICK")
+            self._enter_s4(SystemState.S4_OUTY_PICK)
+            return
+
+        if not self._cmd_sent_s4:
+            self._cyl2_retract()
+            self._cyl2_retry_t  = time.time() + 3.0
+            self._step_start_s4 = time.time()
+            self._cmd_sent_s4   = True
+        elif time.time() > self._cyl2_retry_t:
+            self.get_logger().info("[S4] Retry Cyl2 retract before OutY pick")
+            self._cyl2_retract()
+            self._cyl2_retry_t = time.time() + 3.0
+
+        if time.time() - self._step_start_s4 > CYLINDER_TIMEOUT_S:
+            self._notify_step('warn', 'STATE 4', 'Cyl2 retract before pick',
+                f'{self._sensor_label(21)} chưa ON hoặc {self._sensor_label(22)} chưa OFF '
+                f'sau {CYLINDER_TIMEOUT_S:.0f}s — vẫn đang retry mỗi 3s',
+                check=['van Cyl2 retract', 'áp khí',
+                       f'dây {self._sensor_label(21)}/{self._sensor_label(22)}'],
+                action=['Kiểm tra van/khí nén', 'Hoặc nhấn STOP để abort'])
+            self._step_start_s4 = time.time()
+
+        self._log_once("S4_WAIT_CYL2_RET_PICK",
+                       f"Cho Cyl2 RETRACT trước PICK | S21={cyl2_ret} S22={cyl2_ext}")
 
     # ══════════════════════════════════════════════════════════════
     # WARNING — CAO RỦI RO: Cyl2 EXTEND ngay sau khi OutY tới target.

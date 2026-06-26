@@ -83,7 +83,6 @@ class SystemConfig(BaseModel):
     # Pos 2
     iny_target2: float = 60.0
     servo3_home: float = 0.0
-    servo3_target1: float = 10.0
     servo3_target2: float = 400.0
     servo3_push_position: float = 300.0
     servo3_jog_velocity: float = 50.0
