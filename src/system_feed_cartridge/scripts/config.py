@@ -147,8 +147,12 @@ class SystemConfig(BaseModel):
         return obj
 
     def save(self, path: str):
+        if hasattr(self, "model_dump"):
+            data = self.model_dump(exclude_unset=True)
+        else:
+            data = self.dict(exclude_unset=True)
         with open(path, "w", encoding="utf-8") as f:
-            yaml.dump(self.dict(exclude_unset=False), f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
     def save_to_file(self):
         if hasattr(self, '_config_file') and self._config_file:

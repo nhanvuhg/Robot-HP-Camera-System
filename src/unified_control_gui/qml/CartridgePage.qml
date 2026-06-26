@@ -1801,13 +1801,13 @@ import QtGraphicalEffects 1.15
                                                     text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true
                                                     color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter
                                                     validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 2 }
-                                                    Connections {
-                                                        function onConfigRevisionChanged() {
-                                                            var v = page2Root.parsedConfig[modelData.key]
-                                                            if (v !== undefined) sInput2.text = String(v)
-                                                        }
-                                                        target: page2Root
-                                                    }
+	                                                    Connections {
+	                                                        function onConfigRevisionChanged() {
+	                                                            var v = page2Root.parsedConfig[modelData.key]
+	                                                            sInput2.text = (v !== undefined) ? String(v) : ""
+	                                                        }
+	                                                        target: page2Root
+	                                                    }
                                                 }
                                             }
                                             Text {
@@ -1832,7 +1832,7 @@ import QtGraphicalEffects 1.15
                                             }
                                         }
                                     }
-                                    CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText; onClicked: page2Root.reloadConfig() }
+	                                    CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText; onClicked: cartridgeController.getConfig() }
                                 }
                             }
                         }
@@ -3198,14 +3198,16 @@ import QtGraphicalEffects 1.15
                                     font.pixelSize: 14; font.family: "monospace"; color: root.cWhiteText
                                     horizontalAlignment: TextInput.AlignHCenter
                                     validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 2 }
-                                    Connections {
-                                        function onConfigRevisionChanged() {
-                                            var tbl = page2Root.parsedConfig[cfgCard.configKey]
-                                            if (tbl && tbl[String(modelData)] !== undefined)
-                                                rowInput.text = String(tbl[String(modelData)])
-                                        }
-                                        target: page2Root
-                                    }
+	                                    Connections {
+	                                        function onConfigRevisionChanged() {
+	                                            var tbl = page2Root.parsedConfig[cfgCard.configKey]
+	                                            if (tbl && tbl[String(modelData)] !== undefined)
+	                                                rowInput.text = String(tbl[String(modelData)])
+	                                            else
+	                                                rowInput.text = ""
+	                                        }
+	                                        target: page2Root
+	                                    }
                                 }
                             }
                             Item { width: 4 }
@@ -3224,14 +3226,14 @@ import QtGraphicalEffects 1.15
                             var positions = {}
                             for (var i = 0; i < cfgRepeater.count; i++) {
                                 var item = cfgRepeater.itemAt(i)
-                                if (item) positions[String(item.rowNum)] = parseFloat(item.inputText) || 0.0
-                            }
-                            cartridgeController.saveConfig(cfgCard.configKey, JSON.stringify(positions))
+	                                if (item && item.inputText !== "") positions[String(item.rowNum)] = parseFloat(item.inputText) || 0.0
+	                            }
+	                            cartridgeController.saveConfig(cfgCard.configKey, JSON.stringify(positions))
                         }
                     }
-                    CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize: 17; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText
-                        onClicked: page2Root.reloadConfig()
-                    }
+	                    CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize: 17; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText
+	                        onClicked: cartridgeController.getConfig()
+	                    }
                 }
             }
         }
@@ -3289,15 +3291,15 @@ import QtGraphicalEffects 1.15
                                 spacing: parent.width * 0.02
                                 Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; anchors.verticalCenter: parent.verticalCenter }
 
-                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
-                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
-                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) minInp.text = String(tbl[String(modelData)][0]) } } } }
-                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
-                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
-                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) maxInp.text = String(tbl[String(modelData)][1]) } } } }
-                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
-                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
-                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; if (tbl && tbl[String(modelData)]) tgtInp.text = String(tbl[String(modelData)][2]) } } } }
+	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
+	                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; minInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][0]) : "" } } } }
+	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
+	                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; maxInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][1]) : "" } } } }
+	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
+	                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; tgtInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][2]) : "" } } } }
 
                                 Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; anchors.verticalCenter: parent.verticalCenter }
                             }
@@ -3312,18 +3314,20 @@ import QtGraphicalEffects 1.15
                                 for (var i = 0; i < cfgZoneRepeater.count; i++) {
                                     var item = cfgZoneRepeater.itemAt(i)
                                     if (item) {
-                                      var min = parseFloat(item.minText); if(isNaN(min)) min = 0.0;
-                                      var max = parseFloat(item.maxText); if(isNaN(max)) max = 0.0;
-                                      var tgt = parseFloat(item.tgtText); if(isNaN(tgt)) tgt = 0.0;
-                                      positions[String(item.rowNum)] = [min, max, tgt]
-                                    }
+	                                      if (item.minText !== "" && item.maxText !== "" && item.tgtText !== "") {
+	                                        var min = parseFloat(item.minText); if(isNaN(min)) min = 0.0;
+	                                        var max = parseFloat(item.maxText); if(isNaN(max)) max = 0.0;
+	                                        var tgt = parseFloat(item.tgtText); if(isNaN(tgt)) tgt = 0.0;
+	                                        positions[String(item.rowNum)] = [min, max, tgt]
+	                                      }
+	                                    }
                                 }
                                 cartridgeController.saveConfig(cfgZoneCard.configKey, JSON.stringify(positions))
                             }
                         }
-                        CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText
-                            onClicked: page2Root.reloadConfig()
-                        }
+	                        CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText
+	                            onClicked: cartridgeController.getConfig()
+	                        }
                     }
                 }
             }

@@ -206,9 +206,9 @@ class SystemState(Enum):
     S3_COMPLETE          = "s3_complete"
 
     # STATE 4
+    S4_CYL2_RETRACT_READY = "s4_cyl2_retract_ready"
     S4_CHECK_OUTY_SAFE   = "s4_check_outy_safe"
     S4_OUTX_TARGET2      = "s4_outx_target2"
-    S4_CYL2_RETRACT_READY = "s4_cyl2_retract_ready"
     S4_OUTY_PICK         = "s4_outy_pick"
     S4_CYL2_EXTEND       = "s4_cyl2_extend"
     S4_CYL4_RETRACT      = "s4_cyl4_retract"
@@ -337,7 +337,7 @@ class CartridgeSystem(Node):
         self._s4_trigger        = False
         self._outy_jog_start    = 0.0
         self._outy_jog_pos      = 0.0
-        # S4 scan S20 (NC, falling edge) — mirror pattern S1/S2A scan S4
+        # S4 scan S20 (NO, rising edge)
         self._s20_prev          = False
         self._s20_armed         = False
         self._s4_scan_noise_retry = 0
@@ -421,6 +421,7 @@ class CartridgeSystem(Node):
 
         qos_latching = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_config_data    = self.create_publisher(String, '/providesystem/config_data', qos_latching)
+        self._config_mtime_ns   = self._config_file_mtime_ns()
         # homing_done dùng QoS latching để subscriber (vfd_logic_node) start sau
         # nhận được last state (True nếu đã homing xong). Default state = False
         # ngay khi node init → vfd_logic biết phải gate AUTO cho tới khi user
@@ -456,6 +457,7 @@ class CartridgeSystem(Node):
         self._connect_hardware()
 
         self.create_timer(0.05, self._safe_control_loop)
+        self.create_timer(1.0, self._config_file_watchdog)
         
         # Positions publisher chạy trong thread riêng
         # để Modbus timeout KHÔNG block ROS control loop
@@ -1187,7 +1189,7 @@ class CartridgeSystem(Node):
         """
         now = time.time()
         if now < self._ready_until.get(servo_id, 0.0):
-            return
+            return True
 
         if hasattr(mot, 'ready_for_motion'):
             acquired = self._servo_lock.acquire(timeout=0.1)
@@ -1195,7 +1197,7 @@ class CartridgeSystem(Node):
                 try:
                     if mot.ready_for_motion():
                         self._ready_until[servo_id] = now + self._ready_ttl
-                        return
+                        return True
                 except Exception:
                     pass
                 finally:
@@ -1211,7 +1213,7 @@ class CartridgeSystem(Node):
                 self._servo_lock.release()
 
         if not hasattr(mot, 'ready_for_motion'):
-            return
+            return True
         start = time.time()
         while time.time() - start < timeout:
             if self._servo_lock.acquire(timeout=0.5):
@@ -1221,9 +1223,10 @@ class CartridgeSystem(Node):
                     self._servo_lock.release()
                 if ready:
                     self._ready_until[servo_id] = time.time() + self._ready_ttl
-                    return
+                    return True
             time.sleep(0.05)
         self.get_logger().warn(f"S{servo_id}: drive not ready after {timeout}s")
+        return False
 
     # ── Cylinders ─────────────────────────────────────────────────
 
@@ -1832,7 +1835,36 @@ class CartridgeSystem(Node):
             mot = self.servos[sid]
 
             try:
-                self._ensure_ready(mot, sid, timeout=5.0)
+                ready_ok = False
+                for ready_attempt in range(1, 4):
+                    if self._homing_abort.is_set():
+                        self.get_logger().warn(f"  {name}: homing aborted (STOP) before ready")
+                        return False
+                    if self._ensure_ready(mot, sid, timeout=5.0):
+                        ready_ok = True
+                        break
+                    self._ready_until.pop(sid, None)
+                    self.get_logger().warn(
+                        f"  {name}: drive not ready before homing "
+                        f"(attempt {ready_attempt}/3)"
+                    )
+                    try:
+                        with self._servo_lock:
+                            mot.stop_motion_task()
+                    except Exception:
+                        pass
+                    time.sleep(1.0)
+
+                if not ready_ok:
+                    self._notify_step('error', 'HOMING', f'{name} (S{sid})',
+                        'Drive chưa ready nên không gửi lệnh referencing_task',
+                        enum_name='HOMING_RUNNING',
+                        check=[f'FAS Diagnostic S{sid}: drive enable/ready',
+                               'PLC control granted nhưng ready_for_motion phải TRUE',
+                               'Powerstage/enable, STO, limit switch, warning trên drive'],
+                        action=['ACK lỗi trên FAS rồi HOMING lại',
+                                'Nếu vẫn lặp: power-cycle drive hoặc kiểm tra enable/STO'])
+                    return False
 
                 # Đánh dấu motion timestamp để _publish_positions đọc tươi trong khi homing
                 self._servo_motion_t[sid] = time.time()
@@ -2844,25 +2876,16 @@ class CartridgeSystem(Node):
                     action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 4'],
                     hint='press_homing')
                 return
-            # Pre-flight sensor check (mirror STATE 1/2/3):
-            #   S18 ON  — phải có khay ở vị trí feed cần thay (giống điều kiện auto)
-            #   S21 ON + S22 OFF — Cyl2 phải retracted trước khi OutY hạ xuống kẹp
+            # Pre-flight sensor check (mirror AUTO trigger):
+            #   S18 ON — phải có khay ở vị trí feed cần thay.
+            # Cyl2 không reject ở đây: STATE 4 sẽ tự retract và chờ S21 ON/S22 OFF
+            # ở bước đầu tiên trước khi OutY/OutX di chuyển.
             s18 = self.sensor(S18_FEED_OK)
-            s21, s22 = self._snap(S21_CYL2_RETRACTED, S22_CYL2_EXTENDED)
-            if (not s18) or (not s21) or s22:
+            if not s18:
                 reasons, check, action = [], [], []
-                if not s18:
-                    reasons.append(f"{self._sensor_label(18)} OFF (không có khay ở feed)")
-                    check.append('khay output có thật ở vị trí feed không')
-                    action.append('Chạy STATE 3 cấp khay trước')
-                if not s21:
-                    reasons.append(f"{self._sensor_label(21)} OFF (Cyl2 chưa retract)")
-                    check.append(f'van Cyl2, áp khí, dây {self._sensor_label(21)}')
-                    action.append('Cyl2 RETRACT manual')
-                if s22:
-                    reasons.append(f"{self._sensor_label(22)} ON (Cyl2 đang extend)")
-                    check.append(f'van Cyl2, dây {self._sensor_label(22)}')
-                    action.append('Cyl2 RETRACT manual')
+                reasons.append(f"{self._sensor_label(18)} OFF (không có khay ở feed)")
+                check.append('khay output có thật ở vị trí feed không')
+                action.append('Chạy STATE 3 cấp khay trước')
                 self._notify_step('warn', 'STATE 4', 'pre-flight',
                     'Điều kiện chưa đủ: ' + '; '.join(reasons),
                     check=check, action=action)
@@ -2871,7 +2894,7 @@ class CartridgeSystem(Node):
             self._drive_warm_t = -1.0  # FAS drive warm-up
             self._sync_mode_jog()
             self._notify('info', 'STATE 4 (manual)', 'Thay khay output')
-            self._enter_s4(SystemState.S4_CHECK_OUTY_SAFE)
+            self._enter_s4(SystemState.S4_CYL2_RETRACT_READY)
             return
 
         if cmd == 'ABORT_TO_JOG':
@@ -2947,6 +2970,7 @@ class CartridgeSystem(Node):
         """
         try:
             import json
+            self._reload_config_from_disk("before GUI update")
             payload = json.loads(msg.data)
             key = payload.get('key')
             val_str = payload.get('data', '')
@@ -2966,6 +2990,8 @@ class CartridgeSystem(Node):
                     except ValueError: pass
                 setattr(self.config, key, val)
                 self.config.save_to_file()
+                self._config_mtime_ns = self._config_file_mtime_ns()
+                self._publish_config_snapshot()
                 self.get_logger().info(f"Config updated dynamically: {key} = {val}")
                 self._notify('info', 'Config Updated', f'Cập nhật thành công {key}')
             else:
@@ -2982,13 +3008,8 @@ class CartridgeSystem(Node):
         """
         if msg.data.strip() == 'request':
             try:
-                import json
-                import yaml
-                with open(self.config._config_file, 'r') as f:
-                    js_data = json.dumps(yaml.safe_load(f))
-                    msg_out = String()
-                    msg_out.data = js_data
-                    self.pub_config_data.publish(msg_out)
+                self._reload_config_from_disk("GUI request")
+                self._publish_config_snapshot()
             except Exception as e:
                 self.get_logger().warn(f"get_config error: {e}")
 
@@ -3118,6 +3139,53 @@ class CartridgeSystem(Node):
         else:
             self._cyl5_retract()
         self._cyl5_retry_t = now
+
+    def _config_file_mtime_ns(self) -> int:
+        path = getattr(self.config, '_config_file', None)
+        if not path:
+            return 0
+        try:
+            return os.stat(path).st_mtime_ns
+        except OSError:
+            return 0
+
+    def _reload_config_from_disk(self, reason: str = "") -> bool:
+        """
+        Đồng bộ runtime config từ YAML trên đĩa.
+        GUI chỉ là view/editor; YAML là nguồn mới nhất khi operator sửa tay.
+        """
+        path = getattr(self.config, '_config_file', None)
+        if not path:
+            return False
+        try:
+            self.config = CartridgeConfig.load(path)
+            self._config_mtime_ns = self._config_file_mtime_ns()
+            if reason:
+                self.get_logger().info(f"[CONFIG] Reloaded YAML ({reason})")
+            return True
+        except Exception as e:
+            self.get_logger().warn(f"[CONFIG] Reload YAML failed ({reason}): {e}")
+            return False
+
+    def _publish_config_snapshot(self):
+        try:
+            if hasattr(self.config, "model_dump"):
+                data = self.config.model_dump(exclude_unset=True)
+            else:
+                data = self.config.dict(exclude_unset=True)
+            msg_out = String()
+            msg_out.data = json.dumps(data)
+            self.pub_config_data.publish(msg_out)
+        except Exception as e:
+            self.get_logger().warn(f"[CONFIG] publish snapshot error: {e}")
+
+    def _config_file_watchdog(self):
+        mtime_ns = self._config_file_mtime_ns()
+        if not mtime_ns:
+            return
+        if mtime_ns != getattr(self, '_config_mtime_ns', 0):
+            if self._reload_config_from_disk("file changed"):
+                self._publish_config_snapshot()
 
     def _control_loop(self):
         """
@@ -3443,9 +3511,9 @@ class CartridgeSystem(Node):
         """
         s = self.state_s4
         if   s == SystemState.IDLE:                self._do_idle_s4()
+        elif s == SystemState.S4_CYL2_RETRACT_READY: self._s4_cyl2_retract_ready()
         elif s == SystemState.S4_CHECK_OUTY_SAFE:  self._s4_check_outy_safe()
         elif s == SystemState.S4_OUTX_TARGET2:     self._s4_outx_target2()
-        elif s == SystemState.S4_CYL2_RETRACT_READY: self._s4_cyl2_retract_ready()
         elif s == SystemState.S4_OUTY_PICK:        self._s4_outy_pick()
         elif s == SystemState.S4_CYL2_EXTEND:      self._s4_cyl2_extend()
         elif s == SystemState.S4_CYL4_RETRACT:     self._s4_cyl4_retract()
@@ -3518,7 +3586,7 @@ class CartridgeSystem(Node):
         if self._can_start_s4():
             self._s4_trigger = False
             self.get_logger().info("[S4-IDLE] Output full → STATE 4")
-            self._enter_s4(SystemState.S4_CHECK_OUTY_SAFE)
+            self._enter_s4(SystemState.S4_CYL2_RETRACT_READY)
 
     def _do_homing(self):
         """
@@ -5195,7 +5263,7 @@ class CartridgeSystem(Node):
         Gate _outy_safe() re-check MỖI TICK (mirror rule _iny_safe của S1/S2 —
         không chỉ tin thứ tự bước, phòng OutY drift giữa chừng).
         Timeout → resend (pattern S1/S2). Verify _at_position trước khi sang
-        S4_CYL2_RETRACT_READY để chắc Cyl2 đang thu trước khi OutY hạ gắp.
+        S4_OUTY_PICK (Cyl2 đã được retract ở bước đầu STATE 4).
         """
         cfg = self.config
         if not self._outy_safe():
@@ -5214,21 +5282,21 @@ class CartridgeSystem(Node):
                 self._cmd_sent_s4 = False
             # [BLOCKING-FIX] verify _at_position(4, outx_target2)
             elif self._arrived(4) and self._at_position(4, cfg.outx_target2):
-                self._enter_s4(SystemState.S4_CYL2_RETRACT_READY)
+                self._enter_s4(SystemState.S4_OUTY_PICK)
 
     def _s4_cyl2_retract_ready(self):
         """
-        Interlock trước khi OutY hạ xuống gắp khay: Cyl2 phải đang RETRACT.
+        Bước đầu STATE 4: ép Cyl2 RETRACT trước khi OutY/OutX di chuyển.
         Theo mapping hiện tại:
           - S21 ON  = Cyl2 retracted
           - S22 OFF = Cyl2 không còn extended
         Nếu chưa đúng thì gửi Cyl2 RETRACT và retry mỗi 3s, không cho vào
-        S4_OUTY_PICK cho tới khi feedback hợp lệ.
+        S4_CHECK_OUTY_SAFE cho tới khi feedback hợp lệ.
         """
         cyl2_ret, cyl2_ext = self._snap(S21_CYL2_RETRACTED, S22_CYL2_EXTENDED)
         if cyl2_ret and not cyl2_ext:
-            self.get_logger().info("[S4] Cyl2 RETRACT ready: S21 ON + S22 OFF -> OutY PICK")
-            self._enter_s4(SystemState.S4_OUTY_PICK)
+            self.get_logger().info("[S4] Cyl2 RETRACT ready: S21 ON + S22 OFF -> CHECK_OUTY_SAFE")
+            self._enter_s4(SystemState.S4_CHECK_OUTY_SAFE)
             return
 
         if not self._cmd_sent_s4:
@@ -5237,7 +5305,7 @@ class CartridgeSystem(Node):
             self._step_start_s4 = time.time()
             self._cmd_sent_s4   = True
         elif time.time() > self._cyl2_retry_t:
-            self.get_logger().info("[S4] Retry Cyl2 retract before OutY pick")
+            self.get_logger().info("[S4] Retry Cyl2 retract at STATE 4 entry")
             self._cyl2_retract()
             self._cyl2_retry_t = time.time() + 3.0
 
@@ -5250,8 +5318,8 @@ class CartridgeSystem(Node):
                 action=['Kiểm tra van/khí nén', 'Hoặc nhấn STOP để abort'])
             self._step_start_s4 = time.time()
 
-        self._log_once("S4_WAIT_CYL2_RET_PICK",
-                       f"Cho Cyl2 RETRACT trước PICK | S21={cyl2_ret} S22={cyl2_ext}")
+        self._log_once("S4_WAIT_CYL2_RET_ENTRY",
+                       f"Cho Cyl2 RETRACT khi vào STATE 4 | S21={cyl2_ret} S22={cyl2_ext}")
 
     # ══════════════════════════════════════════════════════════════
     # WARNING — CAO RỦI RO: Cyl2 EXTEND ngay sau khi OutY tới target.
@@ -5476,16 +5544,15 @@ class CartridgeSystem(Node):
 
     def _s4_outy_scan_s20(self):
         """
-        Scan OutY tìm row trống trong output stack — logic mirror Y CHANG
-        _s1_iny_scan / _s2a_iny_jog_output (S20 cùng loại cảm biến NC như S4):
-          1. S20 là NC → bắt FALLING EDGE (prev ON → now OFF) khi chạm khay tồn.
+        Scan OutY tìm row trống trong output stack:
+          1. S20 là NO → bắt RISING EDGE (prev OFF → now ON) khi chạm khay tồn.
              KHÔNG dùng raw level — S20 kẹt ON sẽ trigger sai ngay đầu scan.
           2. Armed gate re-evaluate mỗi tick:
              - OutX vẫn tại outx_target3 ± position_tolerance (_at_position)
              - OutY ∈ [outy_scan_valid_min_mm, outy_scan_valid_max_mm]
           3. Disarm + warn nếu OutX drift khỏi target giữa lúc scan.
 
-        Falling edge hợp lệ → _zone_to_row(outy_output_zones) → stop(5) →
+        Rising edge hợp lệ → _zone_to_row(outy_output_zones) → stop(5) →
         S4_OUTY_DROP (DROP tự gửi move — KHÔNG pre-issue ở đây, fix double-issue
         do _enter_s4 reset _cmd_sent_s4).
 
@@ -5536,18 +5603,18 @@ class CartridgeSystem(Node):
         self._s20_armed = new_armed
 
         s20_now = self.sensor(S20_SCAN_STACK_P2)
-        # S20 là NC (cùng loại S4): chạm khay → ON sang OFF → falling edge
-        s20_falling = self._s20_prev and (not s20_now)
+        # S20 là NO: chạm khay → OFF sang ON → rising edge
+        s20_rising = (not self._s20_prev) and s20_now
         self._s20_prev = s20_now
 
-        if self._s20_armed and s20_falling:
+        if self._s20_armed and s20_rising:
             trigger_pos = self._pos(5) or oy
             row = self._zone_to_row(trigger_pos, cfg.outy_output_zones)
             target_mm = cfg.outy_output_zones[row][2]
             self._outy_jog_pos = target_mm
             self._s4_scan_noise_retry = 0
             self.get_logger().info(
-                f"[S4 SCAN] S20 falling edge @ {trigger_pos:.1f}mm → "
+                f"[S4 SCAN] S20 rising edge @ {trigger_pos:.1f}mm → "
                 f"row{row} ({target_mm:.0f}mm)"
             )
             self._stop(5)
@@ -5700,7 +5767,7 @@ class CartridgeSystem(Node):
 
         if not oy_safe:
             if not self._cmd_sent_s4:
-                if not self._nb_move(5, cfg.outy_target1):
+                if not self._nb_move(5, cfg.outy_target1, vel = 120):
                     self._log_once("S4_HOME_OY_FAIL", "S4 OutY home fail")
                     return
                 self._cmd_sent_s4     = True
@@ -5760,7 +5827,7 @@ class CartridgeSystem(Node):
         ox_at_target = abs(ox - cfg.outx_target1) <= 5.0
         if not ox_at_target:
             if not self._cmd_sent_s4:
-                if not self._nb_move(4, cfg.outx_target1):
+                if not self._nb_move(4, cfg.outx_target1, vel = 150):
                     self._log_once("S4_HOME_OX_FAIL", "S4 OutX home fail")
                     return
                 self._cmd_sent_s4     = True

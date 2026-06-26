@@ -23,7 +23,7 @@ servo_limits:
   2: 1050.0
   3: 1000.0
   4: 600.0
-  5: 1000.0
+  5: 1020.0
 homing_timeout: 120.0
 move_timeout: 80.0
 cylinder_timeout: 15.0
@@ -177,15 +177,14 @@ servo3_jog_velocity: 20.0
 servo3_feed_velocity: 20.0
 outx_home: 0.0
 outx_target1: 15.0
-outx_target2: 558.0
-outx_target3: -280.0
+outx_target2: 552.0
+outx_target3: -277.0
 outy_home: 0.0
 outy_target1: 10.0
-outy_target2: 300.0
-outy_pick_pos: 100.0
+outy_pick_pos: 160.0                   # lấy khay
 outy_safe_zone: 30.0
-outy_search_velocity: 40.0
-outy_row_limit: 680.0
+outy_search_velocity: 30.0
+
 outy_slow_vel: 20.0
 target_scanoutp2: 1000.0
 outy_scan_arm_mm: 50.0
