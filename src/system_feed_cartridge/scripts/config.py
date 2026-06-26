@@ -30,9 +30,15 @@ class SystemConfig(BaseModel):
     # Cylinder Outputs
     cylinder1_extend_channel: int = 5
     cylinder1_retract_channel: int = 4
-    cylinder2_extend_channel: int = 9
-    cylinder2_retract_channel: int = 8
+    cylinder2_extend_channel: int = 0
+    cylinder2_retract_channel: int = 1
     cyl3_present: bool = True
+    cylinder3_extend_channel: int = 6
+    cylinder3_retract_channel: int = 7
+    cylinder4_extend_channel: int = 2
+    cylinder4_retract_channel: int = 3
+    cylinder5_extend_channel: int = 4
+    cylinder5_retract_channel: int = 5
     # Cụm output stack (Servo3 Platform + OutX/OutY + CPX 254 sensors S17-S22).
     # Đặt false khi hardware chưa lắp — STATE 3/4 auto-trigger bị disable và manual
     # button STATE 3/4 cũng bị khóa. STATE 1/2 (input Pos1) độc lập, không ảnh hưởng.
@@ -111,7 +117,7 @@ class SystemConfig(BaseModel):
     max_slots_per_output_tray: int = 9
 
     # Sensors section
-    num_sensors: int = 22
+    num_sensors: int = 28
     sensor_type: str = "PNP"
     sensor_logic: str = "NO"
     sensors: List[SensorConfig] = Field(default_factory=list)
@@ -149,4 +155,3 @@ class SystemConfig(BaseModel):
         if hasattr(self, '_config_file') and self._config_file:
             self.save(self._config_file)
             print(f"Config saved safely to: {self._config_file}")
-

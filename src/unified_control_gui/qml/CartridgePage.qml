@@ -1171,18 +1171,22 @@ import QtGraphicalEffects 1.15
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
-                                // 3 columns x 2 rows — same GridLayout structure as State Navigation
+                                // 5 columns x 2 rows: Cyl1, Cyl2, Cyl3, Cyl4, Cyl5
                                 GridLayout {
                                     Layout.fillWidth: true; Layout.fillHeight: true
-                                    columns: 3; columnSpacing: 4; rowSpacing: 4
+                                    columns: 5; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nEXTEND";  bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; onClicked: cartridgeController.cylinderCmd(1, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nEXTEND"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; onClicked: cartridgeController.cylinderCmd(2, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nEXTEND"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; onClicked: cartridgeController.cylinderCmd(3, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL1\nEXTEND"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; onClicked: cartridgeController.cylinderCmd(1, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL2\nEXTEND"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; onClicked: cartridgeController.cylinderCmd(2, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL3\nEXTEND"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; onClicked: cartridgeController.cylinderCmd(3, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL4\nEXTEND"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 26 && cartridgeController.sensorState.charAt(25) === '1'; onClicked: cartridgeController.cylinderCmd(4, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL5\nEXTEND"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 28 && cartridgeController.sensorState.charAt(27) === '1'; onClicked: cartridgeController.cylinderCmd(5, true) }
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "INY\nRETRACT";  bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "OUTY\nRETRACT"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "HOLD\nRETRACT"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL1\nRETRACT"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; onClicked: cartridgeController.cylinderCmd(1, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL2\nRETRACT"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; onClicked: cartridgeController.cylinderCmd(2, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL3\nRETRACT"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; onClicked: cartridgeController.cylinderCmd(3, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL4\nRETRACT"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 25 && cartridgeController.sensorState.charAt(24) === '1'; onClicked: cartridgeController.cylinderCmd(4, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL5\nRETRACT"; bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 27 && cartridgeController.sensorState.charAt(26) === '1'; onClicked: cartridgeController.cylinderCmd(5, false) }
                                 }
                             }
                         }
@@ -1502,7 +1506,7 @@ import QtGraphicalEffects 1.15
                     }
 
                     // ─ SENSOR SIGNALS (grid-area: servo, full height) ──
-                    // Hiển thị read-only 20 sensor THẬT (S1-S10, S13-S22) từ IO module qua
+                    // Hiển thị read-only 24 sensor THẬT (S1-S10, S13-S22, S25-S28) từ IO module qua
                     // topic /providesystem/sensors_state. S11/S12 là VFD status (ATV Run/
                     // Fault) — monitor bởi vfd_logic_node, không hiển thị ở grid này. Cập
                     // nhật real-time, không click. Ô được thu nhỏ để fit vừa card.
@@ -1561,6 +1565,11 @@ import QtGraphicalEffects 1.15
                                         ListElement { sid:20; slabel:"S20"; sdesc:"Scan Stack Pos2" }
                                         ListElement { sid:21; slabel:"S21"; sdesc:"Cyl2 Ret" }
                                         ListElement { sid:22; slabel:"S22"; sdesc:"Cyl2 Ext" }
+                                        // [CPX 254] Module 4: I4.0–I4.1
+                                        ListElement { sid:25; slabel:"S25"; sdesc:"Cyl4 Ret" }
+                                        ListElement { sid:26; slabel:"S26"; sdesc:"Cyl4 Ext" }
+                                        ListElement { sid:27; slabel:"S27"; sdesc:"Cyl5 Ret" }
+                                        ListElement { sid:28; slabel:"S28"; sdesc:"Cyl5 Ext" }
                                     }
                                     delegate: Rectangle {
                                         id: sBtn

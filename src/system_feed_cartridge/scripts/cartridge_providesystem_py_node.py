@@ -7,16 +7,15 @@ HARDWARE INSTALL STATUS (đọc trước khi sửa code)
 ═══════════════════════════════════════════════════════════════════════════════
 Cụm Pos1 (đã lắp, production):
   • Servo S1=InX (192.168.27.248), S2=InY (192.168.27.249)
-  • CPX 253 (192.168.27.253) — sensor S1-S16, valve Cyl1/Cyl2/Cyl3
+  • CPX 253 (192.168.27.253) — sensor S1-S16, valve Cyl1/Cyl3
   • Cyl3 piston + sensor S13-S16
   → STATE 1, STATE 2A chạy đầy đủ với interlock Cyl3.
 
-Cụm Pos2 (đang chờ lắp đặt):
+Cụm Pos2 (đã lắp):
   • Servo S3=Servo3/Platform (192.168.27.250)
   • Servo S4=OutX (192.168.27.251), S5=OutY (192.168.27.252)
-  • CPX 254 (192.168.27.254) — sensor S17-S22
-  → STATE 3, STATE 4 hiện DISABLED qua flag `output_stack_present: false`
-    trong cartridge_config.yaml.
+  • CPX 254 (192.168.27.254) — sensor S17-S28, valve Cyl2/Cyl4/Cyl5
+  → STATE 3, STATE 4 được enable qua flag `output_stack_present: true`.
 
 → Khi user nói "đã lắp servo 3/4/5" / "đã lắp CPX 254" / "đã lắp xong cụm
   Pos2/output" → đổi YAML `output_stack_present: false → true` và restart.
@@ -109,6 +108,11 @@ S19_CHECK_TRAY_P2  = 19
 S20_SCAN_STACK_P2  = 20
 S21_CYL2_RETRACTED = 21
 S22_CYL2_EXTENDED  = 22
+# S23/S24 reserved
+S25_CYL4_RETRACTED = 25
+S26_CYL4_EXTENDED  = 26
+S27_CYL5_RETRACTED = 27
+S28_CYL5_EXTENDED  = 28
 
 
 # ─── State Enum ──────────────────────────────────────────────────
@@ -195,6 +199,7 @@ class SystemState(Enum):
     S3_SERVO3_TARGET1    = "s3_servo3_target1"
     S3_CHECK_S17         = "s3_check_s17"
     S3_WAIT_S17          = "s3_wait_s17"
+    S3_CYL4_EXTEND       = "s3_cyl4_extend"
     S3_WAIT_GUI_CONFIRM  = "s3_wait_gui_confirm"
     S3_SERVO3_FEED       = "s3_servo3_feed"
     S3_WAIT_S18          = "s3_wait_s18"
@@ -205,14 +210,19 @@ class SystemState(Enum):
     S4_OUTX_TARGET2      = "s4_outx_target2"
     S4_OUTY_PICK         = "s4_outy_pick"
     S4_CYL2_EXTEND       = "s4_cyl2_extend"
+    S4_CYL4_RETRACT      = "s4_cyl4_retract"
     S4_OUTY_TARGET1      = "s4_outy_target1"
     S4_OUTX_TARGET3      = "s4_outx_target3"
     S4_CHECK_S19          = "s4_check_s19"
+    S4_CYL5_SYNC         = "s4_cyl5_sync"
     S4_OUTY_ROW1         = "s4_outy_row1"
     S4_OUTY_SCAN_S20     = "s4_outy_scan_s20"
     S4_OUTY_DROP         = "s4_outy_drop"
     S4_CYL2_RETRACT      = "s4_cyl2_retract"
+    S4_CYL5_EXTEND_HOLD  = "s4_cyl5_extend_hold"
     S4_OUTY_OUTX_HOME    = "s4_outy_outx_home"
+    S4_CYL5_RETRACT_RELEASE = "s4_cyl5_retract_release"
+    S4_OUTX_HOME         = "s4_outx_home"
     S4_RETRY_SCAN_HOME   = "s4_retry_scan_home"
     S4_COMPLETE          = "s4_complete"
 
@@ -315,6 +325,8 @@ class CartridgeSystem(Node):
         self._cmd_sent_s3       = False
         self._step_start_s3     = 0.0
         self._step_timeout_s3   = 0.0
+        self._cyl4_retry_t      = 0.0
+        self._cyl4_retract_sent = False
 
         # ── STATE S4 runtime ─────────────────────────────────────────
         self.state_s4           = SystemState.IDLE
@@ -331,6 +343,7 @@ class CartridgeSystem(Node):
         # Cyl2 retry timer RIÊNG — không dùng chung _cyl_retry_t với chain input
         # (S4 chạy song song STATE 1/2, share biến = race condition)
         self._cyl2_retry_t      = 0.0
+        self._cyl5_retry_t      = 0.0
 
         # ── Shared / Other ───────────────────────────────────────────
         self._motion_busy       = False
@@ -548,8 +561,8 @@ class CartridgeSystem(Node):
     def _connect_io(self, idx: int, ip: str):
         """
         Kết nối đến IO Module Festo CPX-AP qua EtherNet/IP (tối đa 3 lần thử).
-        idx=1 → Module chính (S1–S16, valve cylinder 1/2/3, gripper, picker)
-        idx=2 → Module phụ output side (S17–S24)
+        idx=1 → Module chính (S1–S16, valve cylinder 1/3, gripper, picker)
+        idx=2 → Module phụ output side (S17–S28, valve cylinder 2/4/5)
         Khi kết nối Module 1 thành công:
           1. Reset gripper + picker về trạng thái NHẢ an toàn (5/3 valve, ch0-3).
           2. Smart init Cyl3 theo sensor thực tế S6/S15/S16 (nếu cyl3_present=true).
@@ -934,8 +947,8 @@ class CartridgeSystem(Node):
 
     def _sensor_raw(self, sid: int) -> bool:
         """Luôn đọc sensor phần cứng thực (IO module).
-           - S17..S20 → Module 2 (CH 0-3)
-           - S1..S8, S9..S22 → Module 1 (CH tương ứng, mặc định sid-1)
+           - S17..S28 → Module 2 (CH sid-17; S23/S24 reserved)
+           - S1..S16 → Module 1 (CH sid-1)
         """
         with self._io_bg_lock:
             cache1 = getattr(self, '_io_sensor_cache', [])
@@ -946,7 +959,7 @@ class CartridgeSystem(Node):
         if 1 <= sid <= 16:
             if not ready1 or len(cache1) < sid: return False
             return bool(cache1[sid - 1])
-        elif 17 <= sid <= 24:
+        elif 17 <= sid <= 28:
             if not ready2 or len(cache2) < (sid - 16): return False
             return bool(cache2[sid - 17])
         return False
@@ -973,7 +986,7 @@ class CartridgeSystem(Node):
             try:
                 if 1 <= sid <= 16:
                     raw = bool(cache1[sid - 1]) if ready1 and len(cache1) >= sid else False
-                elif 17 <= sid <= 24:
+                elif 17 <= sid <= 28:
                     raw = bool(cache2[sid - 17]) if ready2 and len(cache2) >= (sid - 16) else False
                 else:
                     raw = False
@@ -1228,18 +1241,39 @@ class CartridgeSystem(Node):
                     except Exception: pass
         return False
 
+    def _set_do_2(self, channel: int, state: bool) -> bool:
+        """
+        Ghi digital output lên IO Module 2 (CPX 192.168.27.254).
+        Mapping van: Cyl2=0/1, Cyl4=2/3, Cyl5=4/5 (EXTEND/RETRACT).
+        """
+        if not self.io_module_2:
+            return False
+        with self._io_bg_lock:
+            for mod in self.io_module_2.modules:
+                if mod.is_function_supported("set_channel"):
+                    try:
+                        if state:
+                            mod.set_channel(channel)
+                        else:
+                            mod.reset_channel(channel)
+                        return True
+                    except Exception:
+                        pass
+        return False
+
     def _cyl1_extend(self) -> bool:
         """
         Đẩy xi lanh khí nén 1 ra (EXTEND): reset kênh retract → set kênh extend.
         Cylinder 1 dùng để giữ/đẩy khay tray trong STATE 1/2.
-        Channel mặc định: retract=4, extend=5 (cấu hình trong config YAML).
+        Sensor feedback: S9=retracted, S10=extended.
+        Channel mặc định: extend=4, retract=5 (cấu hình trong config YAML).
         """
-        self.get_logger().info(f"Cyl1 EXTEND (ch{self._conf('cylinder1_extend_channel', 5)})")
+        self.get_logger().info(f"Cyl1 EXTEND (ch{self._conf('cylinder1_extend_channel', 4)})")
         io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
         if io:
             try:
-                self._set_do(self._conf('cylinder1_retract_channel', 4), False)
-                self._set_do(self._conf('cylinder1_extend_channel', 5), True)
+                self._set_do(self._conf('cylinder1_retract_channel', 5), False)
+                self._set_do(self._conf('cylinder1_extend_channel', 4), True)
                 return True
             except Exception as e:
                 self.get_logger().warn(f"Cyl1 extend IO error: {e}")
@@ -1250,13 +1284,14 @@ class CartridgeSystem(Node):
         """
         Thu xi lanh 1 về (RETRACT): reset kênh extend → set kênh retract.
         Gọi khi kết thúc STATE 1/2, STOP khẩn cấp, hoặc khởi động node.
+        Sensor feedback: S9=retracted, S10=extended.
         """
-        self.get_logger().info(f"Cyl1 RETRACT (ch{self._conf('cylinder1_retract_channel', 4)})")
+        self.get_logger().info(f"Cyl1 RETRACT (ch{self._conf('cylinder1_retract_channel', 5)})")
         io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
         if io:
             try:
-                self._set_do(self._conf('cylinder1_extend_channel', 5), False)
-                self._set_do(self._conf('cylinder1_retract_channel', 4), True)
+                self._set_do(self._conf('cylinder1_extend_channel', 4), False)
+                self._set_do(self._conf('cylinder1_retract_channel', 5), True)
                 return True
             except Exception as e:
                 self.get_logger().warn(f"Cyl1 retract IO error: {e}")
@@ -1266,14 +1301,15 @@ class CartridgeSystem(Node):
     def _cyl2_extend(self) -> bool:
         """
         Đẩy xi lanh 2 ra (EXTEND) — dùng trong STATE 4 để giữ khay output.
-        Channel mặc định: retract=8, extend=9.
-        Yêu cầu IO module sẵn sàng (_io_ready=True) trước khi gửi lệnh.
+        Cylinder 2 đã chuyển sang IO Module 2 (CPX 192.168.27.254).
+        Sensor feedback: S21=retracted, S22=extended.
+        Channel mặc định: extend=0, retract=1.
         """
-        io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
-        if self._io_ready and io:
+        io = self.io_module_2
+        if self._io_ready_2 and io:
             try:
-                self._set_do(self._conf('cylinder2_retract_channel', 8), False)
-                self._set_do(self._conf('cylinder2_extend_channel', 9), True)
+                self._set_do_2(self._conf('cylinder2_retract_channel', 1), False)
+                self._set_do_2(self._conf('cylinder2_extend_channel', 0), True)
                 return True
             except Exception as e:
                 self.get_logger().warn(f"Cyl2 extend error: {e}")
@@ -1282,13 +1318,14 @@ class CartridgeSystem(Node):
 
     def _cyl2_retract(self) -> bool:
         """
-        Thu xi lanh 2 về (RETRACT). Gọi khi hoàn thành STATE 4 hoặc STOP khẩn cấp.
+        Thu xi lanh 2 về trên IO Module 2: reset extend=0, set retract=1.
+        Sensor feedback: S21=retracted, S22=extended.
         """
-        io = self.io_module  # snapshot to avoid TOCTOU race with _io_bg_loop
-        if self._io_ready and io:
+        io = self.io_module_2
+        if self._io_ready_2 and io:
             try:
-                self._set_do(self._conf('cylinder2_extend_channel', 9), False)
-                self._set_do(self._conf('cylinder2_retract_channel', 8), True)
+                self._set_do_2(self._conf('cylinder2_extend_channel', 0), False)
+                self._set_do_2(self._conf('cylinder2_retract_channel', 1), True)
                 return True
             except Exception as e:
                 self.get_logger().warn(f"Cyl2 retract error: {e}")
@@ -1307,7 +1344,7 @@ class CartridgeSystem(Node):
         """
         Đẩy xi lanh 3 ra (EXTEND) — cố định khay tại Tray Pos1 sau khi Cyl1 đã thả.
         Channel mặc định: extend=6, retract=7 (Module 4 valve CPX 253).
-        Feedback giám sát qua S16_CYL3_EXTENDED (monitor only, không block state).
+        Sensor feedback: S15=retracted, S16=extended.
         """
         io = self.io_module
         if io:
@@ -1324,7 +1361,7 @@ class CartridgeSystem(Node):
     def _cyl3_retract(self) -> bool:
         """
         Thu xi lanh 3 về (RETRACT). Gọi bởi safety watchdog khi S13+S14 cùng OFF.
-        Feedback giám sát qua S15_CYL3_RETRACTED (monitor only, không block state).
+        Sensor feedback: S15=retracted, S16=extended.
         """
         io = self.io_module
         if io:
@@ -1337,6 +1374,70 @@ class CartridgeSystem(Node):
                 self.get_logger().warn(f"Cyl3 retract IO error: {e}")
                 return False
         return False
+
+    def _cyl4_extend(self) -> bool:
+        """
+        Đẩy Cylinder 4 ra để giữ khay trên platform Servo 3.
+        Output nằm trên IO Module 2: EXTEND=2, RETRACT=3.
+        Sensor feedback: S25=retracted, S26=extended.
+        """
+        if not self._io_ready_2 or not self.io_module_2:
+            return False
+        try:
+            self._set_do_2(self._conf('cylinder4_retract_channel', 3), False)
+            self._set_do_2(self._conf('cylinder4_extend_channel', 2), True)
+            return True
+        except Exception as e:
+            self.get_logger().warn(f"Cyl4 extend IO error: {e}")
+            return False
+
+    def _cyl4_retract(self) -> bool:
+        """
+        Thu Cylinder 4 khi platform không có khay (S17 OFF).
+        Output nằm trên IO Module 2: EXTEND=2, RETRACT=3.
+        Sensor feedback: S25=retracted, S26=extended.
+        """
+        if not self._io_ready_2 or not self.io_module_2:
+            return False
+        try:
+            self._set_do_2(self._conf('cylinder4_extend_channel', 2), False)
+            self._set_do_2(self._conf('cylinder4_retract_channel', 3), True)
+            return True
+        except Exception as e:
+            self.get_logger().warn(f"Cyl4 retract IO error: {e}")
+            return False
+
+    def _cyl5_extend(self) -> bool:
+        """
+        Đẩy Cylinder 5 ra khi S19 phát hiện khay tại output stack.
+        Output IO Module 2: EXTEND=4, RETRACT=5.
+        Sensor feedback: S27=retracted, S28=extended.
+        """
+        if not self._io_ready_2 or not self.io_module_2:
+            return False
+        try:
+            self._set_do_2(self._conf('cylinder5_retract_channel', 5), False)
+            self._set_do_2(self._conf('cylinder5_extend_channel', 4), True)
+            return True
+        except Exception as e:
+            self.get_logger().warn(f"Cyl5 extend IO error: {e}")
+            return False
+
+    def _cyl5_retract(self) -> bool:
+        """
+        Thu Cylinder 5 khi S19 OFF.
+        Output IO Module 2: EXTEND=4, RETRACT=5.
+        Sensor feedback: S27=retracted, S28=extended.
+        """
+        if not self._io_ready_2 or not self.io_module_2:
+            return False
+        try:
+            self._set_do_2(self._conf('cylinder5_extend_channel', 4), False)
+            self._set_do_2(self._conf('cylinder5_retract_channel', 5), True)
+            return True
+        except Exception as e:
+            self.get_logger().warn(f"Cyl5 retract IO error: {e}")
+            return False
 
     # ── Helpers ──────────────────────────────────────────────────
 
@@ -1688,9 +1789,13 @@ class CartridgeSystem(Node):
 
     def _home_all(self) -> bool:
         """
-        Thực hiện homing toàn bộ 5 servo theo thứ tự an toàn:
-          InY → OutY → InX → OutX → Platform (Servo3)
-        Thứ tự này đảm bảo trục dọc về trước, tránh va chạm với vật thể.
+        Thực hiện homing toàn bộ servo theo 2 cụm song song:
+          Pos1/Input : InY → InX
+          Pos2/Output: OutY → OutX → Platform (Servo3)
+
+        Hai cụm Pos1/Pos2 có thể homing cùng lúc vì độc lập cơ khí, nhưng trong
+        từng cụm phải home trục Y xong rồi mới tới trục X. Đặc biệt: OUTY phải
+        homing xong mới được homing OUTX, giống rule InY trước InX ở Pos1.
 
         Logic mỗi servo:
           - Nếu đã homed trước đó (_servo_homed_once) và vị trí gần 0 (< 5mm):
@@ -1708,16 +1813,18 @@ class CartridgeSystem(Node):
         track _servo_homed_once để skip re-home nếu đã homed gần zero.
         Fail loud thay vì silent-assume-home khi drive không di chuyển.
         """
-        NAMES = {1: "InX", 2: "InY", 3: "Platform", 4: "OutX", 5: "OutY"}
-        ORDER = [(2, "InY"), (5, "OutY"), (1, "InX"), (4, "OutX"), (3, "Platform")]
+        sequences = {
+            "Pos1/Input": [(2, "InY"), (1, "InX")],
+            "Pos2/Output": [(5, "OutY"), (4, "OutX"), (3, "Platform")],
+        }
 
         if not hasattr(self, '_servo_homed_once'):
             self._servo_homed_once = {sid: False for sid in self.config.servo_ips}
 
-        for sid, name in ORDER:
+        def _home_one(sid: int, name: str) -> bool:
             if sid not in self.servos:
                 self.get_logger().info(f"  {name} (S{sid}): not connected, skip")
-                continue
+                return True
             mot = self.servos[sid]
 
             try:
@@ -1734,10 +1841,37 @@ class CartridgeSystem(Node):
                 near_zero = abs(current_pos - zero) <= POSITION_TOLERANCE_HOME * COUNTS_PER_MM
 
                 if self._servo_homed_once.get(sid) and near_zero:
-                    # Đã homed, vị trí gần 0 → chỉ position_task về 0 (blocking)
-                    self.get_logger().info(f"  {name}: near zero → position_task(0)")
+                    # Đã homed, vị trí gần 0 → chỉ kéo về zero cũ, không re-reference.
+                    # Không dùng blocking=True ở đây: FAS đôi khi kẹt wait "finished"
+                    # dù target/current đã là 0, làm global state đứng HOMING_RUNNING.
+                    self.get_logger().info(f"  {name}: near zero → position_task(0) nonblocking")
                     with self._servo_lock:
-                        mot.position_task(zero, HOME_SPEED, absolute=True, nonblocking=False)
+                        mot.position_task(zero, HOME_SPEED, absolute=True, nonblocking=True)
+
+                    deadline = time.time() + min(10.0, self.config.move_timeout)
+                    post_pos = current_pos
+                    while time.time() < deadline:
+                        if self._homing_abort.is_set():
+                            self.get_logger().warn(f"  {name}: homing aborted (STOP) during near-zero move")
+                            return False
+                        self._servo_motion_t[sid] = time.time()
+                        with self._servo_lock:
+                            post_pos = mot.current_position()
+                        if abs(post_pos - zero) <= 0.5 * COUNTS_PER_MM:
+                            break
+                        time.sleep(0.2)
+
+                    final_delta_mm = abs(post_pos - zero) / COUNTS_PER_MM
+                    if final_delta_mm > POSITION_TOLERANCE_HOME:
+                        self.get_logger().error(
+                            f"  {name}: near-zero move timeout, still {final_delta_mm:.2f}mm from zero"
+                        )
+                        return False
+
+                    self._servo_homed_once[sid] = True
+                    self.zero_offset[sid] = zero
+                    self.get_logger().info(f"  {name} = 0mm (near-zero OK, offset kept)")
+                    return True
                 else:
                     # Lần đầu hoặc đã lệch xa → referencing_task nonblocking
                     # Lock chỉ giữ đủ để issue lệnh — STOP có thể acquire lock ngay
@@ -1749,7 +1883,7 @@ class CartridgeSystem(Node):
 
                     with self._servo_lock:
                         mot.referencing_task(nonblocking=True)
-                    # Lock released immediately — _cb_stop có thể stop_motion_task ngay
+                    # Lock released immediately — _cb_stop có thể acquire lock ngay
 
                     # 3s interruptible delay: cho drive xóa stale referenced() flag từ NVM
                     # và bắt đầu chuyển động vật lý. Chia nhỏ thành nhiều bước 200ms
@@ -1828,6 +1962,7 @@ class CartridgeSystem(Node):
                     self.zero_offset[sid] = post_pos
                     self._need_warm_up[sid] = True  # FAS quirk: cần flush trước position_task đầu tiên
                     self.get_logger().info(f"  {name} = 0mm (homed, Δ={delta_mm:.1f}mm)")
+                    return True
 
             except Exception as e:
                 self.get_logger().error(f"  {name} home exception: {e}")
@@ -1841,7 +1976,38 @@ class CartridgeSystem(Node):
                             'Báo dev nếu exception lặp lại'])
                 return False
 
-        return True
+        def _home_sequence(label: str, order: list, results: dict):
+            self.get_logger().info(f"[HOMING] {label} sequence start")
+            for sid, name in order:
+                if self._homing_abort.is_set():
+                    results[label] = False
+                    self.get_logger().warn(f"[HOMING] {label} aborted before {name}")
+                    return
+                if not _home_one(sid, name):
+                    results[label] = False
+                    self._homing_abort.set()
+                    self.get_logger().error(f"[HOMING] {label} failed at {name} (S{sid})")
+                    return
+            results[label] = True
+            self.get_logger().info(f"[HOMING] {label} sequence complete")
+
+        results = {}
+        threads = [
+            threading.Thread(
+                target=_home_sequence,
+                args=(label, order, results),
+                daemon=True,
+                name=f"homing_{label.lower().split('/')[0]}",
+            )
+            for label, order in sequences.items()
+        ]
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        return all(results.get(label, False) for label in sequences)
 
     # ══════════════════════════════════════════════════════════════
     # ROS Callbacks
@@ -2116,11 +2282,12 @@ class CartridgeSystem(Node):
 
     def _cb_cyl_cmd(self, msg: String):
         """
-        Điều khiển cylinder 1/2/3 thủ công từ GUI qua /providesystem/cyl_cmd.
-        Định dạng: "<cyl_id> <extend|retract>"  ví dụ "1 extend", "3 retract".
+        Điều khiển cylinder 1..5 thủ công từ GUI qua /providesystem/cyl_cmd.
+        Định dạng: "<cyl_id> <extend|retract>"  ví dụ "1 extend", "5 retract".
 
-        Tái sử dụng _cyl1/_cyl2/_cyl3 extend/retract (drive 2 channel valve:
-        1 set + 1 reset như gripper/picker). Cyl3 chỉ chạy khi cyl3_present=True.
+        Mapping feedback:
+          Cyl1: S9/S10, Cyl2: S21/S22, Cyl3: S15/S16,
+          Cyl4: S25/S26, Cyl5: S27/S28.
 
         Chỉ cho phép trong MANUAL mode + state IDLE/ERROR + không có state machine
         nào đang chạy — tránh xung đột với logic STATE 1/2/3/4 đang điều khiển
@@ -2171,6 +2338,14 @@ class CartridgeSystem(Node):
                     self.get_logger().info("[CYL3] Manual EXTEND → S13/S14 latch cleared")
                 else:
                     self._cyl3_retract()
+            elif cid == 4 and act == 'extend':
+                self._cyl4_extend()
+            elif cid == 4 and act == 'retract':
+                self._cyl4_retract()
+            elif cid == 5 and act == 'extend':
+                self._cyl5_extend()
+            elif cid == 5 and act == 'retract':
+                self._cyl5_retract()
             else:
                 self.get_logger().warn(f"[CYL] unknown cmd: {msg.data}")
         except Exception as e:
@@ -2859,6 +3034,38 @@ class CartridgeSystem(Node):
         # Cyl3 does not check S6 continuously. It only checks when State 2 is Triggered.
         pass
 
+    def _cyl5_follow_s19(self):
+        """
+        Giữ quan hệ S19 ↔ Cylinder 5 cả ngoài bước S4_CYL5_SYNC:
+          S19 ON  → S28 ON + S27 OFF
+          S19 OFF → S27 ON + S28 OFF
+        State 4 tự quản lý Cyl5 theo từng bước riêng nên helper này bỏ qua toàn bộ
+        lúc state_s4 đang chạy, tránh ghi đè lệnh giữ/nhả khay cuối chu trình.
+        """
+        if not self._conf('output_stack_present', True):
+            return
+        # Manual/JOG control cylinder phải giữ theo lệnh operator, không bị S19
+        # auto-follow ghi đè ngay sau khi bấm EXTEND/RETRACT.
+        if self.operation_mode == 'manual':
+            return
+        if self.state_s4 != SystemState.IDLE:
+            return
+
+        s19 = self.sensor(S19_CHECK_TRAY_P2)
+        cyl5_ret, cyl5_ext = self._snap(S27_CYL5_RETRACTED, S28_CYL5_EXTENDED)
+        matched = (cyl5_ext and not cyl5_ret) if s19 else (cyl5_ret and not cyl5_ext)
+        if matched:
+            return
+
+        now = time.time()
+        if now - self._cyl5_retry_t < 1.0:
+            return
+        if s19:
+            self._cyl5_extend()
+        else:
+            self._cyl5_retract()
+        self._cyl5_retry_t = now
+
     def _control_loop(self):
         """
         Vòng lặp điều khiển chính, chạy mỗi 50ms (20Hz) qua ROS timer.
@@ -2893,6 +3100,7 @@ class CartridgeSystem(Node):
 
             self._cyl3_safety_check()
             self._cyl3_monitor()
+            self._cyl5_follow_s19()
 
             # S18 tracking logic for S3 auto-feed delay
             feed_ok = self.sensor(S18_FEED_OK)
@@ -2949,9 +3157,9 @@ class CartridgeSystem(Node):
             time.sleep(1.0) # Throttle error loop if it keeps failing
 
     def _publish_sensors(self):
-        """Publish chuỗi nhị phân 22 ký tự lên /providesystem/sensors_state.
-        Mỗi ký tự = trạng thái cảm biến S1..S22 ('1'=ON, '0'=OFF) theo mode hiện tại."""
-        states = "".join("1" if self.sensor(i) else "0" for i in range(1, 23))
+        """Publish chuỗi nhị phân 28 ký tự lên /providesystem/sensors_state.
+        Mỗi ký tự = trạng thái cảm biến S1..S28 ('1'=ON, '0'=OFF)."""
+        states = "".join("1" if self.sensor(i) else "0" for i in range(1, 29))
         msg = String(); msg.data = states; self.pub_sensors.publish(msg)
 
     def _publish_state(self):
@@ -3168,6 +3376,7 @@ class CartridgeSystem(Node):
         elif s == SystemState.S3_SERVO3_TARGET1:   self._s3_servo3_target1()
         elif s == SystemState.S3_CHECK_S17:        self._s3_check_s17()
         elif s == SystemState.S3_WAIT_S17:         self._s3_wait_s17()
+        elif s == SystemState.S3_CYL4_EXTEND:      self._s3_cyl4_extend()
         elif s == SystemState.S3_WAIT_GUI_CONFIRM: self._s3_wait_gui_confirm()
         elif s == SystemState.S3_SERVO3_FEED:      self._s3_servo3_feed()
         elif s == SystemState.S3_WAIT_S18:         self._s3_wait_s18()
@@ -3184,14 +3393,19 @@ class CartridgeSystem(Node):
         elif s == SystemState.S4_OUTX_TARGET2:     self._s4_outx_target2()
         elif s == SystemState.S4_OUTY_PICK:        self._s4_outy_pick()
         elif s == SystemState.S4_CYL2_EXTEND:      self._s4_cyl2_extend()
+        elif s == SystemState.S4_CYL4_RETRACT:     self._s4_cyl4_retract()
         elif s == SystemState.S4_OUTY_TARGET1:     self._s4_outy_target1()
         elif s == SystemState.S4_OUTX_TARGET3:     self._s4_outx_target3()
         elif s == SystemState.S4_CHECK_S19:         self._s4_check_s19()
+        elif s == SystemState.S4_CYL5_SYNC:        self._s4_cyl5_sync()
         elif s == SystemState.S4_OUTY_ROW1:        self._s4_outy_row1()
         elif s == SystemState.S4_OUTY_SCAN_S20:    self._s4_outy_scan_s20()
         elif s == SystemState.S4_OUTY_DROP:        self._s4_outy_drop()
         elif s == SystemState.S4_CYL2_RETRACT:     self._s4_cyl2_retract_state()
+        elif s == SystemState.S4_CYL5_EXTEND_HOLD: self._s4_cyl5_extend_hold()
         elif s == SystemState.S4_OUTY_OUTX_HOME:   self._s4_outy_outx_home()
+        elif s == SystemState.S4_CYL5_RETRACT_RELEASE: self._s4_cyl5_retract_release()
+        elif s == SystemState.S4_OUTX_HOME:         self._s4_outx_home()
         elif s == SystemState.S4_RETRY_SCAN_HOME:  self._s4_retry_scan_home()
         elif s == SystemState.S4_COMPLETE:         self._s4_complete()
 
@@ -4678,10 +4892,11 @@ class CartridgeSystem(Node):
         """
         Check S17 (Platform Tray) — có khay trên Platform của Servo3 chưa.
         - S17 OFF: chuyển sang S3_WAIT_S17 (chờ operator/băng tải cấp khay).
-        - S17 ON: confirm 3s rồi sang S3_SERVO3_FEED (đẩy khay vào robot).
-        Confirm 3s = chống nhiễu sensor false-positive trong vài chu kỳ tick.
+        - S17 ON: confirm 2s rồi sang S3_CYL4_EXTEND.
+        Cylinder 4 phải xác nhận S26 ON + S25 OFF trước khi Servo 3 feed.
         """
         if not self.sensor(S17_PLATFORM):
+            self._cyl4_retract()
             self._enter_s3(SystemState.S3_WAIT_S17)
             return
 
@@ -4690,8 +4905,8 @@ class CartridgeSystem(Node):
             self._log_once("S3_CHECK_S17", "S17 ON -> Confirming 2s...")
 
         if time.time() - self._step_start_s3 >= 2.0:
-            self.get_logger().info("[S3] S17 confirmed for 2s -> Start Feed")
-            self._enter_s3(SystemState.S3_SERVO3_FEED)
+            self.get_logger().info("[S3] S17 confirmed for 2s -> Extend Cyl4")
+            self._enter_s3(SystemState.S3_CYL4_EXTEND)
 
     def _s3_wait_s17(self):
         """
@@ -4705,6 +4920,22 @@ class CartridgeSystem(Node):
             self._notify('info', 'Da phat hien khay', 'S17 ON — confirm 2s')
             self._enter_s3(SystemState.S3_CHECK_S17)
             return
+
+        # Platform trống: giữ Cylinder 4 ở trạng thái retract. Cross-check
+        # S25 ON + S26 OFF; nếu chưa đạt thì retry mỗi 3 giây.
+        cyl4_ret, cyl4_ext = self._snap(S25_CYL4_RETRACTED, S26_CYL4_EXTENDED)
+        now = time.time()
+        if not (cyl4_ret and not cyl4_ext):
+            if not self._cyl4_retract_sent or now - self._cyl4_retry_t >= 3.0:
+                self._cyl4_retract()
+                self._cyl4_retract_sent = True
+                self._cyl4_retry_t = now
+            self._log_once(
+                "S3_WAIT_CYL4_RET",
+                f"Cho Cyl4 RETRACT: S25={int(cyl4_ret)} S26={int(cyl4_ext)}"
+            )
+        else:
+            self._cyl4_retract_sent = False
 
         # Nếu S17 OFF mà Servo 3 khác vị trí standby (10mm) -> quay về 10mm chờ
         if p3 is not None and not self._at_position(3, cfg.servo3_target1, tol=5.0):
@@ -4720,6 +4951,41 @@ class CartridgeSystem(Node):
                 self._cmd_sent_s3 = False
             self._log_once("S3_WAIT_S17", "Cho S17 ON — cap khay len Platform")
 
+    def _s3_cyl4_extend(self):
+        """
+        STATE 3: S17 đã ổn định → extend Cylinder 4 giữ khay.
+        Chỉ cho Servo 3 feed khi cross-check S26 ON + S25 OFF.
+        Nếu S17 mất trước khi xác nhận xong, retract Cyl4 và quay lại chờ khay.
+        Retry lệnh EXTEND mỗi 3 giây nếu feedback chưa đúng.
+        """
+        if not self.sensor(S17_PLATFORM):
+            self.get_logger().warn("[S3] S17 OFF trước khi Cyl4 extend xong -> RETRACT và chờ lại")
+            self._cyl4_retract()
+            self._enter_s3(SystemState.S3_WAIT_S17)
+            return
+
+        cyl4_ret, cyl4_ext = self._snap(S25_CYL4_RETRACTED, S26_CYL4_EXTENDED)
+        if cyl4_ext and not cyl4_ret:
+            self._cyl4_retract_sent = False
+            self.get_logger().info("[S3] Cyl4 confirmed EXTENDED: S26=ON S25=OFF -> Servo3 FEED")
+            self._enter_s3(SystemState.S3_SERVO3_FEED)
+            return
+
+        now = time.time()
+        if not self._cmd_sent_s3 or now - self._cyl4_retry_t >= 3.0:
+            if self._cyl4_extend():
+                self._cmd_sent_s3 = True
+                self._cyl4_retry_t = now
+                if not self._step_start_s3:
+                    self._step_start_s3 = now
+            else:
+                self._log_once("S3_CYL4_IO", "Cyl4 EXTEND chưa gửi được — chờ IO Module 2")
+
+        self._log_once(
+            "S3_CYL4_EXTEND",
+            f"Cho Cyl4 EXTEND: S25={int(cyl4_ret)} S26={int(cyl4_ext)}"
+        )
+
     def _s3_wait_gui_confirm(self):
         self._enter_s3(SystemState.S3_SERVO3_FEED)
 
@@ -4734,6 +5000,18 @@ class CartridgeSystem(Node):
         Timeout move_timeout → _error().
         """
         cfg = self.config
+        # Khi khay đã rời sensor platform, nhả Cylinder 4. Motion Servo 3 đã
+        # được phép bắt đầu từ feedback extend hợp lệ nên không cần dừng giữa chừng.
+        if not self.sensor(S17_PLATFORM):
+            cyl4_ret, cyl4_ext = self._snap(S25_CYL4_RETRACTED, S26_CYL4_EXTENDED)
+            now = time.time()
+            if not (cyl4_ret and not cyl4_ext) and (
+                not self._cyl4_retract_sent or now - self._cyl4_retry_t >= 3.0
+            ):
+                self._cyl4_retract()
+                self._cyl4_retract_sent = True
+                self._cyl4_retry_t = now
+
         if not self._cmd_sent_s3:
             ok = self._nb_move(3, cfg.servo3_target2, vel=int(cfg.servo3_feed_velocity))
             if not ok:
@@ -4909,7 +5187,7 @@ class CartridgeSystem(Node):
           • Cross-check 2 sensor: S22 ON AND S21 OFF (RULE 9 — không tin 1 sensor).
           • KHÔNG _error theo timeout — notify warn sau CYLINDER_TIMEOUT_S rồi
             TIẾP TỤC retry (operator có thể STOP nếu muốn abort).
-        Next: S4_OUTY_TARGET1.
+        Next: S4_CYL4_RETRACT.
         """
         cyl2_ret, cyl2_ext = self._snap(S21_CYL2_RETRACTED, S22_CYL2_EXTENDED)
         if not self._cmd_sent_s4:
@@ -4919,7 +5197,7 @@ class CartridgeSystem(Node):
             self._cmd_sent_s4   = True
         if cyl2_ext and not cyl2_ret:
             self.get_logger().info("[S4] S22 ON + S21 OFF — Cyl2 kẹp khay OK")
-            self._enter_s4(SystemState.S4_OUTY_TARGET1)
+            self._enter_s4(SystemState.S4_CYL4_RETRACT)
             return
         if time.time() > self._cyl2_retry_t:
             self.get_logger().info("[S4] Retry Cyl2 extend")
@@ -4936,6 +5214,45 @@ class CartridgeSystem(Node):
             self._step_start_s4 = time.time()  # throttle warn — lặp mỗi 15s
         self._log_once("S4_WAIT_S22",
                        f"Cho S22 ON + S21 OFF | S21={cyl2_ret} S22={cyl2_ext}")
+
+    def _s4_cyl4_retract(self):
+        """
+        Sau khi Cyl2 đã kẹp khay (S22 ON + S21 OFF), thu Cyl4 để nhả platform:
+          • Gửi Cyl4 RETRACT.
+          • Chỉ đi tiếp khi S25 ON + S26 OFF.
+          • Retry mỗi 3s; không hard-error, operator có thể STOP nếu cần.
+
+        Next: S4_OUTY_TARGET1.
+        """
+        cyl4_ret, cyl4_ext = self._snap(S25_CYL4_RETRACTED, S26_CYL4_EXTENDED)
+        if not self._cmd_sent_s4:
+            self._cyl4_retract()
+            self._cyl4_retry_t  = time.time() + 3.0
+            self._step_start_s4 = time.time()
+            self._cmd_sent_s4   = True
+
+        if cyl4_ret and not cyl4_ext:
+            self.get_logger().info("[S4] S25 ON + S26 OFF — Cyl4 retract OK, platform released")
+            self._enter_s4(SystemState.S4_OUTY_TARGET1)
+            return
+
+        if time.time() > self._cyl4_retry_t:
+            self.get_logger().info("[S4] Retry Cyl4 retract")
+            self._cyl4_retract()
+            self._cyl4_retry_t = time.time() + 3.0
+
+        if time.time() - self._step_start_s4 > CYLINDER_TIMEOUT_S:
+            self._notify_step('warn', 'STATE 4', 'Cyl4 retract',
+                f'{self._sensor_label(25)} chưa ON hoặc {self._sensor_label(26)} chưa OFF '
+                f'sau {CYLINDER_TIMEOUT_S:.0f}s — vẫn đang retry mỗi 3s',
+                check=['van Cyl4 retract', 'áp khí',
+                       f'dây {self._sensor_label(25)}/{self._sensor_label(26)}',
+                       'Cyl4 có đang bị kẹt cơ khí không'],
+                action=['Kiểm tra van/khí nén', 'Hoặc nhấn STOP để abort'])
+            self._step_start_s4 = time.time()
+
+        self._log_once("S4_WAIT_S25",
+                       f"Cho S25 ON + S26 OFF | S25={cyl4_ret} S26={cyl4_ext}")
 
     def _s4_outy_target1(self):
         """
@@ -4987,16 +5304,46 @@ class CartridgeSystem(Node):
     def _s4_check_s19(self):
         """
         Check S19 (Check Tray Pos 2) — output stack có khay hay không.
-        - S19 OFF: stack rỗng → thẳng row 1 (S4_OUTY_ROW1).
-        - S19 ON: stack có khay → scan tìm slot trống (S4_OUTY_SCAN_S20).
+        Chuyển sang S4_CYL5_SYNC để đồng bộ cylinder theo S19 trước khi OutY chạy.
         """
-        # S17 OFF -> Stack đang rỗng -> Bỏ qua scan, xuống thẳng Row 1
-        if not self.sensor(S19_CHECK_TRAY_P2):
-            self.get_logger().info(f"[S4] S19 OFF -> Bỏ qua scan S20, xuống thẳng Row 1")
-            self._enter_s4(SystemState.S4_OUTY_ROW1)
-        else:
+        self._enter_s4(SystemState.S4_CYL5_SYNC)
+
+    def _s4_cyl5_sync(self):
+        """
+        Đồng bộ Cylinder 5 theo S19 với cross-check hai limit:
+          - S19 ON  → EXTEND; chỉ hợp lệ khi S28 ON + S27 OFF, rồi scan S20.
+          - S19 OFF → RETRACT; chỉ hợp lệ khi S27 ON + S28 OFF, rồi xuống row 1.
+        Nếu S19 đổi trong lúc chờ, lệnh cylinder tự đảo theo trạng thái mới.
+        Retry lệnh mỗi 3 giây cho đến khi feedback hợp lệ.
+        """
+        s19 = self.sensor(S19_CHECK_TRAY_P2)
+        cyl5_ret, cyl5_ext = self._snap(S27_CYL5_RETRACTED, S28_CYL5_EXTENDED)
+
+        if s19 and cyl5_ext and not cyl5_ret:
+            self.get_logger().info("[S4] S19 ON + Cyl5 EXTENDED (S28=ON S27=OFF) -> scan S20")
             self._outy_jog_start = time.time()
             self._enter_s4(SystemState.S4_OUTY_SCAN_S20)
+            return
+
+        if not s19 and cyl5_ret and not cyl5_ext:
+            self.get_logger().info("[S4] S19 OFF + Cyl5 RETRACTED (S27=ON S28=OFF) -> row 1")
+            self._enter_s4(SystemState.S4_OUTY_ROW1)
+            return
+
+        now = time.time()
+        if not self._cmd_sent_s4 or now - self._cyl5_retry_t >= 3.0:
+            ok = self._cyl5_extend() if s19 else self._cyl5_retract()
+            if ok:
+                self._cmd_sent_s4 = True
+                self._cyl5_retry_t = now
+            else:
+                self._log_once("S4_CYL5_IO", "Cyl5 chưa gửi được lệnh — chờ IO Module 2")
+
+        target = "EXTEND" if s19 else "RETRACT"
+        self._log_once(
+            "S4_CYL5_SYNC",
+            f"Cho Cyl5 {target}: S19={int(s19)} S27={int(cyl5_ret)} S28={int(cyl5_ext)}"
+        )
 
     def _s4_outy_row1(self):
         """
@@ -5176,7 +5523,7 @@ class CartridgeSystem(Node):
           • Retry lệnh valve mỗi 3s.
           • Cross-check 2 sensor: S21 ON AND S22 OFF (giữ nguyên — đã đúng RULE 9).
           • KHÔNG _error theo timeout — warn rồi tiếp tục retry.
-        Next: S4_OUTY_OUTX_HOME.
+        Next: S4_CYL5_EXTEND_HOLD.
         """
         cyl2_ret, cyl2_ext = self._snap(S21_CYL2_RETRACTED, S22_CYL2_EXTENDED)
         if not self._cmd_sent_s4:
@@ -5185,8 +5532,8 @@ class CartridgeSystem(Node):
             self._step_start_s4 = time.time()
             self._cmd_sent_s4   = True
         if cyl2_ret and not cyl2_ext:
-            self.get_logger().info("[S4] S21 ON + S22 OFF — Cyl2 nhả xong")
-            self._enter_s4(SystemState.S4_OUTY_OUTX_HOME)
+            self.get_logger().info("[S4] S21 ON + S22 OFF — Cyl2 nhả xong -> Cyl5 EXTEND giữ khay")
+            self._enter_s4(SystemState.S4_CYL5_EXTEND_HOLD)
             return
         if time.time() > self._cyl2_retry_t:
             self.get_logger().info("[S4] Retry Cyl2 retract")
@@ -5203,24 +5550,50 @@ class CartridgeSystem(Node):
         self._log_once("S4_WAIT_S21",
                        f"Cho S21 ON + S22 OFF | S21={cyl2_ret} S22={cyl2_ext}")
 
+    def _s4_cyl5_extend_hold(self):
+        """
+        Sau khi Cyl2 đã retract nhả khay xuống output stack, extend Cyl5 để giữ khay.
+        Cross-check: S28 ON AND S27 OFF. Next: OutY rút về outy_target1.
+        """
+        cyl5_ret, cyl5_ext = self._snap(S27_CYL5_RETRACTED, S28_CYL5_EXTENDED)
+        if not self._cmd_sent_s4:
+            self._cyl5_extend()
+            self._cyl5_retry_t  = time.time() + 3.0
+            self._step_start_s4 = time.time()
+            self._cmd_sent_s4   = True
+        if cyl5_ext and not cyl5_ret:
+            self.get_logger().info("[S4] S28 ON + S27 OFF — Cyl5 đã giữ khay -> OutY về safe")
+            self._enter_s4(SystemState.S4_OUTY_OUTX_HOME)
+            return
+        if time.time() > self._cyl5_retry_t:
+            self.get_logger().info("[S4] Retry Cyl5 extend giữ khay")
+            self._cyl5_extend()
+            self._cyl5_retry_t = time.time() + 3.0
+        if time.time() - self._step_start_s4 > CYLINDER_TIMEOUT_S:
+            self._notify_step('warn', 'STATE 4', 'Cyl5 extend hold',
+                f'{self._sensor_label(28)} chưa ON sau {CYLINDER_TIMEOUT_S:.0f}s '
+                f'— vẫn đang retry mỗi 3s',
+                check=['van Cyl5 extend', 'áp khí',
+                       f'dây {self._sensor_label(27)}/{self._sensor_label(28)}'],
+                action=['Kiểm tra van/khí nén', 'Hoặc nhấn STOP để abort'])
+            self._step_start_s4 = time.time()
+        self._log_once("S4_WAIT_S28_HOLD",
+                       f"Cho S28 ON + S27 OFF | S27={cyl5_ret} S28={cyl5_ext}")
+
     def _s4_outy_outx_home(self):
         """
-        Hoàn tất STATE 4: đưa OutY về outy_target1 (raise safe) TRƯỚC, sau đó
-        OutX về outx_target1 — tuần tự không chạy cùng lúc (giống InY trước InX
-        ở S1). Verify từng trục bằng _arrived AND _at_position.
-        Next: S4_COMPLETE.
+        Sau khi Cyl5 đã giữ khay, đưa OutY về outy_target1 (raise safe) trước.
+        Khi OutY đã rút khỏi khay thì sang bước retract Cyl5.
+        Next: S4_CYL5_RETRACT_RELEASE.
         """
         cfg = self.config
         oy = self._pos(5)
-        ox = self._pos(4)
-        if oy is None or ox is None:
+        if oy is None:
             return
 
         oy_safe = oy <= cfg.outy_target1 + 5.0
-        ox_at_target = abs(ox - cfg.outx_target1) <= 5.0
 
-        # ── Step 1: OutY raise to safe trước ──
-        if not oy_safe and not getattr(self, '_s4_outy_home_done', False):
+        if not oy_safe:
             if not self._cmd_sent_s4:
                 if not self._nb_move(5, cfg.outy_target1):
                     self._log_once("S4_HOME_OY_FAIL", "S4 OutY home fail")
@@ -5232,11 +5605,54 @@ class CartridgeSystem(Node):
                     self.get_logger().warn("[S4] HOME OutY timeout — resend lệnh")
                     self._cmd_sent_s4 = False
                 elif self._arrived(5) and self._at_position(5, cfg.outy_target1):
-                    self._s4_outy_home_done = True
-                    self._cmd_sent_s4 = False
+                    self.get_logger().info("[S4] OutY đã về safe -> Cyl5 RETRACT nhả cơ cấu giữ")
+                    self._enter_s4(SystemState.S4_CYL5_RETRACT_RELEASE)
             return
 
-        # ── Step 2: OutX → outx_target1 (OutY đã safe) ──
+        self.get_logger().info("[S4] OutY đang safe -> Cyl5 RETRACT nhả cơ cấu giữ")
+        self._enter_s4(SystemState.S4_CYL5_RETRACT_RELEASE)
+
+    def _s4_cyl5_retract_release(self):
+        """
+        Sau khi OutY đã rút về safe, retract Cyl5 để nhả cơ cấu giữ khay.
+        Cross-check: S27 ON AND S28 OFF. Next: OutX về outx_target1.
+        """
+        cyl5_ret, cyl5_ext = self._snap(S27_CYL5_RETRACTED, S28_CYL5_EXTENDED)
+        if not self._cmd_sent_s4:
+            self._cyl5_retract()
+            self._cyl5_retry_t  = time.time() + 3.0
+            self._step_start_s4 = time.time()
+            self._cmd_sent_s4   = True
+        if cyl5_ret and not cyl5_ext:
+            self.get_logger().info("[S4] S27 ON + S28 OFF — Cyl5 đã retract -> OutX về target1")
+            self._enter_s4(SystemState.S4_OUTX_HOME)
+            return
+        if time.time() > self._cyl5_retry_t:
+            self.get_logger().info("[S4] Retry Cyl5 retract")
+            self._cyl5_retract()
+            self._cyl5_retry_t = time.time() + 3.0
+        if time.time() - self._step_start_s4 > CYLINDER_TIMEOUT_S:
+            self._notify_step('warn', 'STATE 4', 'Cyl5 retract release',
+                f'{self._sensor_label(27)} chưa ON sau {CYLINDER_TIMEOUT_S:.0f}s '
+                f'— vẫn đang retry mỗi 3s',
+                check=['van Cyl5 retract', 'áp khí',
+                       f'dây {self._sensor_label(27)}/{self._sensor_label(28)}'],
+                action=['Kiểm tra van/khí nén', 'Hoặc nhấn STOP để abort'])
+            self._step_start_s4 = time.time()
+        self._log_once("S4_WAIT_S27_RELEASE",
+                       f"Cho S27 ON + S28 OFF | S27={cyl5_ret} S28={cyl5_ext}")
+
+    def _s4_outx_home(self):
+        """
+        Bước cuối STATE 4: OutX về outx_target1 sau khi OutY safe và Cyl5 đã retract.
+        Next: S4_COMPLETE.
+        """
+        cfg = self.config
+        ox = self._pos(4)
+        if ox is None:
+            return
+
+        ox_at_target = abs(ox - cfg.outx_target1) <= 5.0
         if not ox_at_target:
             if not self._cmd_sent_s4:
                 if not self._nb_move(4, cfg.outx_target1):
@@ -5249,12 +5665,10 @@ class CartridgeSystem(Node):
                     self.get_logger().warn("[S4] HOME OutX timeout — resend lệnh")
                     self._cmd_sent_s4 = False
                 elif self._arrived(4) and self._at_position(4, cfg.outx_target1):
-                    self._s4_outy_home_done = False
                     self._enter_s4(SystemState.S4_COMPLETE)
             return
 
-        # Both ok → complete
-        self._s4_outy_home_done = False
+        # OutX đã ở target1.
         self._enter_s4(SystemState.S4_COMPLETE)
 
     def _s4_retry_scan_home(self):
