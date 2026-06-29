@@ -407,6 +407,7 @@ private:
     void logState(const std::string& message);
     void transitionTo(SystemState new_state);
     void softStopToManual(const std::string& source);
+    void forceScalePass(const std::string& source);
     bool checkConnection();
     bool validateRobotState();
     std::string stateToString(SystemState state);
@@ -643,6 +644,9 @@ void RobotLogicNode::initSubscriptions()
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             ignore_scale_ = msg->data;
             RCLCPP_INFO(get_logger(), "[SCALE] Ignore Scale mode toggled: %s", ignore_scale_ ? "ON" : "OFF");
+            if (ignore_scale_) {
+                forceScalePass("/robot/ignore_scale");
+            }
         });
 
     input_trays_empty_sub_ = create_subscription<std_msgs::msg::Bool>(
@@ -880,6 +884,34 @@ void RobotLogicNode::softStopToManual(const std::string& source)
     notifyStateChange();
 }
 
+void RobotLogicNode::forceScalePass(const std::string& source)
+{
+    PendingScaleResult r;
+    r.pass         = true;
+    r.timestamp    = this->now();
+    r.cartridge_id = cartridge_counter_.load();
+
+    {
+        std::lock_guard<std::mutex> lock(scale_result_mutex_);
+        pending_scale_results_.clear();
+        pending_scale_results_.push_back(r);
+    }
+
+    stored_scale_result_.store(true);
+    scale_result_received_ = true;
+
+    RCLCPP_WARN(get_logger(),
+        "[SCALE] IGNORE/BYPASS from %s -> force PASS for cartridge #%d",
+        source.c_str(), r.cartridge_id);
+
+    if (current_state_ == SystemState::PROCESSING_SCALE ||
+        current_state_ == SystemState::ERROR_SCALE_TIMEOUT ||
+        current_state_ == SystemState::WAIT_SCALE_CHOICE)
+    {
+        notifyStateChange();
+    }
+}
+
 // ============================================================================
 // HELPER: getNextAutoRow
 // Returns the row number to pick next (1-5).
@@ -1104,8 +1136,10 @@ bool RobotLogicNode::hasPendingScaleResults()
 
 void RobotLogicNode::scaleResultCallback(const std_msgs::msg::Bool::SharedPtr msg)
 {
+    bool pass = ignore_scale_ ? true : msg->data;
+
     PendingScaleResult r;
-    r.pass         = msg->data;
+    r.pass         = pass;
     r.timestamp    = this->now();
     r.cartridge_id = cartridge_counter_.load();
 
@@ -1118,11 +1152,11 @@ void RobotLogicNode::scaleResultCallback(const std_msgs::msg::Bool::SharedPtr ms
         }
     }
 
-    stored_scale_result_.store(msg->data);
+    stored_scale_result_.store(pass);
     scale_result_received_ = true;
 
     RCLCPP_INFO(get_logger(), "[SCALE] ⚡ Result #%d: %s",
-        r.cartridge_id, msg->data ? "PASS" : "FAIL");
+        r.cartridge_id, pass ? "PASS" : "FAIL");
 
     if (current_state_ == SystemState::PROCESSING_SCALE ||
         current_state_ == SystemState::ERROR_SCALE_TIMEOUT)
@@ -2275,6 +2309,12 @@ void RobotLogicNode::stateWaitResumeChoice()
 void RobotLogicNode::stateWaitScaleChoice()
 {
     publishSystemStatus("WAIT_SCALE_CHOICE");
+    if (ignore_scale_) {
+        RCLCPP_WARN(get_logger(), "[SCALE_CHOICE] IGNORE MODE: force PASS");
+        forceScalePass("WAIT_SCALE_CHOICE");
+        transitionTo(SystemState::PLACE_TO_OUTPUT);
+        return;
+    }
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 10000,
         "[SCALE_CHOICE] ⏸ No loadcell 150s — waiting operator: WAIT_FILLING / PLACE_TO_OUTPUT / PLACE_TO_FAIL");
 }
@@ -2402,9 +2442,9 @@ void RobotLogicNode::stateProcessingScale()
     }
 
     if (ignore_scale_) {
-        double elapsed = (this->now() - scale_wait_start_).seconds();
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
-            "[SCALE] IGNORE MODE: Waiting indefinitely for manual PLACE_OUTPUT or PLACE_FAIL command... (%.1fs)", elapsed);
+        RCLCPP_WARN(get_logger(), "[SCALE] IGNORE MODE: bypass scale -> PASS");
+        forceScalePass("PROCESSING_SCALE");
+        transitionTo(SystemState::PLACE_TO_OUTPUT);
         return;
     }
 
@@ -2449,6 +2489,13 @@ void RobotLogicNode::stateProcessingScale()
 void RobotLogicNode::stateErrorScaleTimeout()
 {
     publishSystemStatus("ERROR_SCALE_TIMEOUT");
+
+    if (ignore_scale_) {
+        RCLCPP_WARN(get_logger(), "[ERROR_SCALE_TIMEOUT] IGNORE MODE: force PASS");
+        forceScalePass("ERROR_SCALE_TIMEOUT");
+        transitionTo(SystemState::PLACE_TO_OUTPUT);
+        return;
+    }
 
     if (scale_result_received_) {
         RCLCPP_INFO(get_logger(), "[SCALE] Result received after timeout — resuming");
