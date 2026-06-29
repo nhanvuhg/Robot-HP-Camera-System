@@ -8,7 +8,7 @@ Festo Gripper Controller Node
 Channel map (CPX-AP module index 3 @ 192.168.27.253):
   ch0/ch1 = Gripper (open/close)
   ch2/ch3 = Picker  (open/close)
-  ch8/ch9 = Cyl6    (ch8 = NHẢ/release coil, ch9 = KẸP/clamp coil)
+  ch8/ch9 = Cyl_loadcell    (ch8 = NHẢ/release coil, ch9 = KẸP/clamp coil)
 """
 
 import rclpy
@@ -75,9 +75,9 @@ class FestoGripperNode(Node):
                             self.myIO.reset_channel(3)
                             self.myIO.reset_channel(2)
 
-                        # Cyl6: Safe = Ch8 False, Ch9 False (de-energized, no commanded motion)
+                        # Cyl_loadcell: Safe = Ch8 False, Ch9 False (de-energized, no commanded motion)
                         if len(channels) > 9 and (channels[8] or channels[9]):
-                            self.get_logger().info('Initializing Cyl6 to default de-energized state (0V)...')
+                            self.get_logger().info('Initializing Cyl_loadcell to default de-energized state (0V)...')
                             self.myIO.reset_channel(9)
                             self.myIO.reset_channel(8)
 
@@ -99,8 +99,8 @@ class FestoGripperNode(Node):
         # State flags for gripper and picker (separate devices/channels)
         self.gripper_open = True
         self.picker_open = True
-        # Cyl6 state: True = KẸP/clamp (extended), False = NHẢ/release (default)
-        self.cyl6_clamped = False
+        # Cyl_loadcell state: True = KẸP/clamp (extended), False = NHẢ/release (default)
+        self.cyl_loadcell_clamped = False
 
         # Subscriptions from robot_logic_node
         self.gripper_sub = self.create_subscription(
@@ -118,21 +118,21 @@ class FestoGripperNode(Node):
             10
         )
 
-        # Cyl6 cylinder commands (channels 8/9 on same CPX module)
-        self.cyl6_sub = self.create_subscription(
+        # Cyl_loadcell cylinder commands (channels 8/9 on same CPX module)
+        self.cyl_loadcell_sub = self.create_subscription(
             Bool,
-            '/robot/cyl6_cmd',
-            self.cyl6_callback,
+            '/robot/cyl_loadcell_cmd',
+            self.cyl_loadcell_callback,
             10
         )
 
         # Status publishers for feedback
         self.gripper_pub = self.create_publisher(Bool, '/robot/gripper_status', 10)
         self.picker_pub = self.create_publisher(Bool, '/robot/picker_status', 10)
-        self.cyl6_pub = self.create_publisher(Bool, '/robot/cyl6_status', 10)
+        self.cyl_loadcell_pub = self.create_publisher(Bool, '/robot/cyl_loadcell_status', 10)
 
         mode_str = "SIMULATION" if self.simulation_mode else "LIVE"
-        self.get_logger().info(f'[{mode_str}] Waiting for commands on /robot/gripper_cmd, /robot/picker_cmd, /robot/cyl6_cmd...')
+        self.get_logger().info(f'[{mode_str}] Waiting for commands on /robot/gripper_cmd, /robot/picker_cmd, /robot/cyl_loadcell_cmd...')
     
     def gripper_callback(self, msg: Bool):
         """
@@ -259,30 +259,30 @@ class FestoGripperNode(Node):
                 self.get_logger().error(f'Failed to open picker: {e}')
 
     # =========================================================================
-    # Cyl6 cylinder — double-solenoid valve on CPX channels 8/9 (same module)
+    # Cyl_loadcell cylinder — double-solenoid valve on CPX channels 8/9 (same module)
     #   ch8 = NHẢ/release coil, ch9 = KẸP/clamp coil
     #   msg.data True  → KẸP  (set ch9, reset ch8)
     #   msg.data False → NHẢ  (set ch8, reset ch9)
     # NOTE: Nếu hướng bị ngược ngoài thực tế, đổi 2 channel 8<->9 ở 2 method dưới.
     # =========================================================================
-    def cyl6_callback(self, msg: Bool):
-        """Callback for cyl6 commands. True = KẸP (clamp), False = NHẢ (release)."""
+    def cyl_loadcell_callback(self, msg: Bool):
+        """Callback for cyl_loadcell commands. True = KẸP (clamp), False = NHẢ (release)."""
         try:
             if msg.data:
-                self.cyl6_clamp()
+                self.cyl_loadcell_clamp()
             else:
-                self.cyl6_release()
+                self.cyl_loadcell_release()
         except Exception as e:
-            self.get_logger().error(f'Error controlling cyl6: {e}')
+            self.get_logger().error(f'Error controlling cyl_loadcell: {e}')
 
-    def cyl6_clamp(self):
-        """Cyl6 KẸP — energize clamp coil (ch9), release coil (ch8) off."""
-        if not self.cyl6_clamped:
-            self.get_logger().info('🟢 Cyl6: KẸP (set ch9, reset ch8)')
+    def cyl_loadcell_clamp(self):
+        """Cyl_loadcell KẸP — energize clamp coil (ch9), release coil (ch8) off."""
+        if not self.cyl_loadcell_clamped:
+            self.get_logger().info('🟢 Cyl_loadcell: KẸP (set ch9, reset ch8)')
 
             if self.simulation_mode:
-                self.get_logger().info('[SIM] Cyl6 clamped (channels: 8=reset, 9=set)')
-                self.cyl6_clamped = True
+                self.get_logger().info('[SIM] Cyl_loadcell clamped (channels: 8=reset, 9=set)')
+                self.cyl_loadcell_clamped = True
                 return
 
             try:
@@ -290,22 +290,22 @@ class FestoGripperNode(Node):
                     raise RuntimeError('CPX IO not available')
                 self.myIO.reset_channel(8)
                 self.myIO.set_channel(9)
-                self.cyl6_clamped = True
+                self.cyl_loadcell_clamped = True
                 time.sleep(0.05)
                 msg = Bool()
-                msg.data = True  # Cyl6 clamped = ON
-                self.cyl6_pub.publish(msg)
+                msg.data = True  # Cyl_loadcell clamped = ON
+                self.cyl_loadcell_pub.publish(msg)
             except Exception as e:
-                self.get_logger().error(f'Failed to clamp cyl6: {e}')
+                self.get_logger().error(f'Failed to clamp cyl_loadcell: {e}')
 
-    def cyl6_release(self):
-        """Cyl6 NHẢ — energize release coil (ch8), clamp coil (ch9) off."""
-        if self.cyl6_clamped:
-            self.get_logger().info('🔴 Cyl6: NHẢ (set ch8, reset ch9)')
+    def cyl_loadcell_release(self):
+        """Cyl_loadcell NHẢ — energize release coil (ch8), clamp coil (ch9) off."""
+        if self.cyl_loadcell_clamped:
+            self.get_logger().info('🔴 Cyl_loadcell: NHẢ (set ch8, reset ch9)')
 
             if self.simulation_mode:
-                self.get_logger().info('[SIM] Cyl6 released (channels: 9=reset, 8=set)')
-                self.cyl6_clamped = False
+                self.get_logger().info('[SIM] Cyl_loadcell released (channels: 9=reset, 8=set)')
+                self.cyl_loadcell_clamped = False
                 return
 
             try:
@@ -313,13 +313,13 @@ class FestoGripperNode(Node):
                     raise RuntimeError('CPX IO not available')
                 self.myIO.reset_channel(9)
                 self.myIO.set_channel(8)
-                self.cyl6_clamped = False
+                self.cyl_loadcell_clamped = False
                 time.sleep(0.05)
                 msg = Bool()
-                msg.data = False  # Cyl6 released = OFF
-                self.cyl6_pub.publish(msg)
+                msg.data = False  # Cyl_loadcell released = OFF
+                self.cyl_loadcell_pub.publish(msg)
             except Exception as e:
-                self.get_logger().error(f'Failed to release cyl6: {e}')
+                self.get_logger().error(f'Failed to release cyl_loadcell: {e}')
 
     def shutdown(self):
         """Cleanup on shutdown"""
@@ -339,7 +339,7 @@ class FestoGripperNode(Node):
                 self.picker_open_cmd()
             except Exception:
                 pass
-            # Cyl6: de-energize both coils (safe, no commanded motion)
+            # Cyl_loadcell: de-energize both coils (safe, no commanded motion)
             try:
                 if self.myIO:
                     self.myIO.reset_channel(9)
