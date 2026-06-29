@@ -959,18 +959,18 @@ private:
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại input row
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 120,8)) return false;
-        if (!moveToIndex(27)) return false;
-        if (!moveToIndex(28)) return false;
+        if (!moveToIndex(27+1)) return false;
+        if (!moveToIndex(28+1)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, 139, 0,8)) return false;
+        if (!moveR(0, 70, 0,3)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(0.5)) return false;
-        if (!moveR(1, -60, 0)) return false;
-        if (!moveR(-10, 29, 0)) return false;
+        if (!moveR(1, -56, 0)) return false;
+        if (!moveR(-10, 25, 0)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, -230, 0)) return false;
-        if (!moveToIndex(28)) return false;
+        if (!moveR(0, -30, 0)) return false;
+        if (!moveToIndex(28+1)) return false;
         return true;
     }
 
@@ -978,7 +978,7 @@ private:
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Buffer", row);
         if (row < 1 || row > 5) return false;
         // if (!moveToIndex(6)) return false; // Tạm thời bỏ move đến vị trí an toàn
-        if (!moveToIndex(27)) return false;
+        if (!moveToIndex(28+1)) return false;
         // MoveJ đến row1new1 (Index 1)
         if (!moveToIndex(1)) return false;
         
@@ -995,7 +995,7 @@ private:
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại input row
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 120,8)) return false;
-        if (!moveToIndex(27)) return false;
+        if (!moveToIndex(27+1)) return false;
         if (!moveToIndex(8)) return false;
         if (!moveR(0, 0, -55)) return false;
         if (!wait(0.5)) return false;
@@ -1009,12 +1009,14 @@ private:
     bool executeChamberScale() {
         RCLCPP_INFO(get_logger(), "[MOTION] Chamber → Scale");
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 140.5, 0)) return false;
+        if (!moveR(0, 70.5, 0)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại chamber
         if (!wait(0.5)) return false;
-        if (!moveR(0, -170, 0)) return false;
+        if (!moveR(1, -70, 0,8)) return false;
+        if (!wait(0.5)) return false;
+        if (!moveToIndex(31)) return false;
         if (!moveToIndex(9)) return false;
-        if (!moveR(0, 0, -60)) return false;
+        if (!moveR(0, 0, -89)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay lên scale
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 110)) return false;
@@ -1024,28 +1026,30 @@ private:
     bool executeScaleOutput(int slot) {
         RCLCPP_INFO(get_logger(), "[MOTION] Scale → Output Slot %d", slot);
         if (slot < 1 || slot > 9) return false;
-        if (!moveToIndex(30)) return false;
+        if (!moveToIndex(30+1)) return false;
         if (!moveToIndex(10)) return false;
-        if (!moveR(40, 0, 0)) return false;
+        if (!moveR(50, 0, 0)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay đang ở scale
-        if (!moveR(0, 0, 40,8)) return false;
+        if (!moveR(0, 0, 70,8)) return false;
         if (!moveToIndex(12)) return false;
         if (!moveR(0, 0, -60,8)) return false;
         if (!wait(0.5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — đặt khay xuống vị trí trung gian
         if (!wait(0.5)) return false;
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — đảm bảo gripper mở trước khi pick up
-        if (!moveR(0, 0, 60,8)) return false;
-        if (!moveToIndex(11)) return false;
-        if (!moveR(0, 0, -60,8)) return false;
+        if (!moveR(0, 0, 200,8)) return false;
+        if (!setDigitalOutput(6, false)) return false;
+        if (!moveToIndex(11)) return false; 
+        if (!moveR(0, 0, -70,8)) return false;
         if (!setDigitalOutput(2, true)) return false;   // Gripper GẮP — kẹp khay tại Index 11
         if (!wait(0.5)) return false;
-        if (!moveR(0, 0, 60,8)) return false;
+        if (!moveR(0, 0, 70,8)) return false;
         if (!moveToIndex(13)) return false;
         if (!moveToIndex(13 + slot)) return false;
-        if (!moveR(0, 0, -30,8)) return false;
+        if (!moveR(0, 0, -125,8)) return false;
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — thả khay vào output slot
-        if (!moveR(0, 0, 30,8)) return false;
+        if (!moveR(0, 0, 130,8)) return false;
+        if (!setDigitalOutput(6, true)) return false;
         if (!moveToIndex(13)) return false;
         if (!moveToIndex(0)) return false;
         return true;
@@ -1065,25 +1069,26 @@ private:
 
     bool executeBufferChamber() {
         RCLCPP_INFO(get_logger(), "[MOTION] Buffer → Chamber");
-        if (!moveToIndex(28)) return false; 
-        if (!moveToIndex(8)) return false;
+        if (!moveToIndex(28+1)) return false;
         if (!moveR(0, 0, -58)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại buffer
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 90)) return false;
-        if (!moveToIndex(28)) return false;
+        if (!moveToIndex(28+1)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, 139, 0,8)) return false;
+        if (!moveR(0, 70, 0,3)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(0.5)) return false;
-        if (!moveR(-1, -60, 0)) return false;
-        if (!moveR(-10, 29, 0)) return false;
+        if (!moveR(-1, -56, 0)) return false;
+        if (!moveR(-10, 25, 0)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, -230, 0)) return false;
-        if (!moveToIndex(28)) return false;
+        if (!moveR(0, -30, 0)) return false;
+        if (!moveToIndex(28+1)) return false;
         return true;
     }
+
+
 };
 
 // ============================================================================
