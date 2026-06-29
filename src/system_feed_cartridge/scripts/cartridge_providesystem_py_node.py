@@ -328,6 +328,9 @@ class CartridgeSystem(Node):
         self._step_timeout_s3   = 0.0
         self._cyl4_retry_t      = 0.0
         self._cyl4_retract_sent = False
+        # True = ép Servo3 về home 0mm ở S3_SERVO3_TARGET1 (sau overshoot 850 chưa
+        # thấy S18). Fresh trigger = False → S17 ON thì giữ vị trí, đẩy tiếp.
+        self._s3_force_home     = False
 
         # ── STATE S4 runtime ─────────────────────────────────────────
         self.state_s4           = SystemState.IDLE
@@ -2846,6 +2849,7 @@ class CartridgeSystem(Node):
             self._jog_mode = False
             self._drive_warm_t = -1.0  # FAS drive warm-up
             self._sync_mode_jog()
+            self._s3_force_home = False   # fresh trigger: S17 ON thì giữ vị trí, đẩy tiếp
             self._notify('info', 'STATE 3 (manual)', 'Bắt đầu cấp khay output')
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
             return
@@ -3577,6 +3581,7 @@ class CartridgeSystem(Node):
             return
         if self._can_start_s3():
             self.get_logger().info("[S3-IDLE] S17 ON + S18 OFF >= 5s → STATE 3")
+            self._s3_force_home = False   # fresh trigger: S17 ON thì giữ vị trí, đẩy tiếp
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
 
     def _do_idle_s4(self):
@@ -4988,13 +4993,23 @@ class CartridgeSystem(Node):
     
     def _s3_servo3_target1(self):
         """
-        STATE 3 bước 2: Servo3 → servo3_home (0mm) — điểm nhận & chờ cấp khay.
-        Servo3 luôn nhận khay + kiểm tra tín hiệu tại vị trí home 0.0.
-        Verify _at_position(3, servo3_home) trước khi sang S3_CHECK_S17
-        (check sensor có khay trên platform).
-        Timeout → _error() (vào ERROR state).
+        STATE 3 bước 2: quyết định vị trí Servo3 trước khi feed, theo S17 (Platform):
+          - S17 ON và KHÔNG bị ép về home (_s3_force_home=False): GIỮ NGUYÊN vị trí
+            Servo3 hiện tại → đi thẳng S3_CHECK_S17 → feed tiếp tới servo3_target2
+            (cấp khay kế trong cùng chồng, KHÔNG reset về 0 — 1 chồng tới 10 khay).
+          - S17 OFF hoặc _s3_force_home=True (vừa đẩy tới 850 mà S18 chưa ON): đưa
+            Servo3 về servo3_home (0mm) rồi re-check S17 (S3_CHECK_S17 confirm 2s).
+        Verify _arrived AND _at_position(3, servo3_home) trước transition.
+        Timeout → resend (KHÔNG vào ERROR — tránh clear zero_offset / re-home cả 5 servo).
         """
         cfg = self.config
+        # S17 ON + không ép về home → giữ vị trí Servo3, đẩy tiếp (continue feed)
+        if self.sensor(S17_PLATFORM) and not self._s3_force_home:
+            self._cmd_sent_s3 = False
+            self._enter_s3(SystemState.S3_CHECK_S17)
+            return
+
+        # S17 OFF hoặc overshoot 850 → đưa Servo3 về home 0mm để nhận/xét lại chồng
         if not self._cmd_sent_s3:
             ok = self._nb_move(3, cfg.servo3_home)
             if not ok:
@@ -5010,6 +5025,8 @@ class CartridgeSystem(Node):
                 self._cmd_sent_s3 = False
             # [BLOCKING-FIX] verify _at_position(3, servo3_home)
             elif self._arrived(3) and self._at_position(3, cfg.servo3_home):
+                self._cmd_sent_s3   = False
+                self._s3_force_home = False   # đã về home, clear cờ overshoot
                 self._enter_s3(SystemState.S3_CHECK_S17)
 
     def _s3_check_s17(self):
@@ -5172,8 +5189,9 @@ class CartridgeSystem(Node):
             # đã ở target2, tránh đọc nhầm drive flag rồi quay về 10mm vô lý.
             elif (self._arrived(3) and self._at_position(3, cfg.servo3_target2)
                   and time.time() - self._step_start_s3 > 0.5):
-                self.get_logger().warn("[S3] Servo 3 tới giới hạn (target2) chưa có S18 -> Quay về home (0mm) thử lại!")
-                self._notify('warn', 'Lỗi cấp khay', 'Đã tới 400mm nhưng chưa thấy S18, thu về cấp lại')
+                self.get_logger().warn("[S3] Servo3 tới 850mm chưa thấy S18 -> về home (0mm) xét lại S17")
+                self._notify('warn', 'Cấp khay', 'Servo3 tới 850mm chưa thấy S18 — về 0mm xét lại S17 rồi cấp lại')
+                self._s3_force_home = True   # ép S3_SERVO3_TARGET1 về 0mm (overshoot)
                 self._enter_s3(SystemState.S3_SERVO3_TARGET1)
 
     def _s3_wait_s18(self):
@@ -5434,7 +5452,7 @@ class CartridgeSystem(Node):
         """
         cfg = self.config
         if not self._cmd_sent_s4:
-            ok = self._nb_move(5, cfg.outy_target1, vel = 140)
+            ok = self._nb_move(5, cfg.outy_target1, vel = 200)
             if not ok:
                 self._log_once("S4_OY1_FAIL", "S4 outy_target1 fail")
                 return
