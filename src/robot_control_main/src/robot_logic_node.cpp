@@ -96,6 +96,7 @@ private:
     static constexpr double FILLING_DURATION_SEC     = 90.0;
     static constexpr double MOTION_WATCHDOG_SEC      = 120.0;
     static constexpr int    TOTAL_ROWS               = 5;   // rows per tray
+    static constexpr int    TOTAL_OUTPUT_SLOTS       = 10;  // slots per output tray
 
     // ========================================================================
     // SUBSCRIPTIONS
@@ -1215,7 +1216,7 @@ void RobotLogicNode::selectedRowCallback(const std_msgs::msg::Int32::SharedPtr m
 void RobotLogicNode::selectedSlotCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
     int slot = msg->data;
-    if (slot < 1 || slot > 9) return;
+    if (slot < 1 || slot > TOTAL_OUTPUT_SLOTS) return;
     {
         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
         selected_output_slot_ = slot;
@@ -1378,7 +1379,7 @@ void RobotLogicNode::commandRowCallback(const std_msgs::msg::Int32::SharedPtr ms
 void RobotLogicNode::commandSlotCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
     int slot = msg->data;
-    if (slot < 1 || slot > 9) return;
+    if (slot < 1 || slot > TOTAL_OUTPUT_SLOTS) return;
     {
         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
         selected_output_slot_ = slot;
@@ -2560,12 +2561,12 @@ void RobotLogicNode::statePlaceToOutput()
             selected_output_slot_ = SLOT_UNSET;
         }
 
-        // Slot 9 reached → output tray full
-        if (placed_slot >= 9) {
+        // Last output slot reached → output tray full
+        if (placed_slot >= TOTAL_OUTPUT_SLOTS) {
             current_auto_slot_ = 1;
             if (!use_ai_for_control_) {
                 // AUTO/MANUAL: Robot tự quyết định thay khay
-                RCLCPP_WARN(get_logger(), "[OUTPUT] Slot 9 reached — output tray full (AUTO mode)");
+                RCLCPP_WARN(get_logger(), "[OUTPUT] Slot %d reached — output tray full (AUTO mode)", TOTAL_OUTPUT_SLOTS);
                 publishDoneTrayOutput();
             }
             // AI mode: Camera toàn quyền — không can thiệp

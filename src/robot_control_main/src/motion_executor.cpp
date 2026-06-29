@@ -163,6 +163,8 @@ public:
 
 
 private:
+    static constexpr int TOTAL_OUTPUT_SLOTS = 10;
+
     // ========================================================================
     // MOTION DATA
     // ========================================================================
@@ -1025,7 +1027,7 @@ private:
 
     bool executeScaleOutput(int slot) {
         RCLCPP_INFO(get_logger(), "[MOTION] Scale → Output Slot %d", slot);
-        if (slot < 1 || slot > 9) return false;
+        if (slot < 1 || slot > TOTAL_OUTPUT_SLOTS) return false;
         if (!moveToIndex(30+1)) return false;
         if (!moveToIndex(10)) return false;
         if (!moveR(50, 0, 0)) return false;
