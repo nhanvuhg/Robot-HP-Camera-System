@@ -120,6 +120,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr motion_hb_sub_;
     rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr vision_hb_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   motion_busy_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   soft_stop_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   stop_button_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  set_mode_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_homing_done_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sensors_state_sub_;
@@ -404,6 +406,7 @@ private:
     // ========================================================================
     void logState(const std::string& message);
     void transitionTo(SystemState new_state);
+    void softStopToManual(const std::string& source);
     bool checkConnection();
     bool validateRobotState();
     std::string stateToString(SystemState state);
@@ -690,6 +693,18 @@ void RobotLogicNode::initSubscriptions()
         "/robot/motion_busy", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) { motion_busy_ = msg->data; });
 
+    soft_stop_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/system/soft_stop", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (msg->data) softStopToManual("/system/soft_stop");
+        });
+
+    stop_button_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/system/stop_button", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (msg->data) softStopToManual("/system/stop_button");
+        });
+
     // PHẢI gán vào member SharedPtr — create_subscription return SharedPtr; nếu vứt return,
     // sub bị destruct ngay, callback không bao giờ fire. Bug history: interlock cartridge_busy_
     // không hoạt động → motion thread chạy đè cartridge → kẹt khay.
@@ -811,23 +826,7 @@ void RobotLogicNode::initServices()
         "/robot/soft_stop_to_manual",
         [this](const std_srvs::srv::SetBool::Request::SharedPtr /*req*/,
                std_srvs::srv::SetBool::Response::SharedPtr res) {
-            // Soft STOP: cancel motion goals NGAY + chuyển MANUAL + reset state machine về IDLE
-            // GIỮ NGUYÊN: row tracking, slot, chamber/buffer flags (data state)
-            // Reset current_state_=IDLE để GUI nhận "robotBusy=false" → unlock mode buttons.
-            RCLCPP_WARN(get_logger(), "[SOFT_STOP] Cancel motion + state=IDLE + switch MANUAL (keep data)");
-            if (motion_action_client_) {
-                motion_action_client_->async_cancel_all_goals();
-            }
-            current_state_   = SystemState::IDLE;
-            system_running_  = false;
-            system_started_  = false;
-            manual_mode_     = true;
-            use_ai_for_control_ = false;
-            // Sync mode về cartridge node
-            auto sync_msg = std_msgs::msg::String();
-            sync_msg.data = "manual";
-            if (cartridge_mode_pub_) cartridge_mode_pub_->publish(sync_msg);
-            notifyStateChange();   // publish /robot/system_status để GUI unlock mode buttons
+            softStopToManual("/robot/soft_stop_to_manual");
             res->success = true;
             res->message = "Soft stop OK — motion cancelled, state=IDLE, mode=MANUAL, data preserved";
         },
@@ -856,6 +855,29 @@ void RobotLogicNode::initServices()
         "/robot/set_mode", 10,
         std::bind(&RobotLogicNode::setModeCallback, this, std::placeholders::_1),
         sub_options);
+}
+
+void RobotLogicNode::softStopToManual(const std::string& source)
+{
+    // Soft STOP: cancel motion goals NGAY + chuyển MANUAL + reset state machine về IDLE.
+    // GIỮ NGUYÊN: row tracking, slot, chamber/buffer flags (data state).
+    // Reset current_state_=IDLE để GUI nhận "robotBusy=false" → unlock manual controls.
+    RCLCPP_WARN(get_logger(),
+        "[SOFT_STOP] %s -> cancel motion + state=IDLE + switch MANUAL (keep data)",
+        source.c_str());
+    if (motion_action_client_) {
+        motion_action_client_->async_cancel_all_goals();
+    }
+    current_state_      = SystemState::IDLE;
+    system_running_     = false;
+    system_started_     = false;
+    manual_mode_        = true;
+    use_ai_for_control_ = false;
+    motion_busy_        = false;
+    motion_in_progress_ = false;
+    clearMotionCmd();
+
+    notifyStateChange();
 }
 
 // ============================================================================

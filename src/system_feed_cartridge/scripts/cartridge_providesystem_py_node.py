@@ -274,6 +274,10 @@ class CartridgeSystem(Node):
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         self._servo_motion_t: dict = {}
         self._idle_skip_modbus_s    = 2.0   # giây — sau motion command này thì còn đọc tươi
+        # GUI cần feedback actual position liên tục cho cả 5 trục. Trước đây
+        # idle-skip làm S3/S4/S5 reuse cache sau 2s vì các state output không
+        # refresh _servo_motion_t đều như S1/S2.
+        self._live_position_servos  = set(range(1, 6))
         # Servo đang JOG continuous (jog_task duration=0.0): set bởi _jog,
         # clear bởi _stop. _publish_positions bỏ qua idle-skip cho các sid
         # trong set này → vị trí luôn đọc tươi suốt thời gian giữ JOG, không
@@ -3322,9 +3326,10 @@ class CartridgeSystem(Node):
         GUI dùng để hiển thị vị trí live và tốc độ JOG hiện tại.
 
         Tối ưu hot path:
-        1. Per-servo: nếu time.time() - _servo_motion_t[sid] > _idle_skip_modbus_s
-           (mặc định 2s) → servo idle lâu → SKIP Modbus, reuse cache. Giảm lock
-           contention khi không có hoạt động → JOG cold press grab lock nhanh.
+        1. Per-servo: các trục trong _live_position_servos luôn đọc actual
+           position. Trục khác nếu time.time() - _servo_motion_t[sid] >
+           _idle_skip_modbus_s (mặc định 2s) → servo idle lâu → SKIP Modbus,
+           reuse cache. Giảm lock contention khi không có hoạt động.
         2. Khi servo active (JOG/move/home) → đọc tươi Modbus mỗi cycle.
         3. Try-acquire 50ms — nếu lock vẫn bận (state machine giữ) → fallback cache.
 
@@ -3342,7 +3347,11 @@ class CartridgeSystem(Node):
                 # Bỏ qua nếu servo đang JOG continuous (duration=0.0) — drive di
                 # chuyển liên tục mà không có loop refresh _servo_motion_t.
                 last_motion = self._servo_motion_t.get(sid, 0.0)
-                if sid not in jog_active and now - last_motion > idle_skip and cached is not None:
+                live_position = sid in getattr(self, '_live_position_servos', set())
+                if (not live_position
+                        and sid not in jog_active
+                        and now - last_motion > idle_skip
+                        and cached is not None):
                     pos[str(sid)] = cached
                     continue
                 # ── (2/3) Đọc tươi (try-acquire) hoặc fallback cache nếu lock busy
