@@ -49,6 +49,7 @@
 #include "dobot_msgs_v3/srv/sync.hpp"
 #include "dobot_msgs_v3/srv/clear_error.hpp"
 #include "dobot_msgs_v3/srv/get_error_id.hpp"
+#include "dobot_msgs_v3/srv/pause.hpp"
 
 #include <vector>
 #include <string>
@@ -79,6 +80,7 @@ using AccJ = dobot_msgs_v3::srv::AccJ;
 using SyncSrv = dobot_msgs_v3::srv::Sync;
 using ClearError = dobot_msgs_v3::srv::ClearError;
 using GetErrorID = dobot_msgs_v3::srv::GetErrorID;
+using Pause = dobot_msgs_v3::srv::Pause;
 
 // ============================================================================
 // MOTION EXECUTOR NODE
@@ -125,6 +127,18 @@ public:
             [this](const std_msgs::msg::Int32::SharedPtr msg) {
                 current_speed_ratio_ = std::clamp(msg->data, 1, 100);
                 RCLCPP_INFO(get_logger(), "[SPEED] Speed ratio updated: %d%% (GUI already sent SpeedFactor to hardware)", current_speed_ratio_);
+            });
+
+        soft_stop_sub_ = create_subscription<std_msgs::msg::Bool>(
+            "/system/soft_stop", 10,
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                if (msg->data) requestMotionStop("/system/soft_stop");
+            });
+
+        stop_button_sub_ = create_subscription<std_msgs::msg::Bool>(
+            "/system/stop_button", 10,
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                if (msg->data) requestMotionStop("/system/stop_button");
             });
 
         // Heartbeat Timer (500ms)
@@ -187,6 +201,8 @@ private:
     std::atomic<bool> last_cyl_loadcell_status_{false};
 
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr speed_ratio_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr soft_stop_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stop_button_sub_;
     
     rclcpp::TimerBase::SharedPtr heartbeat_timer_;
 
@@ -215,6 +231,7 @@ private:
     rclcpp::Client<AccJ>::SharedPtr accj_client_;
     rclcpp::Client<SyncSrv>::SharedPtr sync_client_;
     rclcpp::Client<GetErrorID>::SharedPtr error_client_;
+    rclcpp::Client<Pause>::SharedPtr pause_client_;
 
     // ========================================================================
     // INITIALIZATION
@@ -240,6 +257,7 @@ private:
         accj_client_ = create_client<AccJ>("/nova5/dobot_bringup/AccJ", qos);
         sync_client_ = create_client<SyncSrv>("/nova5/dobot_bringup/Sync", qos);
         error_client_ = create_client<GetErrorID>("/nova5/dobot_bringup/GetErrorID", qos);
+        pause_client_ = create_client<Pause>("/nova5/dobot_bringup/Pause", qos);
         
         RCLCPP_INFO(get_logger(), "[MOTION] Service clients initialized");
     }
@@ -711,13 +729,8 @@ private:
         const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
     {
         (void)goal_handle;
-        RCLCPP_WARN(get_logger(), "[ACTION] Received request to cancel goal — set abort flag");
-        // Set abort flag NGAY — motion helpers đang chạy sẽ thoát ở check tiếp theo.
-        // KHÔNG gọi rollbackSafe() từ đây: handle_cancel chạy trên executor thread,
-        // còn motion đang chạy trên thread riêng (handle_accepted detach). Gọi rollback
-        // ở đây sẽ chạy moveL song song với motion đang dở → Dobot reject hoặc race.
-        // Rollback được executeAction tự gọi ở fail path khi nó thoát do abort.
-        abort_motion_.store(true);
+        RCLCPP_WARN(get_logger(), "[ACTION] Received request to cancel goal — stop Dobot motion");
+        requestMotionStop("action_cancel");
         return rclcpp_action::CancelResponse::ACCEPT;
     }
 
@@ -732,6 +745,26 @@ private:
     // True = ROS shutdown HOẶC handle_cancel đã set abort_motion_ (STOP).
     bool shouldAbort() const {
         return abort_motion_.load() || !rclcpp::ok();
+    }
+
+    void requestMotionStop(const std::string& source) {
+        abort_motion_.store(true);
+        RCLCPP_WARN(get_logger(), "[STOP] %s -> abort flag + Dobot Pause", source.c_str());
+
+        if (!pause_client_ || !pause_client_->service_is_ready()) {
+            RCLCPP_WARN(get_logger(), "[STOP] Pause service not ready; abort flag still set");
+            return;
+        }
+
+        auto req = std::make_shared<Pause::Request>();
+        pause_client_->async_send_request(req,
+            [this](rclcpp::Client<Pause>::SharedFuture f) {
+                try {
+                    RCLCPP_WARN(this->get_logger(), "[STOP] Dobot Pause result: %d", f.get()->res);
+                } catch (...) {
+                    RCLCPP_WARN(this->get_logger(), "[STOP] Dobot Pause failed");
+                }
+            });
     }
 
     void executeAction(const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)

@@ -1462,13 +1462,17 @@ void RobotLogicNode::emergencyStopCallback(
     std::shared_ptr<std_srvs::srv::SetBool::Response> response)
 {
     if (request->data) {
-        emergency_stop_ = true;
-        system_enabled_ = false;
+        emergency_stop_ = false;
+        system_enabled_ = true;
         system_paused_  = false;
         pause_requested_ = false;
         system_running_ = false;
         system_started_ = false;
         current_state_  = SystemState::IDLE;
+        manual_mode_    = true;
+        use_ai_for_control_ = false;
+        motion_busy_        = false;
+        motion_in_progress_ = false;
         is_first_batch_ = true;
         motion_fail_count_ = 0;
         tray_count_ = 0;
@@ -1476,22 +1480,24 @@ void RobotLogicNode::emergencyStopCallback(
         selected_output_slot_ = 1;
         skipped_buffer_load_     = false;
         feed_chamber_wait_active_ = false;
+        clearMotionCmd();
+
+        if (motion_action_client_) {
+            motion_action_client_->async_cancel_all_goals();
+            RCLCPP_WARN(get_logger(), "[E-STOP] Cancelled all in-flight motion goals");
+        }
 
         auto resetReq = std::make_shared<ResetRobot::Request>();
         reset_robot_client_->async_send_request(resetReq,
             [this](rclcpp::Client<ResetRobot>::SharedFuture /*f*/) {
-                auto disableReq = std::make_shared<DisableRobot::Request>();
-                disable_robot_client_->async_send_request(disableReq,
-                    [this](rclcpp::Client<DisableRobot>::SharedFuture /*f2*/) {
-                        RCLCPP_WARN(get_logger(), "[E-STOP] ⚡ Robot POWER OFF");
-                    });
+                RCLCPP_WARN(get_logger(), "[E-STOP] Robot reset requested; staying enabled for MANUAL control");
             });
 
         publishError("EMERGENCY STOP");
         notifyStateChange();
 
         response->success = true;
-        response->message = "EMERGENCY STOP — Robot POWER OFF";
+        response->message = "EMERGENCY STOP — motion stopped, mode=MANUAL";
     } else {
         emergency_stop_ = false;
         response->success = true;
