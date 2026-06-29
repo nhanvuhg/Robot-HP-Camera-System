@@ -563,6 +563,7 @@ import QtGraphicalEffects 1.15
                     try {
                         var obj = JSON.parse(cartridgeController.lastNotification)
                         if (obj.level && obj.level.indexOf("silent") === 0) return;
+                        // Banner tắt theo yêu cầu — mọi thông báo xem trong Activity Log.
                         // notifyBanner.lvl = obj.level  || "info"
                         // notifyBanner.ttl = obj.title  || ""
                         // notifyBanner.dtl = obj.detail || ""
@@ -1496,7 +1497,13 @@ import QtGraphicalEffects 1.15
                                             width: parent ? parent.width : 100
                                             text: "[" + entry.time + "] " + entry.msg
                                             font.pixelSize: 18; font.family: "monospace"
-                                            color: root.cWhiteText
+                                            color: {
+                                                var t = entry.type || "info"
+                                                if (t === "err")  return root.cRed
+                                                if (t === "warn") return root.cOrange
+                                                if (t === "ok")   return root.cGreen
+                                                return root.cWhiteText
+                                            }
                                             wrapMode: Text.WordWrap
                                         }
                                     }
