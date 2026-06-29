@@ -22,10 +22,10 @@ servo_limits:
   1: 560.0
   2: 1050.0
   3: 1000.0
-  4: 600.0
+  4: 800.0
   5: 1020.0
 homing_timeout: 120.0
-move_timeout: 80.0
+move_timeout: 100.0
 cylinder_timeout: 15.0
 modbus_timeout_ms: 3000
 fas_position_velocity: 0.05
@@ -130,66 +130,65 @@ iny_output_zones:
   - 205.0
 outy_output_zones:
   1:
-  - 980.0
-  - 905.0
-  - 1016.0
+  - 1010.0
+  - 950.0
+  - 1015.0
   2:
-  - 880.0
-  - 810.0
-  - 924.0
+  - 910.0
+  - 840.0
+  - 925.0
   3:
   - 790.0
   - 720.0
-  - 832.0
+  - 833.0
   4:
   - 700.0
   - 630.0
-  - 740.0
+  - 743.0
   5:
   - 610.0
   - 535.0
-  - 648.0
+  - 643.0
   6:
   - 520.0
   - 445.0
-  - 556.0
+  - 563.0
   7:
   - 430.0
   - 355.0
-  - 464.0
+  - 473.0
   8:
   - 350.0
   - 260.0
-  - 372.0
+  - 383.0
   9:
   - 255.0
   - 170.0
-  - 280.0
+  - 293.0
   10:
   - 200.0
   - 80.0
-  - 188.0
+  - 203.0
 iny_target2: 87.0
 servo3_home: 0.0
 servo3_target2: 850.0
 servo3_push_position: 300.0
-servo3_jog_velocity: 20.0
-servo3_feed_velocity: 20.0
+servo3_jog_velocity: 30.0
+servo3_feed_velocity: 30.0
 outx_home: 0.0
 outx_target1: 15.0
 outx_target2: 552.0
 outx_target3: -277.0
 outy_home: 0.0
 outy_target1: 10.0
-outy_pick_pos: 160.0                   # lấy khay
+outy_pick_pos: 160.0
 outy_safe_zone: 30.0
-outy_search_velocity: 30.0
-
-outy_slow_vel: 20.0
+outy_search_velocity: 60.0
+outy_slow_vel: 30.0
 target_scanoutp2: 1000.0
-outy_scan_arm_mm: 50.0
+outy_scan_arm_mm: 50
 outy_scan_valid_min_mm: 70.0
-outy_scan_valid_max_mm: 980.0
+outy_scan_valid_max_mm: 1000.0
 s4_scan_noise_retry_limit: 2
 s4_check_servo3_safe: false
 iny_search_velocity: 30.0
