@@ -75,11 +75,12 @@ class FestoGripperNode(Node):
                             self.myIO.reset_channel(3)
                             self.myIO.reset_channel(2)
 
-                        # Cyl_loadcell: Safe = Ch8 False, Ch9 False (de-energized, no commanded motion)
-                        if len(channels) > 9 and (channels[8] or channels[9]):
-                            self.get_logger().info('Initializing Cyl_loadcell to default de-energized state (0V)...')
-                            self.myIO.reset_channel(9)
+                        # Cyl_loadcell: MẶC ĐỊNH EXTEND (KẸP) cho hệ thống robot —
+                        # energize ch9, release ch8. Retract khi cần thì chỉnh trong code.
+                        if len(channels) > 9:
+                            self.get_logger().info('Initializing Cyl_loadcell to default EXTEND state (ch9 set)...')
                             self.myIO.reset_channel(8)
+                            self.myIO.set_channel(9)
 
                         time.sleep(0.1)
                     except Exception as e:
@@ -99,8 +100,8 @@ class FestoGripperNode(Node):
         # State flags for gripper and picker (separate devices/channels)
         self.gripper_open = True
         self.picker_open = True
-        # Cyl_loadcell state: True = KẸP/clamp (extended), False = NHẢ/release (default)
-        self.cyl_loadcell_clamped = False
+        # Cyl_loadcell state: True = KẸP/clamp (extended) — MẶC ĐỊNH EXTEND cho hệ thống robot
+        self.cyl_loadcell_clamped = True
 
         # Subscriptions from robot_logic_node
         self.gripper_sub = self.create_subscription(
@@ -339,11 +340,11 @@ class FestoGripperNode(Node):
                 self.picker_open_cmd()
             except Exception:
                 pass
-            # Cyl_loadcell: de-energize both coils (safe, no commanded motion)
+            # Cyl_loadcell: GIỮ EXTEND (mặc định cho hệ thống robot) — KHÔNG nhả khi shutdown
             try:
                 if self.myIO:
-                    self.myIO.reset_channel(9)
                     self.myIO.reset_channel(8)
+                    self.myIO.set_channel(9)
             except Exception:
                 pass
             if self.myCPX:
