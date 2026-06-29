@@ -10,7 +10,7 @@ ApplicationWindow {
     width: 1920
     height: 1080
     title: "ROS2 - Unified Control System"
-    color: "#061024"
+    color: "#06101d"
     visibility: Window.FullScreen
 
     property bool scaleIssueWarning: false
@@ -44,7 +44,7 @@ ApplicationWindow {
     }
     Rectangle {
         anchors.fill: parent
-        color: "#80061024"
+        color: "#8006101d"
         z: -9
     }
 
@@ -100,8 +100,8 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         width: 620; height: 400
         background: Rectangle {
-            color: "#081e29"
-            border.color: "#f59e0b"
+            color: "#081627"
+            border.color: "#f5a623"
             border.width: 2
             radius: 10
         }
@@ -121,14 +121,14 @@ ApplicationWindow {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: "⏸  RESUME REQUIRED"
-                color: "#f59e0b"
+                color: "#f5a623"
                 font.pixelSize: 26
                 font.bold: true
             }
             Text {
                 Layout.fillWidth: true
                 text: "feed_chamber timeout 150s — SCALE has been drained to PLACE.\nSelect how to resume the cycle:"
-                color: "#e8e8f0"
+                color: "#c7dcef"
                 font.pixelSize: 17
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
@@ -143,9 +143,9 @@ ApplicationWindow {
                     Layout.preferredWidth: 250; Layout.preferredHeight: 60
                     text: "🔁  LOAD CHAMBER\nFROM BUFFER"
                     font.pixelSize: 15; font.bold: true
-                    background: Rectangle { color: "#1e2a80"; border.color: "#818cf8"; border.width: 2; radius: 6 }
+                    background: Rectangle { color: "#6f4be0"; border.color: "#9b7bff"; border.width: 2; radius: 6 }
                     contentItem: Text {
-                        text: parent.text; color: "#c7d2fe"
+                        text: parent.text; color: "#bfe0f5"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -159,9 +159,9 @@ ApplicationWindow {
                     Layout.preferredWidth: 250; Layout.preferredHeight: 60
                     text: "🔂  LOAD CHAMBER\nFROM TRAY"
                     font.pixelSize: 15; font.bold: true
-                    background: Rectangle { color: "#7a4a00"; border.color: "#fbbf24"; border.width: 2; radius: 6 }
+                    background: Rectangle { color: "#e2761b"; border.color: "#ecc45a"; border.width: 2; radius: 6 }
                     contentItem: Text {
-                        text: parent.text; color: "#fde68a"
+                        text: parent.text; color: "#ecc45a"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -175,9 +175,9 @@ ApplicationWindow {
                 Layout.preferredWidth: 516; Layout.preferredHeight: 52
                 text: "⏹  STOP & HOME  —  Dừng hệ thống và đưa robot về Home"
                 font.pixelSize: 15; font.bold: true
-                background: Rectangle { color: "#4d1a1a"; border.color: "#ef4444"; border.width: 2; radius: 6 }
+                background: Rectangle { color: "#3a1614"; border.color: "#f0735c"; border.width: 2; radius: 6 }
                 contentItem: Text {
-                    text: parent.text; color: "#ef4444"
+                    text: parent.text; color: "#f0735c"
                     font: parent.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -199,8 +199,8 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         width: 580; height: 320
         background: Rectangle {
-            color: "#081e29"
-            border.color: "#ef4444"
+            color: "#081627"
+            border.color: "#f0735c"
             border.width: 2
             radius: 10
         }
@@ -212,7 +212,7 @@ ApplicationWindow {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: "⚠  CONFIRM EMPTY BUFFER"
-                color: "#ef4444"
+                color: "#f0735c"
                 font.pixelSize: 24
                 font.bold: true
             }
@@ -221,7 +221,7 @@ ApplicationWindow {
                 text: "LOAD CHAMBER FROM TRAY will restart like a fresh boot:\n" +
                       "  INIT_LOAD → INIT_REFILL_BUFFER → cycle.\n\n" +
                       "Have you manually removed all cartridges from the BUFFER?"
-                color: "#e8e8f0"
+                color: "#c7dcef"
                 font.pixelSize: 16
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
@@ -236,9 +236,9 @@ ApplicationWindow {
                     Layout.preferredWidth: 240; Layout.preferredHeight: 56
                     text: "✓  Buffer is empty — CONFIRM"
                     font.pixelSize: 15; font.bold: true
-                    background: Rectangle { color: "#10b981"; radius: 6 }
+                    background: Rectangle { color: "#3ed0b4"; radius: 6 }
                     contentItem: Text {
-                        text: parent.text; color: "#001100"
+                        text: parent.text; color: "#04140d"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -253,9 +253,9 @@ ApplicationWindow {
                     Layout.preferredWidth: 240; Layout.preferredHeight: 56
                     text: "✗  Cancel / Back"
                     font.pixelSize: 15; font.bold: true
-                    background: Rectangle { color: "#374151"; radius: 6 }
+                    background: Rectangle { color: "#14263c"; radius: 6 }
                     contentItem: Text {
-                        text: parent.text; color: "#e8e8f0"
+                        text: parent.text; color: "#c7dcef"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -278,8 +278,8 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         width: 660; height: 430
         background: Rectangle {
-            color: "#081e29"
-            border.color: "#ef4444"
+            color: "#081627"
+            border.color: "#f0735c"
             border.width: 2
             radius: 10
         }
@@ -299,14 +299,14 @@ ApplicationWindow {
             Text {
                 Layout.alignment: Qt.AlignHCenter
                 text: "⚠  SCALE ISSUE DETECTED"
-                color: "#ef4444"
+                color: "#f0735c"
                 font.pixelSize: 26
                 font.bold: true
             }
             Text {
                 Layout.fillWidth: true
                 text: "No loadcell topic received for 150s in PROCESSING_SCALE.\nSelect how to handle this cartridge:"
-                color: "#e8e8f0"
+                color: "#c7dcef"
                 font.pixelSize: 16
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
@@ -321,9 +321,9 @@ ApplicationWindow {
                     Layout.preferredWidth: 196; Layout.preferredHeight: 72
                     text: "↩  BACK TO\nWAIT FILLING\n(đã lấy cartridge ra)"
                     font.pixelSize: 13; font.bold: true
-                    background: Rectangle { color: "#0f2a4a"; border.color: "#60a5fa"; border.width: 2; radius: 6 }
+                    background: Rectangle { color: "#081627"; border.color: "#36b6ff"; border.width: 2; radius: 6 }
                     contentItem: Text {
-                        text: parent.text; color: "#93c5fd"
+                        text: parent.text; color: "#7fcdf5"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -338,9 +338,9 @@ ApplicationWindow {
                     Layout.preferredWidth: 196; Layout.preferredHeight: 72
                     text: "✓  PLACE TO\nOUTPUT\n(force PASS)"
                     font.pixelSize: 13; font.bold: true
-                    background: Rectangle { color: "#052e16"; border.color: "#4ade80"; border.width: 2; radius: 6 }
+                    background: Rectangle { color: "#0a2418"; border.color: "#3ed0b4"; border.width: 2; radius: 6 }
                     contentItem: Text {
-                        text: parent.text; color: "#86efac"
+                        text: parent.text; color: "#3ed0b4"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -355,9 +355,9 @@ ApplicationWindow {
                     Layout.preferredWidth: 196; Layout.preferredHeight: 72
                     text: "✗  PLACE TO\nFAIL\n(force FAIL)"
                     font.pixelSize: 13; font.bold: true
-                    background: Rectangle { color: "#2d0a0a"; border.color: "#f87171"; border.width: 2; radius: 6 }
+                    background: Rectangle { color: "#220c0b"; border.color: "#f0735c"; border.width: 2; radius: 6 }
                     contentItem: Text {
-                        text: parent.text; color: "#fca5a5"
+                        text: parent.text; color: "#f5a394"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -375,9 +375,9 @@ ApplicationWindow {
                 Layout.preferredWidth: 612; Layout.preferredHeight: 52
                 text: "⏹  STOP & HOME  —  Dừng hệ thống và đưa robot về Home"
                 font.pixelSize: 15; font.bold: true
-                background: Rectangle { color: "#1a0808"; border.color: "#ef4444"; border.width: 2; radius: 6 }
+                background: Rectangle { color: "#160a09"; border.color: "#f0735c"; border.width: 2; radius: 6 }
                 contentItem: Text {
-                    text: parent.text; color: "#ef4444"
+                    text: parent.text; color: "#f0735c"
                     font: parent.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -433,8 +433,8 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         width: 600; height: 320
         background: Rectangle {
-            color: "#0c0c1d"
-            border.color: "#ef4444"
+            color: "#06101d"
+            border.color: "#f0735c"
             border.width: 2
             radius: 10
         }
@@ -448,14 +448,14 @@ ApplicationWindow {
             
             Text {
                 text: "⚠️ WARNING: INK NOT SELECTED"
-                color: "#ef4444"
+                color: "#f0735c"
                 font.pixelSize: 24
                 font.bold: true
                 Layout.alignment: Qt.AlignHCenter
             }
             Text {
                 text: "Ink or Lot has not been selected for the system.\nIf you continue running, production and consumption logs WILL NOT BE SAVED."
-                color: "#e8e8f0"
+                color: "#c7dcef"
                 font.pixelSize: 16
                 Layout.alignment: Qt.AlignHCenter
                 horizontalAlignment: Text.AlignHCenter
@@ -474,7 +474,7 @@ ApplicationWindow {
                         notYetInkSelectedPopup.close()
                         if (notYetInkSelectedPopup.confirmCallback) notYetInkSelectedPopup.confirmCallback()
                     }
-                    background: Rectangle { radius: 6; color: "#ef4444" }
+                    background: Rectangle { radius: 6; color: "#f0735c" }
                     contentItem: Text {
                         text: parent.text; color: "#ffffff"
                         font: parent.font
@@ -487,9 +487,9 @@ ApplicationWindow {
                     font.pixelSize: 16
                     font.bold: true
                     onClicked: notYetInkSelectedPopup.close()
-                    background: Rectangle { radius: 6; color: "#374151" }
+                    background: Rectangle { radius: 6; color: "#14263c" }
                     contentItem: Text {
-                        text: parent.text; color: "#e8e8f0"
+                        text: parent.text; color: "#c7dcef"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter

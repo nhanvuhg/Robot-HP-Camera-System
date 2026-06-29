@@ -30,9 +30,15 @@ class SystemConfig(BaseModel):
     # Cylinder Outputs
     cylinder1_extend_channel: int = 5
     cylinder1_retract_channel: int = 4
-    cylinder2_extend_channel: int = 9
-    cylinder2_retract_channel: int = 8
+    cylinder2_extend_channel: int = 0
+    cylinder2_retract_channel: int = 1
     cyl3_present: bool = True
+    cylinder3_extend_channel: int = 6
+    cylinder3_retract_channel: int = 7
+    cylinder4_extend_channel: int = 2
+    cylinder4_retract_channel: int = 3
+    cylinder5_extend_channel: int = 4
+    cylinder5_retract_channel: int = 5
     # Cụm output stack (Servo3 Platform + OutX/OutY + CPX 254 sensors S17-S22).
     # Đặt false khi hardware chưa lắp — STATE 3/4 auto-trigger bị disable và manual
     # button STATE 3/4 cũng bị khóa. STATE 1/2 (input Pos1) độc lập, không ảnh hưởng.
@@ -77,7 +83,6 @@ class SystemConfig(BaseModel):
     # Pos 2
     iny_target2: float = 60.0
     servo3_home: float = 0.0
-    servo3_target1: float = 10.0
     servo3_target2: float = 400.0
     servo3_push_position: float = 300.0
     servo3_jog_velocity: float = 50.0
@@ -111,7 +116,7 @@ class SystemConfig(BaseModel):
     max_slots_per_output_tray: int = 9
 
     # Sensors section
-    num_sensors: int = 22
+    num_sensors: int = 28
     sensor_type: str = "PNP"
     sensor_logic: str = "NO"
     sensors: List[SensorConfig] = Field(default_factory=list)
@@ -142,11 +147,14 @@ class SystemConfig(BaseModel):
         return obj
 
     def save(self, path: str):
+        if hasattr(self, "model_dump"):
+            data = self.model_dump(exclude_unset=True)
+        else:
+            data = self.dict(exclude_unset=True)
         with open(path, "w", encoding="utf-8") as f:
-            yaml.dump(self.dict(exclude_unset=False), f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
 
     def save_to_file(self):
         if hasattr(self, '_config_file') and self._config_file:
             self.save(self._config_file)
             print(f"Config saved safely to: {self._config_file}")
-

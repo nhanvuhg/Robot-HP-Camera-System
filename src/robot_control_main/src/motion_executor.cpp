@@ -98,6 +98,7 @@ public:
         pub_heartbeat_ = create_publisher<std_msgs::msg::Header>("/robot/motion_heartbeat", 10);
         pub_gripper_ = create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
         pub_picker_ = create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
+        pub_cyl_loadcell_ = create_publisher<std_msgs::msg::Bool>("/robot/cyl_loadcell_cmd", 10);
 
         
         // Subscriptions
@@ -111,6 +112,12 @@ public:
             "/robot/picker_status", 10,
             [this](const std_msgs::msg::Bool::SharedPtr msg) {
                 last_picker_status_ = msg->data;
+            });
+
+        sub_cyl_loadcell_status_ = create_subscription<std_msgs::msg::Bool>(
+            "/robot/cyl_loadcell_status", 10,
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                last_cyl_loadcell_status_ = msg->data;
             });
 
         speed_ratio_sub_ = create_subscription<std_msgs::msg::Int32>(
@@ -170,11 +177,14 @@ private:
 
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_gripper_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_picker_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_cyl_loadcell_;
 
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_gripper_status_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_picker_status_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_cyl_loadcell_status_;
     std::atomic<bool> last_gripper_status_{false};
     std::atomic<bool> last_picker_status_{false};
+    std::atomic<bool> last_cyl_loadcell_status_{false};
 
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr speed_ratio_sub_;
     
@@ -486,6 +496,25 @@ private:
                 }
                 rclcpp::sleep_for(std::chrono::milliseconds(10));
             }
+        }
+
+        // Cyl_loadcell nằm trên CPX ch8/9 (qua festo_gripper_controller), KHÔNG phải Dobot DO.
+        // index==6: true = EXTEND (KẸP/ch9), false = RETRACT (NHẢ/ch8).
+        if (index == 6 && pub_cyl_loadcell_) {
+            auto msg = std_msgs::msg::Bool();
+            msg.data = status;
+            pub_cyl_loadcell_->publish(msg);
+
+            // Wait for feedback from Python node (festo_gripper_controller)
+            auto start = std::chrono::steady_clock::now();
+            while (last_cyl_loadcell_status_ != status && rclcpp::ok()) {
+                if (std::chrono::steady_clock::now() - start > std::chrono::milliseconds(2000)) {
+                    RCLCPP_WARN(get_logger(), "[DO] Timeout waiting for Cyl_loadcell status feedback!");
+                    break;
+                }
+                rclcpp::sleep_for(std::chrono::milliseconds(10));
+            }
+            return true;   // cyl_loadcell thuần CPX — không gọi Dobot DO port 6
         }
 
         // Try to trigger Dobot's hardware DO (optional, might fail if not configured)

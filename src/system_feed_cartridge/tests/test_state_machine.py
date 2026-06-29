@@ -78,7 +78,9 @@ from cartridge_providesystem_py_node import (
     SystemState,
     S1_BELT_START, S2_BELT_MID, S3_BELT_END,
     S7_TRAY_AT_ROBOT, S9_CYL1_RETRACTED, S10_CYL1_EXTENDED,
-    S17_PLATFORM, S18_FEED_OK,
+    S17_PLATFORM, S18_FEED_OK, S19_CHECK_TRAY_P2,
+    S25_CYL4_RETRACTED, S26_CYL4_EXTENDED,
+    S27_CYL5_RETRACTED, S28_CYL5_EXTENDED,
 )
 
 
@@ -120,6 +122,14 @@ class TestSystemConfig:
         )
         assert config.homing_timeout == 30.0
         assert config.cylinder1_extend_channel == 5
+        assert config.cylinder3_extend_channel == 6
+        assert config.cylinder3_retract_channel == 7
+        assert config.cylinder2_extend_channel == 0
+        assert config.cylinder2_retract_channel == 1
+        assert config.cylinder4_extend_channel == 2
+        assert config.cylinder4_retract_channel == 3
+        assert config.cylinder5_extend_channel == 4
+        assert config.cylinder5_retract_channel == 5
         assert config.modbus_timeout_ms == 3000
 
     def test_yaml_no_as_false_handled(self):
@@ -162,8 +172,8 @@ class TestSystemStateEnum:
         required = ['IDLE', 'ERROR', 'HOMING', 'HOMING_RUNNING',
                      'S1_CONFIRM_SAFE', 'S1_COMPLETE',
                      'S2A_CHECK_INTERLOCK', 'S2A_COMPLETE',
-                     'S3_CHECK_OUTXY_SAFE', 'S3_COMPLETE',
-                     'S4_CHECK_OUTY_SAFE', 'S4_COMPLETE']
+                     'S3_CHECK_OUTXY_SAFE', 'S3_CYL4_EXTEND', 'S3_COMPLETE',
+                     'S4_CHECK_OUTY_SAFE', 'S4_CYL5_SYNC', 'S4_COMPLETE']
         for name in required:
             assert hasattr(SystemState, name), f"Missing state: {name}"
 
@@ -231,7 +241,11 @@ def _make_node():
     node._s5_retry          = 0
     node._s1_retry_count    = 0
     node._cmd_sent_s3       = False
+    node._step_start_s3     = 0.0
+    node._cyl4_retry_t      = 0.0
+    node._cyl4_retract_sent = False
     node._cmd_sent_s4       = False
+    node._cyl5_retry_t      = 0.0
     node._s3_pending        = False
     node._step_timeout_in   = 0.0
     node._step_timeout_s3   = 0.0
@@ -275,16 +289,16 @@ def _make_node():
 def _set_sensors(node, **sensor_states):
     """Helper: inject sensor state qua _io_sensor_cache (thay thế _sim_sensors cũ).
     Dùng: _set_sensors(node, S1_BELT_START=True, S7_TRAY_AT_ROBOT=False) — key có thể
-    là constant (int) hoặc số sid. Tự phân loại module 1 (1-16) vs module 2 (17-24)."""
+    là constant (int) hoặc số sid. Tự phân loại module 1 (1-16) vs module 2 (17-28)."""
     cache1 = [False] * 16
-    cache2 = [False] * 8
+    cache2 = [False] * 12
     for sid, val in sensor_states.items():
         if isinstance(sid, str):
             sid_val = globals().get(sid)  # cho phép truyền "S1_BELT_START"=True
             sid = sid_val if sid_val is not None else int(sid)
         if 1 <= sid <= 16:
             cache1[sid - 1] = bool(val)
-        elif 17 <= sid <= 24:
+        elif 17 <= sid <= 28:
             cache2[sid - 17] = bool(val)
     node._io_ready = True
     node._io_ready_2 = True
@@ -390,6 +404,108 @@ class TestStateTransitions:
         node._enter_s4(SystemState.S4_CHECK_OUTY_SAFE)
         assert node.state_s4 == SystemState.S4_CHECK_OUTY_SAFE
         assert node._cmd_sent_s4 is False
+
+    def test_s3_cyl4_extend_requires_crosscheck(self):
+        """S26 ON + S25 OFF mới cho phép Servo 3 chuyển sang FEED."""
+        node = _make_node()
+        node.state_s3 = SystemState.S3_CYL4_EXTEND
+        _set_sensors(
+            node,
+            S17_PLATFORM=True,
+            S25_CYL4_RETRACTED=False,
+            S26_CYL4_EXTENDED=True,
+        )
+        node._cyl4_extend = MagicMock(return_value=True)
+
+        node._s3_cyl4_extend()
+
+        assert node.state_s3 == SystemState.S3_SERVO3_FEED
+        node._cyl4_extend.assert_not_called()
+
+    def test_s3_cyl4_extend_waits_on_invalid_feedback(self):
+        """Cả hai limit OFF chưa hợp lệ: retry EXTEND và chưa chạy Servo 3."""
+        node = _make_node()
+        node.state_s3 = SystemState.S3_CYL4_EXTEND
+        _set_sensors(
+            node,
+            S17_PLATFORM=True,
+            S25_CYL4_RETRACTED=False,
+            S26_CYL4_EXTENDED=False,
+        )
+        node._cyl4_extend = MagicMock(return_value=True)
+
+        node._s3_cyl4_extend()
+
+        assert node.state_s3 == SystemState.S3_CYL4_EXTEND
+        node._cyl4_extend.assert_called_once()
+
+    def test_s3_cyl4_retracts_if_s17_lost(self):
+        """S17 OFF trước khi Cyl4 xác nhận xong → retract và quay lại WAIT_S17."""
+        node = _make_node()
+        node.state_s3 = SystemState.S3_CYL4_EXTEND
+        _set_sensors(
+            node,
+            S17_PLATFORM=False,
+            S25_CYL4_RETRACTED=False,
+            S26_CYL4_EXTENDED=True,
+        )
+        node._cyl4_retract = MagicMock(return_value=True)
+
+        node._s3_cyl4_extend()
+
+        assert node.state_s3 == SystemState.S3_WAIT_S17
+        node._cyl4_retract.assert_called_once()
+
+    def test_s4_cyl5_extends_when_s19_on(self):
+        """S19 ON: S28 ON + S27 OFF mới cho phép chuyển sang scan S20."""
+        node = _make_node()
+        node.state_s4 = SystemState.S4_CYL5_SYNC
+        _set_sensors(
+            node,
+            S19_CHECK_TRAY_P2=True,
+            S27_CYL5_RETRACTED=False,
+            S28_CYL5_EXTENDED=True,
+        )
+        node._cyl5_extend = MagicMock(return_value=True)
+
+        node._s4_cyl5_sync()
+
+        assert node.state_s4 == SystemState.S4_OUTY_SCAN_S20
+        node._cyl5_extend.assert_not_called()
+
+    def test_s4_cyl5_retracts_when_s19_off(self):
+        """S19 OFF: S27 ON + S28 OFF mới cho phép đi xuống row 1."""
+        node = _make_node()
+        node.state_s4 = SystemState.S4_CYL5_SYNC
+        _set_sensors(
+            node,
+            S19_CHECK_TRAY_P2=False,
+            S27_CYL5_RETRACTED=True,
+            S28_CYL5_EXTENDED=False,
+        )
+        node._cyl5_retract = MagicMock(return_value=True)
+
+        node._s4_cyl5_sync()
+
+        assert node.state_s4 == SystemState.S4_OUTY_ROW1
+        node._cyl5_retract.assert_not_called()
+
+    def test_s4_cyl5_waits_on_invalid_crosscheck(self):
+        """Limit chưa hợp lệ: gửi lệnh theo S19 và giữ nguyên enum sync."""
+        node = _make_node()
+        node.state_s4 = SystemState.S4_CYL5_SYNC
+        _set_sensors(
+            node,
+            S19_CHECK_TRAY_P2=True,
+            S27_CYL5_RETRACTED=True,
+            S28_CYL5_EXTENDED=False,
+        )
+        node._cyl5_extend = MagicMock(return_value=True)
+
+        node._s4_cyl5_sync()
+
+        assert node.state_s4 == SystemState.S4_CYL5_SYNC
+        node._cyl5_extend.assert_called_once()
 
     def test_s1_abort_resets_to_idle(self):
         """_s1_abort() → state_in = IDLE, state1_enabled = False, pub busy(False)."""
@@ -679,4 +795,3 @@ class TestHomingPrerequisite:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v', '--tb=short'])
-

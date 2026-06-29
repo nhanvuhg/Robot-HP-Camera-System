@@ -50,7 +50,7 @@ MotionButton {
             radius: 15
             visible: control.countdown > 0
             color: "#cc0d1e32"
-            border.color: "#7bc8f0"
+            border.color: "#7fcdf5"
             border.width: 1
 
             Text {

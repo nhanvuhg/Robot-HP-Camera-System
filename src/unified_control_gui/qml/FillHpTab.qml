@@ -13,21 +13,21 @@ Item {
     anchors.fill: parent
 
     // ---- Theme tokens (mirror CartridgePage palette) ----
-    readonly property color cBg:          "#0c0c1d"
-    readonly property color cPanel:       "#081e29"
-    readonly property color cPanel2:      "#051a1a"
-    readonly property color cBorder:      "#134357"
-    readonly property color cText:        "#e8e8f0"
-    readonly property color cMuted:       "#8888aa"
-    readonly property color cAccent:      "#4f6cff"
+    readonly property color cBg:          "#06101d"
+    readonly property color cPanel:       "#081627"
+    readonly property color cPanel2:      "#04080f"
+    readonly property color cBorder:      "#163a52"
+    readonly property color cText:        "#c7dcef"
+    readonly property color cMuted:       "#74899f"
+    readonly property color cAccent:      "#6f4be0"
     readonly property color cAccentSoft:  Qt.rgba(0.31, 0.42, 1.0, 0.18)
-    readonly property color cOk:          "#5cf4f1"
+    readonly property color cOk:          "#67d0ff"
     readonly property color cOkBg:        Qt.rgba(0.09, 0.95, 0.94, 0.15)
-    readonly property color cWarn:        "#ffa726"
+    readonly property color cWarn:        "#f5a623"
     readonly property color cWarnBg:      Qt.rgba(1.0, 0.65, 0.15, 0.15)
-    readonly property color cBad:         "#ff5252"
+    readonly property color cBad:         "#f0735c"
     readonly property color cBadBg:       Qt.rgba(1.0, 0.32, 0.32, 0.15)
-    readonly property color cIdle:        "#526070"
+    readonly property color cIdle:        "#74899f"
     readonly property color cIdleBg:      Qt.rgba(0.32, 0.38, 0.44, 0.15)
 
     readonly property string monoFamily:  "JetBrains Mono, DejaVu Sans Mono, Consolas, monospace"
@@ -306,7 +306,7 @@ Item {
         id: headerBar
         anchors { top: parent.top; left: parent.left; right: parent.right }
         height: 60
-        color: "#141428"
+        color: "#06101d"
 
         RowLayout {
             anchors.fill: parent
@@ -844,7 +844,7 @@ Item {
                                         width: Math.floor((sensorSect.width - 36) / 3)
                                         height: 48
                                         radius: 4
-                                        color: on_ ? "#0d2a3a" : tab.cPanel
+                                        color: on_ ? "#081627" : tab.cPanel
                                         border.color: on_ ? tab.cAccent : tab.cBorder
                                         border.width: 1
                                         Behavior on color       { ColorAnimation { duration: 150 } }
@@ -868,7 +868,7 @@ Item {
                                             Rectangle {
                                                 id: dotIndicator
                                                 width: 6; height: 6; radius: 3
-                                                color: sBtn.on_ ? tab.cAccent : "#134357"
+                                                color: sBtn.on_ ? tab.cAccent : "#163a52"
                                                 anchors.horizontalCenter: parent.horizontalCenter
 
                                                 Repeater {
@@ -952,7 +952,7 @@ Item {
                                     Layout.fillWidth: true
                                     implicitHeight: 85
                                     color: "transparent"
-                                    border.color: "#3a2a08" // Dark warning color
+                                    border.color: "#2a1c08" // Dark warning color
                                     border.width: 1
                                     radius: 6
 
@@ -1003,8 +1003,8 @@ Item {
                             Rectangle {
                                 width: parent.width
                                 implicitHeight: 200
-                                color: "#0c1920"
-                                border.color: "#1e3d4a"
+                                color: "#081627"
+                                border.color: "#163a52"
                                 border.width: 1
                                 radius: 6
 
@@ -1018,7 +1018,7 @@ Item {
                                         text: "servo_position_raw=" + hpController.servoPositionRaw + "\n" +
                                               "servo_position=" + hpController.servoPosition + "\n" +
                                               "pressure_thresholds=" + hpController.pressureThresholds
-                                        color: "#a9c0cb"
+                                        color: "#9fb3c8"
                                         font.pixelSize: 12
                                         font.family: monoFamily
                                         wrapMode: Text.Wrap
@@ -1114,9 +1114,9 @@ Item {
         readonly property color baseBorder: variant === "primary" ? cAccent
                                           : variant === "warn"    ? cWarn
                                           : variant === "danger"  ? cBad : cBorder
-        readonly property color baseBg:     variant === "primary" ? "#0a1a3a"
-                                          : variant === "warn"    ? "#3a2a08"
-                                          : variant === "danger"  ? "#3a1010" : cPanel2
+        readonly property color baseBg:     variant === "primary" ? "#081627"
+                                          : variant === "warn"    ? "#2a1c08"
+                                          : variant === "danger"  ? "#2c0f0e" : cPanel2
         readonly property color baseFg:     variant === "primary" ? cAccent
                                           : variant === "warn"    ? cWarn
                                           : variant === "danger"  ? cBad : cText
@@ -1142,7 +1142,7 @@ Item {
     component ModeBtn: TbBtn {
         property bool active: false
         variant: "default"
-        color: active ? "#0d2a3a" : cPanel2
+        color: active ? "#081627" : cPanel2
         border.color: active ? cOk : cBorder
         Text {
             anchors.centerIn: parent; text: parent.lbl
@@ -1279,7 +1279,7 @@ Item {
         border.color: cls === "ok"    ? cOk
                     : cls === "high"  ? cWarn
                     : cls === "limit" ? cBad
-                    : "#0284c7"
+                    : "#1f86e0"
         border.width: 1
         RowLayout {
             anchors.fill: parent
@@ -1307,7 +1307,7 @@ Item {
                         color: cls === "ok"    ? cOk
                              : cls === "high"  ? cWarn
                              : cls === "limit" ? cBad
-                             : "#0284c7"
+                             : "#1f86e0"
                     }
                 }
             }
@@ -1430,7 +1430,7 @@ Item {
                 border.color: parent.parent.aActive ? cOk : cBorder; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: actA
-                    color: parent.parent.parent.aActive ? "#0c0c1d" : cText
+                    color: parent.parent.parent.aActive ? "#06101d" : cText
                     font.pixelSize: 19; font.bold: true
                 }
                 MotionMouseArea {
@@ -1444,7 +1444,7 @@ Item {
                 border.color: parent.parent.bActive ? cOk : cBorder; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: actB
-                    color: parent.parent.parent.bActive ? "#0c0c1d" : cText
+                    color: parent.parent.parent.bActive ? "#06101d" : cText
                     font.pixelSize: 19; font.bold: true
                 }
                 MotionMouseArea {
@@ -1529,7 +1529,7 @@ Item {
             Text { text: item.unit || ""; color: cMuted; font.pixelSize: 19; Layout.preferredWidth: 38 }
             Rectangle {
                 implicitWidth: 60; implicitHeight: 32; radius: 4
-                color: "#0a1a3a"; border.color: cAccent; border.width: 1
+                color: "#081627"; border.color: cAccent; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: "Set"; color: cAccent
                     font.pixelSize: 19; font.bold: true
