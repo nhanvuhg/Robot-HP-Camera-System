@@ -184,8 +184,10 @@ private:
     // (gripper_cmd_pub_ + picker_cmd_pub_ da duoc declare o tren — dung lai)
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr gripper_status_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr picker_status_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr cyl_loadcell_status_sub_;
     bool last_gripper_state_{false};
     bool last_picker_state_{false};
+    bool last_cyl_loadcell_state_{false};
     rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedPtr reset_robot_client_;
     rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedPtr speed_factor_client_;
     rclcpp::Client<dobot_msgs_v3::srv::GetErrorID>::SharedPtr get_error_id_client_;
@@ -210,6 +212,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr ignore_scale_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr gripper_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr picker_cmd_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr cyl_loadcell_cmd_pub_;
     
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_status_sub_;

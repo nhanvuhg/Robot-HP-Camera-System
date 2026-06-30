@@ -2619,6 +2619,38 @@ import QtGraphicalEffects 1.15
                                             }
                                         }
 
+                                        // Cyl loadcell DO6 — CPX 27.253 ch8/ch9: KẸP (ch9) / NHẢ (ch8)
+                                        Text { text: "CYL LOADCELL (DO6)"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
+                                        Row {
+                                            id: rowCylLoadcell
+                                            property bool isOn: false  // false = NHẢ
+                                            spacing: 6; width: parent.width
+                                            Rectangle {
+                                                width: (parent.width - 6) / 2; height: 42; radius: 6
+                                                color: "transparent"
+                                                border.color: root.cDashButtonBorder
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: (cylLoadOnMA.pressed || rowCylLoadcell.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                    GradientStop { position: 1.0; color: (cylLoadOnMA.pressed || rowCylLoadcell.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                                }
+                                                Text { anchors.centerIn: parent; text: "KẸP"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: cylLoadOnMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(6, true); rowCylLoadcell.isOn = true } }
+                                            }
+                                            Rectangle {
+                                                width: (parent.width - 6) / 2; height: 42; radius: 6
+                                                color: "transparent"
+                                                border.color: root.cDashButtonBorder
+                                                gradient: Gradient {
+                                                    orientation: Gradient.Horizontal
+                                                    GradientStop { position: 0.0; color: (cylLoadOffMA.pressed || !rowCylLoadcell.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
+                                                    GradientStop { position: 1.0; color: (cylLoadOffMA.pressed || !rowCylLoadcell.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                                }
+                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: cylLoadOffMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(6, false); rowCylLoadcell.isOn = false } }
+                                            }
+                                        }
+
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
                                         // System actions — same visual language as Control Dashboard

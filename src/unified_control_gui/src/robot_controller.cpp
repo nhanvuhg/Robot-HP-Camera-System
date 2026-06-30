@@ -53,8 +53,12 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     picker_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
         "/robot/picker_status", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) { last_picker_state_ = msg->data; });
+    cyl_loadcell_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
+        "/robot/cyl_loadcell_status", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) { last_cyl_loadcell_state_ = msg->data; });
     gripper_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
     picker_cmd_pub_  = node_->create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
+    cyl_loadcell_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/cyl_loadcell_cmd", 10);
     clear_error_client_ = node_->create_client<dobot_msgs_v3::srv::ClearError>("/nova5/dobot_bringup/ClearError");
     reset_robot_client_ = node_->create_client<dobot_msgs_v3::srv::ResetRobot>("/nova5/dobot_bringup/ResetRobot");
     speed_factor_client_ = node_->create_client<dobot_msgs_v3::srv::SpeedFactor>("/nova5/dobot_bringup/SpeedFactor");
@@ -1059,6 +1063,9 @@ void RobotController::setDigitalOutput(int index, bool status)
         gripper_cmd_pub_->publish(msg);
     } else if (index == 2 && picker_cmd_pub_) {
         picker_cmd_pub_->publish(msg);
+    } else if (index == 6 && cyl_loadcell_cmd_pub_) {
+        cyl_loadcell_cmd_pub_->publish(msg);
+        last_cyl_loadcell_state_ = status;
     } else {
         qWarning() << "Invalid DO index for GUI control:" << index;
     }
