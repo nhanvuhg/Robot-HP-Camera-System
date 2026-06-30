@@ -2173,16 +2173,18 @@ class CartridgeSystem(Node):
             self._publish_homing_done(False)  # gate vfd_logic AUTO chờ re-home
             self.get_logger().info("[STOP] Cleared zero_offset — START lần sau sẽ phải re-home")
 
-        # Chuyển về MANUAL mode
+        # Chuyển về MANUAL mode. Không tự bật JOG sub-state ở STOP;
+        # nút STOP STATE/STATE MODE trên Control Dashboard là nơi duy nhất
+        # chuyển manual <-> jog cho cartridge system.
         self.operation_mode = 'manual'
-        self._jog_mode = True
+        self._jog_mode = False
         self._sync_mode_jog()
         robot_msg = Int32()
         robot_msg.data = 3
         self.pub_robot_mode.publish(robot_msg)
         self.get_logger().info("[STOP] Hệ thống dừng - Đã chuyển về MANUAL mode")
         self._sync_mode_jog()
-        self.get_logger().info('[STOP] STOP — JOG sẵn sàng (cần re-home trước STATE)')
+        self.get_logger().info('[STOP] STOP — MANUAL sẵn sàng (cần re-home trước STATE)')
         self._notify('warn', 'STOP', 'Dừng hệ thống — Cần HOMING trước khi chạy STATE')
 
     def _cb_soft_stop(self, msg: Bool):
@@ -2216,9 +2218,9 @@ class CartridgeSystem(Node):
         self._motion_busy    = False
         self._state1_enabled = False
 
-        # Switch sang MANUAL mode + jog ready (giống _cb_stop)
+        # Switch sang MANUAL mode. JOG sub-state chỉ bật qua Control Dashboard.
         self.operation_mode = 'manual'
-        self._jog_mode = True
+        self._jog_mode = False
         self._sync_mode_jog()
         robot_msg = Int32()
         robot_msg.data = 3

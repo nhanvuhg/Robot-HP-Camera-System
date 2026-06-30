@@ -387,6 +387,12 @@ void RobotController::stopAndResetRobot()
     qDebug() << "Stop & Reset Robot";
     stopManualJogMotion();
 
+    if (set_mode_pub_) {
+        auto modeMsg = std_msgs::msg::Int32();
+        modeMsg.data = 3; // 3 = MANUAL
+        set_mode_pub_->publish(modeMsg);
+    }
+
     // Reset UI-facing selection/ready state immediately so the GUI blanks out
     // as soon as STOP is pressed.
     if (selected_row_ != -1) {
