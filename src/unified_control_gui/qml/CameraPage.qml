@@ -107,8 +107,9 @@ Item {
             hpController.publishMode(2)
         }
 
-        modeLocked = true
-        autoRowIndicatorsActive = true
+        var lockControlMode = requestedUiMode === "auto" || requestedUiMode === "camera_ai"
+        modeLocked = lockControlMode
+        autoRowIndicatorsActive = lockControlMode
         robotController.startSystem(true)
     }
 
