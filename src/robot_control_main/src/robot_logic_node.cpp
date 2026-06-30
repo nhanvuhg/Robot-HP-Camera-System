@@ -16,6 +16,8 @@
 #include "dobot_msgs_v3/srv/reset_robot.hpp"
 #include "dobot_msgs_v3/srv/pause.hpp"
 #include "dobot_msgs_v3/srv/disable_robot.hpp"
+#include "dobot_msgs_v3/srv/emergency_stop.hpp"
+#include "dobot_msgs_v3/srv/stop_script.hpp"
 
 #include <functional>
 #include <vector>
@@ -40,6 +42,8 @@ using GetErrorID    = dobot_msgs_v3::srv::GetErrorID;
 using ResetRobot    = dobot_msgs_v3::srv::ResetRobot;
 using Pause         = dobot_msgs_v3::srv::Pause;
 using DisableRobot  = dobot_msgs_v3::srv::DisableRobot;
+using EmergencyStop = dobot_msgs_v3::srv::EmergencyStop;
+using StopScript    = dobot_msgs_v3::srv::StopScript;
 
 // ============================================================================
 // ENUMS
@@ -184,6 +188,8 @@ private:
     rclcpp::Client<ResetRobot>::SharedPtr    reset_robot_client_;
     rclcpp::Client<Pause>::SharedPtr         pause_client_;
     rclcpp::Client<DisableRobot>::SharedPtr  disable_robot_client_;
+    rclcpp::Client<EmergencyStop>::SharedPtr emergency_stop_client_;
+    rclcpp::Client<StopScript>::SharedPtr    stop_script_client_;
 
     // ========================================================================
     // THREAD SYNC
@@ -557,6 +563,8 @@ void RobotLogicNode::initServiceClients()
     reset_robot_client_   = create_client<ResetRobot>   ("/nova5/dobot_bringup/ResetRobot",    qos, callback_group_reentrant_);
     pause_client_         = create_client<Pause>        ("/nova5/dobot_bringup/Pause",         qos, callback_group_reentrant_);
     disable_robot_client_ = create_client<DisableRobot> ("/nova5/dobot_bringup/DisableRobot",  qos, callback_group_reentrant_);
+    emergency_stop_client_= create_client<EmergencyStop>("/nova5/dobot_bringup/EmergencyStop", qos, callback_group_reentrant_);
+    stop_script_client_   = create_client<StopScript>   ("/nova5/dobot_bringup/StopScript",    qos, callback_group_reentrant_);
 }
 
 void RobotLogicNode::initSubscriptions()
@@ -1463,6 +1471,48 @@ void RobotLogicNode::emergencyStopCallback(
     std::shared_ptr<std_srvs::srv::SetBool::Response> response)
 {
     if (request->data) {
+        if (emergency_stop_client_ && emergency_stop_client_->service_is_ready()) {
+            auto e_stop_req = std::make_shared<EmergencyStop::Request>();
+            emergency_stop_client_->async_send_request(e_stop_req,
+                [this](rclcpp::Client<EmergencyStop>::SharedFuture f) {
+                    try {
+                        RCLCPP_WARN(get_logger(), "[E-STOP] Dobot EmergencyStop result: %d", f.get()->res);
+                    } catch (...) {
+                        RCLCPP_WARN(get_logger(), "[E-STOP] Dobot EmergencyStop failed");
+                    }
+                });
+        } else {
+            RCLCPP_WARN(get_logger(), "[E-STOP] Dobot EmergencyStop service not ready");
+        }
+
+        if (stop_script_client_ && stop_script_client_->service_is_ready()) {
+            auto stop_script_req = std::make_shared<StopScript::Request>();
+            stop_script_client_->async_send_request(stop_script_req,
+                [this](rclcpp::Client<StopScript>::SharedFuture f) {
+                    try {
+                        RCLCPP_WARN(get_logger(), "[E-STOP] Dobot StopScript result: %d", f.get()->res);
+                    } catch (...) {
+                        RCLCPP_WARN(get_logger(), "[E-STOP] Dobot StopScript failed");
+                    }
+                });
+        } else {
+            RCLCPP_WARN(get_logger(), "[E-STOP] Dobot StopScript service not ready");
+        }
+
+        if (pause_client_ && pause_client_->service_is_ready()) {
+            auto pause_req = std::make_shared<Pause::Request>();
+            pause_client_->async_send_request(pause_req,
+                [this](rclcpp::Client<Pause>::SharedFuture f) {
+                    try {
+                        RCLCPP_WARN(get_logger(), "[E-STOP] Dobot Pause result: %d", f.get()->res);
+                    } catch (...) {
+                        RCLCPP_WARN(get_logger(), "[E-STOP] Dobot Pause failed");
+                    }
+                });
+        } else {
+            RCLCPP_WARN(get_logger(), "[E-STOP] Dobot Pause service not ready");
+        }
+
         emergency_stop_ = false;
         system_enabled_ = true;
         system_paused_  = false;
@@ -1492,6 +1542,17 @@ void RobotLogicNode::emergencyStopCallback(
         reset_robot_client_->async_send_request(resetReq,
             [this](rclcpp::Client<ResetRobot>::SharedFuture /*f*/) {
                 RCLCPP_WARN(get_logger(), "[E-STOP] Robot reset requested; staying enabled for MANUAL control");
+
+                auto clearReq = std::make_shared<ClearError::Request>();
+                clear_error_client_->async_send_request(clearReq,
+                    [this](rclcpp::Client<ClearError>::SharedFuture /*cf*/) {
+                        auto enableReq = std::make_shared<EnableRobot::Request>();
+                        enableReq->load = 0.0;
+                        enable_client_->async_send_request(enableReq,
+                            [this](rclcpp::Client<EnableRobot>::SharedFuture /*ef*/) {
+                                RCLCPP_WARN(get_logger(), "[E-STOP] Robot re-enabled for MANUAL control");
+                            });
+                    });
             });
 
         publishError("EMERGENCY STOP");

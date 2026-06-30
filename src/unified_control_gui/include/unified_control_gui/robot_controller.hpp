@@ -257,6 +257,7 @@ private:
     void callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr client, bool value);
     void pollRobotState();
     void sendMoveJog(const QString& axisId);  // native MoveJog for continuous
+    void stopManualJogMotion();
 
     // Thread-safe high-frequency GUI updates
     std::mutex status_mutex_;

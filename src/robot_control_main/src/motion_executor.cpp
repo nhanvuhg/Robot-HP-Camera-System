@@ -50,6 +50,9 @@
 #include "dobot_msgs_v3/srv/clear_error.hpp"
 #include "dobot_msgs_v3/srv/get_error_id.hpp"
 #include "dobot_msgs_v3/srv/pause.hpp"
+#include "dobot_msgs_v3/srv/emergency_stop.hpp"
+#include "dobot_msgs_v3/srv/stop_script.hpp"
+#include "dobot_msgs_v3/srv/reset_robot.hpp"
 
 #include <vector>
 #include <string>
@@ -81,6 +84,9 @@ using SyncSrv = dobot_msgs_v3::srv::Sync;
 using ClearError = dobot_msgs_v3::srv::ClearError;
 using GetErrorID = dobot_msgs_v3::srv::GetErrorID;
 using Pause = dobot_msgs_v3::srv::Pause;
+using EmergencyStop = dobot_msgs_v3::srv::EmergencyStop;
+using StopScript = dobot_msgs_v3::srv::StopScript;
+using ResetRobot = dobot_msgs_v3::srv::ResetRobot;
 
 // ============================================================================
 // MOTION EXECUTOR NODE
@@ -234,6 +240,9 @@ private:
     rclcpp::Client<SyncSrv>::SharedPtr sync_client_;
     rclcpp::Client<GetErrorID>::SharedPtr error_client_;
     rclcpp::Client<Pause>::SharedPtr pause_client_;
+    rclcpp::Client<EmergencyStop>::SharedPtr emergency_stop_client_;
+    rclcpp::Client<StopScript>::SharedPtr stop_script_client_;
+    rclcpp::Client<ResetRobot>::SharedPtr reset_robot_client_;
 
     // ========================================================================
     // INITIALIZATION
@@ -260,6 +269,9 @@ private:
         sync_client_ = create_client<SyncSrv>("/nova5/dobot_bringup/Sync", qos);
         error_client_ = create_client<GetErrorID>("/nova5/dobot_bringup/GetErrorID", qos);
         pause_client_ = create_client<Pause>("/nova5/dobot_bringup/Pause", qos);
+        emergency_stop_client_ = create_client<EmergencyStop>("/nova5/dobot_bringup/EmergencyStop", qos);
+        stop_script_client_ = create_client<StopScript>("/nova5/dobot_bringup/StopScript", qos);
+        reset_robot_client_ = create_client<ResetRobot>("/nova5/dobot_bringup/ResetRobot", qos);
         
         RCLCPP_INFO(get_logger(), "[MOTION] Service clients initialized");
     }
@@ -751,22 +763,78 @@ private:
 
     void requestMotionStop(const std::string& source) {
         abort_motion_.store(true);
-        RCLCPP_WARN(get_logger(), "[STOP] %s -> abort flag + Dobot Pause", source.c_str());
+        RCLCPP_WARN(get_logger(), "[STOP] %s -> abort flag + Dobot stop/reset", source.c_str());
 
-        if (!pause_client_ || !pause_client_->service_is_ready()) {
-            RCLCPP_WARN(get_logger(), "[STOP] Pause service not ready; abort flag still set");
-            return;
+        if (stop_script_client_ && stop_script_client_->service_is_ready()) {
+            auto req = std::make_shared<StopScript::Request>();
+            stop_script_client_->async_send_request(req,
+                [this](rclcpp::Client<StopScript>::SharedFuture f) {
+                    try {
+                        RCLCPP_WARN(this->get_logger(), "[STOP] Dobot StopScript result: %d", f.get()->res);
+                    } catch (...) {
+                        RCLCPP_WARN(this->get_logger(), "[STOP] Dobot StopScript failed");
+                    }
+                });
+        } else {
+            RCLCPP_WARN(get_logger(), "[STOP] StopScript service not ready");
         }
 
-        auto req = std::make_shared<Pause::Request>();
-        pause_client_->async_send_request(req,
-            [this](rclcpp::Client<Pause>::SharedFuture f) {
-                try {
-                    RCLCPP_WARN(this->get_logger(), "[STOP] Dobot Pause result: %d", f.get()->res);
-                } catch (...) {
-                    RCLCPP_WARN(this->get_logger(), "[STOP] Dobot Pause failed");
-                }
-            });
+        if (pause_client_ && pause_client_->service_is_ready()) {
+            auto req = std::make_shared<Pause::Request>();
+            pause_client_->async_send_request(req,
+                [this](rclcpp::Client<Pause>::SharedFuture f) {
+                    try {
+                        RCLCPP_WARN(this->get_logger(), "[STOP] Dobot Pause result: %d", f.get()->res);
+                    } catch (...) {
+                        RCLCPP_WARN(this->get_logger(), "[STOP] Dobot Pause failed");
+                    }
+                });
+        } else {
+            RCLCPP_WARN(get_logger(), "[STOP] Pause service not ready; abort flag still set");
+        }
+
+        if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
+            auto req = std::make_shared<ResetRobot::Request>();
+            reset_robot_client_->async_send_request(req,
+                [this](rclcpp::Client<ResetRobot>::SharedFuture f) {
+                    try {
+                        RCLCPP_WARN(this->get_logger(), "[STOP] Dobot ResetRobot result: %d", f.get()->res);
+                    } catch (...) {
+                        RCLCPP_WARN(this->get_logger(), "[STOP] Dobot ResetRobot failed");
+                    }
+
+                    if (clear_error_client_ && clear_error_client_->service_is_ready()) {
+                        auto clear_req = std::make_shared<ClearError::Request>();
+                        clear_error_client_->async_send_request(clear_req,
+                            [this](rclcpp::Client<ClearError>::SharedFuture cf) {
+                                try {
+                                    RCLCPP_WARN(this->get_logger(), "[STOP] Dobot ClearError result: %d", cf.get()->res);
+                                } catch (...) {
+                                    RCLCPP_WARN(this->get_logger(), "[STOP] Dobot ClearError failed");
+                                }
+
+                                if (enable_client_ && enable_client_->service_is_ready()) {
+                                    auto enable_req = std::make_shared<EnableRobot::Request>();
+                                    enable_req->load = 0.0;
+                                    enable_client_->async_send_request(enable_req,
+                                        [this](rclcpp::Client<EnableRobot>::SharedFuture ef) {
+                                            try {
+                                                RCLCPP_WARN(this->get_logger(), "[STOP] Dobot EnableRobot result: %d", ef.get()->res);
+                                            } catch (...) {
+                                                RCLCPP_WARN(this->get_logger(), "[STOP] Dobot EnableRobot failed");
+                                            }
+                                        });
+                                } else {
+                                    RCLCPP_WARN(this->get_logger(), "[STOP] EnableRobot service not ready");
+                                }
+                            });
+                    } else {
+                        RCLCPP_WARN(this->get_logger(), "[STOP] ClearError service not ready");
+                    }
+                });
+        } else {
+            RCLCPP_WARN(get_logger(), "[STOP] ResetRobot service not ready");
+        }
     }
 
     void executeAction(const std::shared_ptr<GoalHandleExecuteMotion> goal_handle)
@@ -961,8 +1029,8 @@ private:
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại input row
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 120,8)) return false;
-        if (!moveToIndex(27+1)) return false;
-        if (!moveToIndex(28+1)) return false;
+        if (!moveToIndex(28)) return false;
+        if (!moveToIndex(29)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(0.5)) return false;
         if (!moveR(0, 70, 0,3)) return false;
@@ -972,15 +1040,15 @@ private:
         if (!moveR(-10, 25, 0)) return false;
         if (!wait(0.5)) return false;
         if (!moveR(0, -30, 0)) return false;
-        if (!moveToIndex(28+1)) return false;
+        if (!moveToIndex(37)) return false;
+        if (!moveToIndex(29)) return false;
         return true;
     }
 
     bool executeInputTrayBuffer(int row) {
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Buffer", row);
         if (row < 1 || row > 5) return false;
-        // if (!moveToIndex(6)) return false; // Tạm thời bỏ move đến vị trí an toàn
-        if (!moveToIndex(28+1)) return false;
+        if (!moveToIndex(6)) return false; // Tạm thời bỏ move đến vị trí an toàn
         // MoveJ đến row1new1 (Index 1)
         if (!moveToIndex(1)) return false;
         
@@ -997,7 +1065,7 @@ private:
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại input row
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 120,8)) return false;
-        if (!moveToIndex(27+1)) return false;
+        if (!moveToIndex(28)) return false;
         if (!moveToIndex(8)) return false;
         if (!moveR(0, 0, -55)) return false;
         if (!wait(0.5)) return false;
@@ -1016,33 +1084,35 @@ private:
         if (!wait(0.5)) return false;
         if (!moveR(1, -70, 0,8)) return false;
         if (!wait(0.5)) return false;
-        if (!moveToIndex(31)) return false;
         if (!moveToIndex(9)) return false;
-        if (!moveR(0, 0, -89)) return false;
+        if (!moveR(0, 0, -70)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay lên scale
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 110)) return false;
+        if (!moveToIndex(0)) return false;
         return true;
     }
 
     bool executeScaleOutput(int slot) {
         RCLCPP_INFO(get_logger(), "[MOTION] Scale → Output Slot %d", slot);
         if (slot < 1 || slot > TOTAL_OUTPUT_SLOTS) return false;
-        if (!moveToIndex(30+1)) return false;
         if (!moveToIndex(10)) return false;
-        if (!moveR(50, 0, 0)) return false;
+        if (!moveR(0, 0, -69)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay đang ở scale
-        if (!moveR(0, 0, 70,8)) return false;
-        if (!moveToIndex(12)) return false;
-        if (!moveR(0, 0, -60,8)) return false;
+        if (!moveR(0, 0, 80,8)) return false;
+        if (!moveToIndex(11)) return false;      /// buoc dem cho 10
+        if (!moveToIndex(32)) return false;
+        if (!moveToIndex(33)) return false;
+        if (!moveR(0, 0, -100,8)) return false;
         if (!wait(0.5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — đặt khay xuống vị trí trung gian
         if (!wait(0.5)) return false;
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — đảm bảo gripper mở trước khi pick up
-        if (!moveR(0, 0, 200,8)) return false;
+        if (!moveR(0, 0, 160,8)) return false;
         if (!setDigitalOutput(6, false)) return false;
-        if (!moveToIndex(11)) return false; 
-        if (!moveR(0, 0, -70,8)) return false;
+         if (!wait(2)) return false;
+        if (!moveToIndex(12)) return false; 
+        if (!moveR(0, 0, -60,8)) return false;
         if (!setDigitalOutput(2, true)) return false;   // Gripper GẮP — kẹp khay tại Index 11
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 70,8)) return false;
@@ -1071,12 +1141,12 @@ private:
 
     bool executeBufferChamber() {
         RCLCPP_INFO(get_logger(), "[MOTION] Buffer → Chamber");
-        if (!moveToIndex(28+1)) return false;
+        if (!moveToIndex(28)) return false;
         if (!moveR(0, 0, -58)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại buffer
         if (!wait(0.5)) return false;
-        if (!moveR(0, 0, 90)) return false;
-        if (!moveToIndex(28+1)) return false;
+        if (!moveR(0, 0, 100)) return false;
+        if (!moveToIndex(35)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(0.5)) return false;
         if (!moveR(0, 70, 0,3)) return false;
@@ -1086,7 +1156,7 @@ private:
         if (!moveR(-10, 25, 0)) return false;
         if (!wait(0.5)) return false;
         if (!moveR(0, -30, 0)) return false;
-        if (!moveToIndex(28+1)) return false;
+        if (!moveToIndex(37)) return false;
         return true;
     }
 

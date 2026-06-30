@@ -379,6 +379,7 @@ void RobotController::enableSystem(bool enable)
 void RobotController::stopAndResetRobot()
 {
     qDebug() << "Stop & Reset Robot";
+    stopManualJogMotion();
 
     // Reset UI-facing selection/ready state immediately so the GUI blanks out
     // as soon as STOP is pressed.
@@ -426,17 +427,8 @@ void RobotController::stopAndResetRobot()
     qDebug() << "  -> Snapshot gripper=" << snapshot_gripper
              << ", picker=" << snapshot_picker;
 
-    // ✅ HARD HALT motion: EmergencyStop + StopScript TRƯỚC Pause/ResetRobot.
-    // Pause/ResetRobot KHÔNG halt được motion đang chạy mid-MovJ; chỉ Dobot
-    // EmergencyStop service moi cat duong di chuyen ngay lap tuc.
-    auto eStopReq = std::make_shared<dobot_msgs_v3::srv::EmergencyStop::Request>();
-    if (dobot_emergency_stop_client_ && dobot_emergency_stop_client_->service_is_ready()) {
-        qDebug() << "  -> EmergencyStop (hard halt motion)";
-        dobot_emergency_stop_client_->async_send_request(eStopReq);
-    } else {
-        qWarning() << "  -> EmergencyStop service NOT ready — motion may NOT halt!";
-    }
-
+    // Normal STOP must halt motion but leave Dobot recoverable by EnableRobot.
+    // EmergencyStop() is intentionally reserved for the Emergency Stop path.
     auto stopScriptReq = std::make_shared<dobot_msgs_v3::srv::StopScript::Request>();
     if (dobot_stop_script_client_ && dobot_stop_script_client_->service_is_ready()) {
         qDebug() << "  -> StopScript (abort script)";
@@ -511,6 +503,7 @@ void RobotController::stopAndResetRobot()
 void RobotController::softStopAndManual()
 {
     qDebug() << "Soft Stop & Switch to MANUAL (keep state + CPX)";
+    stopManualJogMotion();
 
     // 1. Pause Dobot ngay → robot motion ngừng vật lý
     auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
@@ -563,6 +556,9 @@ void RobotController::startSystem(bool start)
 void RobotController::emergencyStop(bool stop)
 {
     qDebug() << "Emergency stop:" << stop;
+    if (stop) {
+        stopAndResetRobot();
+    }
     callServiceAsync(emergency_stop_client_, stop);
 }
 
@@ -784,30 +780,32 @@ void RobotController::sendCartesianStep()
 void RobotController::sendMoveJog(const QString&) {}
 void RobotController::sendJogStep() {}
 
-void RobotController::jogStop()
+void RobotController::stopManualJogMotion()
 {
-    qDebug() << "Jog stop";
-    bool wasJoint = jog_axis_.startsWith("J");
+    if (jog_timer_) jog_timer_->stop();
+    jog_cart_idx_ = -1;
     jog_moving_ = false;
     jog_axis_.clear();
 
-    if (wasJoint) {
-        // Joint: MoveJog("") stop
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - jog_start_time_).count();
-        int delay = (elapsed < 200) ? (200 - elapsed) : 0;
-        QTimer::singleShot(delay, this, [this]() {
-            auto req = std::make_shared<dobot_msgs_v3::srv::MoveJog::Request>();
-            req->axis_id = "";
-            req->param_value = {};
-            jog_client_->async_send_request(req,
-                [](rclcpp::Client<dobot_msgs_v3::srv::MoveJog>::SharedFuture) {});
-        });
-    } else {
-        // Cartesian: stop ServoP timer = robot stops immediately
-        if (jog_timer_) jog_timer_->stop();
-        jog_cart_idx_ = -1;
+    if (!jog_client_ || !jog_client_->service_is_ready()) {
+        qWarning() << "[JOG] MoveJog service not ready; cannot send manual jog stop";
+        return;
     }
+
+    auto req = std::make_shared<dobot_msgs_v3::srv::MoveJog::Request>();
+    req->axis_id = "";
+    req->param_value = {};
+    jog_client_->async_send_request(req,
+        [](rclcpp::Client<dobot_msgs_v3::srv::MoveJog>::SharedFuture f) {
+            try { qDebug() << "[JOG] MoveJog stop res:" << f.get()->res; }
+            catch (...) { qWarning() << "[JOG] MoveJog stop failed"; }
+        });
+}
+
+void RobotController::jogStop()
+{
+    qDebug() << "Jog stop";
+    stopManualJogMotion();
 }
 
 void RobotController::getAngles()

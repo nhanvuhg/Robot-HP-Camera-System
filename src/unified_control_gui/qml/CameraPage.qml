@@ -893,7 +893,7 @@ Item {
                             GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker(cBtnEmergencyEnd, 1.15) : cBtnEmergencyEnd }
                         }
                         Text { anchors.centerIn: parent; text: "⛔ EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
-                        MotionMouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; robotController.emergencyStop(true) } }
+                        MotionMouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; mainWindow.stopSynchronizedSystems() } }
                     }
 
                     GridLayout {
