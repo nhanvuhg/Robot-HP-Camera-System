@@ -55,6 +55,9 @@ class RobotController : public QObject
     Q_PROPERTY(QVariantList rowReady READ rowReady NOTIFY rowReadyChanged)
     Q_PROPERTY(QVariantList slotReady READ slotReady NOTIFY slotReadyChanged)
     Q_PROPERTY(QString errorLog READ errorLog NOTIFY errorLogChanged)
+    Q_PROPERTY(bool gripperOn READ gripperOn NOTIFY gripperOnChanged)
+    Q_PROPERTY(bool pickerOn READ pickerOn NOTIFY pickerOnChanged)
+    Q_PROPERTY(bool cylLoadcellOn READ cylLoadcellOn NOTIFY cylLoadcellOnChanged)
 
 public:
     explicit RobotController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -77,6 +80,9 @@ public:
     bool ignoreScale() const { return ignore_scale_; }
     QVariantList rowReady() const { return row_ready_; }
     QVariantList slotReady() const { return slot_ready_; }
+    bool gripperOn() const { return last_gripper_state_; }
+    bool pickerOn() const { return last_picker_state_; }
+    bool cylLoadcellOn() const { return last_cyl_loadcell_state_; }
 
 public slots:
     // System control
@@ -152,6 +158,9 @@ signals:
     void rowReadyChanged();
     void slotReadyChanged();
     void jointPoseSaved(bool success, QString message);
+    void gripperOnChanged();
+    void pickerOnChanged();
+    void cylLoadcellOnChanged();
 
 private:
     rclcpp::Node::SharedPtr node_;

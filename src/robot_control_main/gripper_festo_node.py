@@ -75,12 +75,12 @@ class FestoGripperNode(Node):
                             self.myIO.reset_channel(3)
                             self.myIO.reset_channel(2)
 
-                        # Cyl_loadcell: MẶC ĐỊNH EXTEND (KẸP) cho hệ thống robot —
-                        # energize ch9, release ch8. Retract khi cần thì chỉnh trong code.
+                        # Cyl_loadcell: mặc định NHẢ khi node khởi động.
+                        # ch8 = NHẢ/release coil, ch9 = KẸP/clamp coil.
                         if len(channels) > 9:
-                            self.get_logger().info('Initializing Cyl_loadcell to default EXTEND state (ch9 set)...')
-                            self.myIO.reset_channel(8)
-                            self.myIO.set_channel(9)
+                            self.get_logger().info('Initializing Cyl_loadcell to default RELEASE state (ch8 set)...')
+                            self.myIO.reset_channel(9)
+                            self.myIO.set_channel(8)
 
                         time.sleep(0.1)
                     except Exception as e:
@@ -100,8 +100,8 @@ class FestoGripperNode(Node):
         # State flags for gripper and picker (separate devices/channels)
         self.gripper_open = True
         self.picker_open = True
-        # Cyl_loadcell state: True = KẸP/clamp (extended) — MẶC ĐỊNH EXTEND cho hệ thống robot
-        self.cyl_loadcell_clamped = True
+        # Cyl_loadcell state: True = KẸP/clamp, False = NHẢ/release.
+        self.cyl_loadcell_clamped = False
 
         # Subscriptions from robot_logic_node
         self.gripper_sub = self.create_subscription(
@@ -131,6 +131,7 @@ class FestoGripperNode(Node):
         self.gripper_pub = self.create_publisher(Bool, '/robot/gripper_status', 10)
         self.picker_pub = self.create_publisher(Bool, '/robot/picker_status', 10)
         self.cyl_loadcell_pub = self.create_publisher(Bool, '/robot/cyl_loadcell_status', 10)
+        self.cyl_loadcell_pub.publish(Bool(data=False))
 
         mode_str = "SIMULATION" if self.simulation_mode else "LIVE"
         self.get_logger().info(f'[{mode_str}] Waiting for commands on /robot/gripper_cmd, /robot/picker_cmd, /robot/cyl_loadcell_cmd...')
@@ -340,11 +341,11 @@ class FestoGripperNode(Node):
                 self.picker_open_cmd()
             except Exception:
                 pass
-            # Cyl_loadcell: GIỮ EXTEND (mặc định cho hệ thống robot) — KHÔNG nhả khi shutdown
+            # Cyl_loadcell: giữ trạng thái an toàn NHẢ khi shutdown.
             try:
                 if self.myIO:
-                    self.myIO.reset_channel(8)
-                    self.myIO.set_channel(9)
+                    self.myIO.reset_channel(9)
+                    self.myIO.set_channel(8)
             except Exception:
                 pass
             if self.myCPX:

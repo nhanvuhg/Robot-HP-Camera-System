@@ -49,13 +49,25 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     // [STOP-PRESERVE] Track gripper/picker state real-time tu gripper_festo_node
     gripper_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
         "/robot/gripper_status", 10,
-        [this](const std_msgs::msg::Bool::SharedPtr msg) { last_gripper_state_ = msg->data; });
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (last_gripper_state_ == msg->data) return;
+            last_gripper_state_ = msg->data;
+            QMetaObject::invokeMethod(this, [this]() { emit gripperOnChanged(); }, Qt::QueuedConnection);
+        });
     picker_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
         "/robot/picker_status", 10,
-        [this](const std_msgs::msg::Bool::SharedPtr msg) { last_picker_state_ = msg->data; });
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (last_picker_state_ == msg->data) return;
+            last_picker_state_ = msg->data;
+            QMetaObject::invokeMethod(this, [this]() { emit pickerOnChanged(); }, Qt::QueuedConnection);
+        });
     cyl_loadcell_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
         "/robot/cyl_loadcell_status", 10,
-        [this](const std_msgs::msg::Bool::SharedPtr msg) { last_cyl_loadcell_state_ = msg->data; });
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (last_cyl_loadcell_state_ == msg->data) return;
+            last_cyl_loadcell_state_ = msg->data;
+            QMetaObject::invokeMethod(this, [this]() { emit cylLoadcellOnChanged(); }, Qt::QueuedConnection);
+        });
     gripper_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
     picker_cmd_pub_  = node_->create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
     cyl_loadcell_cmd_pub_ = node_->create_publisher<std_msgs::msg::Bool>("/robot/cyl_loadcell_cmd", 10);
@@ -1067,11 +1079,22 @@ void RobotController::setDigitalOutput(int index, bool status)
     msg.data = status;
     if (index == 1 && gripper_cmd_pub_) {
         gripper_cmd_pub_->publish(msg);
+        if (last_gripper_state_ != status) {
+            last_gripper_state_ = status;
+            emit gripperOnChanged();
+        }
     } else if (index == 2 && picker_cmd_pub_) {
         picker_cmd_pub_->publish(msg);
+        if (last_picker_state_ != status) {
+            last_picker_state_ = status;
+            emit pickerOnChanged();
+        }
     } else if (index == 6 && cyl_loadcell_cmd_pub_) {
         cyl_loadcell_cmd_pub_->publish(msg);
-        last_cyl_loadcell_state_ = status;
+        if (last_cyl_loadcell_state_ != status) {
+            last_cyl_loadcell_state_ = status;
+            emit cylLoadcellOnChanged();
+        }
     } else {
         qWarning() << "Invalid DO index for GUI control:" << index;
     }

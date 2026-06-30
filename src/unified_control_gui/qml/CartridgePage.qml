@@ -2559,31 +2559,33 @@ import QtGraphicalEffects 1.15
                                         Text { text: "GRIPPER (DO1)"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
                                         Row {
                                             id: rowGripper
-                                            property bool isOn: false  // false = NHẢ (startup safe state)
+                                            property bool isOn: robotController.gripperOn
                                             spacing: 6; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: "transparent"
-                                                border.color: root.cDashButtonBorder
+                                                border.color: rowGripper.isOn ? "#67d0ff" : root.cDashButtonBorder
+                                                border.width: rowGripper.isOn ? 2 : 1
                                                 gradient: Gradient {
                                                     orientation: Gradient.Horizontal
                                                     GradientStop { position: 0.0; color: (gripOnMA.pressed || rowGripper.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
                                                     GradientStop { position: 1.0; color: (gripOnMA.pressed || rowGripper.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
                                                 }
-                                                Text { anchors.centerIn: parent; text: "GẮP"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
-                                                MotionMouseArea { id: gripOnMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, true); rowGripper.isOn = true } }
+                                                Text { anchors.centerIn: parent; text: rowGripper.isOn ? "● GẮP" : "GẮP"; color: rowGripper.isOn ? "#67d0ff" : root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: gripOnMA; anchors.fill: parent; onClicked: robotController.setDigitalOutput(1, true) }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: "transparent"
-                                                border.color: root.cDashButtonBorder
+                                                border.color: !rowGripper.isOn ? "#67d0ff" : root.cDashButtonBorder
+                                                border.width: !rowGripper.isOn ? 2 : 1
                                                 gradient: Gradient {
                                                     orientation: Gradient.Horizontal
                                                     GradientStop { position: 0.0; color: (gripOffMA.pressed || !rowGripper.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
                                                     GradientStop { position: 1.0; color: (gripOffMA.pressed || !rowGripper.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
                                                 }
-                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
-                                                MotionMouseArea { id: gripOffMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(1, false); rowGripper.isOn = false } }
+                                                Text { anchors.centerIn: parent; text: !rowGripper.isOn ? "● NHẢ" : "NHẢ"; color: !rowGripper.isOn ? "#67d0ff" : root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: gripOffMA; anchors.fill: parent; onClicked: robotController.setDigitalOutput(1, false) }
                                             }
                                         }
 
@@ -2591,31 +2593,33 @@ import QtGraphicalEffects 1.15
                                         Text { text: "PICKER (DO2)"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
                                         Row {
                                             id: rowPicker
-                                            property bool isOn: false  // false = NHẢ (startup safe state)
+                                            property bool isOn: robotController.pickerOn
                                             spacing: 6; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: "transparent"
-                                                border.color: root.cDashButtonBorder
+                                                border.color: rowPicker.isOn ? "#67d0ff" : root.cDashButtonBorder
+                                                border.width: rowPicker.isOn ? 2 : 1
                                                 gradient: Gradient {
                                                     orientation: Gradient.Horizontal
                                                     GradientStop { position: 0.0; color: (pickerOnMA.pressed || rowPicker.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
                                                     GradientStop { position: 1.0; color: (pickerOnMA.pressed || rowPicker.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
                                                 }
-                                                Text { anchors.centerIn: parent; text: "GẮP"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
-                                                MotionMouseArea { id: pickerOnMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, true); rowPicker.isOn = true } }
+                                                Text { anchors.centerIn: parent; text: rowPicker.isOn ? "● GẮP" : "GẮP"; color: rowPicker.isOn ? "#67d0ff" : root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: pickerOnMA; anchors.fill: parent; onClicked: robotController.setDigitalOutput(2, true) }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: "transparent"
-                                                border.color: root.cDashButtonBorder
+                                                border.color: !rowPicker.isOn ? "#67d0ff" : root.cDashButtonBorder
+                                                border.width: !rowPicker.isOn ? 2 : 1
                                                 gradient: Gradient {
                                                     orientation: Gradient.Horizontal
                                                     GradientStop { position: 0.0; color: (pickerOffMA.pressed || !rowPicker.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
                                                     GradientStop { position: 1.0; color: (pickerOffMA.pressed || !rowPicker.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
                                                 }
-                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
-                                                MotionMouseArea { id: pickerOffMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(2, false); rowPicker.isOn = false } }
+                                                Text { anchors.centerIn: parent; text: !rowPicker.isOn ? "● NHẢ" : "NHẢ"; color: !rowPicker.isOn ? "#67d0ff" : root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: pickerOffMA; anchors.fill: parent; onClicked: robotController.setDigitalOutput(2, false) }
                                             }
                                         }
 
@@ -2623,31 +2627,33 @@ import QtGraphicalEffects 1.15
                                         Text { text: "CYL LOADCELL (DO6)"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
                                         Row {
                                             id: rowCylLoadcell
-                                            property bool isOn: false  // false = NHẢ
+                                            property bool isOn: robotController.cylLoadcellOn
                                             spacing: 6; width: parent.width
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: "transparent"
-                                                border.color: root.cDashButtonBorder
+                                                border.color: rowCylLoadcell.isOn ? "#67d0ff" : root.cDashButtonBorder
+                                                border.width: rowCylLoadcell.isOn ? 2 : 1
                                                 gradient: Gradient {
                                                     orientation: Gradient.Horizontal
                                                     GradientStop { position: 0.0; color: (cylLoadOnMA.pressed || rowCylLoadcell.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
                                                     GradientStop { position: 1.0; color: (cylLoadOnMA.pressed || rowCylLoadcell.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
                                                 }
-                                                Text { anchors.centerIn: parent; text: "KẸP"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
-                                                MotionMouseArea { id: cylLoadOnMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(6, true); rowCylLoadcell.isOn = true } }
+                                                Text { anchors.centerIn: parent; text: rowCylLoadcell.isOn ? "● KẸP" : "KẸP"; color: rowCylLoadcell.isOn ? "#67d0ff" : root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: cylLoadOnMA; anchors.fill: parent; onClicked: robotController.setDigitalOutput(6, true) }
                                             }
                                             Rectangle {
                                                 width: (parent.width - 6) / 2; height: 42; radius: 6
                                                 color: "transparent"
-                                                border.color: root.cDashButtonBorder
+                                                border.color: !rowCylLoadcell.isOn ? "#67d0ff" : root.cDashButtonBorder
+                                                border.width: !rowCylLoadcell.isOn ? 2 : 1
                                                 gradient: Gradient {
                                                     orientation: Gradient.Horizontal
                                                     GradientStop { position: 0.0; color: (cylLoadOffMA.pressed || !rowCylLoadcell.isOn) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
                                                     GradientStop { position: 1.0; color: (cylLoadOffMA.pressed || !rowCylLoadcell.isOn) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
                                                 }
-                                                Text { anchors.centerIn: parent; text: "NHẢ"; color: root.cWhiteText; font.pixelSize: 15; font.bold: true }
-                                                MotionMouseArea { id: cylLoadOffMA; anchors.fill: parent; onClicked: { robotController.setDigitalOutput(6, false); rowCylLoadcell.isOn = false } }
+                                                Text { anchors.centerIn: parent; text: !rowCylLoadcell.isOn ? "● NHẢ" : "NHẢ"; color: !rowCylLoadcell.isOn ? "#67d0ff" : root.cWhiteText; font.pixelSize: 15; font.bold: true }
+                                                MotionMouseArea { id: cylLoadOffMA; anchors.fill: parent; onClicked: robotController.setDigitalOutput(6, false) }
                                             }
                                         }
 
