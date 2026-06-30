@@ -1036,6 +1036,7 @@ private:
     bool executeInputTrayBuffer(int row) {
         RCLCPP_INFO(get_logger(), "[MOTION] Input Tray Row %d → Buffer", row);
         if (row < 1 || row > 5) return false;
+        if (!moveToIndex(0)) return false;
         if (!moveToIndex(6)) return false; // Tạm thời bỏ move đến vị trí an toàn
         // MoveJ đến row1new1 (Index 1)
         if (!moveToIndex(1)) return false;
@@ -1073,7 +1074,7 @@ private:
         if (!moveR(1, -70, 0,8)) return false;
         if (!wait(0.5)) return false;
         if (!moveToIndex(9)) return false;
-        if (!moveR(0, 0, -95)) return false;
+        if (!moveR(0, 0, -100)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay lên scale
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 110)) return false;
@@ -1097,10 +1098,11 @@ private:
         if (!wait(0.5)) return false;
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — đảm bảo gripper mở trước khi pick up
         if (!moveR(0, 0, 160,8)) return false;
+        if (!setDigitalOutput(6, true)) return false;
+        if (!wait(2.5)) return false;
         if (!setDigitalOutput(6, false)) return false;
-        if (!wait(2)) return false;
         if (!moveToIndex(12)) return false; 
-        if (!moveR(0, 0, -60,8)) return false;
+        if (!moveR(0, 0, -59.5,8)) return false;
         if (!setDigitalOutput(2, true)) return false;   // Gripper GẮP — kẹp khay tại Index 11
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 70,8)) return false;
@@ -1109,7 +1111,7 @@ private:
         if (!moveR(0, 0, -125,8)) return false;
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — thả khay vào output slot
         if (!moveR(0, 0, 130,8)) return false;
-        if (!setDigitalOutput(6, true)) return false;
+        if (!setDigitalOutput(6, false)) return false;
         if (!moveToIndex(13)) return false;
         if (!moveToIndex(0)) return false;
         return true;
