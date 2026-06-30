@@ -779,20 +779,8 @@ private:
             RCLCPP_WARN(get_logger(), "[STOP] StopScript service not ready");
         }
 
-        if (pause_client_ && pause_client_->service_is_ready()) {
-            auto req = std::make_shared<Pause::Request>();
-            pause_client_->async_send_request(req,
-                [this](rclcpp::Client<Pause>::SharedFuture f) {
-                    try {
-                        RCLCPP_WARN(this->get_logger(), "[STOP] Dobot Pause result: %d", f.get()->res);
-                    } catch (...) {
-                        RCLCPP_WARN(this->get_logger(), "[STOP] Dobot Pause failed");
-                    }
-                });
-        } else {
-            RCLCPP_WARN(get_logger(), "[STOP] Pause service not ready; abort flag still set");
-        }
-
+        // Normal STOP avoids Pause(): Pause can leave ServoP/Cartesian jog
+        // paused after recovery even though Joint MoveJog still works.
         if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
             auto req = std::make_shared<ResetRobot::Request>();
             reset_robot_client_->async_send_request(req,

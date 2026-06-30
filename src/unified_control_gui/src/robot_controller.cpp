@@ -435,12 +435,8 @@ void RobotController::stopAndResetRobot()
         dobot_stop_script_client_->async_send_request(stopScriptReq);
     }
 
-    // FORCE INSTANT STOP: Pause + ResetRobot (sau EmergencyStop để clear state)
-    auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
-    if (pause_client_ && pause_client_->service_is_ready()) {
-        pause_client_->async_send_request(pauseReq);
-    }
-
+    // Do not call Pause() on normal STOP. It can leave ServoP/Cartesian jog
+    // paused after recovery, while Joint MoveJog still appears to work.
     auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
     if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
         reset_robot_client_->async_send_request(resetRobotReq);
@@ -505,14 +501,7 @@ void RobotController::softStopAndManual()
     qDebug() << "Soft Stop & Switch to MANUAL (keep state + CPX)";
     stopManualJogMotion();
 
-    // 1. Pause Dobot ngay → robot motion ngừng vật lý
-    auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
-    if (pause_client_ && pause_client_->service_is_ready()) {
-        pause_client_->async_send_request(pauseReq);
-    }
-
-    // 1b. ResetRobot: clear motion buffer để Dobot accept lệnh manual mới (MovJ, JointMovJ)
-    //     Nếu chỉ Pause thì robot ở paused state, các lệnh motion sau sẽ bị reject.
+    // ResetRobot clears the motion buffer without leaving ServoP paused.
     auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
     if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
         reset_robot_client_->async_send_request(resetRobotReq);
