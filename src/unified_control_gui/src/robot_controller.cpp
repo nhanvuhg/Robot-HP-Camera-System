@@ -44,6 +44,7 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     dobot_emergency_stop_client_ = node_->create_client<dobot_msgs_v3::srv::EmergencyStop>("/nova5/dobot_bringup/EmergencyStop");
     dobot_stop_script_client_ = node_->create_client<dobot_msgs_v3::srv::StopScript>("/nova5/dobot_bringup/StopScript");
     disable_robot_client_ = node_->create_client<dobot_msgs_v3::srv::DisableRobot>("/nova5/dobot_bringup/DisableRobot");
+    dobot_enable_robot_client_ = node_->create_client<dobot_msgs_v3::srv::EnableRobot>("/nova5/dobot_bringup/EnableRobot");
 
     // [STOP-PRESERVE] Track gripper/picker state real-time tu gripper_festo_node
     gripper_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
@@ -444,12 +445,6 @@ void RobotController::stopAndResetRobot()
 
     // Do not call Pause() on normal STOP. It can leave ServoP/Cartesian jog
     // paused after recovery, while Joint MoveJog still appears to work.
-    QTimer::singleShot(150, this, [this]() {
-        auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
-        if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
-            reset_robot_client_->async_send_request(resetRobotReq);
-        }
-    });
 
     // Step 1: Reset state machine → IDLE (stops auto mode, clears all flags)
     auto resetReq = std::make_shared<std_srvs::srv::SetBool::Request>();
@@ -470,38 +465,63 @@ void RobotController::stopAndResetRobot()
         emergency_stop_client_->async_send_request(estopReq);
     }
 
-    // Step 3: ClearError + EnableRobot (after 500ms for reset_state to complete)
-    QTimer::singleShot(500, this, [this, snapshot_gripper, snapshot_picker]() {
-        auto clearReq = std::make_shared<dobot_msgs_v3::srv::ClearError::Request>();
-        clear_error_client_->async_send_request(clearReq,
-            [this, snapshot_gripper, snapshot_picker](rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedFuture f) {
-                try { qDebug() << "ClearError:" << f.get()->res; } catch (...) {}
-                QMetaObject::invokeMethod(this, [this, snapshot_gripper, snapshot_picker]() {
-                    QTimer::singleShot(300, this, [this, snapshot_gripper, snapshot_picker]() {
-                        callServiceAsync(enable_client_, true);
-                        qDebug() << "Robot re-enabled — ready for new commands";
+    // Step 3: Recover Dobot in order after DisableRobot has had time to latch:
+    // ResetRobot -> ClearError -> EnableRobot direct -> backend enable flag.
+    QTimer::singleShot(300, this, [this, snapshot_gripper, snapshot_picker]() {
+        auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
+        if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
+            reset_robot_client_->async_send_request(resetRobotReq,
+                [this, snapshot_gripper, snapshot_picker](rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedFuture f) {
+                    try { qDebug() << "ResetRobot:" << f.get()->res; } catch (...) {}
+                    QMetaObject::invokeMethod(this, [this, snapshot_gripper, snapshot_picker]() {
+                        QTimer::singleShot(300, this, [this, snapshot_gripper, snapshot_picker]() {
+                            auto clearReq = std::make_shared<dobot_msgs_v3::srv::ClearError::Request>();
+                            if (!clear_error_client_ || !clear_error_client_->service_is_ready()) {
+                                qWarning() << "ClearError service not ready after STOP";
+                                return;
+                            }
+                            clear_error_client_->async_send_request(clearReq,
+                                [this, snapshot_gripper, snapshot_picker](rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedFuture cf) {
+                                    try { qDebug() << "ClearError:" << cf.get()->res; } catch (...) {}
+                                    QMetaObject::invokeMethod(this, [this, snapshot_gripper, snapshot_picker]() {
+                                        QTimer::singleShot(300, this, [this, snapshot_gripper, snapshot_picker]() {
+                                            auto enableReq = std::make_shared<dobot_msgs_v3::srv::EnableRobot::Request>();
+                                            enableReq->load = 0.0;
+                                            if (dobot_enable_robot_client_ && dobot_enable_robot_client_->service_is_ready()) {
+                                                dobot_enable_robot_client_->async_send_request(enableReq,
+                                                    [this](rclcpp::Client<dobot_msgs_v3::srv::EnableRobot>::SharedFuture ef) {
+                                                        try { qDebug() << "EnableRobot:" << ef.get()->res; } catch (...) {}
+                                                    });
+                                            } else {
+                                                qWarning() << "EnableRobot service not ready after STOP";
+                                            }
 
-                        // [STOP-PRESERVE] Restore gripper+picker state sau khi
-                        // EnableRobot. Day la safety net: neu state hien tai
-                        // van match snapshot, no-op; neu khac (do reset side
-                        // effect), gripper_festo se chinh CPX coil ve dung.
-                        QTimer::singleShot(200, this, [this, snapshot_gripper, snapshot_picker]() {
-                            if (gripper_cmd_pub_) {
-                                auto gMsg = std_msgs::msg::Bool();
-                                gMsg.data = snapshot_gripper;
-                                gripper_cmd_pub_->publish(gMsg);
-                            }
-                            if (picker_cmd_pub_) {
-                                auto pMsg = std_msgs::msg::Bool();
-                                pMsg.data = snapshot_picker;
-                                picker_cmd_pub_->publish(pMsg);
-                            }
-                            qDebug() << "  -> Restored gripper=" << snapshot_gripper
-                                     << ", picker=" << snapshot_picker;
+                                            callServiceAsync(enable_client_, true);
+                                            qDebug() << "Robot re-enabled — ready for new commands";
+
+                                            QTimer::singleShot(200, this, [this, snapshot_gripper, snapshot_picker]() {
+                                                if (gripper_cmd_pub_) {
+                                                    auto gMsg = std_msgs::msg::Bool();
+                                                    gMsg.data = snapshot_gripper;
+                                                    gripper_cmd_pub_->publish(gMsg);
+                                                }
+                                                if (picker_cmd_pub_) {
+                                                    auto pMsg = std_msgs::msg::Bool();
+                                                    pMsg.data = snapshot_picker;
+                                                    picker_cmd_pub_->publish(pMsg);
+                                                }
+                                                qDebug() << "  -> Restored gripper=" << snapshot_gripper
+                                                         << ", picker=" << snapshot_picker;
+                                            });
+                                        });
+                                    }, Qt::QueuedConnection);
+                                });
                         });
-                    });
-                }, Qt::QueuedConnection);
-            });
+                    }, Qt::QueuedConnection);
+                });
+        } else {
+            qWarning() << "ResetRobot service not ready after STOP";
+        }
     });
 }
 

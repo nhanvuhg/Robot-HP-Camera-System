@@ -24,6 +24,7 @@
 #include "dobot_msgs_v3/srv/emergency_stop.hpp"
 #include "dobot_msgs_v3/srv/stop_script.hpp"
 #include "dobot_msgs_v3/srv/disable_robot.hpp"
+#include "dobot_msgs_v3/srv/enable_robot.hpp"
 #include "dobot_msgs_v3/srv/clear_error.hpp"
 #include "dobot_msgs_v3/srv/reset_robot.hpp"
 #include "dobot_msgs_v3/srv/speed_factor.hpp"
@@ -175,6 +176,7 @@ private:
     rclcpp::Client<dobot_msgs_v3::srv::EmergencyStop>::SharedPtr dobot_emergency_stop_client_;
     rclcpp::Client<dobot_msgs_v3::srv::StopScript>::SharedPtr dobot_stop_script_client_;
     rclcpp::Client<dobot_msgs_v3::srv::DisableRobot>::SharedPtr disable_robot_client_;
+    rclcpp::Client<dobot_msgs_v3::srv::EnableRobot>::SharedPtr dobot_enable_robot_client_;
     rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedPtr clear_error_client_;
 
     // [STOP-PRESERVE] Snapshot/restore picker+gripper state khi STOP de dam bao
