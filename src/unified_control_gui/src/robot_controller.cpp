@@ -43,6 +43,7 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     pause_client_ = node_->create_client<dobot_msgs_v3::srv::Pause>("/nova5/dobot_bringup/Pause");
     dobot_emergency_stop_client_ = node_->create_client<dobot_msgs_v3::srv::EmergencyStop>("/nova5/dobot_bringup/EmergencyStop");
     dobot_stop_script_client_ = node_->create_client<dobot_msgs_v3::srv::StopScript>("/nova5/dobot_bringup/StopScript");
+    disable_robot_client_ = node_->create_client<dobot_msgs_v3::srv::DisableRobot>("/nova5/dobot_bringup/DisableRobot");
 
     // [STOP-PRESERVE] Track gripper/picker state real-time tu gripper_festo_node
     gripper_status_sub_ = node_->create_subscription<std_msgs::msg::Bool>(
@@ -435,12 +436,20 @@ void RobotController::stopAndResetRobot()
         dobot_stop_script_client_->async_send_request(stopScriptReq);
     }
 
+    if (disable_robot_client_ && disable_robot_client_->service_is_ready()) {
+        qDebug() << "  -> DisableRobot (cut active manual Send motion)";
+        auto disableReq = std::make_shared<dobot_msgs_v3::srv::DisableRobot::Request>();
+        disable_robot_client_->async_send_request(disableReq);
+    }
+
     // Do not call Pause() on normal STOP. It can leave ServoP/Cartesian jog
     // paused after recovery, while Joint MoveJog still appears to work.
-    auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
-    if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
-        reset_robot_client_->async_send_request(resetRobotReq);
-    }
+    QTimer::singleShot(150, this, [this]() {
+        auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
+        if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
+            reset_robot_client_->async_send_request(resetRobotReq);
+        }
+    });
 
     // Step 1: Reset state machine → IDLE (stops auto mode, clears all flags)
     auto resetReq = std::make_shared<std_srvs::srv::SetBool::Request>();
