@@ -448,8 +448,10 @@ class CartridgeSystem(Node):
 
         self.pub_gripper_status = self.create_publisher(Bool, '/robot/gripper_status', 10)
         self.pub_picker_status  = self.create_publisher(Bool, '/robot/picker_status', 10)
+        self.pub_cyl_loadcell_status = self.create_publisher(Bool, '/robot/cyl_loadcell_status', 10)
         self.create_subscription(Bool, '/robot/gripper_cmd', self._cb_gripper_cmd, 10)
         self.create_subscription(Bool, '/robot/picker_cmd', self._cb_picker_cmd, 10)
+        self.create_subscription(Bool, '/robot/cyl_loadcell_cmd', self._cb_cyl_loadcell_cmd, 10)
 
         self.create_subscription(String, '/providesystem/gui_confirm',       self._cb_gui_confirm,        qos)
         self.create_subscription(String, '/providesystem/jog_cmd',           self._cb_jog,                qos)
@@ -666,7 +668,9 @@ class CartridgeSystem(Node):
                     if mod.is_function_supported("set_channel"):
                         mod.reset_channel(0); mod.set_channel(1)  # nhả gripper
                         mod.reset_channel(2); mod.set_channel(3)  # nhả picker
-                        self.get_logger().info("[CPX-SETUP] Gripper + Picker → NHẢ (safe)")
+                        mod.reset_channel(9); mod.set_channel(8)  # nhả cyl6/loadcell
+                        self.pub_cyl_loadcell_status.publish(Bool(data=False))
+                        self.get_logger().info("[CPX-SETUP] Gripper + Picker + Cyl6 → NHẢ (safe)")
                         break
             except Exception as e:
                 self.get_logger().error(f"[CPX-SETUP] Failed to init gripper/picker: {e}")
@@ -2334,6 +2338,37 @@ class CartridgeSystem(Node):
                         break
             except Exception as e:
                 self.get_logger().error(f"Picker cmd error: {e}")
+
+    def _cb_cyl_loadcell_cmd(self, msg: Bool):
+        """
+        Điều khiển cyl6/loadcell trên CPX 192.168.27.253, channel 8/9:
+          msg.data=True  → Kẹp/extend  (reset ch8, set ch9)
+          msg.data=False → Nhả/retract (reset ch9, set ch8)
+
+        Node này đang sở hữu CPX 253, nên xử lý tại đây thay vì
+        gripper_festo_node.py (node đó bị tắt trong start_all để tránh ghi
+        trùng CPX).
+        """
+        if not self.io_module:
+            self.get_logger().warn("Cyl6 cmd ignored: CPX 253 not connected")
+            return
+        with self._io_bg_lock:
+            try:
+                for valve_mod in self.io_module.modules:
+                    if valve_mod.is_function_supported("set_channel"):
+                        if msg.data:  # Kẹp
+                            valve_mod.reset_channel(8)
+                            valve_mod.set_channel(9)
+                            self.pub_cyl_loadcell_status.publish(Bool(data=True))
+                            self.get_logger().info("Cyl6/loadcell KẸP: ch8 reset, ch9 set")
+                        else:  # Nhả
+                            valve_mod.reset_channel(9)
+                            valve_mod.set_channel(8)
+                            self.pub_cyl_loadcell_status.publish(Bool(data=False))
+                            self.get_logger().info("Cyl6/loadcell NHẢ: ch9 reset, ch8 set")
+                        break
+            except Exception as e:
+                self.get_logger().error(f"Cyl6/loadcell cmd error: {e}")
 
     def _cb_cyl_cmd(self, msg: String):
         """

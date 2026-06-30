@@ -1098,7 +1098,7 @@ private:
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — đảm bảo gripper mở trước khi pick up
         if (!moveR(0, 0, 160,8)) return false;
         if (!setDigitalOutput(6, false)) return false;
-         if (!wait(2)) return false;
+        if (!wait(2)) return false;
         if (!moveToIndex(12)) return false; 
         if (!moveR(0, 0, -60,8)) return false;
         if (!setDigitalOutput(2, true)) return false;   // Gripper GẮP — kẹp khay tại Index 11
