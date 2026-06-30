@@ -2676,13 +2676,42 @@ import QtGraphicalEffects 1.15
                             }
 
                             Column {
-                                anchors.centerIn: parent; spacing: 20
+                                anchors.centerIn: parent; spacing: 14
                                 
                                 Text {
                                     text: "🔒 MANUAL CONTROL LOCKED\nRobot đang chạy — không thể JOG"
                                     color: root.cWhiteText; font.pixelSize: 16; font.bold: true
                                     horizontalAlignment: Text.AlignHCenter; lineHeight: 1.5
                                     anchors.horizontalCenter: parent.horizontalCenter
+                                }
+
+                                Row {
+                                    spacing: 8
+                                    anchors.horizontalCenter: parent.horizontalCenter
+
+                                    CBtn {
+                                        lbl: "STOP"
+                                        w: 150; h: 48
+                                        fontSize: 15
+                                        bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"
+                                        onClicked: mainWindow.stopSynchronizedSystems()
+                                    }
+
+                                    CBtn {
+                                        lbl: "ENABLE"
+                                        w: 150; h: 48
+                                        fontSize: 15
+                                        bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText
+                                        onClicked: robotController.enableSystem(true)
+                                    }
+
+                                    CBtn {
+                                        lbl: "CLEAR ERROR"
+                                        w: 170; h: 48
+                                        fontSize: 13
+                                        bg: root.cBtnWarningStart; bgEnd: root.cBtnWarningEnd; bc: root.cBtnWarningBorder; tc: root.cWhiteText
+                                        onClicked: robotController.clearError()
+                                    }
                                 }
                             }
                         }

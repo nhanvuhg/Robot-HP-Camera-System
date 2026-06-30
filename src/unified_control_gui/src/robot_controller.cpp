@@ -437,14 +437,14 @@ void RobotController::stopAndResetRobot()
         dobot_stop_script_client_->async_send_request(stopScriptReq);
     }
 
-    if (disable_robot_client_ && disable_robot_client_->service_is_ready()) {
-        qDebug() << "  -> DisableRobot (cut active manual Send motion)";
-        auto disableReq = std::make_shared<dobot_msgs_v3::srv::DisableRobot::Request>();
-        disable_robot_client_->async_send_request(disableReq);
+    if (pause_client_ && pause_client_->service_is_ready()) {
+        qDebug() << "  -> Pause (cut active manual Send motion)";
+        auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
+        pause_client_->async_send_request(pauseReq);
     }
 
-    // Do not call Pause() on normal STOP. It can leave ServoP/Cartesian jog
-    // paused after recovery, while Joint MoveJog still appears to work.
+    // Pause is used only to interrupt active MovL/JointMovJ. ResetRobot below
+    // clears the paused motion state before manual Cartesian/ServoP is reused.
 
     // Step 1: Reset state machine → IDLE (stops auto mode, clears all flags)
     auto resetReq = std::make_shared<std_srvs::srv::SetBool::Request>();
@@ -465,7 +465,7 @@ void RobotController::stopAndResetRobot()
         emergency_stop_client_->async_send_request(estopReq);
     }
 
-    // Step 3: Recover Dobot in order after DisableRobot has had time to latch:
+    // Step 3: Recover Dobot in order after Pause has had time to latch:
     // ResetRobot -> ClearError -> EnableRobot direct -> backend enable flag.
     QTimer::singleShot(300, this, [this, snapshot_gripper, snapshot_picker]() {
         auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
