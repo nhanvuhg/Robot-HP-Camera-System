@@ -222,6 +222,8 @@ def _make_node():
     node._system_paused    = False
     node._s4_trigger       = False
     node._jog_mode         = False
+    node._drain_armed_after_s2 = False
+    node._drain_state      = False
 
     # Hardware stubs
     node.zero_offset = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
@@ -271,6 +273,7 @@ def _make_node():
     node.pub_servo_pos        = MagicMock()
     node.pub_sensors          = MagicMock()
     node.pub_input_trays_empty = MagicMock()
+    node.pub_drain           = MagicMock()
     node.pub_current_mode     = MagicMock()
     node.pub_config_data      = MagicMock()
     node.pub_vfd_run          = MagicMock()

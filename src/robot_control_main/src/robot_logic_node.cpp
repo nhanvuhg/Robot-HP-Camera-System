@@ -118,6 +118,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   start_button_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   new_tray_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   input_trays_empty_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_drain_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  selected_row_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  command_row_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  selected_slot_sub_;
@@ -225,7 +226,8 @@ private:
     // waiting_for_new_input_ : true  = đã pub done_tray_input, đang chờ new_tray_loaded
     //                          false = tray input sẵn sàng
     std::atomic<bool> new_tray_loaded_{false};
-    std::atomic<bool> input_trays_empty_{true}; // True if physical feeder conveyor is empty (S1/S2/S3=0) = tray input sẵn sàng
+    std::atomic<bool> input_trays_empty_{true}; // Sensor-only: true when physical feeder conveyor is empty (S1/S2/S3=0)
+    std::atomic<bool> cartridge_drain_confirmed_{false}; // Cartridge confirms S2 finished and no S1/S2/S3 tray can feed S1
     // waiting_for_new_output_: true  = đã pub done_tray_output, đang chờ new_trayoutput_loaded
     //                          false = tray output sẵn sàng
     std::atomic<bool> new_trayoutput_loaded_{false};
@@ -603,6 +605,7 @@ void RobotLogicNode::initSubscriptions()
                 new_tray_loaded_ = false;
                 new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
                 waiting_for_new_input_ = true;
+                cartridge_drain_confirmed_ = false;
                 wait_tray_start_time_  = this->now();
                 notifyStateChange();
             }
@@ -665,6 +668,18 @@ void RobotLogicNode::initSubscriptions()
         "/cartridge/input_trays_empty", rclcpp::QoS(10).reliable(),
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             input_trays_empty_ = msg->data;
+        });
+
+    cartridge_drain_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/cartridge/drain", rclcpp::QoS(10).reliable(),
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            bool prev = cartridge_drain_confirmed_.load();
+            cartridge_drain_confirmed_ = msg->data;
+            if (prev != msg->data) {
+                RCLCPP_WARN(get_logger(), "[DRAIN] Cartridge drain confirmation: %s",
+                    msg->data ? "TRUE" : "FALSE");
+                notifyStateChange();
+            }
         });
 
     // new_trayoutput_loaded: output tray ready after cartridge system change
@@ -966,6 +981,7 @@ void RobotLogicNode::advanceAutoRow()
         new_tray_loaded_      = false;
         new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
         waiting_for_new_input_ = true;
+        cartridge_drain_confirmed_ = false;
         wait_tray_start_time_  = this->now();
         
         current_auto_row_ = 1;
@@ -1012,6 +1028,7 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
     new_tray_loaded_ = true;
     bool was_waiting = waiting_for_new_input_.load();
     waiting_for_new_input_ = false;
+    cartridge_drain_confirmed_ = false;
 
     // Clear scale results sót lại từ batch trước. Loadcell đã có latch, nhưng nếu
     // robot crash giữa chừng, queue có thể còn 1 entry chưa consume — entry đó thuộc
@@ -1622,6 +1639,7 @@ void RobotLogicNode::resetStateCallback(
     feed_chamber_wait_active_ = false;
     skipped_buffer_load_     = false;
     fill_done_               = false;
+    cartridge_drain_confirmed_ = false;
     emergency_stop_          = false;
     system_paused_           = false;
     pause_requested_         = false;
@@ -2162,24 +2180,24 @@ void RobotLogicNode::stateWaitFilling()
         return;
     }
 
-    // Pipeline fully drained AND waiting for trays → IDLE (with 40s tolerance for feeder to catch up)
+    // Pipeline fully drained AND waiting for trays → IDLE only after cartridge confirms drain.
     bool pipeline_empty = !chamber_has_cartridge_ && buffer_is_empty_ && !scale_has_cartridge_;
     if (pipeline_empty && waiting_for_new_input_.load()) {
-        if (input_trays_empty_.load()) {
+        if (cartridge_drain_confirmed_.load()) {
             auto elapsed = (this->now() - wait_tray_start_time_).seconds();
             if (elapsed > 40.0) {
                 RCLCPP_INFO(get_logger(),
-                    "[WAIT_FILLING] Pipeline drained, Conveyor EMPTY for 40s → IDLE");
+                    "[WAIT_FILLING] Pipeline drained, cartridge DRAIN confirmed for 40s → IDLE");
                 transitionTo(SystemState::IDLE);
                 return;
             } else {
                 RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
-                    "[WAIT_FILLING] Pipeline empty, Conveyor EMPTY, waiting up to 40s... (%.1fs/40s)", elapsed);
+                    "[WAIT_FILLING] Pipeline empty, cartridge DRAIN confirmed, waiting up to 40s... (%.1fs/40s)", elapsed);
                 // DO NOT return here, let it check fill_done (though chamber is empty so it will bounce anyway)
             }
         } else {
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
-                "[WAIT_FILLING] Pipeline empty but Conveyor has queued trays — waiting infinitely...");
+                "[WAIT_FILLING] Pipeline empty, waiting for cartridge drain confirmation or new tray...");
             // DO NOT return here
         }
     }
@@ -2451,15 +2469,16 @@ void RobotLogicNode::stateRefillBuffer()
 
     // ── Check if we still have rows ──
     if (waiting_for_new_input_.load() || !new_tray_loaded_.load()) {
-        if (input_trays_empty_.load()) {
-            // No tray & Conveyor EMPTY — skip refill -> drain
+        if (cartridge_drain_confirmed_.load()) {
+            // Cartridge confirmed no S1/S2/S3 tray after S2 -> S1 handoff — skip refill -> drain.
             RCLCPP_WARN(get_logger(),
-                "[REFILL] No input tray & Conveyor EMPTY — skip refill → PROCESSING_SCALE");
+                "[REFILL] Cartridge DRAIN confirmed — skip refill → PROCESSING_SCALE");
             transitionTo(SystemState::PROCESSING_SCALE);
             return;
         } else {
             RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
-                "[REFILL] Conveyor has queued trays (S1/S2/S3 = ON) — waiting for load...");
+                "[REFILL] Waiting for cartridge S2→S1 handoff (empty=%d drain=%d new_tray=%d)...",
+                input_trays_empty_.load(), cartridge_drain_confirmed_.load(), new_tray_loaded_.load());
             return;
         }
     }
@@ -2642,9 +2661,9 @@ void RobotLogicNode::statePlaceToOutput()
         bool pipeline_empty = !chamber_has_cartridge_ && buffer_is_empty_;
         if (pipeline_empty) {
             if (waiting_for_new_input_.load()) {
-                if (input_trays_empty_.load()) {
+                if (cartridge_drain_confirmed_.load()) {
                     RCLCPP_WARN(get_logger(),
-                        "[PIPELINE] 📦 Pipeline drained + Conveyor EMPTY -> Waiting in IDLE for new tray to auto-restart");
+                        "[PIPELINE] 📦 Pipeline drained + cartridge DRAIN confirmed -> Waiting in IDLE for new tray to auto-restart");
 
                     // BATCH CUỐI XỬ LÝ DRAIN: Robot tự quyết định thay khay ra
                     if (!waiting_for_new_output_.load()) {
@@ -2655,7 +2674,7 @@ void RobotLogicNode::statePlaceToOutput()
                     transitionTo(SystemState::IDLE);
                 } else {
                     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
-                        "[PIPELINE] 📦 Pipeline drained but Conveyor has queued trays → Waiting in WAIT_FILLING");
+                        "[PIPELINE] 📦 Pipeline drained but cartridge has not confirmed DRAIN → Waiting in WAIT_FILLING");
                     transitionTo(SystemState::WAIT_FILLING);
                 }
             } else {
@@ -2756,13 +2775,13 @@ void RobotLogicNode::statePlaceToFail()
             transitionTo(SystemState::IDLE);
         } else if (pipeline_empty) {
             if (waiting_for_new_input_.load()) {
-                if (input_trays_empty_.load()) {
+                if (cartridge_drain_confirmed_.load()) {
                     RCLCPP_WARN(get_logger(),
-                        "[PIPELINE] 📦 Pipeline drained (fail) + Conveyor EMPTY -> Waiting in IDLE for new tray to auto-restart");
+                        "[PIPELINE] 📦 Pipeline drained (fail) + cartridge DRAIN confirmed -> Waiting in IDLE for new tray to auto-restart");
                     transitionTo(SystemState::IDLE);
                 } else {
                     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
-                        "[PIPELINE] 📦 Pipeline drained (fail) but Conveyor has queued trays → Waiting in WAIT_FILLING");
+                        "[PIPELINE] 📦 Pipeline drained (fail) but cartridge has not confirmed DRAIN → Waiting in WAIT_FILLING");
                     transitionTo(SystemState::WAIT_FILLING);
                 }
             } else {

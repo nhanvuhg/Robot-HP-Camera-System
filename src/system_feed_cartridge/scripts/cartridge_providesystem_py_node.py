@@ -404,6 +404,8 @@ class CartridgeSystem(Node):
         self._system_paused  = False  # True = đã halt thực sự (graceful PAUSE đã promote)
         self._pause_pending  = False  # True = user bấm PAUSE, chờ ranh giới state để promote
         self._input_trays_empty_debounce_count = 0
+        self._drain_armed_after_s2 = False
+        self._drain_state = False
 
         # Watchdog
         self._watchdog_last_tick = time.time()
@@ -421,6 +423,7 @@ class CartridgeSystem(Node):
         self.pub_busy_cartridge = self.create_publisher(Bool, '/cartridge/busy', qos)
         self.pub_busy_cartridge_pos2 = self.create_publisher(Bool, '/cartridge/pos2_busy', qos)
         self.pub_input_trays_empty = self.create_publisher(Bool, '/cartridge/input_trays_empty', qos)
+        self.pub_drain = self.create_publisher(Bool, '/cartridge/drain', qos)
         self.pub_current_mode   = self.create_publisher(String, '/providesystem/current_mode', qos)        
         self.pub_robot_mode     = self.create_publisher(Int32, '/robot/set_mode', qos)
         self.pub_vfd_run        = self.create_publisher(Bool,   '/vfd/cmd_run', qos)
@@ -1748,6 +1751,24 @@ class CartridgeSystem(Node):
         """
         self.pub_busy_cartridge_pos2.publish(Bool(data=busy))
 
+    def _input_belt_empty(self) -> bool:
+        """True khi cả S1/S2/S3 đều OFF."""
+        return not (
+            self.sensor(S1_BELT_START)
+            or self.sensor(S2_BELT_MID)
+            or self.sensor(S3_BELT_END)
+        )
+
+    def _publish_drain(self, active: bool):
+        active = bool(active)
+        if active != self._drain_state:
+            self.get_logger().warn(
+                f"[DRAIN] /cartridge/drain = {active} "
+                f"(armed_after_s2={self._drain_armed_after_s2}, state_in={self.state_in.name})"
+            )
+        self._drain_state = active
+        self.pub_drain.publish(Bool(data=active))
+
     def _cb_motion_busy(self, msg: Bool):
         """
         Nhận trạng thái bận của robot từ /robot/motion_busy.
@@ -1780,6 +1801,8 @@ class CartridgeSystem(Node):
         """
         if msg.data:
             self._input_tray_done = True
+            self._drain_armed_after_s2 = False
+            self._publish_drain(False)
             # Chỉ enable auto-chain S1 trong AUTO/AI — MANUAL dừng chain sau S2A
             if self.operation_mode in ('auto', 'ai'):
                 self._state1_enabled = True
@@ -2102,6 +2125,8 @@ class CartridgeSystem(Node):
         self._system_running = True
         self._inx_moving = self._iny_moving = False
         self._state1_enabled = (self.operation_mode in ['auto', 'ai'])
+        self._drain_armed_after_s2 = False
+        self._publish_drain(False)
         self._motion_busy = False
 
         # Auto/AI: tắt JOG flag để GUI hiển thị đúng mode.
@@ -2159,6 +2184,8 @@ class CartridgeSystem(Node):
         self._input_tray_done = False
         self._motion_busy = False
         self._state1_enabled = False
+        self._drain_armed_after_s2 = False
+        self._publish_drain(False)
         self._s4_trigger = False
         # Re-arm drive warm-up gate — phòng khi STOP xảy ra trong tình huống bất thường
         # (drive vẫn có thể ở state lạ); state1 sau START sẽ tự flush.
@@ -2216,6 +2243,8 @@ class CartridgeSystem(Node):
         self._system_running = False
         self._motion_busy    = False
         self._state1_enabled = False
+        self._drain_armed_after_s2 = False
+        self._publish_drain(False)
 
         # Switch sang MANUAL mode. JOG sub-state chỉ bật qua Control Dashboard.
         self.operation_mode = 'manual'
@@ -2463,6 +2492,8 @@ class CartridgeSystem(Node):
 
         if requested == 'manual' and self.operation_mode == 'manual' and getattr(self, '_jog_mode', False):
             self.get_logger().info("[SYNC MODE] Robot MANUAL received — giữ JOG sub-mode của cartridge")
+            self._drain_armed_after_s2 = False
+            self._publish_drain(False)
             self._sync_mode_jog()
             return
 
@@ -2473,6 +2504,8 @@ class CartridgeSystem(Node):
             self._jog_mode = False
             self._guide_logged.clear()
             self._sync_mode_jog()
+            self._drain_armed_after_s2 = False
+            self._publish_drain(False)
             self._reset_auto_triggers_on_mode_enter(old, requested)
 
     def _reset_auto_triggers_on_mode_enter(self, old_mode: str, new_mode: str):
@@ -2520,6 +2553,8 @@ class CartridgeSystem(Node):
             return
         old = self.operation_mode
         self.operation_mode = requested
+        self._drain_armed_after_s2 = False
+        self._publish_drain(False)
 
         if jog_requested:
             self._jog_mode = True
@@ -2980,6 +3015,8 @@ class CartridgeSystem(Node):
         robot_msg.data = 3
         self.pub_robot_mode.publish(robot_msg)
         self._state1_enabled = False
+        self._drain_armed_after_s2 = False
+        self._publish_drain(False)
         self._s5_retry = 0; self._s1_retry_count = 0; self._cmd_sent_in = False
         self._input_tray_done = False
         self._s4_trigger = False
@@ -3307,9 +3344,9 @@ class CartridgeSystem(Node):
             self._publish_state()
             self._publish_sensors()
             
-            # Publish input_trays_empty state to Dobot Robot Node for pipeline drain handling
+            # Publish input_trays_empty state to Dobot Robot Node for sensor display/status.
             b_msg = Bool()
-            raw_empty = not (self.sensor(S1_BELT_START) or self.sensor(S2_BELT_MID) or self.sensor(S3_BELT_END))
+            raw_empty = self._input_belt_empty()
             
             if raw_empty:
                 self._input_trays_empty_debounce_count += 1
@@ -3317,8 +3354,19 @@ class CartridgeSystem(Node):
                 self._input_trays_empty_debounce_count = 0
                 
             #... rest of control loop
-            b_msg.data = bool(self._input_trays_empty_debounce_count >= 20)
+            empty_debounced = bool(self._input_trays_empty_debounce_count >= 20)
+            b_msg.data = empty_debounced
             self.pub_input_trays_empty.publish(b_msg)
+
+            drain_active = (
+                self.operation_mode in ['auto', 'ai']
+                and getattr(self, '_system_running', False)
+                and self.state_in == SystemState.IDLE
+                and self._state1_enabled
+                and self._drain_armed_after_s2
+                and empty_debounced
+            )
+            self._publish_drain(drain_active)
             
         except Exception as e:
             tb = traceback.format_exc()
@@ -3624,6 +3672,8 @@ class CartridgeSystem(Node):
         if self._state1_enabled and self._can_start_s1():
             self.get_logger().info(f"[IN-IDLE] Đủ điều kiện → STATE 1 ({self.operation_mode.upper()})")
             self._guide_logged.discard("IDLE_IN_S7")
+            self._drain_armed_after_s2 = False
+            self._publish_drain(False)
             self._enter_in(SystemState.S1_CONFIRM_SAFE)
             return
         
@@ -4301,6 +4351,8 @@ class CartridgeSystem(Node):
                 self.pub_new_tray.publish(Bool(data=True))
                 self.get_logger().info("Published: new_tray_loaded = True (S7 ON)")
                 self._notify('info', 'STATE 1 COMPLETE', 'Khay đã ở robot')
+                self._drain_armed_after_s2 = False
+                self._publish_drain(False)
                 self._tray_robot_check_start = -1.0
 
             self._state1_enabled = False
@@ -4319,6 +4371,8 @@ class CartridgeSystem(Node):
                            'cơ khí đẩy khay (Cyl1) hoạt động đủ chưa'],
                     action=['Đẩy khay manual nếu cần', 'Kiểm tra wiring S7', 'Hệ thống quay về IDLE để retry'])
                 self.pub_new_tray.publish(Bool(data=True))
+                self._drain_armed_after_s2 = False
+                self._publish_drain(False)
                 self._state1_enabled = False
                 self._enter_in(SystemState.IDLE)
             else:
@@ -4925,7 +4979,15 @@ class CartridgeSystem(Node):
                 'STATE 2 đã hoàn tất nhưng phát hiện S4/S6 mismatch trong scan — hệ thống PAUSE. Kiểm tra cảm biến S4 (scan stack) hoặc S6 (check tray pos1) rồi nhấn RESUME.'
             )
 
-        self.get_logger().info("State2 done -> IDLE (cho check S123 de chay State 1 cap khay tiep)")
+        self._drain_armed_after_s2 = (
+            self.operation_mode in ('auto', 'ai')
+            and getattr(self, '_system_running', False)
+            and self._state1_enabled
+        )
+        self.get_logger().info(
+            "State2 done -> IDLE (cho check S123 de chay State 1 cap khay tiep, "
+            f"drain_armed={self._drain_armed_after_s2})"
+        )
         self._enter_in(SystemState.IDLE)
 
     # ══════════════════════════════════════════════════════════════
