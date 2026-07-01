@@ -569,14 +569,17 @@ void RobotController::softStopAndManual()
 void RobotController::startSystem(bool start)
 {
     qDebug() << "Start system:" << start;
-    // Call robot service
-    callServiceAsync(start_system_client_, start);
-    // Also publish to shared topic so cartridge system starts too
+    // Publish one synchronized START edge only. robot_logic_node also subscribes
+    // to /system/start_button and performs ClearError -> EnableRobot -> HOME
+    // there. Calling /robot/start_system first races the state machine into
+    // INIT_LOAD before HOME can be sent.
     if (start) {
         auto msg = std_msgs::msg::Bool();
         msg.data = true;
         system_start_pub_->publish(msg);
-        qDebug() << "Published /system/start_button = true (cartridge trigger)";
+        qDebug() << "Published /system/start_button = true (robot + cartridge trigger)";
+    } else {
+        callServiceAsync(start_system_client_, false);
     }
 }
 

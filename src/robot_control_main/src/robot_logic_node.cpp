@@ -15,6 +15,7 @@
 #include "dobot_msgs_v3/srv/get_error_id.hpp"
 #include "dobot_msgs_v3/srv/reset_robot.hpp"
 #include "dobot_msgs_v3/srv/pause.hpp"
+#include "dobot_msgs_v3/srv/continues.hpp"
 #include "dobot_msgs_v3/srv/disable_robot.hpp"
 #include "dobot_msgs_v3/srv/emergency_stop.hpp"
 #include "dobot_msgs_v3/srv/stop_script.hpp"
@@ -41,6 +42,7 @@ using ClearError    = dobot_msgs_v3::srv::ClearError;
 using GetErrorID    = dobot_msgs_v3::srv::GetErrorID;
 using ResetRobot    = dobot_msgs_v3::srv::ResetRobot;
 using Pause         = dobot_msgs_v3::srv::Pause;
+using Continues     = dobot_msgs_v3::srv::Continues;
 using DisableRobot  = dobot_msgs_v3::srv::DisableRobot;
 using EmergencyStop = dobot_msgs_v3::srv::EmergencyStop;
 using StopScript    = dobot_msgs_v3::srv::StopScript;
@@ -156,7 +158,6 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   new_tray_loaded_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   new_trayoutput_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   done_output_tray_pub_;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr cartridge_mode_pub_;
 
     // ========================================================================
     // ACTION CLIENT
@@ -187,6 +188,7 @@ private:
     rclcpp::Client<GetErrorID>::SharedPtr    error_client_;
     rclcpp::Client<ResetRobot>::SharedPtr    reset_robot_client_;
     rclcpp::Client<Pause>::SharedPtr         pause_client_;
+    rclcpp::Client<Continues>::SharedPtr     continue_client_;
     rclcpp::Client<DisableRobot>::SharedPtr  disable_robot_client_;
     rclcpp::Client<EmergencyStop>::SharedPtr emergency_stop_client_;
     rclcpp::Client<StopScript>::SharedPtr    stop_script_client_;
@@ -562,6 +564,7 @@ void RobotLogicNode::initServiceClients()
     error_client_         = create_client<GetErrorID>   ("/nova5/dobot_bringup/GetErrorID",    qos, callback_group_reentrant_);
     reset_robot_client_   = create_client<ResetRobot>   ("/nova5/dobot_bringup/ResetRobot",    qos, callback_group_reentrant_);
     pause_client_         = create_client<Pause>        ("/nova5/dobot_bringup/Pause",         qos, callback_group_reentrant_);
+    continue_client_      = create_client<Continues>    ("/nova5/dobot_bringup/Continue",      qos, callback_group_reentrant_);
     disable_robot_client_ = create_client<DisableRobot> ("/nova5/dobot_bringup/DisableRobot",  qos, callback_group_reentrant_);
     emergency_stop_client_= create_client<EmergencyStop>("/nova5/dobot_bringup/EmergencyStop", qos, callback_group_reentrant_);
     stop_script_client_   = create_client<StopScript>   ("/nova5/dobot_bringup/StopScript",    qos, callback_group_reentrant_);
@@ -777,7 +780,6 @@ void RobotLogicNode::initPublishers()
     new_tray_loaded_pub_  = create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_tray_loaded", rclcpp::QoS(10).reliable());
     done_output_tray_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/done_tray_output", 10);
     new_trayoutput_pub_   = create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_trayoutput_loaded", rclcpp::QoS(10).reliable());
-    cartridge_mode_pub_   = create_publisher<std_msgs::msg::String>("/providesystem/set_operation_mode", 10);
 }
 
 void RobotLogicNode::initServices()
@@ -1190,7 +1192,11 @@ void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr ms
     auto enable_req = std::make_shared<EnableRobot::Request>();
     enable_req->load = 0.0;
     callService<EnableRobot>(enable_client_, enable_req, "EnableRobot");
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    auto continue_req = std::make_shared<Continues::Request>();
+    callService<Continues>(continue_client_, continue_req, "Continue");
+    std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
     if (!manual_mode_) {
         if (cartridge_is_homed_) {
@@ -1414,6 +1420,10 @@ void RobotLogicNode::enableSystemCallback(
         auto enable_req = std::make_shared<EnableRobot::Request>();
         enable_req->load = 0.0;
         callService<EnableRobot>(enable_client_, enable_req, "EnableRobot");
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+        auto continue_req = std::make_shared<Continues::Request>();
+        callService<Continues>(continue_client_, continue_req, "Continue");
 
         response->success = true;
         response->message = "Robot Power ON";
@@ -1688,25 +1698,20 @@ void RobotLogicNode::pauseSystemCallback(
 
 void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
-    auto sync_msg = std_msgs::msg::String();
-
     switch (msg->data) {
         case 1:
             manual_mode_ = false;
             use_ai_for_control_ = false;
-            sync_msg.data = "auto";
             RCLCPP_INFO(get_logger(), "[MODE] AUTO (giữ nguyên new_tray_loaded — tray vẫn còn vật lý)");
             break;
         case 2:
             manual_mode_ = false;
             use_ai_for_control_ = true;
-            sync_msg.data = "ai";
-            RCLCPP_INFO(get_logger(), "[MODE] AI (giữ nguyên new_tray_loaded — tray vẫn còn vật lý)");
+            RCLCPP_INFO(get_logger(), "[MODE] AI camera (Cartridge System syncs as AUTO)");
             break;
         case 3:
             manual_mode_ = true;
             use_ai_for_control_ = false;
-            sync_msg.data = "manual";
             RCLCPP_INFO(get_logger(), "[MODE] MANUAL");
             {
                 std::lock_guard<std::mutex> lock(row_selection_mutex_);
@@ -1720,11 +1725,6 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
         default:
             RCLCPP_ERROR(get_logger(), "[MODE] Invalid: %d", msg->data);
             return;
-    }
-
-    if (cartridge_mode_pub_) {
-        cartridge_mode_pub_->publish(sync_msg);
-        RCLCPP_INFO(get_logger(), "[MODE] Synced to Cartridge System: %s", sync_msg.data.c_str());
     }
 
     notifyStateChange();

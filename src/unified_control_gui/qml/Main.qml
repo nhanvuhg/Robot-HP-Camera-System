@@ -15,7 +15,59 @@ ApplicationWindow {
 
     property bool scaleIssueWarning: false
 
+    signal synchronizedModeRequested(string mode)
+    signal synchronizedStartRequested(string mode)
     signal synchronizedStopRequested()
+
+    function cartridgeModeFor(mode) {
+        var m = (mode || "").toString().trim().toLowerCase()
+        if (m === "auto" || m === "ai" || m === "camera_ai")
+            return "auto"
+        if (m === "jog")
+            return "jog"
+        return "manual"
+    }
+
+    function robotModeFor(mode) {
+        var m = (mode || "").toString().trim().toLowerCase()
+        if (m === "camera_ai" || m === "ai")
+            return "ai"
+        if (m === "auto")
+            return "auto"
+        return "manual"
+    }
+
+    function cartridgeCommandModeFor(mode) {
+        var m = (mode || "").toString().trim().toLowerCase()
+        if (m === "camera_ai" || m === "ai")
+            return m
+        return cartridgeModeFor(m)
+    }
+
+    function syncOperationMode(mode) {
+        var cartridgeMode = cartridgeModeFor(mode)
+        var cartridgeCommandMode = cartridgeCommandModeFor(mode)
+        var robotMode = robotModeFor(mode)
+
+        synchronizedModeRequested(mode)
+        cartridgeController.setMode(cartridgeCommandMode)
+
+        if (robotMode === "ai")
+            robotController.setAiMode(true)
+        else if (robotMode === "auto")
+            robotController.setAutoMode(true)
+        else
+            robotController.setManualMode(true)
+
+        return cartridgeMode
+    }
+
+    function startSynchronizedSystems(mode) {
+        var cartridgeMode = syncOperationMode(mode)
+        hpController.publishMode(cartridgeMode === "auto" ? 0 : 2)
+        synchronizedStartRequested(mode)
+        robotController.startSystem(true)
+    }
 
     function stopSynchronizedSystems() {
         synchronizedStopRequested()

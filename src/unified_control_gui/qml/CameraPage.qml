@@ -97,20 +97,12 @@ Item {
 
         if (requestedUiMode === "camera_ai") {
             robotController.selectRow(0)
-            robotController.setAiMode(true)
-            hpController.publishMode(0)
-        } else if (requestedUiMode === "auto") {
-            robotController.setAutoMode(true)
-            hpController.publishMode(0)
-        } else if (requestedUiMode === "manual") {
-            robotController.setManualMode(true)
-            hpController.publishMode(2)
         }
 
         var lockControlMode = requestedUiMode === "auto" || requestedUiMode === "camera_ai"
         modeLocked = lockControlMode
         autoRowIndicatorsActive = lockControlMode
-        robotController.startSystem(true)
+        mainWindow.startSynchronizedSystems(requestedUiMode)
     }
 
     // Unlock row selection khi process idle/done
@@ -126,6 +118,22 @@ Item {
 
     Connections {
         target: mainWindow
+        function onSynchronizedModeRequested(mode) {
+            var m = (mode || "").toLowerCase()
+            if (m === "auto" || m === "camera_ai" || m === "manual")
+                cameraPageRoot.ctrlMode = m
+            else if (m === "ai")
+                cameraPageRoot.ctrlMode = "camera_ai"
+            else if (m === "jog")
+                cameraPageRoot.ctrlMode = "manual"
+        }
+        function onSynchronizedStartRequested(mode) {
+            var m = (mode || "").toLowerCase()
+            if (m === "auto" || m === "camera_ai" || m === "ai") {
+                cameraPageRoot.modeLocked = true
+                cameraPageRoot.autoRowIndicatorsActive = true
+            }
+        }
         function onSynchronizedStopRequested() {
             startModeConfirmTimer.stop()
             cameraPageRoot.pendingStartMode = ""
@@ -146,8 +154,10 @@ Item {
                 cameraPageRoot.dispatchStartAfterModeConfirmed()
             if (requestedUiMode === "camera_ai" && m === "auto") {
                 cameraPageRoot.ctrlMode = "camera_ai"
-            } else if (m === "auto" || m === "ai" || m === "camera_ai" || m === "manual") {
-                cameraPageRoot.ctrlMode = (m === "ai") ? "camera_ai" : m;
+            } else if (m === "auto" && cameraPageRoot.ctrlMode === "camera_ai") {
+                return
+            } else if (m === "auto" || m === "ai" || m === "camera_ai" || m === "manual" || m === "jog") {
+                cameraPageRoot.ctrlMode = (m === "ai") ? "camera_ai" : (m === "jog" ? "manual" : m);
             }
         }
     }
@@ -618,7 +628,10 @@ Item {
                                             shadowColor: "#66000000"
                                             enabled: !isLocked
                                             opacity: (!isSelected && isLocked) ? 0.35 : 1.0
-                                            onClicked: cameraPageRoot.ctrlMode = modelData.key
+                                            onClicked: {
+                                                cameraPageRoot.ctrlMode = modelData.key
+                                                mainWindow.syncOperationMode(modelData.key)
+                                            }
 
                                             background: Rectangle {
                                                 radius: height / 2
@@ -955,14 +968,14 @@ Item {
                                     return
                                 cameraPageRoot.startCommandLocked = true
                                 cameraPageRoot.pendingStartUiMode = cameraPageRoot.ctrlMode
-                                cameraPageRoot.pendingStartMode = cameraPageRoot.ctrlMode === "manual" ? "manual" : "auto"
+                                cameraPageRoot.pendingStartMode = mainWindow.cartridgeModeFor(cameraPageRoot.ctrlMode)
 
                                 var confirmedMode = (cartridgeController.currentMode || "").toLowerCase()
                                 if (confirmedMode === cameraPageRoot.pendingStartMode) {
                                     cameraPageRoot.dispatchStartAfterModeConfirmed()
                                 } else {
                                     startModeConfirmTimer.restart()
-                                    cartridgeController.setMode(cameraPageRoot.pendingStartMode)
+                                    mainWindow.syncOperationMode(cameraPageRoot.ctrlMode)
                                 }
                             } }
                         }

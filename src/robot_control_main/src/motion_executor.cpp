@@ -50,6 +50,7 @@
 #include "dobot_msgs_v3/srv/clear_error.hpp"
 #include "dobot_msgs_v3/srv/get_error_id.hpp"
 #include "dobot_msgs_v3/srv/pause.hpp"
+#include "dobot_msgs_v3/srv/continues.hpp"
 #include "dobot_msgs_v3/srv/emergency_stop.hpp"
 #include "dobot_msgs_v3/srv/stop_script.hpp"
 #include "dobot_msgs_v3/srv/reset_robot.hpp"
@@ -84,6 +85,7 @@ using SyncSrv = dobot_msgs_v3::srv::Sync;
 using ClearError = dobot_msgs_v3::srv::ClearError;
 using GetErrorID = dobot_msgs_v3::srv::GetErrorID;
 using Pause = dobot_msgs_v3::srv::Pause;
+using Continues = dobot_msgs_v3::srv::Continues;
 using EmergencyStop = dobot_msgs_v3::srv::EmergencyStop;
 using StopScript = dobot_msgs_v3::srv::StopScript;
 using ResetRobot = dobot_msgs_v3::srv::ResetRobot;
@@ -240,6 +242,7 @@ private:
     rclcpp::Client<SyncSrv>::SharedPtr sync_client_;
     rclcpp::Client<GetErrorID>::SharedPtr error_client_;
     rclcpp::Client<Pause>::SharedPtr pause_client_;
+    rclcpp::Client<Continues>::SharedPtr continue_client_;
     rclcpp::Client<EmergencyStop>::SharedPtr emergency_stop_client_;
     rclcpp::Client<StopScript>::SharedPtr stop_script_client_;
     rclcpp::Client<ResetRobot>::SharedPtr reset_robot_client_;
@@ -269,6 +272,7 @@ private:
         sync_client_ = create_client<SyncSrv>("/nova5/dobot_bringup/Sync", qos);
         error_client_ = create_client<GetErrorID>("/nova5/dobot_bringup/GetErrorID", qos);
         pause_client_ = create_client<Pause>("/nova5/dobot_bringup/Pause", qos);
+        continue_client_ = create_client<Continues>("/nova5/dobot_bringup/Continue", qos);
         emergency_stop_client_ = create_client<EmergencyStop>("/nova5/dobot_bringup/EmergencyStop", qos);
         stop_script_client_ = create_client<StopScript>("/nova5/dobot_bringup/StopScript", qos);
         reset_robot_client_ = create_client<ResetRobot>("/nova5/dobot_bringup/ResetRobot", qos);
@@ -357,6 +361,20 @@ private:
         
         RCLCPP_ERROR(get_logger(), "[SERVICE] %s timeout", service_name.c_str());
         return nullptr;
+    }
+
+    bool continueIfPaused(const std::string& context) {
+        if (!continue_client_ || !continue_client_->service_is_ready()) {
+            RCLCPP_WARN(get_logger(), "[%s] Continue service not ready", context.c_str());
+            return false;
+        }
+        auto req = std::make_shared<Continues::Request>();
+        auto res = callService<Continues>(continue_client_, req, "Continue");
+        if (!res) return false;
+        RCLCPP_WARN(get_logger(), "[%s] RobotMode=10 (PAUSED) — Continue result: %d",
+                    context.c_str(), res->res);
+        rclcpp::sleep_for(std::chrono::milliseconds(200));
+        return res->res == 0;
     }
 
     // ========================================================================
@@ -580,6 +598,7 @@ private:
         // before it officially starts trajectory execution.
         rclcpp::sleep_for(std::chrono::milliseconds(250));
 
+        bool continue_sent = false;
         const int max_attempts = 600; // 60 seconds max
         for (int i = 0; i < max_attempts; ++i) {
             // Thoát ngay nếu STOP/cancel — không chờ thêm
@@ -600,6 +619,10 @@ private:
                     if (mode == 5) {
                         RCLCPP_DEBUG(get_logger(), "[SYNC] Robot idle (mode=5) after %d polls - SUCCESS", i);
                         return true;
+                    } else if (mode == 10 && !continue_sent) {
+                        continue_sent = true;
+                        continueIfPaused("SYNC");
+                        continue;
                     } else if (mode != 7) {
                         RCLCPP_ERROR(get_logger(), "[SYNC] Motion INTERRUPTED! Mode=%d (not 7 or 5)", mode);
                         return false;
@@ -857,6 +880,8 @@ private:
                     std::this_thread::sleep_for(300ms);
                     
                     RCLCPP_INFO(get_logger(), "[ACTION] Robot re-enabled after error clear");
+                } else if (mode == 10) {
+                    continueIfPaused("ACTION");
                 }
                 // mode 5 = standby, mode 7 = running — không cần làm gì
             } catch (...) {
@@ -1021,7 +1046,7 @@ private:
         if (!moveToIndex(29)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, 70, 0,3)) return false;
+        if (!moveR(0, 90, 0,3)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(0.5)) return false;
         if (!moveR(1, -56, 0)) return false;
@@ -1067,7 +1092,7 @@ private:
     bool executeChamberScale() {
         RCLCPP_INFO(get_logger(), "[MOTION] Chamber → Scale");
         if (!moveToIndex(7)) return false;
-        if (!moveR(-2, 70.5, 0,5)) return false;
+        if (!moveR(-1, 90.5, 0,5)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại chamber
         if (!wait(0.2)) return false;
         if (!moveR(1, -70, 0,8)) return false;
@@ -1141,7 +1166,7 @@ private:
         if (!moveToIndex(35)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, 70, 0,3)) return false;
+        if (!moveR(0, 90, 0,3)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(0.5)) return false;
         if (!moveR(-1, -56, 0)) return false;

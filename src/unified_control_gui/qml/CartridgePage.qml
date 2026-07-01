@@ -208,6 +208,9 @@ import QtGraphicalEffects 1.15
 
         Connections {
             target: mainWindow
+            function onSynchronizedStartRequested(mode) {
+                root.startCommandLocked = true
+            }
             function onSynchronizedStopRequested() {
                 root.startCommandLocked = false
                 root.homingCommandLocked = false
@@ -969,8 +972,7 @@ import QtGraphicalEffects 1.15
                                             shadowEnabled: false
                                             shimmerEnabled: false
                                             onClicked: {
-                                                cartridgeController.setMode("auto")
-                                                hpController.publishMode(0)
+                                                mainWindow.syncOperationMode("auto")
                                             }
                                         }
                                         Column {
@@ -1013,8 +1015,7 @@ import QtGraphicalEffects 1.15
                                             shadowEnabled: false
                                             shimmerEnabled: false
                                             onClicked: {
-                                                cartridgeController.setMode("manual")
-                                                hpController.publishMode(2)
+                                                mainWindow.syncOperationMode("manual")
                                             }
                                         }
                                         Column {
@@ -1059,16 +1060,7 @@ import QtGraphicalEffects 1.15
                                             if (root.startCommandLocked)
                                                 return
                                             root.startCommandLocked = true
-                                            if (cartridgeController.currentMode === "auto") {
-                                                cartridgeController.setMode("auto")
-                                                robotController.setAutoMode(true)
-                                                hpController.publishMode(0)
-                                            } else if (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") {
-                                                cartridgeController.setMode("manual")
-                                                robotController.setManualMode(true)
-                                                hpController.publishMode(2)
-                                            }
-                                            cartridgeController.startSystem()
+                                            mainWindow.startSynchronizedSystems(cartridgeController.currentMode)
                                         } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; iconSource: "qrc:/qml/icons/step_forward.svg"; bg: root.cBtnActionStart; bgEnd: root.cBtnActionEnd; bc: root.cBtnActionBorder; tc: "#ffffff"; onClicked: cartridgeController.resumeSystem() }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP"; bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: { root.cancelHoming(); mainWindow.stopSynchronizedSystems() } }
@@ -1137,8 +1129,7 @@ import QtGraphicalEffects 1.15
                                             root.jogStopStateHint = false
                                             if (cartridgeController.currentMode === "jog") {
                                                 root.suppressJogEchoForManual = true
-                                                cartridgeController.setMode("manual")
-                                                hpController.publishMode(2)  // sync Fill HP → Manual
+                                                mainWindow.syncOperationMode("manual")
                                             } else {
                                                 cartridgeController.gotoState("ABORT_TO_JOG")
                                             }

@@ -494,8 +494,7 @@ class CartridgeSystem(Node):
         khởi động để đảm bảo sync mode dù robot subscribe trễ. Tự cancel timer
         sau lần thứ 3."""
         msg = Int32()
-        if self.operation_mode == 'auto': msg.data = 1
-        elif self.operation_mode == 'ai': msg.data = 2
+        if self.operation_mode in ('auto', 'ai'): msg.data = 1
         else: msg.data = 3
         self.pub_robot_mode.publish(msg)
         self._initial_mode_publish_count += 1
@@ -2454,17 +2453,24 @@ class CartridgeSystem(Node):
     def _cb_robot_mode(self, msg: Int32):
         """
         Đồng bộ mode từ robot node qua /robot/set_mode.
-        Mapping: 1=auto, 2=ai, 3=manual.
+        Mapping cartridge: robot AUTO/AI camera đều là AUTO; robot MANUAL là MANUAL.
         Khi mode thay đổi: xóa log guide để hiển thị message mới phù hợp mode mới.
-        Khi chuyển sang AUTO/AI: reset trigger flags (_input_tray_done, _s4_trigger)
+        Khi chuyển sang AUTO: reset trigger flags (_input_tray_done, _s4_trigger)
         để bắt buộc chu trình mới từ STATE1/STATE3, không kế thừa state cũ.
         """
-        mapping = {1: 'auto', 2: 'ai', 3: 'manual'}
+        mapping = {1: 'auto', 2: 'auto', 3: 'manual'}
         requested = mapping.get(msg.data, 'manual')
+
+        if requested == 'manual' and self.operation_mode == 'manual' and getattr(self, '_jog_mode', False):
+            self.get_logger().info("[SYNC MODE] Robot MANUAL received — giữ JOG sub-mode của cartridge")
+            self._sync_mode_jog()
+            return
+
         if requested != self.operation_mode:
             old = self.operation_mode
             self.get_logger().info(f"[SYNC MODE] Cập nhật mode từ Robot Node: {requested.upper()}")
             self.operation_mode = requested
+            self._jog_mode = False
             self._guide_logged.clear()
             self._sync_mode_jog()
             self._reset_auto_triggers_on_mode_enter(old, requested)
@@ -2500,10 +2506,12 @@ class CartridgeSystem(Node):
         Chỉ cho phép đổi mode khi hệ thống ở IDLE hoặc ERROR (không đang chạy STATE).
         Khi đổi mode: sync GUI và thông báo đến robot node.
         """
-        requested = msg.data.strip().lower()
-        if requested not in ('auto', 'manual', 'ai'):
-            self._notify('warn', f'Mode khong hop le: {requested}', '')
+        raw_requested = msg.data.strip().lower()
+        if raw_requested not in ('auto', 'manual', 'ai', 'camera_ai', 'jog'):
+            self._notify('warn', f'Mode khong hop le: {raw_requested}', '')
             return
+        requested = 'auto' if raw_requested in ('auto', 'ai', 'camera_ai') else 'manual'
+        jog_requested = (raw_requested == 'jog')
         active_states = {SystemState.IDLE, SystemState.ERROR,
                          SystemState.HOMING, SystemState.HOMING_RUNNING}
         if self.state not in active_states:
@@ -2513,12 +2521,14 @@ class CartridgeSystem(Node):
         old = self.operation_mode
         self.operation_mode = requested
 
-        # User explicitly chọn 'manual' từ mode selector = ý định thoát JOG sub-state.
-        # Clear _jog_mode kể cả khi mode không đổi (old == 'manual' với _jog_mode=True
-        # do _s1_abort/_cb_stop set). Sau lệnh này GUI sẽ hiện "manual" không còn "jog".
-        if requested == 'manual' and getattr(self, '_jog_mode', False):
+        if jog_requested:
+            self._jog_mode = True
+            self.get_logger().info("[MODE] User chọn JOG — cartridge MANUAL/JOG, robot MANUAL")
+        elif requested == 'manual' and getattr(self, '_jog_mode', False):
             self._jog_mode = False
             self.get_logger().info("[MODE] User chọn MANUAL — thoát JOG sub-state")
+        elif requested != 'manual':
+            self._jog_mode = False
 
         # LUÔN echo current_mode về GUI sau mỗi lệnh chọn mode hợp lệ — kể cả khi
         # mode KHÔNG đổi. GUI mặc định current_mode='idle' còn backend default
@@ -2527,14 +2537,14 @@ class CartridgeSystem(Node):
         # kiện sửa đúng việc này; _sync_mode_jog idempotent nên an toàn gọi mọi lần.
         self._sync_mode_jog()
 
-        if old != requested:
+        if old != requested or jog_requested:
             self._guide_logged.clear()
 
             # Sync to robot node
             robot_msg = Int32()
-            if requested == 'auto': robot_msg.data = 1
-            elif requested == 'ai': robot_msg.data = 2
-            elif requested == 'manual': robot_msg.data = 3
+            if raw_requested in ('ai', 'camera_ai'): robot_msg.data = 2
+            elif requested == 'auto': robot_msg.data = 1
+            else: robot_msg.data = 3
             self.pub_robot_mode.publish(robot_msg)
 
             self._reset_auto_triggers_on_mode_enter(old, requested)
@@ -2955,7 +2965,7 @@ class CartridgeSystem(Node):
         Dừng tất cả servo, reset mọi cờ state, bật JOG sẵn sàng.
         KHÔNG retract Cyl1/Cyl2 — giữ nguyên valve state trên CPX
         (tránh thả khay đang kẹp; operator can thiệp thủ công).
-        Khác với _cb_stop: không chuyển sang MANUAL mode vĩnh viễn.
+        Sau abort chuyển sang MANUAL/JOG để đồng bộ với robot manual và cho phép jog tay.
         """
         self._pub_cartridge_busy(False)
         self._pub_cartridge_pos2_busy(False)
@@ -2964,7 +2974,11 @@ class CartridgeSystem(Node):
         self.get_logger().error(f"S1 ABORT: {reason}")
         self._notify('error', 'Hủy State', reason)
         self._stop(1); self._stop(2); self._stop(3); self._stop(4); self._stop(5)
+        self.operation_mode = 'manual'
         self._jog_mode = True
+        robot_msg = Int32()
+        robot_msg.data = 3
+        self.pub_robot_mode.publish(robot_msg)
         self._state1_enabled = False
         self._s5_retry = 0; self._s1_retry_count = 0; self._cmd_sent_in = False
         self._input_tray_done = False
