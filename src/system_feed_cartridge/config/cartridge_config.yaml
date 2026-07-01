@@ -1,11 +1,11 @@
 servo_ips:
-  1: 192.168.27.248
-  2: 192.168.27.249
-  3: 192.168.27.250
-  4: 192.168.27.251
-  5: 192.168.27.252
-io_ip: 192.168.27.253
-io_ip_2: 192.168.27.254
+  1: 172.16.11.35
+  2: 172.16.11.36
+  3: 172.16.11.38
+  4: 172.16.11.39
+  5: 172.16.11.40
+io_ip: 172.16.11.37
+io_ip_2: 172.16.11.41
 cylinder1_extend_channel: 4
 cylinder1_retract_channel: 5
 cylinder2_extend_channel: 0
@@ -90,43 +90,43 @@ iny_input_zones:
 iny_output_zones:
   1:
   - 1010.0
-  - 950.0
+  - 945.0
   - 1015.0
   2:
   - 920.0
-  - 890.0
+  - 885.0
   - 925.0
   3:
   - 830.0
-  - 800.0
+  - 795.0
   - 835.0
   4:
   - 740.0
-  - 710.0
+  - 705.0
   - 745.0
   5:
   - 650.0
-  - 620.0
+  - 615.0
   - 655.0
   6:
   - 560.0
-  - 530.0
+  - 525.0
   - 565.0
   7:
   - 470.0
-  - 440.0
+  - 435.0
   - 475.0
   8:
   - 380.0
-  - 350.0
+  - 345.0
   - 385.0
   9:
   - 290.0
-  - 260.0
+  - 255.0
   - 295.0
   10:
   - 200.0
-  - 170.0
+  - 165.0
   - 205.0
 outy_output_zones:
   1:
@@ -204,7 +204,7 @@ sensors:
 - id: 1
   name: S1_BELT_START
   gui_label: Belt start
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I1.0
   desc: phát hiện khay ở đầu băng tải đầu vào
   pos: pos1
@@ -215,7 +215,7 @@ sensors:
 - id: 2
   name: S2_BELT_MID
   gui_label: Belt mid
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I1.1
   desc: phát hiện khay đang di chuyển
   pos: pos1
@@ -226,7 +226,7 @@ sensors:
 - id: 3
   name: S3_BELT_END
   gui_label: Belt end
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I1.2
   desc: xác nhận khay đã tới cuối băng tải
   pos: pos1
@@ -237,7 +237,7 @@ sensors:
 - id: 4
   name: S4_SCAN_STACK_POS1
   gui_label: Scan Stack Pos1
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I1.3
   desc: phát hiện chồng khay kim loại
   pos: pos1
@@ -248,7 +248,7 @@ sensors:
 - id: 5
   name: S5_OUTPUT_DETECT
   gui_label: Output det.
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I1.4
   desc: xác nhận khay vào vị trí nạp
   pos: pos1
@@ -259,7 +259,7 @@ sensors:
 - id: 6
   name: S6_CHECK_TRAY_P1
   gui_label: Check Tray OutP1
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I1.5
   desc: snapshot có khay
   pos: pos1
@@ -270,7 +270,7 @@ sensors:
 - id: 7
   name: S7_TRAY_AT_ROBOT
   gui_label: Khay tại Robot
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I1.6
   desc: xác nhận khay đã lên vị trí robot
   pos: pos1
@@ -281,7 +281,7 @@ sensors:
 - id: 8
   name: S8_RESERVED
   gui_label: '[Reserved]'
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I1.7
   desc: chưa sử dụng
   pos: pos1
@@ -291,7 +291,7 @@ sensors:
 - id: 9
   name: S9_CYL1_RETRACTED
   gui_label: Cyl1 Ret
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I2.0
   desc: Cylinder 1 đã co lại hoàn toàn
   pos: pos1
@@ -301,7 +301,7 @@ sensors:
 - id: 10
   name: S10_CYL1_EXTENDED
   gui_label: Cyl1 Ext
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I2.1
   desc: Cylinder 1 đã đẩy ra hoàn toàn
   pos: pos1
@@ -311,7 +311,7 @@ sensors:
 - id: 11
   name: S11_ATV_RUN
   gui_label: ATV Run
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I2.2
   desc: Đọc trạng thái ATV Run
   pos: vfd
@@ -321,7 +321,7 @@ sensors:
 - id: 12
   name: S12_ATV_FAULT
   gui_label: ATV Fault
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I2.3
   desc: Đọc trạng thái ATV Fault
   pos: vfd
@@ -331,7 +331,7 @@ sensors:
 - id: 13
   name: S13_OUT1_TRAYPOS1
   gui_label: OUT1 Tray Pos1
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I2.4
   desc: Công tắc hành trình OUT1 tại Tray Pos 1 (Omron D4C-1201, pin plunger, 1NO+1NC
     SPDT, wired NO)
@@ -342,7 +342,7 @@ sensors:
 - id: 14
   name: S14_OUT2_TRAYPOS1
   gui_label: OUT2 Tray Pos1
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I2.5
   desc: Công tắc hành trình OUT2 tại Tray Pos 1 (Omron D4C-1201, pin plunger, 1NO+1NC
     SPDT, wired NO)
@@ -353,7 +353,7 @@ sensors:
 - id: 15
   name: S15_CYL3_RETRACTED
   gui_label: Cyl3 Retracted
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I2.6
   desc: Feedback xác nhận Cyl3 đã rút về
   pos: pos1
@@ -363,7 +363,7 @@ sensors:
 - id: 16
   name: S16_CYL3_EXTENDED
   gui_label: Cyl3 Extended
-  cpx_ip: 192.168.27.253
+  cpx_ip: 172.16.11.37
   cpx_channel: I2.7
   desc: Feedback xác nhận Cyl3 đã đẩy ra
   pos: pos1
@@ -373,7 +373,7 @@ sensors:
 - id: 17
   name: S17_PLATFORM
   gui_label: Platform
-  cpx_ip: 192.168.27.254
+  cpx_ip: 172.16.11.41
   cpx_channel: I3.0
   desc: khay đã lên Platform
   pos: pos2
@@ -383,7 +383,7 @@ sensors:
 - id: 18
   name: S18_FEED_OK
   gui_label: Feed OK
-  cpx_ip: 192.168.27.254
+  cpx_ip: 172.16.11.41
   cpx_channel: I3.1
   desc: xác nhận cấp khay
   pos: pos2
@@ -393,7 +393,7 @@ sensors:
 - id: 19
   name: S19_CHECK_TRAY_P2
   gui_label: Check Tray OutP2
-  cpx_ip: 192.168.27.254
+  cpx_ip: 172.16.11.41
   cpx_channel: I3.2
   desc: xác nhận có khay
   pos: pos2
@@ -403,7 +403,7 @@ sensors:
 - id: 20
   name: S20_SCAN_STACK_POS2
   gui_label: Scan Stack Pos2
-  cpx_ip: 192.168.27.254
+  cpx_ip: 172.16.11.41
   cpx_channel: I3.3
   desc: OutY phát hiện cạnh
   pos: pos2
@@ -413,7 +413,7 @@ sensors:
 - id: 21
   name: S21_CYL2_RETRACTED
   gui_label: Cyl2 Ret
-  cpx_ip: 192.168.27.254
+  cpx_ip: 172.16.11.41
   cpx_channel: I3.4
   desc: Cylinder 2 co lại
   pos: pos2
@@ -423,7 +423,7 @@ sensors:
 - id: 22
   name: S22_CYL2_EXTENDED
   gui_label: Cyl2 Ext
-  cpx_ip: 192.168.27.254
+  cpx_ip: 172.16.11.41
   cpx_channel: I3.5
   desc: Cylinder 2 đẩy ra
   pos: pos2
@@ -433,7 +433,7 @@ sensors:
 - id: 25
   name: S25_CYL4_RETRACTED
   gui_label: Cyl4 Ret
-  cpx_ip: 192.168.27.254
+  cpx_ip: 172.16.11.41
   cpx_channel: I4.0
   desc: Feedback xác nhận Cylinder 4 đã co lại
   pos: pos2
@@ -444,7 +444,7 @@ sensors:
 - id: 26
   name: S26_CYL4_EXTENDED
   gui_label: Cyl4 Ext
-  cpx_ip: 192.168.27.254
+  cpx_ip: 172.16.11.41
   cpx_channel: I4.1
   desc: Feedback xác nhận Cylinder 4 đã đẩy ra giữ khay trên platform
   pos: pos2
@@ -455,7 +455,7 @@ sensors:
 - id: 27
   name: S27_CYL5_RETRACTED
   gui_label: Cyl5 Ret
-  cpx_ip: 192.168.27.254
+  cpx_ip: 172.16.11.41
   cpx_channel: I4.2
   desc: Feedback xác nhận Cylinder 5 đã co lại
   pos: pos2
@@ -466,7 +466,7 @@ sensors:
 - id: 28
   name: S28_CYL5_EXTENDED
   gui_label: Cyl5 Ext
-  cpx_ip: 192.168.27.254
+  cpx_ip: 172.16.11.41
   cpx_channel: I4.3
   desc: Feedback xác nhận Cylinder 5 đã đẩy ra khi S19 phát hiện khay
   pos: pos2

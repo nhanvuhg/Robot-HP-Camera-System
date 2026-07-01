@@ -20,7 +20,7 @@ export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
 # Lưu ý: fastdds_peers.xml là XML static, FastDDS không support env-var trong
 # <address>, nên updater sẽ sửa các locator tương ứng. Sanity check:
 #   bash scripts/check_revpi_ip_sync.sh
-export REVPI_A_HOST="192.168.27.197"
+export REVPI_A_HOST="172.16.11.31"
 
 # Cross-host discovery: unicast peers (xem fastdds_peers.xml). Cùng file
 # này được dùng trên cả Pi 5 (path tuyệt đối) và RevPi A (path tuyệt đối

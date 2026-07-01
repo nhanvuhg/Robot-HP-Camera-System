@@ -286,7 +286,7 @@ class GUIHandler(http.server.BaseHTTPRequestHandler):
 # IP RevPi A — đọc từ env-var REVPI_A_HOST (set trong ros2_env.sh, single
 # source of truth). Iframe loadcell web GUI dùng placeholder __REVPI_A_HOST__
 # trong HTML, được thay tại _html() trước khi serve.
-REVPI_A_HOST = os.environ.get("REVPI_A_HOST", "192.168.27.197")
+REVPI_A_HOST = os.environ.get("REVPI_A_HOST", "172.16.11.31")
 
 HTML = r"""<!DOCTYPE html>
 <html lang="vi">

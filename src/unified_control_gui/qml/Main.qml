@@ -23,6 +23,12 @@ ApplicationWindow {
         cartridgeController.stopSystem()
     }
 
+    function emergencyStopSynchronizedSystems() {
+        synchronizedStopRequested()
+        robotController.emergencyStop(true)
+        cartridgeController.stopSystem()
+    }
+
     Shortcut {
         sequence: "F11"
         onActivated: {
@@ -106,13 +112,6 @@ ApplicationWindow {
             radius: 10
         }
 
-        Timer {
-            id: resumeStopHomingTimer
-            interval: 500
-            repeat: false
-            onTriggered: cartridgeController.gotoState("HOMING")
-        }
-
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 22
@@ -173,7 +172,7 @@ ApplicationWindow {
             MotionButton {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: 516; Layout.preferredHeight: 52
-                text: "⏹  STOP & HOME  —  Dừng hệ thống và đưa robot về Home"
+                text: "⏹  STOP  —  Dừng hệ thống và giữ nguyên vị trí hiện tại"
                 font.pixelSize: 15; font.bold: true
                 background: Rectangle { color: "#3a1614"; border.color: "#f0735c"; border.width: 2; radius: 6 }
                 contentItem: Text {
@@ -184,7 +183,6 @@ ApplicationWindow {
                 }
                 onClicked: {
                     mainWindow.stopSynchronizedSystems()
-                    resumeStopHomingTimer.start()
                     resumeChoicePopup.close()
                 }
             }
@@ -284,13 +282,6 @@ ApplicationWindow {
             radius: 10
         }
 
-        Timer {
-            id: scaleStopHomingTimer
-            interval: 500
-            repeat: false
-            onTriggered: cartridgeController.gotoState("HOMING")
-        }
-
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 22
@@ -373,7 +364,7 @@ ApplicationWindow {
             MotionButton {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: 612; Layout.preferredHeight: 52
-                text: "⏹  STOP & HOME  —  Dừng hệ thống và đưa robot về Home"
+                text: "⏹  STOP  —  Dừng hệ thống và giữ nguyên vị trí hiện tại"
                 font.pixelSize: 15; font.bold: true
                 background: Rectangle { color: "#160a09"; border.color: "#f0735c"; border.width: 2; radius: 6 }
                 contentItem: Text {
@@ -385,7 +376,6 @@ ApplicationWindow {
                 onClicked: {
                     mainWindow.stopSynchronizedSystems()
                     mainWindow.scaleIssueWarning = true
-                    scaleStopHomingTimer.start()
                     scaleChoicePopup.close()
                 }
             }

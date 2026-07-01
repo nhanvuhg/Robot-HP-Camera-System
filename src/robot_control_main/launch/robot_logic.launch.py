@@ -14,7 +14,7 @@ from launch_ros.actions import Node
 # by dual_camera_system.launch.py alongside the camera pipeline.
 # ──────────────────────────────────────────────────────────────────────
 
-ROBOT_IP_DEFAULT = '192.168.27.8'
+ROBOT_IP_DEFAULT = '172.16.11.34'
 
 
 def generate_launch_description():

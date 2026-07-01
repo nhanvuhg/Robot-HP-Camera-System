@@ -199,8 +199,8 @@ GHI CHÚ:
 ### **Vấn đề: Servo không kết nối**
 ```bash
 # Kiểm tra kết nối mạng
-ping 192.168.27.247  # InX
-ping 192.168.27.248  # InY
+ping 172.16.11.35  # InX
+ping 172.16.11.36  # InY
 ```
 
 ### **Vấn đề: Vị trí không chính xác**

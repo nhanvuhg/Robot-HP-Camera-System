@@ -6,18 +6,18 @@ Cartridge Loading System — ROS 2 + festo-edcon
 HARDWARE INSTALL STATUS (đọc trước khi sửa code)
 ═══════════════════════════════════════════════════════════════════════════════
 Cụm Pos1 (đã lắp, production):
-  • Servo S1=InX (192.168.27.248), S2=InY (192.168.27.249)
-  • CPX 253 (192.168.27.253) — sensor S1-S16, valve Cyl1/Cyl3
+  • Servo S1=InX (172.16.11.35), S2=InY (172.16.11.36)
+  • CPX 37 (172.16.11.37) — sensor S1-S16, valve Cyl1/Cyl3
   • Cyl3 piston + sensor S13-S16
   → STATE 1, STATE 2A chạy đầy đủ với interlock Cyl3.
 
 Cụm Pos2 (đã lắp):
-  • Servo S3=Servo3/Platform (192.168.27.250)
-  • Servo S4=OutX (192.168.27.251), S5=OutY (192.168.27.252)
-  • CPX 254 (192.168.27.254) — sensor S17-S28, valve Cyl2/Cyl4/Cyl5
+  • Servo S3=Servo3/Platform (172.16.11.38)
+  • Servo S4=OutX (172.16.11.39), S5=OutY (172.16.11.40)
+  • CPX 41 (172.16.11.41) — sensor S17-S28, valve Cyl2/Cyl4/Cyl5
   → STATE 3, STATE 4 được enable qua flag `output_stack_present: true`.
 
-→ Khi user nói "đã lắp servo 3/4/5" / "đã lắp CPX 254" / "đã lắp xong cụm
+→ Khi user nói "đã lắp servo 3/4/5" / "đã lắp CPX 41" / "đã lắp xong cụm
   Pos2/output" → đổi YAML `output_stack_present: false → true` và restart.
   Không cần sửa code. Các check `_can_start_s3/s4`, manual STATE3/4 button,
   `_s2a_cyl3_extend` sẽ tự active khi flag=true.
@@ -563,7 +563,7 @@ class CartridgeSystem(Node):
                 target=self._connect_io, args=(1, self.config.io_ip),
                 daemon=True, name="connect_io1",
             ).start()
-            io2_ip = getattr(self.config, 'io_ip_2', "192.168.27.254")
+            io2_ip = getattr(self.config, 'io_ip_2', "172.16.11.41")
             threading.Thread(
                 target=self._connect_io, args=(2, io2_ip),
                 daemon=True, name="connect_io2",
@@ -956,7 +956,7 @@ class CartridgeSystem(Node):
         """Reconnect IO Module 2 sau 5s delay."""
         time.sleep(5.0)
         try:
-            self.io_module_2 = CpxAp(ip_address=getattr(self.config, 'io_ip_2', "192.168.27.254"), cycle_time=None)
+            self.io_module_2 = CpxAp(ip_address=getattr(self.config, 'io_ip_2', "172.16.11.41"), cycle_time=None)
         except Exception: pass
 
     # ── Sensor read ───────────────────────────────────────────────
@@ -1260,7 +1260,7 @@ class CartridgeSystem(Node):
 
     def _set_do_2(self, channel: int, state: bool) -> bool:
         """
-        Ghi digital output lên IO Module 2 (CPX 192.168.27.254).
+        Ghi digital output lên IO Module 2 (CPX 172.16.11.41).
         Mapping van: Cyl2=0/1, Cyl4=2/3, Cyl5=4/5 (EXTEND/RETRACT).
         """
         if not self.io_module_2:
@@ -1318,7 +1318,7 @@ class CartridgeSystem(Node):
     def _cyl2_extend(self) -> bool:
         """
         Đẩy xi lanh 2 ra (EXTEND) — dùng trong STATE 4 để giữ khay output.
-        Cylinder 2 đã chuyển sang IO Module 2 (CPX 192.168.27.254).
+        Cylinder 2 đã chuyển sang IO Module 2 (CPX 172.16.11.41).
         Sensor feedback: S21=retracted, S22=extended.
         Channel mặc định: extend=0, retract=1.
         """
@@ -2343,7 +2343,7 @@ class CartridgeSystem(Node):
 
     def _cb_cyl_loadcell_cmd(self, msg: Bool):
         """
-        Điều khiển cyl6/loadcell trên CPX 192.168.27.253, channel 8/9:
+        Điều khiển cyl6/loadcell trên CPX 172.16.11.37, channel 8/9:
           msg.data=True  → Kẹp/extend  (reset ch8, set ch9)
           msg.data=False → Nhả/retract (reset ch9, set ch8)
 

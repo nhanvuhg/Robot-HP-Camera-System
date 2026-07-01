@@ -5,7 +5,7 @@ Festo Gripper Controller Node
 - Controls Festo CPX-AP gripper valve via CPX IO module
 - No 'rich' dependency required
 
-Channel map (CPX-AP module index 3 @ 192.168.27.253):
+Channel map (CPX-AP module index 3 @ 172.16.11.37):
   ch0/ch1 = Gripper (open/close)
   ch2/ch3 = Picker  (open/close)
   ch8/ch9 = Cyl_loadcell    (ch8 = NHẢ/release coil, ch9 = KẸP/clamp coil)
@@ -34,7 +34,7 @@ class FestoGripperNode(Node):
         super().__init__('festo_gripper_controller')
         
         # Get CPX IP from parameters (default: Festo gripper IP)
-        self.declare_parameter('cpx_ip', '192.168.27.253')
+        self.declare_parameter('cpx_ip', '172.16.11.37')
         self.cpx_ip = self.get_parameter('cpx_ip').value
         
         # Get module index (default: module 3 for VABX valve terminal)

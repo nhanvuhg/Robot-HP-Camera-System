@@ -2689,7 +2689,7 @@ import QtGraphicalEffects 1.15
                                             w: parent.width; h: 50
                                             fontSize: 14
                                             bg: root.cBtnEmergencyStart; bgEnd: root.cBtnEmergencyEnd; bc: root.cBtnEmergencyBorder; tc: "#ffffff"
-                                            onClicked: { robotController.emergencyStop(true); cartridgeController.stopSystem() }
+                                            onClicked: mainWindow.emergencyStopSynchronizedSystems()
                                         }
                                     }
                                 }

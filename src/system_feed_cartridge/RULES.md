@@ -433,8 +433,8 @@ Thay đổi BẮT BUỘC phải tag `rule-change: state1-2` + test 5 chu kỳ:
 
 ### WHY
 2 IO module Festo CPX-AP nằm trên cùng subnet nhưng phục vụ 2 cụm thiết bị khác nhau:
-- **CPX 253** (192.168.27.253) — sensor S1-S16, valve Cyl1/Cyl2/Cyl3, gripper, picker. Phục vụ **Pos1 = STATE 1/2**.
-- **CPX 254** (192.168.27.254) — sensor S17-S22 (Platform, FeedOk, OutP2, Cyl2_output). Phục vụ **Pos2 = STATE 3/4**.
+- **CPX 253** (172.16.11.37) — sensor S1-S16, valve Cyl1/Cyl2/Cyl3, gripper, picker. Phục vụ **Pos1 = STATE 1/2**.
+- **CPX 254** (172.16.11.41) — sensor S17-S22 (Platform, FeedOk, OutP2, Cyl2_output). Phục vụ **Pos2 = STATE 3/4**.
 
 Lắp đặt thực tế tuần tự: Pos1 chạy production trước, Pos2 lắp sau. Một module fail/offline KHÔNG được kéo theo module kia.
 

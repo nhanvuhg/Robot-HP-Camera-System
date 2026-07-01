@@ -1513,8 +1513,8 @@ void RobotLogicNode::emergencyStopCallback(
             RCLCPP_WARN(get_logger(), "[E-STOP] Dobot Pause service not ready");
         }
 
-        emergency_stop_ = false;
-        system_enabled_ = true;
+        emergency_stop_ = true;
+        system_enabled_ = false;
         system_paused_  = false;
         pause_requested_ = false;
         system_running_ = false;
@@ -1538,28 +1538,25 @@ void RobotLogicNode::emergencyStopCallback(
             RCLCPP_WARN(get_logger(), "[E-STOP] Cancelled all in-flight motion goals");
         }
 
-        auto resetReq = std::make_shared<ResetRobot::Request>();
-        reset_robot_client_->async_send_request(resetReq,
-            [this](rclcpp::Client<ResetRobot>::SharedFuture /*f*/) {
-                RCLCPP_WARN(get_logger(), "[E-STOP] Robot reset requested; staying enabled for MANUAL control");
-
-                auto clearReq = std::make_shared<ClearError::Request>();
-                clear_error_client_->async_send_request(clearReq,
-                    [this](rclcpp::Client<ClearError>::SharedFuture /*cf*/) {
-                        auto enableReq = std::make_shared<EnableRobot::Request>();
-                        enableReq->load = 0.0;
-                        enable_client_->async_send_request(enableReq,
-                            [this](rclcpp::Client<EnableRobot>::SharedFuture /*ef*/) {
-                                RCLCPP_WARN(get_logger(), "[E-STOP] Robot re-enabled for MANUAL control");
-                            });
-                    });
-            });
+        if (disable_robot_client_ && disable_robot_client_->service_is_ready()) {
+            auto disable_req = std::make_shared<DisableRobot::Request>();
+            disable_robot_client_->async_send_request(disable_req,
+                [this](rclcpp::Client<DisableRobot>::SharedFuture f) {
+                    try {
+                        RCLCPP_WARN(get_logger(), "[E-STOP] Dobot DisableRobot result: %d", f.get()->res);
+                    } catch (...) {
+                        RCLCPP_WARN(get_logger(), "[E-STOP] Dobot DisableRobot failed");
+                    }
+                });
+        } else {
+            RCLCPP_WARN(get_logger(), "[E-STOP] Dobot DisableRobot service not ready");
+        }
 
         publishError("EMERGENCY STOP");
         notifyStateChange();
 
         response->success = true;
-        response->message = "EMERGENCY STOP — motion stopped, mode=MANUAL";
+        response->message = "EMERGENCY STOP — disabled, clear error + enable required";
     } else {
         emergency_stop_ = false;
         response->success = true;

@@ -451,8 +451,8 @@ void RobotController::stopAndResetRobot()
     qDebug() << "  -> Snapshot gripper=" << snapshot_gripper
              << ", picker=" << snapshot_picker;
 
-    // Normal STOP must halt motion but leave Dobot recoverable by EnableRobot.
-    // EmergencyStop() is intentionally reserved for the Emergency Stop path.
+    // Normal STOP halts motion, clears the queued command, and leaves Dobot
+    // disabled until the operator explicitly presses ENABLE.
     auto stopScriptReq = std::make_shared<dobot_msgs_v3::srv::StopScript::Request>();
     if (dobot_stop_script_client_ && dobot_stop_script_client_->service_is_ready()) {
         qDebug() << "  -> StopScript (abort script)";
@@ -487,8 +487,9 @@ void RobotController::stopAndResetRobot()
         emergency_stop_client_->async_send_request(estopReq);
     }
 
-    // Step 3: Recover Dobot in order after Pause has had time to latch:
-    // ResetRobot -> ClearError -> EnableRobot direct -> backend enable flag.
+    // Step 3: Clear the current motion command, then hold disabled until the
+    // operator explicitly presses ENABLE. Do not ClearError/Enable/Continue
+    // here, otherwise a paused MovL/ServoP can resume toward the old target.
     QTimer::singleShot(300, this, [this, snapshot_gripper, snapshot_picker]() {
         auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
         if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
@@ -496,48 +497,34 @@ void RobotController::stopAndResetRobot()
                 [this, snapshot_gripper, snapshot_picker](rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedFuture f) {
                     try { qDebug() << "ResetRobot:" << f.get()->res; } catch (...) {}
                     QMetaObject::invokeMethod(this, [this, snapshot_gripper, snapshot_picker]() {
-                        QTimer::singleShot(300, this, [this, snapshot_gripper, snapshot_picker]() {
-                            auto clearReq = std::make_shared<dobot_msgs_v3::srv::ClearError::Request>();
-                            if (!clear_error_client_ || !clear_error_client_->service_is_ready()) {
-                                qWarning() << "ClearError service not ready after STOP";
-                                return;
+                        QTimer::singleShot(150, this, [this, snapshot_gripper, snapshot_picker]() {
+                            if (disable_robot_client_ && disable_robot_client_->service_is_ready()) {
+                                auto disableReq = std::make_shared<dobot_msgs_v3::srv::DisableRobot::Request>();
+                                disable_robot_client_->async_send_request(disableReq,
+                                    [](rclcpp::Client<dobot_msgs_v3::srv::DisableRobot>::SharedFuture df) {
+                                        try { qDebug() << "DisableRobot after STOP:" << df.get()->res; } catch (...) {}
+                                    });
+                            } else {
+                                qWarning() << "DisableRobot service not ready after STOP";
                             }
-                            clear_error_client_->async_send_request(clearReq,
-                                [this, snapshot_gripper, snapshot_picker](rclcpp::Client<dobot_msgs_v3::srv::ClearError>::SharedFuture cf) {
-                                    try { qDebug() << "ClearError:" << cf.get()->res; } catch (...) {}
-                                    QMetaObject::invokeMethod(this, [this, snapshot_gripper, snapshot_picker]() {
-                                        QTimer::singleShot(300, this, [this, snapshot_gripper, snapshot_picker]() {
-                                            auto enableReq = std::make_shared<dobot_msgs_v3::srv::EnableRobot::Request>();
-                                            enableReq->load = 0.0;
-                                            if (dobot_enable_robot_client_ && dobot_enable_robot_client_->service_is_ready()) {
-                                                dobot_enable_robot_client_->async_send_request(enableReq,
-                                                    [this](rclcpp::Client<dobot_msgs_v3::srv::EnableRobot>::SharedFuture ef) {
-                                                        try { qDebug() << "EnableRobot:" << ef.get()->res; } catch (...) {}
-                                                    });
-                                            } else {
-                                                qWarning() << "EnableRobot service not ready after STOP";
-                                            }
 
-                                            callServiceAsync(enable_client_, true);
-                                            qDebug() << "Robot re-enabled — ready for new commands";
+                            callServiceAsync(enable_client_, false);
+                            qDebug() << "Robot stopped and disabled — press ENABLE to move again";
 
-                                            QTimer::singleShot(200, this, [this, snapshot_gripper, snapshot_picker]() {
-                                                if (gripper_cmd_pub_) {
-                                                    auto gMsg = std_msgs::msg::Bool();
-                                                    gMsg.data = snapshot_gripper;
-                                                    gripper_cmd_pub_->publish(gMsg);
-                                                }
-                                                if (picker_cmd_pub_) {
-                                                    auto pMsg = std_msgs::msg::Bool();
-                                                    pMsg.data = snapshot_picker;
-                                                    picker_cmd_pub_->publish(pMsg);
-                                                }
-                                                qDebug() << "  -> Restored gripper=" << snapshot_gripper
-                                                         << ", picker=" << snapshot_picker;
-                                            });
-                                        });
-                                    }, Qt::QueuedConnection);
-                                });
+                            QTimer::singleShot(200, this, [this, snapshot_gripper, snapshot_picker]() {
+                                if (gripper_cmd_pub_) {
+                                    auto gMsg = std_msgs::msg::Bool();
+                                    gMsg.data = snapshot_gripper;
+                                    gripper_cmd_pub_->publish(gMsg);
+                                }
+                                if (picker_cmd_pub_) {
+                                    auto pMsg = std_msgs::msg::Bool();
+                                    pMsg.data = snapshot_picker;
+                                    picker_cmd_pub_->publish(pMsg);
+                                }
+                                qDebug() << "  -> Restored gripper=" << snapshot_gripper
+                                         << ", picker=" << snapshot_picker;
+                            });
                         });
                     }, Qt::QueuedConnection);
                 });
@@ -597,7 +584,45 @@ void RobotController::emergencyStop(bool stop)
 {
     qDebug() << "Emergency stop:" << stop;
     if (stop) {
-        stopAndResetRobot();
+        stopManualJogMotion();
+
+        if (set_mode_pub_) {
+            auto modeMsg = std_msgs::msg::Int32();
+            modeMsg.data = 3; // 3 = MANUAL
+            set_mode_pub_->publish(modeMsg);
+        }
+
+        if (dobot_emergency_stop_client_ && dobot_emergency_stop_client_->service_is_ready()) {
+            auto estopReq = std::make_shared<dobot_msgs_v3::srv::EmergencyStop::Request>();
+            dobot_emergency_stop_client_->async_send_request(estopReq,
+                [](rclcpp::Client<dobot_msgs_v3::srv::EmergencyStop>::SharedFuture ef) {
+                    try { qDebug() << "Dobot EmergencyStop:" << ef.get()->res; } catch (...) {}
+                });
+        } else {
+            qWarning() << "Dobot EmergencyStop service not ready";
+        }
+
+        if (dobot_stop_script_client_ && dobot_stop_script_client_->service_is_ready()) {
+            auto stopScriptReq = std::make_shared<dobot_msgs_v3::srv::StopScript::Request>();
+            dobot_stop_script_client_->async_send_request(stopScriptReq);
+        }
+
+        if (pause_client_ && pause_client_->service_is_ready()) {
+            auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
+            pause_client_->async_send_request(pauseReq);
+        }
+
+        if (disable_robot_client_ && disable_robot_client_->service_is_ready()) {
+            auto disableReq = std::make_shared<dobot_msgs_v3::srv::DisableRobot::Request>();
+            disable_robot_client_->async_send_request(disableReq,
+                [](rclcpp::Client<dobot_msgs_v3::srv::DisableRobot>::SharedFuture df) {
+                    try { qDebug() << "DisableRobot after E-STOP:" << df.get()->res; } catch (...) {}
+                });
+        } else {
+            qWarning() << "DisableRobot service not ready after E-STOP";
+        }
+
+        callServiceAsync(enable_client_, false);
     }
     callServiceAsync(emergency_stop_client_, stop);
 }

@@ -87,7 +87,7 @@ public:
 public slots:
     // System control
     void enableSystem(bool enable);
-    void stopAndResetRobot();  // ResetRobot → ClearError → EnableRobot → mode 4
+    void stopAndResetRobot();  // Reset motion command, disable Dobot, switch MANUAL
     void softStopAndManual();  // Soft STOP: Pause Dobot + cancel motion + switch MANUAL (keep state)
     void startSystem(bool start);
     void emergencyStop(bool stop);

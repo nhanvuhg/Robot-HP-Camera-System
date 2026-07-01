@@ -1,8 +1,8 @@
 # Feeder Sensor Mapping
 
 Hệ thống sử dụng **22 digital sensor** kết nối qua 2 module Festo CPX-AP IO.
-- **CPX 253** (`io_ip = 192.168.27.253`): Module 2 (I1.0–I1.7) + Module 3 (I2.0–I2.7) — 16 kênh DI
-- **CPX 254** (`io_ip_2 = 192.168.27.254`): Module 2 (I3.0–I3.7) — 8 kênh DI
+- **CPX 253** (`io_ip = 172.16.11.37`): Module 2 (I1.0–I1.7) + Module 3 (I2.0–I2.7) — 16 kênh DI
+- **CPX 254** (`io_ip_2 = 172.16.11.41`): Module 2 (I3.0–I3.7) — 8 kênh DI
 
 Tất cả cấu hình **PNP, Normally Open (NO)**. Cập nhật: 2026-05-04.
 

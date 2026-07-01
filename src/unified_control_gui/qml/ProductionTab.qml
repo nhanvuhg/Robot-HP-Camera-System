@@ -24,7 +24,7 @@ Item {
     readonly property color cPurple:   "#1f86e0"
     readonly property string monoFont: "JetBrains Mono, DejaVu Sans Mono, Consolas, monospace"
 
-    readonly property string apiBase: "http://192.168.27.193:8080"
+    readonly property string apiBase: "http://172.16.11.31:8080"
  
     // ── Data ──
     property var todayData: ({count:0, total_volume_ml:0, ok:0, ng:0, items:[]})

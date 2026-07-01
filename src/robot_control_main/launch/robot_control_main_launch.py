@@ -15,7 +15,7 @@ def generate_launch_description():
             output='screen',
             parameters=[
                 params_file,
-                {'robot_ip': '192.168.27.8'}  # ← Thêm IP đúng
+                {'robot_ip': '172.16.11.34'}  # Robot controller IP
             ]
         )
     ])

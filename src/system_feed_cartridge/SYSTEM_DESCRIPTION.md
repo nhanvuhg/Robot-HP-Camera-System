@@ -20,19 +20,19 @@ Hệ thống tự động nạp cartridge với **5 servo motors** Festo CMMT-AS
 │                    HỆ THỐNG SERVO                           │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  SERVO 1 - InX (192.168.27.247)                            │
+│  SERVO 1 - InX (172.16.11.35)                            │
 │  └─ Trục X đầu vào - Di chuyển ngang để lấy khay           │
 │                                                             │
-│  SERVO 2 - InY (192.168.27.248)                            │
+│  SERVO 2 - InY (172.16.11.36)                            │
 │  └─ Trục Y đầu vào - Di chuyển dọc để chọn hàng (row)      │
 │                                                             │
-│  SERVO 3 - Put Tray (192.168.27.103)                       │
+│  SERVO 3 - Put Tray (172.16.11.38)                       │
 │  └─ Đẩy khay - Đẩy khay ra vị trí cho robot lấy           │
 │                                                             │
-│  SERVO 4 - OutX (192.168.27.104)                           │
+│  SERVO 4 - OutX (172.16.11.39)                           │
 │  └─ Trục X đầu ra - Di chuyển ngang để lấy khay đã xử lý   │
 │                                                             │
-│  SERVO 5 - OutY (192.168.27.105)                           │
+│  SERVO 5 - OutY (172.16.11.40)                           │
 │  └─ Trục Y đầu ra - Di chuyển dọc để đặt khay vào stack    │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -41,7 +41,7 @@ Hệ thống tự động nạp cartridge với **5 servo motors** Festo CMMT-AS
 ### **IO Module**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│         FESTO CPX-AP (192.168.27.254)                       │
+│         FESTO CPX-AP (172.16.11.41)                       │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  INPUTS (Sensors):                                         │
@@ -403,7 +403,7 @@ is_homed = mot.referenced()
 #### **IO Module:**
 ```python
 # Connection
-io = CpxAp(ip_address="192.168.27.254")
+io = CpxAp(ip_address="172.16.11.41")
 io.__enter__()
 
 # Read Sensor

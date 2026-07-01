@@ -45,7 +45,7 @@
 | Component        | Port  | Protocol |
 |------------------|-------|----------|
 | Dashboard + Motion | 29999 | TCP (Dobot API text commands) |
-| Robot IP         | 192.168.27.10 | — |
+| Robot IP         | 172.16.11.34 | — |
 
 > **Lưu ý**: Firmware Nova5 mới gộp tất cả lệnh (dashboard + motion) qua port 29999. Port 30003/30004 không dùng.
 

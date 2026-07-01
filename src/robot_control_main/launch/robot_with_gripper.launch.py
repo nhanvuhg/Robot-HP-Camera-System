@@ -13,7 +13,7 @@ def generate_launch_description():
     # Parameters for gripper node
     cpx_ip_arg = DeclareLaunchArgument(
         'cpx_ip',
-        default_value='192.168.27.253',
+        default_value='172.16.11.37',
         description='IP address of Festo CPX-AP module'
     )
     

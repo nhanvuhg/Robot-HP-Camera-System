@@ -247,7 +247,7 @@ Timeouts:
 ### **Common Issues:**
 
 1. **Servo không kết nối**
-   - Check network: `ping 192.168.27.247`
+   - Check network: `ping 172.16.11.35`
    - Check library: `pip list | grep festo`
 
 2. **Config không load**

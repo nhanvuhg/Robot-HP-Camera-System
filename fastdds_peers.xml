@@ -12,8 +12,8 @@
   → đủ cover.
 
   IPs:
-    192.168.27.247 = Raspberry Pi 5
-    192.168.27.197 = RevPi A
+    172.16.11.30 = Raspberry Pi 5
+    172.16.11.31 = RevPi A
 
   ⚠ IP RevPi A phải khớp $REVPI_A_HOST trong ros2_env.sh.
      FastDDS không support env-var trong <address>, nên hãy chạy
@@ -39,49 +39,49 @@
                     <initialPeersList>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.247</address>
+                                <address>172.16.11.30</address>
                                 <port>12910</port>
                             </udpv4>
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.247</address>
+                                <address>172.16.11.30</address>
                                 <port>12912</port>
                             </udpv4>
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.247</address>
+                                <address>172.16.11.30</address>
                                 <port>12914</port>
                             </udpv4>
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.247</address>
+                                <address>172.16.11.30</address>
                                 <port>12916</port>
                             </udpv4>
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.247</address>
+                                <address>172.16.11.30</address>
                                 <port>12918</port>
                             </udpv4>
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.247</address>
+                                <address>172.16.11.30</address>
                                 <port>12920</port>
                             </udpv4>
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.197</address>
+                                <address>172.16.11.31</address>
                                 <port>12910</port>
                             </udpv4>
                         </locator>
                         <locator>
                             <udpv4>
-                                <address>192.168.27.197</address>
+                                <address>172.16.11.31</address>
                                 <port>12912</port>
                             </udpv4>
                         </locator>

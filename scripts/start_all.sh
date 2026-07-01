@@ -336,7 +336,7 @@ fi
 # ══════════════════════════════════════════
 # [9] RS485 BUS NODE — RevPi A (Loadcell + VFD)
 # ══════════════════════════════════════════
-REVPI_HOST="${REVPI_HOST:-${REVPI_A_HOST:-192.168.27.197}}"
+REVPI_HOST="${REVPI_HOST:-${REVPI_A_HOST:-172.16.11.31}}"
 REVPI_USER="${REVPI_USER:-pi}"
 REVPI_WS="${REVPI_WS:-/home/${REVPI_USER}/ros2_jazzy}"
 
@@ -357,7 +357,7 @@ fi
 # ══════════════════════════════════════════
 # [10] LOADCELL NODE — RevPi A (4-20mA)
 # ══════════════════════════════════════════
-LOADCELL_HOST="${LOADCELL_HOST:-${REVPI_A_HOST:-192.168.27.197}}"
+LOADCELL_HOST="${LOADCELL_HOST:-${REVPI_A_HOST:-172.16.11.31}}"
 LOADCELL_USER="${LOADCELL_USER:-pi}"
 
 LOG_LOADCELL="$LOG_DIR/loadcell_node.log"

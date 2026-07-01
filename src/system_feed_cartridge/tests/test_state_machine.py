@@ -97,7 +97,7 @@ class TestSystemConfig:
         if not os.path.exists(config_path):
             pytest.skip("cartridge_config.yaml not found")
         config = SystemConfig.load(config_path)
-        assert config.io_ip == "192.168.27.253"
+        assert config.io_ip == "172.16.11.37"
         assert 1 in config.servo_ips
         assert config.homing_timeout > 0
 
@@ -115,8 +115,8 @@ class TestSystemConfig:
     def test_default_values(self):
         """Kiểm tra các default value khi không truyền."""
         config = SystemConfig(
-            servo_ips={1: "192.168.27.248"},
-            io_ip="192.168.27.253", io_ip_2="192.168.27.254",
+            servo_ips={1: "172.16.11.36"},
+            io_ip="172.16.11.37", io_ip_2="172.16.11.41",
             servo_limits={1: 700.0},
             iny_input_zones={}, iny_output_zones={}, outy_output_zones={},
         )
