@@ -2180,25 +2180,30 @@ void RobotLogicNode::stateWaitFilling()
         return;
     }
 
-    // Pipeline fully drained AND waiting for trays → IDLE only after cartridge confirms drain.
+    // Pipeline fully drained: drain confirmation ends the batch immediately.
+    // If a new tray arrives after drain, newTrayCallback clears the drain flag and
+    // this state restarts the normal cycle from the new tray.
     bool pipeline_empty = !chamber_has_cartridge_ && buffer_is_empty_ && !scale_has_cartridge_;
-    if (pipeline_empty && waiting_for_new_input_.load()) {
-        if (cartridge_drain_confirmed_.load()) {
-            auto elapsed = (this->now() - wait_tray_start_time_).seconds();
-            if (elapsed > 40.0) {
+    if (pipeline_empty) {
+        if (!waiting_for_new_input_.load() && new_tray_loaded_.load()) {
+            cartridge_drain_confirmed_ = false;
+            RCLCPP_INFO(get_logger(),
+                "[WAIT_FILLING] Pipeline empty + NEW tray available → INIT_LOAD_CHAMBER_DIRECT");
+            transitionTo(SystemState::INIT_LOAD_CHAMBER_DIRECT);
+            return;
+        }
+
+        if (waiting_for_new_input_.load()) {
+            if (cartridge_drain_confirmed_.load()) {
                 RCLCPP_INFO(get_logger(),
-                    "[WAIT_FILLING] Pipeline drained, cartridge DRAIN confirmed for 40s → IDLE");
+                    "[WAIT_FILLING] Pipeline drained + cartridge DRAIN confirmed → IDLE");
                 transitionTo(SystemState::IDLE);
                 return;
-            } else {
-                RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
-                    "[WAIT_FILLING] Pipeline empty, cartridge DRAIN confirmed, waiting up to 40s... (%.1fs/40s)", elapsed);
-                // DO NOT return here, let it check fill_done (though chamber is empty so it will bounce anyway)
             }
-        } else {
+
             RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
                 "[WAIT_FILLING] Pipeline empty, waiting for cartridge drain confirmation or new tray...");
-            // DO NOT return here
+            return;
         }
     }
 
@@ -2685,6 +2690,16 @@ void RobotLogicNode::statePlaceToOutput()
             return;
         }
 
+        if (chamber_has_cartridge_ && buffer_is_empty_
+            && !waiting_for_new_input_.load() && new_tray_loaded_.load())
+        {
+            cartridge_drain_confirmed_ = false;
+            RCLCPP_INFO(get_logger(),
+                "[PIPELINE] New tray arrived during drain scale processing → REFILL_BUFFER");
+            transitionTo(SystemState::REFILL_BUFFER);
+            return;
+        }
+
         // Continue cycle
         transitionTo(SystemState::WAIT_FILLING);
         return;
@@ -2789,6 +2804,13 @@ void RobotLogicNode::statePlaceToFail()
                     "[PIPELINE] 📦 Pipeline drained (fail) + NEW tray available → Restarting pipeline cycle (INIT_LOAD_CHAMBER_DIRECT)");
                 transitionTo(SystemState::INIT_LOAD_CHAMBER_DIRECT);
             }
+        } else if (chamber_has_cartridge_ && buffer_is_empty_
+                   && !waiting_for_new_input_.load() && new_tray_loaded_.load())
+        {
+            cartridge_drain_confirmed_ = false;
+            RCLCPP_INFO(get_logger(),
+                "[PIPELINE] New tray arrived during drain fail processing → REFILL_BUFFER");
+            transitionTo(SystemState::REFILL_BUFFER);
         } else {
             transitionTo(SystemState::WAIT_FILLING);
         }
