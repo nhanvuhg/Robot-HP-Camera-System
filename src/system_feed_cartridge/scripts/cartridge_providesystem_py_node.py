@@ -3691,8 +3691,35 @@ class CartridgeSystem(Node):
             return
         if self._can_start_s3():
             self.get_logger().info("[S3-IDLE] S17 ON + S18 OFF >= 5s → STATE 3")
+            self._guide_logged.discard("S3_IDLE_S17_OFF")
             self._s3_force_home = False   # fresh trigger: S17 ON thì giữ vị trí, đẩy tiếp
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
+            return
+
+        if (self._conf('output_stack_present', True)
+                and self.operation_mode in ['auto', 'ai']
+                and not self._motion_busy
+                and not self.sensor(S18_FEED_OK)):
+            s18_off_duration = 0.0
+            if getattr(self, '_s10_off_time', 0) > 0:
+                s18_off_duration = time.time() - self._s10_off_time
+            else:
+                s18_off_duration = 5.0
+            if s18_off_duration >= 5.0 and not self.sensor(S17_PLATFORM):
+                key = "S3_IDLE_S17_OFF"
+                if key not in self._guide_logged:
+                    self._guide_logged.add(key)
+                    self.get_logger().warn(
+                        "[S3-IDLE] S18 empty but S17 OFF — hết khay/chưa cấp khay Platform"
+                    )
+                    self._notify_step(
+                        'warn',
+                        'STATE 3',
+                        'S17 Platform',
+                        f'{self._sensor_label(S17_PLATFORM)} OFF — hết khay hoặc chưa cấp khay lên Platform',
+                        check=['khay trên Platform Servo3', self._sensor_label(S17_PLATFORM)],
+                        action=['Cấp khay lên Platform', 'Khi S17 ON hệ thống sẽ tự chạy STATE 3']
+                    )
 
     def _do_idle_s4(self):
         """Chờ điều kiện để trigger STATE 4: _s4_trigger=True (robot báo khay output đầy)."""
@@ -5159,9 +5186,26 @@ class CartridgeSystem(Node):
         Cylinder 4 phải xác nhận S26 ON + S25 OFF trước khi Servo 3 feed.
         """
         if not self.sensor(S17_PLATFORM):
+            key = "S3_CHECK_S17_OFF"
+            if key not in self._guide_logged:
+                self._guide_logged.add(key)
+                self.get_logger().warn(
+                    "[S3] S17 OFF at check — hết khay/chưa cấp khay Platform, chờ S17 ON"
+                )
+                self._notify_step(
+                    'warn',
+                    'STATE 3',
+                    'Check S17',
+                    f'{self._sensor_label(S17_PLATFORM)} OFF — hết khay hoặc chưa cấp khay lên Platform',
+                    check=['khay trên Platform Servo3', self._sensor_label(S17_PLATFORM)],
+                    action=['Cấp khay lên Platform', 'Khi S17 ON hệ thống sẽ tiếp tục STATE 3']
+                )
             self._cyl4_retract()
             self._enter_s3(SystemState.S3_WAIT_S17)
             return
+
+        self._guide_logged.discard("S3_IDLE_S17_OFF")
+        self._guide_logged.discard("S3_CHECK_S17_OFF")
 
         if not getattr(self, '_step_start_s3', 0.0):
             self._step_start_s3 = time.time()
@@ -5180,6 +5224,8 @@ class CartridgeSystem(Node):
         cfg = self.config
         p3 = self._pos(3)
         if self.sensor(S17_PLATFORM):
+            self._guide_logged.discard("S3_IDLE_S17_OFF")
+            self._guide_logged.discard("S3_CHECK_S17_OFF")
             self._notify('info', 'Da phat hien khay', 'S17 ON — confirm 2s')
             self._enter_s3(SystemState.S3_CHECK_S17)
             return
