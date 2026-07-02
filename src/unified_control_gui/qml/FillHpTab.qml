@@ -12,17 +12,18 @@ Item {
     id: tab
     anchors.fill: parent
 
-    // ---- Theme tokens (mirror CartridgePage palette) ----
-    readonly property color cBg:          "#06101d"
-    readonly property color cPanel:       "#081627"
-    readonly property color cPanel2:      "#04080f"
-    readonly property color cBorder:      "#163a52"
+    // ---- Theme tokens (đồng bộ liquid-glass với CameraPage/CartridgePage/InkTab) ----
+    readonly property color cBg:          "transparent"
+    readonly property color cPanel:       "#990d1e32"
+    readonly property color cPanel2:      "#8806101d"
+    readonly property color cBorder:      "#1affffff"
     readonly property color cText:        "#c7dcef"
-    readonly property color cMuted:       "#74899f"
-    readonly property color cAccent:      "#6f4be0"
-    readonly property color cAccentSoft:  Qt.rgba(0.31, 0.42, 1.0, 0.18)
-    readonly property color cOk:          "#67d0ff"
-    readonly property color cOkBg:        Qt.rgba(0.09, 0.95, 0.94, 0.15)
+    readonly property color cMuted:       "#9fb3c8"
+    readonly property color cAccent:      "#7fcdf5"
+    readonly property color cAccentSoft:  Qt.rgba(0.42, 0.75, 0.95, 0.16)
+    readonly property color cOk:          "#3ed0b4"
+    readonly property color cOkBg:        Qt.rgba(0.0, 0.90, 0.46, 0.15)
+    readonly property color cField:       "#cc081627"
     readonly property color cWarn:        "#f5a623"
     readonly property color cWarnBg:      Qt.rgba(1.0, 0.65, 0.15, 0.15)
     readonly property color cBad:         "#f0735c"
@@ -1124,8 +1125,11 @@ Item {
         implicitWidth: Math.max(80, t.implicitWidth + 26)
         implicitHeight: 38
         radius: 6
-        color: ma.containsMouse ? Qt.darker(baseBg, 0.85) : baseBg
-        border.color: baseBorder; border.width: 1
+        color: ma.pressed ? Qt.darker(baseBg, 1.35)
+             : ma.containsMouse ? Qt.darker(baseBg, 0.85) : baseBg
+        border.color: ma.pressed ? Qt.lighter(baseBorder, 1.15) : baseBorder
+        border.width: 1
+        Behavior on color { ColorAnimation { duration: 90 } }
 
         Text {
             id: t; anchors.centerIn: parent
@@ -1356,7 +1360,7 @@ Item {
         color:        sev === "critical" ? Qt.rgba(1.0, 0.15, 0.15, 0.18)
                     : sev === "error"    ? Qt.rgba(1.0, 0.32, 0.32, 0.10)
                     : sev === "warning"  ? Qt.rgba(1.0, 0.65, 0.15, 0.10)
-                    : Qt.rgba(0.31, 0.42, 1.0, 0.08)
+                    : Qt.rgba(0.42, 0.75, 0.95, 0.10)
         border.color: sev === "critical" ? cBad
                     : sev === "error"    ? cBad
                     : sev === "warning"  ? cWarn
@@ -1469,7 +1473,7 @@ Item {
                                           : variant === "danger"  ? cBad : cText
         implicitWidth: 140; implicitHeight: 46
         radius: 6
-        color: _pressed ? Qt.rgba(0.31, 0.42, 1.0, 0.25) : cPanel2
+        color: _pressed ? Qt.rgba(0.25, 0.65, 0.85, 0.28) : cPanel2
         border.color: baseBorder; border.width: 1
         Text {
             anchors.centerIn: parent; text: lbl; color: baseFg
@@ -1489,7 +1493,7 @@ Item {
         property string valueText: "0"
         implicitWidth: 90; implicitHeight: 34
         radius: 4
-        color: cBg; border.color: cBorder; border.width: 1
+        color: cField; border.color: cBorder; border.width: 1
         TextInput {
             anchors.fill: parent; anchors.margins: 6
             text: valueText
@@ -1517,7 +1521,7 @@ Item {
             }
             Rectangle {
                 implicitWidth: 95; implicitHeight: 32; radius: 4
-                color: cBg; border.color: cBorder; border.width: 1
+                color: cField; border.color: cBorder; border.width: 1
                 TextInput {
                     id: inp
                     anchors.fill: parent; anchors.margins: 6
