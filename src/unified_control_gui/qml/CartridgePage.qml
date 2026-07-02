@@ -94,9 +94,11 @@ import QtGraphicalEffects 1.15
         readonly property color cProvisionButtonBorder: cBtnBaseBorder
         readonly property color cProvisionButtonText: cBtnBaseText
         readonly property color cFunctionLabelText: "#bfe0f5"
-        readonly property color cFunctionFieldStart: "#1f86e0"
-        readonly property color cFunctionFieldEnd: "#163a52"
-        readonly property color cFunctionFieldBorder: "#1f86e0"
+        // Ô hiển thị/nhập giá trị: nền kính tối + viền cyan mờ — KHÔNG dùng màu
+        // xanh action (#1f86e0) để phân biệt rõ "ô dữ liệu" với "nút bấm".
+        readonly property color cFunctionFieldStart: Qt.rgba(0.06, 0.19, 0.26, 0.82)
+        readonly property color cFunctionFieldEnd: Qt.rgba(0.04, 0.13, 0.19, 0.82)
+        readonly property color cFunctionFieldBorder: "#4d67d0ff"
         readonly property color cFunctionFieldText: "#d6f1ff"
         readonly property real cPressDarken: 1.18
         readonly property real cPressGradientDarken: 1.15
@@ -1344,7 +1346,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.preferredHeight: cardItem.controlH
                                                     radius: 6
                                                     color: Qt.rgba(0.06, 0.19, 0.26, 0.82)
-                                                    border.color: root.cCardTitle
+                                                    border.color: root.cFunctionFieldBorder
                                                     border.width: 1
                                                     Text {
                                                         id: velText
@@ -1435,7 +1437,7 @@ import QtGraphicalEffects 1.15
                                                         Layout.preferredHeight: cardItem.controlH
                                                         radius: 6
                                                         color: Qt.rgba(0.06, 0.19, 0.26, 0.82)
-                                                        border.color: root.cCardTitle
+                                                        border.color: root.cFunctionFieldBorder
                                                         border.width: 1
                                                         TextInput {
                                                             id: posIn
@@ -1955,13 +1957,13 @@ import QtGraphicalEffects 1.15
                         height: page3Root.manualEnabled ? 0 : 32
                         visible: !page3Root.manualEnabled
                         radius: 5
-                        color: root.cDashPanel
+                        color: root.cControlPanel
                         border.color: page3Root.manualEnabled ? root.cDashButtonBorder : root.cDashCardBorder
                         border.width: 1
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: page3Root.manualEnabled ? root.cDashButton : root.cDashPanel }
-                            GradientStop { position: 1.0; color: page3Root.manualEnabled ? root.cDashButtonEnd : root.cDashPanel }
+                            GradientStop { position: 0.0; color: page3Root.manualEnabled ? root.cDashButton : root.cControlPanel }
+                            GradientStop { position: 1.0; color: page3Root.manualEnabled ? root.cDashButtonEnd : root.cControlPanel }
                         }
                         Behavior on color { ColorAnimation { duration: 200 } }
                         Behavior on border.color { ColorAnimation { duration: 200 } }
@@ -2012,13 +2014,14 @@ import QtGraphicalEffects 1.15
                                 // ═══ CARTESIAN ═══
                                 Rectangle {
                                     width: (parent.width - parent.parent.colGap * 2) * 0.38; height: parent.height
-                                    color: root.cDashPanel; border.color: root.cBorder; radius: 6
+                                    color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
+                                    GlassHighlight {}
                                     Column {
                                         id: cartCol
                                         anchors { fill: parent; margins: 8 }
                                         spacing: 6
                                         Row { spacing: 6
-                                            Rectangle { width: 4; height: 16; radius: 1; color: root.cAccent; anchors.verticalCenter: parent.verticalCenter }
+                                            Rectangle { width: 4; height: 16; radius: 1; color: root.cCardTitle; anchors.verticalCenter: parent.verticalCenter }
                                             Text { text: "CARTESIAN (mm)"; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
                                         }
                                         Repeater {
@@ -2177,13 +2180,14 @@ import QtGraphicalEffects 1.15
                                 // ═══ JOINT ═══
                                 Rectangle {
                                     width: (parent.width - parent.parent.colGap * 2) * 0.38; height: parent.height
-                                    color: root.cDashPanel; border.color: root.cBorder; radius: 6
+                                    color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
+                                    GlassHighlight {}
                                     Column {
                                         id: jointCol
                                         anchors { fill: parent; margins: 8 }
                                         spacing: 6
                                         Row { spacing: 6
-                                            Rectangle { width: 4; height: 16; radius: 1; color: "#67d0ff"; anchors.verticalCenter: parent.verticalCenter }
+                                            Rectangle { width: 4; height: 16; radius: 1; color: root.cCardTitle; anchors.verticalCenter: parent.verticalCenter }
                                             Text { text: "JOINT (deg)"; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
                                         }
                                         Repeater {
@@ -2504,13 +2508,14 @@ import QtGraphicalEffects 1.15
                                 // ═══ IO + CONTROLS ═══
                                 Rectangle {
                                     width: parent.width - (parent.width - parent.parent.colGap * 2) * 0.76 - parent.parent.colGap * 2; height: parent.height
-                                    color: root.cDashPanel; border.color: root.cBorder; radius: 6
+                                    color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
+                                    GlassHighlight {}
                                     Column {
                                         id: ioCol
                                         anchors { fill: parent; margins: 8 }
                                         spacing: 6
                                         Row { spacing: 6
-                                            Rectangle { width: 4; height: 16; radius: 1; color: root.cCyan; anchors.verticalCenter: parent.verticalCenter }
+                                            Rectangle { width: 4; height: 16; radius: 1; color: root.cCardTitle; anchors.verticalCenter: parent.verticalCenter }
                                             Text { text: "I/O CONTROL"; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
                                         }
 
@@ -2795,7 +2800,8 @@ import QtGraphicalEffects 1.15
                     Rectangle {
                         id: robotLogBar
                         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-                        height: 160; radius: 6; color: root.cDashPanel; border.color: root.cBorder
+                        height: 160; radius: 6; color: root.cControlPanel; border.color: root.cControlBorder
+                        GlassHighlight {}
                         Column {
                             anchors { fill: parent; margins: 8 }
                             spacing: 4
