@@ -1119,12 +1119,13 @@ private:
         if (!moveToIndex(11)) return false;      /// buoc dem cho 10
         if (!moveToIndex(32)) return false;
         if (!moveToIndex(33)) return false;
-        if (!moveR(0, 0, -98,5)) return false;
+        if (!moveR(0, 0, -38,5)) return false;
         if (!wait(0.2)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — đặt khay xuống vị trí trung gian
         if (!wait(0.2)) return false;
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — đảm bảo gripper mở trước khi pick up
-        if (!moveR(0, 0, 160,8)) return false;
+        if (!wait(0.2)) return false;
+        if (!moveToIndex(32)) return false;
         if (!setDigitalOutput(6, true)) return false; // kẹp cartridge
         if (!wait(2.5)) return false;
         if (!setDigitalOutput(6, false)) return false;  // nhả cartridge
