@@ -2695,36 +2695,41 @@ import QtGraphicalEffects 1.15
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
-                                        // System actions — same visual language as Control Dashboard
-                                        CBtn {
-                                            lbl: "STOP"
-                                            w: parent.width; h: 46
-                                            fontSize: 15
-                                            bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"
-                                            onClicked: mainWindow.stopSynchronizedSystems()
-                                        }
-
+                                        // System actions — tỉ lệ + bo góc đồng bộ CameraPage SYSTEM CONTROL:
+                                        // ENABLE trên cùng, STOP + CLEAR ERROR cạnh nhau, EMERGENCY dưới cùng.
                                         CBtn {
                                             lbl: "ENABLE"
-                                            w: parent.width; h: 42
+                                            w: parent.width; h: 52
                                             fontSize: 15
                                             bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"
                                             onClicked: robotController.enableSystem(true)
                                         }
 
-                                        CBtn {
-                                            lbl: "CLEAR ERROR"
-                                            w: parent.width; h: 34
-                                            fontSize: 12
-                                            bg: root.cBtnWarningStart; bgEnd: root.cBtnWarningEnd; bc: root.cBtnWarningBorder; tc: root.cWhiteText
-                                            onClicked: robotController.clearError()
+                                        Row {
+                                            spacing: 6; width: parent.width
+                                            CBtn {
+                                                lbl: "STOP"
+                                                w: (parent.width - 6) / 2; h: 52
+                                                fontSize: 15
+                                                bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"
+                                                onClicked: mainWindow.stopSynchronizedSystems()
+                                            }
+                                            CBtn {
+                                                lbl: "CLEAR ERROR"
+                                                w: (parent.width - 6) / 2; h: 52
+                                                fontSize: 13
+                                                bg: root.cBtnWarningStart; bgEnd: root.cBtnWarningEnd; bc: root.cBtnWarningBorder; tc: root.cWhiteText
+                                                onClicked: robotController.clearError()
+                                            }
                                         }
 
                                         CBtn {
-                                            lbl: "EMERGENCY\nSTOP"
-                                            w: parent.width; h: 50
-                                            fontSize: 14
-                                            bg: root.cBtnEmergencyStart; bgEnd: root.cBtnEmergencyEnd; bc: root.cBtnEmergencyBorder; tc: "#ffffff"
+                                            lbl: "⛔  EMERGENCY STOP"
+                                            w: parent.width; h: 64
+                                            radius: 12
+                                            border.width: 2
+                                            fontSize: 15
+                                            bg: root.cBtnEmergencyStart; bgEnd: "#8f2318"; bc: root.cBtnEmergencyBorder; tc: "#ffffff"
                                             onClicked: mainWindow.emergencyStopSynchronizedSystems()
                                         }
                                     }
