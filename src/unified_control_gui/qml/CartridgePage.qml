@@ -2708,7 +2708,7 @@ import QtGraphicalEffects 1.15
                                             lbl: "ENABLE"
                                             w: parent.width; h: 42
                                             fontSize: 15
-                                            bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText
+                                            bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"
                                             onClicked: robotController.enableSystem(true)
                                         }
 
@@ -2775,7 +2775,7 @@ import QtGraphicalEffects 1.15
                                         lbl: "ENABLE"
                                         w: 150; h: 48
                                         fontSize: 15
-                                        bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText
+                                        bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"
                                         onClicked: robotController.enableSystem(true)
                                     }
 
