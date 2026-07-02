@@ -1051,7 +1051,7 @@ private:
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(0.5)) return false;
         if (!moveR(1, -56, 0)) return false;
-        if (!moveR(-10, 25, 0)) return false;
+        if (!moveR(-10, 23, 0,8)) return false;
         if (!wait(0.5)) return false;
         if (!moveR(0, -30, 0)) return false;
         if (!moveToIndex(37)) return false;
@@ -1178,7 +1178,7 @@ private:
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(0.5)) return false;
         if (!moveR(-1, -56, 0)) return false;
-        if (!moveR(-10, 25, 0)) return false;
+        if (!moveR(-10, 23, 0,8)) return false;
         if (!wait(0.5)) return false;
         if (!moveR(0, -45, 0)) return false;
         if (!moveToIndex(37)) return false;
