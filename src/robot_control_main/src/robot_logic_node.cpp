@@ -2082,7 +2082,7 @@ void RobotLogicNode::stateInitRefillBuffer()
     }
 
     // ── Motion result handling ──
-    if (getMotionCmd() == "INPUT_TRAY_BUFFER") {
+    if (getMotionCmd() == "INIT_INPUT_TRAY_BUFFER") {
         if (motion_in_progress_) return;
         clearMotionCmd();
 
@@ -2160,7 +2160,7 @@ void RobotLogicNode::stateInitRefillBuffer()
     }
 
     RCLCPP_INFO(get_logger(), "[INIT_REFILL] 🤖 Pick Row %d → BUFFER [ASYNC]", row);
-    sendMotionActionAsync("INPUT_TRAY_BUFFER", row);
+    sendMotionActionAsync("INIT_INPUT_TRAY_BUFFER", row);
 }
 
 // ============================================================================

@@ -909,6 +909,7 @@ private:
 
     if (type == "INPUT_TRAY_CHAMBER")  success = executeInputTrayChamber(param);
     else if (type == "INPUT_TRAY_BUFFER") success = executeInputTrayBuffer(param);
+    else if (type == "INIT_INPUT_TRAY_BUFFER") success = executeInitInputTrayBuffer(param);
     else if (type == "CHAMBER_SCALE")  success = executeChamberScale();
     else if (type == "SCALE_OUTPUT")   success = executeScaleOutput(param);
     else if (type == "SCALE_FAIL")     success = executeScaleFail();
@@ -1085,6 +1086,12 @@ private:
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào buffer
         if (!wait(0.2)) return false;
         if (!moveR(0, 0, 140)) return false;
+        return true;
+    }
+
+    bool executeInitInputTrayBuffer(int row) {
+        RCLCPP_INFO(get_logger(), "[MOTION] Init Input Tray Row %d → Buffer → Home", row);
+        if (!executeInputTrayBuffer(row)) return false;
         if (!moveToIndex(0)) return false;
         return true;
     }
