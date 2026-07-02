@@ -5,7 +5,7 @@ MouseArea {
     id: area
 
     property Item targetItem: parent
-    property real hoverScale: 1.05
+    property real hoverScale: 1.02
     property real pressScale: 0.97
     property int hoverDuration: 150
     property int pressDuration: 95

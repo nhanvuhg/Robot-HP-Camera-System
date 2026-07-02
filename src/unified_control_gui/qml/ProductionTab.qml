@@ -13,12 +13,12 @@ Item {
     readonly property color cBg:       "transparent"
     readonly property color cPanel:    "#b30d1527"
     readonly property color cCardBg:   "#b30d1527"
-    readonly property color cBorder:   "#4d00ffff"
+    readonly property color cBorder:   "#1affffff"
     readonly property color cText:     "#c7dcef"
     readonly property color cMuted:    "#9fb3c8"
     readonly property color cOk:       "#3ed0b4"
     readonly property color cBad:      "#f0735c"
-    readonly property color cWarn:     "#ecc45a"
+    readonly property color cWarn:     "#f5a623"
     readonly property color cCyan:     "#1f86e0"
     readonly property color cBlue:     "#1f86e0"
     readonly property color cPurple:   "#1f86e0"
@@ -421,17 +421,18 @@ Item {
  
     // ── Action button ──
     component ActionBtn: Rectangle {
+        id: actionBtn
         property string label: "Xem"
         signal clicked()
         width: 80; height: 38; radius: 8
         gradient: Gradient {
             orientation: Gradient.Horizontal
-            GradientStop { position: 0.0; color: "#36b6ff" }
-            GradientStop { position: 1.0; color: "#6f4be0" }
+            GradientStop { position: 0.0; color: abMA.pressed ? Qt.darker("#1f86e0", 1.2) : "#1f86e0" }
+            GradientStop { position: 1.0; color: abMA.pressed ? Qt.darker("#163a52", 1.2) : "#163a52" }
         }
-        border.color: cCyan; border.width: 0
-        Text { anchors.centerIn: parent; text: label; color: "#ffffff"; font.pixelSize: 16; font.bold: true }
-        MotionMouseArea { anchors.fill: parent; onClicked: parent.clicked() }
+        border.color: "#67d0ff"; border.width: 1
+        Text { anchors.centerIn: parent; text: actionBtn.label; color: "#ffffff"; font.pixelSize: 16; font.bold: true }
+        MotionMouseArea { id: abMA; anchors.fill: parent; onClicked: actionBtn.clicked() }
     }
  
     // ── Data table with headers + rows ──

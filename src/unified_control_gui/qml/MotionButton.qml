@@ -5,7 +5,7 @@ import QtGraphicalEffects 1.15
 Button {
     id: control
 
-    property real hoverScale: 1.05
+    property real hoverScale: 1.02
     property real pressScale: 0.97
     property int hoverDuration: 150
     property int pressDuration: 95
@@ -15,11 +15,29 @@ Button {
     property bool shadowEnabled: false
     property bool shimmerEnabled: false
     property bool raiseOnHover: false
+    // "Độ lún" khi nhấn: dịch xuống + phủ tối nhẹ, áp dụng cho MỌI MotionButton
+    // kể cả khi background tuỳ biến không tự xử lý trạng thái pressed.
+    property real pressSinkOffset: 1.5
+    property color pressTintColor: "#2e000000"
 
     hoverEnabled: true
     transformOrigin: Item.Center
     scale: !enabled ? 1.0 : (pressed ? pressScale : (hovered ? hoverScale : 1.0))
     z: raiseOnHover && (hovered || pressed || (shimmerEnabled && shimmerAnim.running)) ? 20 : 0
+
+    transform: Translate {
+        y: control.enabled && control.pressed ? control.pressSinkOffset : 0
+        Behavior on y { NumberAnimation { duration: control.pressDuration; easing.type: Easing.OutQuad } }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        z: 90
+        radius: (control.background && control.background.radius !== undefined) ? control.background.radius : 6
+        color: control.pressTintColor
+        opacity: control.enabled && control.pressed ? 1.0 : 0.0
+        Behavior on opacity { NumberAnimation { duration: 90 } }
+    }
 
     layer.enabled: shadowEnabled && enabled && (hovered || pressed || (shimmerEnabled && shimmerAnim.running))
     layer.smooth: true

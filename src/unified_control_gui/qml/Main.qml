@@ -249,9 +249,17 @@ ApplicationWindow {
                     Layout.preferredWidth: 250; Layout.preferredHeight: 60
                     text: "🔁  LOAD CHAMBER\nFROM BUFFER"
                     font.pixelSize: 15; font.bold: true
-                    background: Rectangle { color: "#6f4be0"; border.color: "#9b7bff"; border.width: 2; radius: 6 }
+                    background: Rectangle {
+                        radius: 6
+                        border.color: "#9b7bff"; border.width: 2
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: "#6f4be0" }
+                            GradientStop { position: 1.0; color: "#452e91" }
+                        }
+                    }
                     contentItem: Text {
-                        text: parent.text; color: "#bfe0f5"
+                        text: parent.text; color: "#ffffff"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -265,9 +273,17 @@ ApplicationWindow {
                     Layout.preferredWidth: 250; Layout.preferredHeight: 60
                     text: "🔂  LOAD CHAMBER\nFROM TRAY"
                     font.pixelSize: 15; font.bold: true
-                    background: Rectangle { color: "#e2761b"; border.color: "#ecc45a"; border.width: 2; radius: 6 }
+                    background: Rectangle {
+                        radius: 6
+                        border.color: "#f5a623"; border.width: 2
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: "#e2761b" }
+                            GradientStop { position: 1.0; color: "#8a4210" }
+                        }
+                    }
                     contentItem: Text {
-                        text: parent.text; color: "#ecc45a"
+                        text: parent.text; color: "#ffffff"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -358,7 +374,7 @@ ApplicationWindow {
                     Layout.preferredWidth: 240; Layout.preferredHeight: 56
                     text: "✗  Cancel / Back"
                     font.pixelSize: 15; font.bold: true
-                    background: Rectangle { color: "#14263c"; radius: 6 }
+                    background: Rectangle { color: "#14263c"; border.color: "#1a4a6e"; border.width: 1; radius: 6 }
                     contentItem: Text {
                         text: parent.text; color: "#c7dcef"
                         font: parent.font
@@ -584,7 +600,7 @@ ApplicationWindow {
                     font.pixelSize: 16
                     font.bold: true
                     onClicked: notYetInkSelectedPopup.close()
-                    background: Rectangle { radius: 6; color: "#14263c" }
+                    background: Rectangle { radius: 6; color: "#14263c"; border.color: "#1a4a6e"; border.width: 1 }
                     contentItem: Text {
                         text: parent.text; color: "#c7dcef"
                         font: parent.font

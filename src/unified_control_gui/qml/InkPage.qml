@@ -80,7 +80,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: "LOADCELL & INK SYSTEM"
-                            font.pixelSize: 24; font.bold: true; color: "#6cf"
+                            font.pixelSize: 24; font.bold: true; color: "#67d0ff"
                         }
                     }
                     

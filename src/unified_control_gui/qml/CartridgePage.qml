@@ -77,8 +77,8 @@ import QtGraphicalEffects 1.15
         readonly property color cBtnActionEnd:      "#163a52"
         readonly property color cBtnActionBorder:   "#67d0ff"
         readonly property color cBtnWarningStart:   "#e2761b"
-        readonly property color cBtnWarningEnd:     "#e2761b"
-        readonly property color cBtnWarningBorder:  "#e2761b"
+        readonly property color cBtnWarningEnd:     "#8a4210"
+        readonly property color cBtnWarningBorder:  "#f5a623"
         readonly property color cBtnDangerStart:    "#b53527"
         readonly property color cBtnDangerEnd:      "#3a121a"
         readonly property color cBtnDangerBorder:   "#f0735c"
@@ -336,7 +336,7 @@ import QtGraphicalEffects 1.15
                     id: stateBadge
                     Layout.preferredHeight: 50; radius: 6
                     Layout.preferredWidth: sbRow.implicitWidth + 24
-                    color: "transparent"; border.color: "#163a52"; border.width: 2
+                    color: Qt.rgba(0.03, 0.09, 0.16, 0.45); border.color: root.cBorder; border.width: 1
                     Row {
                         id: sbRow
                         anchors.centerIn: parent; spacing: 8
@@ -367,7 +367,7 @@ import QtGraphicalEffects 1.15
                 Rectangle {
                     Layout.preferredHeight: 50; radius: 6
                     Layout.preferredWidth: hmRow.implicitWidth + 24
-                    color: "transparent"; border.color: "#163a52"; border.width: 2
+                    color: Qt.rgba(0.03, 0.09, 0.16, 0.45); border.color: root.cBorder; border.width: 1
                     Row {
                         id: hmRow
                         anchors.centerIn: parent; spacing: 6
@@ -386,7 +386,7 @@ import QtGraphicalEffects 1.15
                     property string m: cartridgeController.currentMode
                     property bool isIdle: m === "idle" || m === ""
                     Layout.preferredWidth: mpLbl.implicitWidth + 26
-                    color: "transparent"; border.color: "#163a52"; border.width: 2
+                    color: Qt.rgba(0.03, 0.09, 0.16, 0.45); border.color: root.cBorder; border.width: 1
 
                     // Nhấp nháy khi chưa chọn mode
                     SequentialAnimation on opacity {
@@ -969,7 +969,7 @@ import QtGraphicalEffects 1.15
                                             id: autoModeMA
                                             anchors.fill: parent
                                             enabled: !modeSelCol.modeBlocked
-                                            hoverScale: 1.05
+                                            hoverScale: 1.02
                                             pressScale: 0.976
                                             shadowEnabled: false
                                             shimmerEnabled: false
@@ -1012,7 +1012,7 @@ import QtGraphicalEffects 1.15
                                             id: aiModeMA
                                             anchors.fill: parent
                                             enabled: !modeSelCol.modeBlocked
-                                            hoverScale: 1.05
+                                            hoverScale: 1.02
                                             pressScale: 0.976
                                             shadowEnabled: false
                                             shimmerEnabled: false
@@ -1055,7 +1055,7 @@ import QtGraphicalEffects 1.15
                                             id: manualModeMA
                                             anchors.fill: parent
                                             enabled: !modeSelCol.modeBlocked
-                                            hoverScale: 1.05
+                                            hoverScale: 1.02
                                             pressScale: 0.976
                                             shadowEnabled: false
                                             shimmerEnabled: false
@@ -2051,7 +2051,7 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
-                                                    MotionMouseArea { id: negMA; anchors.fill: parent; hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: negMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 120; height: 48; radius: 5; color: "transparent"; border.width: 1; border.color: root.cFunctionFieldBorder
@@ -2075,7 +2075,7 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
-                                                    MotionMouseArea { id: posMA; anchors.fill: parent; hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: posMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                             }
                                         }
@@ -2131,7 +2131,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                 }
-                                                MotionMouseArea { id: gpMA; anchors.fill: parent; hoverScale: 1.05; shadowEnabled: false; shimmerEnabled: false; onClicked: {
+                                                MotionMouseArea { id: gpMA; anchors.fill: parent; hoverScale: 1.02; shadowEnabled: false; shimmerEnabled: false; onClicked: {
                                                     robotController.getPose()
                                                     for (var i = 0; i < 6; i++) {
                                                         if (robotController.cartesianPose.length > i)
@@ -2167,7 +2167,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                 }
-                                                MotionMouseArea { id: mlMA; anchors.fill: parent; hoverScale: 1.05; shadowEnabled: false; shimmerEnabled: false; onClicked: {
+                                                MotionMouseArea { id: mlMA; anchors.fill: parent; hoverScale: 1.02; shadowEnabled: false; shimmerEnabled: false; onClicked: {
                                                     var vals = []
                                                     for (var i = 0; i < 6; i++) vals.push(parseFloat(cartInputs.itemAt(i).children[1].children[0].text) || 0)
                                                     robotController.moveLinear(vals[0],vals[1],vals[2],vals[3],vals[4],vals[5])
@@ -2209,7 +2209,7 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
-                                                    MotionMouseArea { id: jnMA; anchors.fill: parent; hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: jnMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 120; height: 48; radius: 5; color: "transparent"; border.width: 1; border.color: root.cFunctionFieldBorder
@@ -2233,7 +2233,7 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
-                                                    MotionMouseArea { id: jpMA; anchors.fill: parent; hoverScale: 1.05; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: jpMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                             }
                                         }
@@ -2289,7 +2289,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                 }
-                                                MotionMouseArea { id: gaMA; anchors.fill: parent; hoverScale: 1.05; shadowEnabled: false; shimmerEnabled: false; onClicked: {
+                                                MotionMouseArea { id: gaMA; anchors.fill: parent; hoverScale: 1.02; shadowEnabled: false; shimmerEnabled: false; onClicked: {
                                                     robotController.getAngles()
                                                     for (var i = 0; i < 6; i++) {
                                                         if (robotController.jointAngles.length > i)
@@ -2329,7 +2329,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                 }
-                                                MotionMouseArea { id: mjMA; anchors.fill: parent; hoverScale: 1.05; shadowEnabled: false; shimmerEnabled: false; onClicked: {
+                                                MotionMouseArea { id: mjMA; anchors.fill: parent; hoverScale: 1.02; shadowEnabled: false; shimmerEnabled: false; onClicked: {
                                                     var vals = []
                                                     for (var i = 0; i < 6; i++) vals.push(parseFloat(jointInputs.itemAt(i).children[1].children[0].text) || 0)
                                                     robotController.moveJoint(vals[0],vals[1],vals[2],vals[3],vals[4],vals[5])
@@ -2406,7 +2406,7 @@ import QtGraphicalEffects 1.15
                                                 }
                                                     MotionMouseArea {
                                                         id: saveMA; anchors.fill: parent
-                                                        hoverScale: 1.05
+                                                        hoverScale: 1.02
                                                         pressScale: 0.976
                                                         shadowEnabled: false
                                                         shimmerEnabled: false

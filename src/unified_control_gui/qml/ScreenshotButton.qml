@@ -9,7 +9,7 @@ MotionButton {
     signal captureRequested()
 
     enabled: countdown === 0
-    hoverScale: 1.05
+    hoverScale: 1.02
     pressScale: 0.97
     shadowEnabled: false
     shimmerEnabled: true
@@ -23,7 +23,7 @@ MotionButton {
     background: Rectangle {
         radius: 6
         color: control.pressed ? "#18374d" : "transparent"
-        border.color: "#1565c0"
+        border.color: "#1a4a6e"
         border.width: 2
 
         Behavior on color {
