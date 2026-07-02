@@ -14,6 +14,7 @@ ApplicationWindow {
     visibility: Window.FullScreen
 
     property bool scaleIssueWarning: false
+    property bool autoAiStartedSinceModeSelect: false
 
     signal synchronizedModeRequested(string mode)
     signal synchronizedStartRequested(string mode)
@@ -64,6 +65,7 @@ ApplicationWindow {
 
     function startSynchronizedSystems(mode) {
         var cartridgeMode = syncOperationMode(mode)
+        autoAiStartedSinceModeSelect = (cartridgeMode === "auto" || cartridgeMode === "ai")
         hpController.publishMode((cartridgeMode === "auto" || cartridgeMode === "ai") ? 0 : 2)
         synchronizedStartRequested(mode)
         robotController.startSystem(true)
@@ -71,12 +73,17 @@ ApplicationWindow {
 
     function stopSynchronizedSystems() {
         synchronizedStopRequested()
-        robotController.stopAndResetRobot()
+        if (autoAiStartedSinceModeSelect)
+            robotController.stopAndResetRobot()
+        else
+            robotController.softStopAndManual()
+        autoAiStartedSinceModeSelect = false
         cartridgeController.stopSystem()
     }
 
     function emergencyStopSynchronizedSystems() {
         synchronizedStopRequested()
+        autoAiStartedSinceModeSelect = false
         robotController.emergencyStop(true)
         cartridgeController.stopSystem()
     }
