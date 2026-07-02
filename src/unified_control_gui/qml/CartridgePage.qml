@@ -944,7 +944,7 @@ import QtGraphicalEffects 1.15
                                     Rectangle {
                                         id: autoModeRect
                                         width: parent.width
-                                        height: (parent.height - 6) / 2
+                                        height: (parent.height - 12) / 3
                                         radius: 8
                                         property bool isModeSelected: cartridgeController.currentMode === "auto"
                                         color: "transparent"
@@ -983,11 +983,54 @@ import QtGraphicalEffects 1.15
                                         }
                                     }
 
+                                    // AI MODE
+                                    Rectangle {
+                                        id: aiModeRect
+                                        width: parent.width
+                                        height: (parent.height - 12) / 3
+                                        radius: 8
+                                        property bool isModeSelected: cartridgeController.currentMode === "ai"
+                                        color: "transparent"
+                                        border.color: isModeSelected ? root.cModeSelectedBorder : root.cProvisionButtonBorder
+                                        border.width: isModeSelected ? 2 : 1
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                        Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            radius: parent.radius
+                                            visible: aiModeRect.isModeSelected || aiModeMA.pressed
+                                            gradient: Gradient {
+                                                orientation: Gradient.Vertical
+                                                GradientStop { position: 0.0; color: aiModeMA.pressed ? root.pressGradientColor(root.cModeSelectedTop) : root.cModeSelectedTop }
+                                                GradientStop { position: 0.54; color: aiModeMA.pressed ? root.pressGradientColor(root.cModeSelectedMid) : root.cModeSelectedMid }
+                                                GradientStop { position: 1.0; color: aiModeMA.pressed ? root.pressGradientColor(root.cModeSelectedBottom) : root.cModeSelectedBottom }
+                                            }
+                                        }
+                                        MotionMouseArea {
+                                            id: aiModeMA
+                                            anchors.fill: parent
+                                            enabled: !modeSelCol.modeBlocked
+                                            hoverScale: 1.05
+                                            pressScale: 0.976
+                                            shadowEnabled: false
+                                            shimmerEnabled: false
+                                            onClicked: {
+                                                mainWindow.syncOperationMode("ai")
+                                            }
+                                        }
+                                        Column {
+                                            anchors.centerIn: parent
+                                            spacing: 2
+                                            Text { text: "AI MODE"; color: root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "Camera AI"; color: root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
+                                        }
+                                    }
+
                                     // MANUAL
                                     Rectangle {
                                         id: manualModeRect
                                         width: parent.width
-                                        height: (parent.height - 6) / 2
+                                        height: (parent.height - 12) / 3
                                         radius: 8
                                         property bool isModeSelected: cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog"
                                         color: "transparent"
