@@ -243,7 +243,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: "ROS 2 - INKOBOT MONITORING SYSTEM"
-                            font.pixelSize: 24; font.bold: true; color: "#67d0ff"
+                            font.pixelSize: 24; font.bold: true; color: "#67d0ff"; font.letterSpacing: 2
                         }
                     }
 
@@ -788,7 +788,7 @@ Item {
 
                     Text { text: "STATE COMMANDS"; color: "#67d0ff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
                     GridLayout {
-                        Layout.fillWidth: true; columns: 2; rowSpacing: 5; columnSpacing: 5
+                        Layout.fillWidth: true; columns: 2; rowSpacing: 8; columnSpacing: 8
                         Repeater {
                             model: [
                                 { lbl: "IN_READY",     displayLbl: "IN_READY",       icon: "icons/between_horizontal_end.svg",   bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
@@ -804,7 +804,7 @@ Item {
                                 readonly property bool isReadyBtn: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
                                 property color gStart: (isReadyBtn && isActive) ? cBtnPrimaryStart : modelData.bgStart
                                 property color gEnd:   (isReadyBtn && isActive) ? cBtnPrimaryEnd : modelData.bgEnd
-                                Layout.fillWidth: true; height: 64; radius: 5
+                                Layout.fillWidth: true; height: 64; radius: 10
                                 color: "transparent"
                                 gradient: Gradient {
                                     orientation: Gradient.Horizontal
@@ -895,20 +895,25 @@ Item {
 
                     Text { text: "SYSTEM CONTROL"; color: "#67d0ff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
 
-                    Rectangle { Layout.fillWidth: true; height: 56; radius: 5; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 1
+                    Rectangle { Layout.fillWidth: true; height: 64; radius: 12; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
                         gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.15) : cBtnEmergencyStart }
-                            GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker(cBtnEmergencyEnd, 1.15) : cBtnEmergencyEnd }
+                            orientation: Gradient.Vertical
+                            GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker("#e05545", 1.25) : "#e05545" }
+                            GradientStop { position: 0.5; color: emMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.25) : cBtnEmergencyStart }
+                            GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker("#8f2318", 1.25) : "#8f2318" }
                         }
-                        Text { anchors.centerIn: parent; text: "⛔ EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 21; font.bold: true }
+                        Rectangle {
+                            anchors { top: parent.top; left: parent.left; right: parent.right; margins: 2 }
+                            height: 1; radius: 1; color: "#66ffffff"
+                        }
+                        Text { anchors.centerIn: parent; text: "⛔  EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 22; font.bold: true; font.letterSpacing: 1.5 }
                         MotionMouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; mainWindow.emergencyStopSynchronizedSystems() } }
                     }
 
                     GridLayout {
-                        Layout.fillWidth: true; columns: 3; rowSpacing: 5; columnSpacing: 5
+                        Layout.fillWidth: true; columns: 3; rowSpacing: 8; columnSpacing: 8
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnDangerBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnDangerBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker(cBtnDangerStart, 1.15) : cBtnDangerStart }
@@ -920,7 +925,7 @@ Item {
                             } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
@@ -930,7 +935,7 @@ Item {
                             MotionMouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnPrimaryBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnPrimaryBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: startMA.pressed ? Qt.darker(cBtnPrimaryStart, 1.15) : cBtnPrimaryStart }
@@ -975,7 +980,7 @@ Item {
                             } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: pauseMA.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
@@ -985,7 +990,7 @@ Item {
                             MotionMouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: resMA.pressed ? Qt.darker(cBtnActionStart, 1.15) : cBtnActionStart }
@@ -1016,7 +1021,7 @@ Item {
                             MotionMouseArea { id: resMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 5; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }

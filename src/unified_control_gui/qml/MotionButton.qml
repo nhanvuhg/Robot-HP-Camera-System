@@ -17,8 +17,8 @@ Button {
     property bool raiseOnHover: false
     // "Độ lún" khi nhấn: dịch xuống + phủ tối nhẹ, áp dụng cho MỌI MotionButton
     // kể cả khi background tuỳ biến không tự xử lý trạng thái pressed.
-    property real pressSinkOffset: 1.5
-    property color pressTintColor: "#2e000000"
+    property real pressSinkOffset: 2
+    property color pressTintColor: "#42000000"
 
     hoverEnabled: true
     transformOrigin: Item.Center

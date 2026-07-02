@@ -28,8 +28,8 @@ import QtGraphicalEffects 1.15
         readonly property int headerH:  70
         readonly property int tabbarH:  64
         readonly property int tabbarDockGap: 4
-        readonly property int gap:       4
-        readonly property int pad:       6
+        readonly property int gap:       8
+        readonly property int pad:       10
         readonly property int ctrlW:   245   // rộng hơn để chứa title font 14
         readonly property int sensorW: 250
         readonly property real rowRatio: 5.0 / (5.0 + 1.6)   // top:log = 5:1.6 → log nhỏ hơn nữa
@@ -3105,7 +3105,7 @@ import QtGraphicalEffects 1.15
 
             implicitWidth:  w > 0 ? w : cbrT.implicitWidth + padH * 2
             implicitHeight: h > 0 ? h : cbrT.implicitHeight + padV * 2
-            radius: 7
+            radius: 10
             property bool _heldVisual: _pressed
 
             // Outline (renderedBg.a==0): pressed/selected/hover hiện fill teal mờ
