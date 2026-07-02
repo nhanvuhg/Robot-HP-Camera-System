@@ -14,6 +14,7 @@ Item {
     property string ctrlMode: "auto"  // "auto" | "camera_ai"
     property string pendingStartMode: ""
     property string pendingStartUiMode: ""
+    property bool pauseLatched: false
 
     readonly property color cPanel:       "#990d1e32"
     readonly property color cPanel2:      "#8806101d"
@@ -29,28 +30,28 @@ Item {
     readonly property color cBad:         "#f0735c"
     readonly property color cBadBg:       Qt.rgba(1.0, 0.32, 0.32, 0.15)
     // CameraPage liquid-glass action palette.
-    readonly property color cBtnBaseStart:      "#163a52"
-    readonly property color cBtnBaseEnd:        "#081627"
-    readonly property color cBtnBaseBorder:     "#1a4a6e"
+    readonly property color cBtnBaseStart:      "#0c1726"
+    readonly property color cBtnBaseEnd:        "#06101d"
+    readonly property color cBtnBaseBorder:     "#163a52"
     readonly property color cBtnBaseText:       "#d6f1ff"
     readonly property color cBtnPrimaryStart:   "#1f9e86"
     readonly property color cBtnPrimaryEnd:     "#163a52"
     readonly property color cBtnPrimaryBorder:  "#3ed0b4"
-    readonly property color cBtnActionStart:    "#1f86e0"
-    readonly property color cBtnActionEnd:      "#163a52"
-    readonly property color cBtnActionBorder:   "#67d0ff"
-    readonly property color cBtnDangerStart:    "#b53527"
-    readonly property color cBtnDangerEnd:      "#3a121a"
-    readonly property color cBtnDangerBorder:   "#f0735c"
-    readonly property color cBtnEmergencyStart: "#d2473a"
-    readonly property color cBtnEmergencyEnd:   "#b53527"
-    readonly property color cBtnEmergencyBorder:"#f0735c"
+    readonly property color cBtnActionStart:    "#163a52"
+    readonly property color cBtnActionEnd:      "#081627"
+    readonly property color cBtnActionBorder:   "#163a52"
+    readonly property color cBtnDangerStart:    "#E05454"
+    readonly property color cBtnDangerEnd:      "#7a2424"
+    readonly property color cBtnDangerBorder:   "#E05454"
+    readonly property color cBtnEmergencyStart: "#E05454"
+    readonly property color cBtnEmergencyEnd:   "#9c3030"
+    readonly property color cBtnEmergencyBorder:"#E05454"
     readonly property color cBtnWarningStart:   "#e2761b"
     readonly property color cBtnWarningEnd:     "#8a4210"
     readonly property color cBtnWarningBorder:  "#f5a623"
-    readonly property color cServoJogStart:     "#155a9c"
-    readonly property color cServoJogEnd:       "#0b2f4a"
-    readonly property color cServoJogBorder:    "#3f95d8"
+    readonly property color cServoJogStart:     "#3B6978"
+    readonly property color cServoJogEnd:       "#1A312C"
+    readonly property color cServoJogBorder:    "#163a52"
     readonly property color cServoJogText:      "#ffffff"
     readonly property color cServoRunStart:     "#1f9e86"
     readonly property color cServoRunEnd:       "#126051"
@@ -149,6 +150,7 @@ Item {
             cameraPageRoot.modeLocked = false
             cameraPageRoot.startCommandLocked = false
             cameraPageRoot.autoRowIndicatorsActive = false
+            cameraPageRoot.pauseLatched = false
         }
     }
 
@@ -251,7 +253,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: "ROS 2 - INKOBOT MONITORING SYSTEM"
-                            font.pixelSize: 24; font.bold: true; color: "#67d0ff"; font.letterSpacing: 2
+                            font.pixelSize: 24; font.bold: true; color: "#ffffff"; font.letterSpacing: 2
                         }
                     }
 
@@ -263,17 +265,17 @@ Item {
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: "#67d0ff"
+                            border.color: "#163a52"
                             border.width: 2
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: "#1a4a6e" }
-                                GradientStop { position: 1.0; color: "#04080f" }
+                                GradientStop { position: 0.0; color: "#0c1726" }
+                                GradientStop { position: 1.0; color: "#06101d" }
                             }
                         }
                         contentItem: Text {
                             text: parent.text; font: parent.font
-                            color: "#67d0ff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                            color: cBtnBaseText; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                         }
                     }
 
@@ -461,7 +463,7 @@ Item {
 
                     Text {
                         text: "ANALOG PRESSURE"
-                        color: "#67d0ff"
+                        color: "#ffffff"
                         font.pixelSize: 20
                         font.bold: true
                         font.letterSpacing: 0.6
@@ -545,7 +547,7 @@ Item {
 
                     Text {
                         text: "SYSTEM MONITOR"
-                        color: "#67d0ff"; font.bold: true; font.pixelSize: 20; font.letterSpacing: 0.6
+                        color: "#ffffff"; font.bold: true; font.pixelSize: 20; font.letterSpacing: 0.6
                         Layout.alignment: Qt.AlignHCenter
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#163a52" }
@@ -598,7 +600,7 @@ Item {
                             Layout.alignment: Qt.AlignTop
                             spacing: 6
 
-                            Text { text: "CONTROL MODE "; color: "#67d0ff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
+                            Text { text: "CONTROL MODE "; color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
 
                             Rectangle {
                                 Layout.fillWidth: true
@@ -687,7 +689,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: false
-                        Text { text: "INPUT ROW"; color: "#67d0ff"; font.pixelSize: 17; font.bold: true }
+                        Text { text: "INPUT ROW"; color: "#ffffff"; font.pixelSize: 17; font.bold: true }
                         Text {
                             Layout.fillWidth: true;
                             font.pixelSize: 13; color: "#74899f"; font.italic: true
@@ -738,7 +740,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: false
-                        Text { text: "OUTPUT SLOT"; color: "#67d0ff"; font.pixelSize: 17; font.bold: true }
+                        Text { text: "OUTPUT SLOT"; color: "#ffffff"; font.pixelSize: 17; font.bold: true }
                         Text {
                             text: robotController.selectedSlot > 0 ? ("Selected slot " + robotController.selectedSlot) : "Select output tray position"
                             color: "#74899f"; font.pixelSize: 17
@@ -794,7 +796,7 @@ Item {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#163a52" }
 
-                    Text { text: "STATE COMMANDS"; color: "#67d0ff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
+                    Text { text: "STATE COMMANDS"; color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
                     GridLayout {
                         Layout.fillWidth: true; columns: 2; rowSpacing: 8; columnSpacing: 8
                         Repeater {
@@ -804,7 +806,7 @@ Item {
                                 { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE", icon: "icons/arrows_up_from_line.svg",      bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
                                 { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",   icon: "icons/fold_horizontal.svg",         bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
                                 { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",   icon: "icons/package.svg",                 bgStart: cBtnPrimaryStart, bgEnd: cBtnPrimaryEnd, bc: cBtnPrimaryBorder, tc: "#ffffff" },
-                                { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",     icon: "icons/package_x.svg",               bgStart: cBtnWarningStart, bgEnd: cBtnWarningEnd, bc: cBtnWarningBorder, tc: "#fbe9c0" }
+                                { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",     icon: "icons/package_x.svg",               bgStart: "#E68457",        bgEnd: "#8a4210",        bc: "#E68457",        tc: "#ffffff" }
                             ]
                             delegate: Rectangle {
                                 required property var modelData
@@ -821,13 +823,6 @@ Item {
                                 }
                                 border.color: modelData.bc
                                 border.width: 1
-                                Rectangle {
-                                    anchors { top: parent.top; left: parent.left; right: parent.right; margins: 1 }
-                                    height: 1
-                                    radius: 1
-                                    color: "#55ffffff"
-                                    opacity: 0.55
-                                }
                                 Item {
                                     anchors.fill: parent
 
@@ -901,18 +896,14 @@ Item {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#163a52" }
 
-                    Text { text: "SYSTEM CONTROL"; color: "#67d0ff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
+                    Text { text: "SYSTEM CONTROL"; color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
 
                     Rectangle { Layout.fillWidth: true; height: 64; radius: 12; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
                         gradient: Gradient {
                             orientation: Gradient.Vertical
-                            GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker("#e05545", 1.25) : "#e05545" }
+                            GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker("#E05454", 1.25) : "#E05454" }
                             GradientStop { position: 0.5; color: emMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.25) : cBtnEmergencyStart }
-                            GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker("#8f2318", 1.25) : "#8f2318" }
-                        }
-                        Rectangle {
-                            anchors { top: parent.top; left: parent.left; right: parent.right; margins: 2 }
-                            height: 1; radius: 1; color: "#66ffffff"
+                            GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker("#7a2424", 1.25) : "#7a2424" }
                         }
                         Text { anchors.centerIn: parent; text: "⛔  EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 22; font.bold: true; font.letterSpacing: 1.5 }
                         MotionMouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; mainWindow.emergencyStopSynchronizedSystems() } }
@@ -933,11 +924,11 @@ Item {
                             } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#163a52"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
-                                GradientStop { position: 1.0; color: enMA.pressed ? Qt.darker(cBtnBaseEnd, 1.15) : cBtnBaseEnd }
+                                GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker("#3B6978", 1.15) : "#3B6978" }
+                                GradientStop { position: 1.0; color: enMA.pressed ? Qt.darker("#1A312C", 1.15) : "#1A312C" }
                             }
                             Text { anchors.centerIn: parent; text: "ENABLE"; color: "#d6f1ff"; font.pixelSize: 19; font.bold: true }
                             MotionMouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
@@ -988,14 +979,38 @@ Item {
                             } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
+                        Rectangle {
+                            Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"
+                            border.color: "#E68457"
+                            border.width: cameraPageRoot.pauseLatched ? 2 : 1
+                            transform: Translate { y: cameraPageRoot.pauseLatched ? 2 : 0 }
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: pauseMA.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
-                                GradientStop { position: 1.0; color: pauseMA.pressed ? Qt.darker(cBtnBaseEnd, 1.15) : cBtnBaseEnd }
+                                GradientStop {
+                                    position: 0.0
+                                    color: pauseMA.pressed || cameraPageRoot.pauseLatched
+                                           ? Qt.darker("#8a4210", 1.12)
+                                           : "#8a4210"
+                                }
+                                GradientStop {
+                                    position: 1.0
+                                    color: pauseMA.pressed || cameraPageRoot.pauseLatched
+                                           ? Qt.darker("#E68457", 1.12)
+                                           : "#E68457"
+                                }
                             }
-                            Text { anchors.centerIn: parent; text: "PAUSE"; color: "#d6f1ff"; font.pixelSize: 19; font.bold: true }
-                            MotionMouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: parent.radius
+                                color: "#000000"
+                                opacity: cameraPageRoot.pauseLatched ? 0.22 : 0.0
+                            }
+                            Text {
+                                anchors.centerIn: parent; text: "PAUSE"
+                                color: "#ffffff"
+                                font.pixelSize: 19; font.bold: true
+                            }
+                            MotionMouseArea { id: pauseMA; anchors.fill: parent; onClicked: { cameraPageRoot.pauseLatched = true; robotController.pauseRobot() } }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cServoRunBorder; border.width: 1
@@ -1026,14 +1041,14 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                             }
-                            MotionMouseArea { id: resMA; anchors.fill: parent; onClicked: robotController.resumeRobot() }
+                            MotionMouseArea { id: resMA; anchors.fill: parent; onClicked: { cameraPageRoot.pauseLatched = false; robotController.resumeRobot() } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnBaseBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#163a52"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
-                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker(cBtnBaseEnd, 1.15) : cBtnBaseEnd }
+                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#2B5748", 1.15) : "#2B5748" }
+                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#1A312C", 1.15) : "#1A312C" }
                             }
                             Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#d6f1ff"; font.pixelSize: 19; font.bold: true }
                             MotionMouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
@@ -1050,7 +1065,7 @@ Item {
                 anchors.fill: parent; color: cPanel; border.color: cBorder; border.width: 1
                 RowLayout {
                     anchors.fill: parent; anchors.margins: 10
-                    Text { text: "© 2025 RYNAN TECHNOLOGIES"; color: "#67d0ff"; font.pixelSize: 16; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: "© 2025 RYNAN TECHNOLOGIES"; color: "#ffffff"; font.pixelSize: 16; Layout.alignment: Qt.AlignVCenter }
                     Item { Layout.fillWidth: true }
                     RowLayout { spacing: 6
                         Image { source: "qrc:/icons/qml/icons/app_badging.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true; Layout.preferredWidth: 24; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
@@ -1059,7 +1074,7 @@ Item {
                     Rectangle { width: 2; Layout.fillHeight: true; color: "#163a52" }
                     RowLayout { spacing: 6; Layout.alignment: Qt.AlignVCenter
                         Image { source: "qrc:/icons/qml/icons/schedule.svg"; fillMode: Image.PreserveAspectFit; smooth: true; Layout.preferredWidth: 24; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
-                        Text { text: currentTime; font.pixelSize: 16; color: "#67d0ff"; Layout.alignment: Qt.AlignVCenter }
+                        Text { text: currentTime; font.pixelSize: 16; color: "#ffffff"; Layout.alignment: Qt.AlignVCenter }
                     }
                 }
             }
@@ -1077,9 +1092,9 @@ Item {
         radius: 10
         color: cPanel2
         clip: true
-        border.color: cBorder
+        border.color: "#163a52"
         border.width: 1
-        HoverHandler { onHoveredChanged: parent.border.color = hovered ? cHover : cBorder }
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#1a4a6e" : "#163a52" }
         ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 16
@@ -1098,7 +1113,7 @@ Item {
                         var tail = parts.length > 1 ? parts.slice(1).join(" ") : "";
                         return tail.length > 0 ? (head + " · " + tail) : head;
                     }
-                    color: cMuted
+                    color: cBtnBaseText
                     font.pixelSize: 15
                     font.bold: true
                     Layout.alignment: Qt.AlignVCenter
@@ -1109,14 +1124,14 @@ Item {
                     Layout.alignment: Qt.AlignVCenter
                     Text {
                         text: val.toFixed(1)
-                        color: cText
+                        color: cBtnBaseText
                         font.pixelSize: 26
                         font.bold: true
                         font.family: "monospace"
                     }
                     Text {
                         text: "mbar"
-                        color: cMuted
+                        color: cBtnBaseText
                         font.pixelSize: 13
                         font.bold: true
                         Layout.alignment: Qt.AlignBottom
@@ -1142,8 +1157,8 @@ Item {
                     clip: true
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: "#1a4a6e" }
-                        GradientStop { position: 1.0; color: "#04080f" }
+                        GradientStop { position: 0.0; color: "#1f9e86" }
+                        GradientStop { position: 1.0; color: "#163a52" }
                     }
 
                     onWidthChanged: {
@@ -1189,9 +1204,9 @@ Item {
         radius: 6
         color:        cPanel2
         clip:         true
-        border.color: cBorder
+        border.color: "#163a52"
         border.width: 1
-        HoverHandler { onHoveredChanged: parent.border.color = hovered ? cHover : cBorder }
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#1a4a6e" : "#163a52" }
         ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 14
@@ -1210,7 +1225,7 @@ Item {
                             var parts = cartName.split(" ");
                             return parts[0].toUpperCase();
                         }
-                        color: cMuted
+                        color: cBtnBaseText
                         font.pixelSize: 11
                         font.bold: true
                     }
@@ -1219,7 +1234,7 @@ Item {
                             var parts = cartName.split(" ");
                             return parts.length > 1 ? parts[1] : "";
                         }
-                        color: cText
+                        color: cBtnBaseText
                         font.pixelSize: 16
                         font.bold: true
                     }
@@ -1230,14 +1245,14 @@ Item {
                     Layout.alignment: Qt.AlignVCenter
                     Text {
                         text: cartVal.toFixed(1)
-                        color: cText
+                        color: cBtnBaseText
                         font.pixelSize: 21
                         font.bold: true
                         font.family: "monospace"
                     }
                     Text {
                         text: "mbar"
-                        color: cMuted
+                        color: cBtnBaseText
                         font.pixelSize: 13
                         font.bold: true
                         Layout.alignment: Qt.AlignBottom
@@ -1266,19 +1281,13 @@ Item {
                         GradientStop {
                             position: 0.0
                             color: {
-                                if (cls === "limit") return "#1a4a6e";
-                                if (cls === "high") return "#1f86e0";
-                                if (cls === "ok") return "#9fb3c8";
-                                return "#1a4a6e";
+                                return "#1f9e86";
                             }
                         }
                         GradientStop {
                             position: 1.0
                             color: {
-                                if (cls === "limit") return "#04080f";
-                                if (cls === "high") return "#163a52";
-                                if (cls === "ok") return "#1f86e0";
-                                return "#04080f";
+                                return "#163a52";
                             }
                         }
                     }
