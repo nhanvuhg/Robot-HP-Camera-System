@@ -1935,8 +1935,10 @@ import QtGraphicalEffects 1.15
             Item {
                 id: page3Root
                 property string currentMode: cartridgeController.currentMode  // bind to system mode
-                // MANUAL controls (JOG) chỉ enable khi robot rảnh — "MANUAL" và "IDLE" đều coi là rảnh.
-                property bool manualEnabled: robotController.systemStatus === "IDLE" || robotController.systemStatus === "MANUAL" || robotController.systemStatus === "UNKNOWN" || robotController.systemStatus === ""
+                // MANUAL controls (JOG) enable khi robot rảnh HOẶC dashboard đang JOG/MANUAL.
+                // Robot control không có JOG riêng → JOG/MANUAL của dashboard = manual robot,
+                // không được khóa di chuyển robot trong 2 mode này.
+                property bool manualEnabled: currentMode === "jog" || currentMode === "manual" || robotController.systemStatus === "IDLE" || robotController.systemStatus === "MANUAL" || robotController.systemStatus === "UNKNOWN" || robotController.systemStatus === ""
                 property real stepValue: 1.0
                 property int speedVal: robotController.speedRatio
                 property bool rowLocked: false
