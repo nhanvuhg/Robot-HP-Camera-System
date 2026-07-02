@@ -85,6 +85,14 @@ import QtGraphicalEffects 1.15
         readonly property color cBtnEmergencyStart: "#d2473a"
         readonly property color cBtnEmergencyEnd:   "#b53527"
         readonly property color cBtnEmergencyBorder:"#f0735c"
+        readonly property color cServoJogStart:     "#155a9c"
+        readonly property color cServoJogEnd:       "#0b2f4a"
+        readonly property color cServoJogBorder:    "#3f95d8"
+        readonly property color cServoJogText:      "#ffffff"
+        readonly property color cServoRunStart:     "#1f9e86"
+        readonly property color cServoRunEnd:       "#126051"
+        readonly property color cServoRunBorder:    "#3ed0b4"
+        readonly property color cServoRunText:      "#ffffff"
         readonly property color cUnifiedBtn: cBtnBaseStart
         readonly property color cInReadyLayer: cBtnBaseStart
         readonly property color cInReadyLayerEnd: cBtnBaseEnd
@@ -1375,7 +1383,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true; Layout.preferredWidth: 1
                                                     Layout.preferredHeight: cardItem.controlH
                                                     padV: 6; padH: 0; fontSize: 18
-                                                    bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText
+                                                    bg: root.cServoJogStart; bgEnd: root.cServoJogEnd; bc: root.cServoJogBorder; tc: root.cServoJogText
                                                     active: servoRow.jogAllowed
                                                     inactiveOpacity: 0.22
                                                         onPressed: {
@@ -1394,7 +1402,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true; Layout.preferredWidth: 1
                                                     Layout.preferredHeight: cardItem.controlH
                                                     padV: 6; padH: 0; fontSize: 18
-                                                        bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText
+                                                        bg: root.cServoJogStart; bgEnd: root.cServoJogEnd; bc: root.cServoJogBorder; tc: root.cServoJogText
                                                     active: servoRow.jogAllowed
                                                     inactiveOpacity: 0.22
                                                         onPressed: {
@@ -1461,7 +1469,7 @@ import QtGraphicalEffects 1.15
                                                         Layout.preferredWidth: 80
                                                         Layout.preferredHeight: cardItem.controlH
                                                         padV: 0; fontSize: 16
-                                                        bg: root.cBtnBaseStart; bgEnd: root.cBtnBaseEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; active: servoRow.jogAllowed
+                                                        bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; active: servoRow.jogAllowed
                                                         inactiveOpacity: 0.22
                                                         onClicked: { if(servoRow.jogAllowed) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } }
                                                     }

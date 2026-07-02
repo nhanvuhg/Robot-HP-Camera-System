@@ -48,6 +48,14 @@ Item {
     readonly property color cBtnWarningStart:   "#e2761b"
     readonly property color cBtnWarningEnd:     "#8a4210"
     readonly property color cBtnWarningBorder:  "#f5a623"
+    readonly property color cServoJogStart:     "#155a9c"
+    readonly property color cServoJogEnd:       "#0b2f4a"
+    readonly property color cServoJogBorder:    "#3f95d8"
+    readonly property color cServoJogText:      "#ffffff"
+    readonly property color cServoRunStart:     "#1f9e86"
+    readonly property color cServoRunEnd:       "#126051"
+    readonly property color cServoRunBorder:    "#3ed0b4"
+    readonly property color cServoRunText:      "#ffffff"
 
     function classifyPressure(val, lowT, highT, limitT) {
         if (val < lowT) return "low";
@@ -793,8 +801,8 @@ Item {
                             model: [
                                 { lbl: "IN_READY",     displayLbl: "IN_READY",       icon: "icons/between_horizontal_end.svg",   bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
                                 { lbl: "OUT_READY",    displayLbl: "OUT_READY",      icon: "icons/between_horizontal_start.svg", bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
-                                { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE", icon: "icons/arrows_up_from_line.svg",      bgStart: cBtnActionStart,  bgEnd: cBtnActionEnd,  bc: cBtnActionBorder,  tc: "#ffffff" },
-                                { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",   icon: "icons/fold_horizontal.svg",         bgStart: cBtnActionStart,  bgEnd: cBtnActionEnd,  bc: cBtnActionBorder,  tc: "#ffffff" },
+                                { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE", icon: "icons/arrows_up_from_line.svg",      bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
+                                { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",   icon: "icons/fold_horizontal.svg",         bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
                                 { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",   icon: "icons/package.svg",                 bgStart: cBtnPrimaryStart, bgEnd: cBtnPrimaryEnd, bc: cBtnPrimaryBorder, tc: "#ffffff" },
                                 { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",     icon: "icons/package_x.svg",               bgStart: cBtnWarningStart, bgEnd: cBtnWarningEnd, bc: cBtnWarningBorder, tc: "#fbe9c0" }
                             ]
@@ -990,11 +998,11 @@ Item {
                             MotionMouseArea { id: pauseMA; anchors.fill: parent; onClicked: robotController.pauseRobot() }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cServoRunBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: resMA.pressed ? Qt.darker(cBtnActionStart, 1.15) : cBtnActionStart }
-                                GradientStop { position: 1.0; color: resMA.pressed ? Qt.darker(cBtnActionEnd, 1.15) : cBtnActionEnd }
+                                GradientStop { position: 0.0; color: resMA.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
+                                GradientStop { position: 1.0; color: resMA.pressed ? Qt.darker(cServoRunEnd, 1.15) : cServoRunEnd }
                             }
                             Row {
                                 anchors.centerIn: parent
@@ -1012,7 +1020,7 @@ Item {
                                 }
                                 Text {
                                     text: "RESUME"
-                                    color: "#d6f1ff"
+                                    color: cServoRunText
                                     font.pixelSize: 19
                                     font.bold: true
                                     anchors.verticalCenter: parent.verticalCenter
