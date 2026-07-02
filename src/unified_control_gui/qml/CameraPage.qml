@@ -149,14 +149,9 @@ Item {
         target: cartridgeController
         function onCurrentModeChanged() {
             var m = (cartridgeController.currentMode || "").toLowerCase()
-            var requestedUiMode = cameraPageRoot.pendingStartUiMode
             if (cameraPageRoot.pendingStartMode !== "" && m === cameraPageRoot.pendingStartMode)
                 cameraPageRoot.dispatchStartAfterModeConfirmed()
-            if (requestedUiMode === "camera_ai" && m === "auto") {
-                cameraPageRoot.ctrlMode = "camera_ai"
-            } else if (m === "auto" && cameraPageRoot.ctrlMode === "camera_ai") {
-                return
-            } else if (m === "auto" || m === "ai" || m === "camera_ai" || m === "manual" || m === "jog") {
+            if (m === "auto" || m === "ai" || m === "camera_ai" || m === "manual" || m === "jog") {
                 cameraPageRoot.ctrlMode = (m === "ai") ? "camera_ai" : (m === "jog" ? "manual" : m);
             }
         }

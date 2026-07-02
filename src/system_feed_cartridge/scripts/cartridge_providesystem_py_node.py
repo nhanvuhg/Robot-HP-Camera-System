@@ -497,7 +497,8 @@ class CartridgeSystem(Node):
         khởi động để đảm bảo sync mode dù robot subscribe trễ. Tự cancel timer
         sau lần thứ 3."""
         msg = Int32()
-        if self.operation_mode in ('auto', 'ai'): msg.data = 1
+        if self.operation_mode == 'auto': msg.data = 1
+        elif self.operation_mode == 'ai': msg.data = 2
         else: msg.data = 3
         self.pub_robot_mode.publish(msg)
         self._initial_mode_publish_count += 1
@@ -2482,12 +2483,12 @@ class CartridgeSystem(Node):
     def _cb_robot_mode(self, msg: Int32):
         """
         Đồng bộ mode từ robot node qua /robot/set_mode.
-        Mapping cartridge: robot AUTO/AI camera đều là AUTO; robot MANUAL là MANUAL.
+        Mapping cartridge: robot AUTO là AUTO, robot AI là AI, robot MANUAL là MANUAL.
         Khi mode thay đổi: xóa log guide để hiển thị message mới phù hợp mode mới.
         Khi chuyển sang AUTO: reset trigger flags (_input_tray_done, _s4_trigger)
         để bắt buộc chu trình mới từ STATE1/STATE3, không kế thừa state cũ.
         """
-        mapping = {1: 'auto', 2: 'auto', 3: 'manual'}
+        mapping = {1: 'auto', 2: 'ai', 3: 'manual'}
         requested = mapping.get(msg.data, 'manual')
 
         if requested == 'manual' and self.operation_mode == 'manual' and getattr(self, '_jog_mode', False):
@@ -2543,7 +2544,12 @@ class CartridgeSystem(Node):
         if raw_requested not in ('auto', 'manual', 'ai', 'camera_ai', 'jog'):
             self._notify('warn', f'Mode khong hop le: {raw_requested}', '')
             return
-        requested = 'auto' if raw_requested in ('auto', 'ai', 'camera_ai') else 'manual'
+        if raw_requested == 'auto':
+            requested = 'auto'
+        elif raw_requested in ('ai', 'camera_ai'):
+            requested = 'ai'
+        else:
+            requested = 'manual'
         jog_requested = (raw_requested == 'jog')
         active_states = {SystemState.IDLE, SystemState.ERROR,
                          SystemState.HOMING, SystemState.HOMING_RUNNING}
@@ -2577,7 +2583,7 @@ class CartridgeSystem(Node):
 
             # Sync to robot node
             robot_msg = Int32()
-            if raw_requested in ('ai', 'camera_ai'): robot_msg.data = 2
+            if requested == 'ai': robot_msg.data = 2
             elif requested == 'auto': robot_msg.data = 1
             else: robot_msg.data = 3
             self.pub_robot_mode.publish(robot_msg)

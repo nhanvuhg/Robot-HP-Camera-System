@@ -21,8 +21,10 @@ ApplicationWindow {
 
     function cartridgeModeFor(mode) {
         var m = (mode || "").toString().trim().toLowerCase()
-        if (m === "auto" || m === "ai" || m === "camera_ai")
+        if (m === "auto")
             return "auto"
+        if (m === "ai" || m === "camera_ai")
+            return "ai"
         if (m === "jog")
             return "jog"
         return "manual"
@@ -39,8 +41,6 @@ ApplicationWindow {
 
     function cartridgeCommandModeFor(mode) {
         var m = (mode || "").toString().trim().toLowerCase()
-        if (m === "camera_ai" || m === "ai")
-            return m
         return cartridgeModeFor(m)
     }
 
@@ -64,7 +64,7 @@ ApplicationWindow {
 
     function startSynchronizedSystems(mode) {
         var cartridgeMode = syncOperationMode(mode)
-        hpController.publishMode(cartridgeMode === "auto" ? 0 : 2)
+        hpController.publishMode((cartridgeMode === "auto" || cartridgeMode === "ai") ? 0 : 2)
         synchronizedStartRequested(mode)
         robotController.startSystem(true)
     }
