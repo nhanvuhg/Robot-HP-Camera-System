@@ -10,7 +10,7 @@ ApplicationWindow {
     width: 1920
     height: 1080
     title: "ROS2 - Unified Control System"
-    color: "#06101d"
+    color: "#020817"
     visibility: Window.FullScreen
 
     property bool scaleIssueWarning: false
@@ -98,19 +98,67 @@ ApplicationWindow {
         }
     }
 
-    Image {
-        id: bgWallpaper
+    Item {
+        id: darkNavyBackground
         anchors.fill: parent
-        source: "qrc:/icons/qml/icons/bg_servers.jpg"
-        fillMode: Image.PreserveAspectCrop
-        smooth: true
         z: -10
-        onStatusChanged: console.log("[BG]", status, source, "size=", sourceSize)
-    }
-    Rectangle {
-        anchors.fill: parent
-        color: "#8006101d"
-        z: -9
+
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop { position: 0.00; color: "#020715" }
+                GradientStop { position: 0.42; color: "#06234c" }
+                GradientStop { position: 0.72; color: "#041a38" }
+                GradientStop { position: 1.00; color: "#01040d" }
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.00; color: "#d9000309" }
+                GradientStop { position: 0.22; color: "#3308203f" }
+                GradientStop { position: 0.52; color: "#1f0b3560" }
+                GradientStop { position: 0.78; color: "#3308203f" }
+                GradientStop { position: 1.00; color: "#df000309" }
+            }
+        }
+
+        Canvas {
+            id: navyTexture
+            anchors.fill: parent
+            opacity: 0.22
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                var dots = Math.max(2400, Math.floor(width * height / 620))
+                for (var i = 0; i < dots; ++i) {
+                    var x = Math.random() * width
+                    var y = Math.random() * height
+                    var a = 0.018 + Math.random() * 0.055
+                    var s = 0.5 + Math.random() * 1.8
+                    ctx.fillStyle = "rgba(120,170,220," + a + ")"
+                    ctx.fillRect(x, y, s, s)
+                }
+                for (var j = 0; j < 120; ++j) {
+                    ctx.strokeStyle = "rgba(120,160,210,0.025)"
+                    ctx.lineWidth = 1
+                    ctx.beginPath()
+                    ctx.moveTo(Math.random() * width, Math.random() * height)
+                    ctx.lineTo(Math.random() * width, Math.random() * height)
+                    ctx.stroke()
+                }
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: "#30000000"
+        }
     }
 
     StackView {
