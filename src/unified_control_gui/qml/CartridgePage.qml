@@ -90,9 +90,9 @@ import QtGraphicalEffects 1.15
         readonly property color cServoJogEnd:       "#1A1A2E"
         readonly property color cServoJogBorder:    "#163a52"
         readonly property color cServoJogText:      "#ffffff"
-        readonly property color cServoRunStart:     "#1f9e86"
-        readonly property color cServoRunEnd:       "#126051"
-        readonly property color cServoRunBorder:    "#3ed0b4"
+        readonly property color cServoRunStart:     "#1C4D8D"
+        readonly property color cServoRunEnd:       "#0c1726"
+        readonly property color cServoRunBorder:    "#163a52"
         readonly property color cServoRunText:      "#ffffff"
         readonly property color cUnifiedBtn: cBtnBaseStart
         readonly property color cInReadyLayer: cBtnBaseStart

@@ -49,13 +49,13 @@ Item {
     readonly property color cBtnWarningStart:   "#e2761b"
     readonly property color cBtnWarningEnd:     "#8a4210"
     readonly property color cBtnWarningBorder:  "#f5a623"
-    readonly property color cServoJogStart:     "#3B6978"
-    readonly property color cServoJogEnd:       "#1A312C"
+    readonly property color cServoJogStart:     "#A1C2BD"
+    readonly property color cServoJogEnd:       "#163a52"
     readonly property color cServoJogBorder:    "#163a52"
-    readonly property color cServoJogText:      "#ffffff"
-    readonly property color cServoRunStart:     "#1f9e86"
-    readonly property color cServoRunEnd:       "#126051"
-    readonly property color cServoRunBorder:    "#3ed0b4"
+    readonly property color cServoJogText:      "#06101d"
+    readonly property color cServoRunStart:     "#1C4D8D"
+    readonly property color cServoRunEnd:       "#0c1726"
+    readonly property color cServoRunBorder:    "#163a52"
     readonly property color cServoRunText:      "#ffffff"
 
     function classifyPressure(val, lowT, highT, limitT) {
@@ -310,7 +310,17 @@ Item {
                                 }
                             }
                         }
-                        background: Rectangle { radius: 6; color: "transparent"; border.color: "#163a52"; border.width: 2 }
+                        background: Rectangle {
+                            radius: 6
+                            color: "transparent"
+                            border.color: cServoRunBorder
+                            border.width: 2
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: cServoRunStart }
+                                GradientStop { position: 1.0; color: cServoRunEnd }
+                            }
+                        }
                         contentItem: Item {
                             Image {
                                 anchors.centerIn: parent
@@ -326,7 +336,17 @@ Item {
                     MotionButton {
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: Qt.quit()
-                        background: Rectangle { radius: 6; color: "transparent"; border.color: "#163a52"; border.width: 2 }
+                        background: Rectangle {
+                            radius: 6
+                            color: "transparent"
+                            border.color: cBtnDangerBorder
+                            border.width: 2
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: cBtnDangerStart }
+                                GradientStop { position: 1.0; color: cBtnDangerEnd }
+                            }
+                        }
                         contentItem: Image { source: "qrc:/icons/qml/icons/power_settings.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true }
                     }
                 }
@@ -642,7 +662,7 @@ Item {
                                                 radius: height / 2
                                                 antialiasing: true
                                                 color: modeOption.isSelected ? "transparent" : (modeOption.hovered ? Qt.rgba(0.15, 0.55, 0.70, 0.12) : "transparent")
-                                                border.color: modeOption.isSelected ? cBtnPrimaryBorder : (modeOption.hovered ? cBtnBaseBorder : "transparent")
+                                                border.color: modeOption.isSelected ? cServoJogBorder : (modeOption.hovered ? cBtnBaseBorder : "transparent")
                                                 border.width: modeOption.isSelected || (modeOption.hovered && !modeOption.isSelected) ? 1 : 0
                                                 gradient: modeOption.isSelected ? selectedModeGradient : null
                                                 Behavior on color { ColorAnimation { duration: 140 } }
@@ -651,14 +671,14 @@ Item {
                                                 Gradient {
                                                     id: selectedModeGradient
                                                     orientation: Gradient.Horizontal
-                                                    GradientStop { position: 0.0; color: cBtnPrimaryStart }
-                                                    GradientStop { position: 1.0; color: cBtnPrimaryEnd }
+                                                    GradientStop { position: 0.0; color: cServoJogStart }
+                                                    GradientStop { position: 1.0; color: cServoJogEnd }
                                                 }
                                             }
 
                                             contentItem: Text {
                                                 text: (modeOption.isLocked && !modeOption.isSelected ? "🔒 " : "") + modeOption.modelData.lbl
-                                                color: modeOption.isSelected ? "#ffffff" : "#d6f1ff"
+                                                color: modeOption.isSelected ? cServoJogText : "#d6f1ff"
                                                 font.pixelSize: 16
                                                 font.bold: true
                                                 horizontalAlignment: Text.AlignHCenter
@@ -706,32 +726,30 @@ Item {
                                 property bool isActive: robotController.selectedRow === rn
                                 property bool isAiDetected: aiMode && (robotController.rowReady[index] === true)
                                 property bool canSelect: !cameraPageRoot.rowLocked && cameraPageRoot.ctrlMode === "auto"
-                                Layout.fillWidth: true; height: 32; radius: 5
-                                color: aiMode
-                                       ? (isAiDetected ? Qt.rgba(0.29, 0.84, 0.81, 0.20) : Qt.rgba(0.03, 0.11, 0.18, 0.50))
-                                       : (isActive ? Qt.rgba(0.07, 0.55, 0.53, 0.28) : Qt.rgba(0.03, 0.11, 0.18, 0.68))
-                                border.color: aiMode
-                                              ? (isAiDetected ? cBtnPrimaryBorder : cBtnBaseBorder)
-                                              : (isActive ? cBtnPrimaryBorder : cBtnBaseBorder)
-                                border.width: aiMode
-                                              ? (isAiDetected ? 2 : 1)
-                                              : (isActive ? 2 : 1)
+                                readonly property bool isAccent: aiMode ? isAiDetected : isActive
+                                Layout.fillWidth: true; height: 32; radius: 12
+                                color: isAccent ? "transparent"
+                                                : (aiMode
+                                                   ? Qt.rgba(0.03, 0.11, 0.18, 0.50)
+                                                   : Qt.rgba(0.03, 0.11, 0.18, 0.68))
+                                border.color: isAccent ? cServoJogBorder : cBtnBaseBorder
+                                border.width: isAccent ? 2 : 1
+                                gradient: isAccent ? accentGradient : null
                                 opacity: aiMode
                                          ? 1.0
                                          : (canSelect ? 1.0 : (isActive ? 1.0 : 0.45))
-                                Rectangle {
-                                    visible: isAiDetected || (!aiMode && isActive)
-                                    anchors { top: parent.top; left: parent.left; right: parent.right }
-                                    height: 3; radius: 2; color: "#67d0ff"
+                                Gradient {
+                                    id: accentGradient
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: maRow.pressed ? Qt.darker(cServoJogStart, 1.15) : cServoJogStart }
+                                    GradientStop { position: 1.0; color: maRow.pressed ? Qt.darker(cServoJogEnd, 1.15) : cServoJogEnd }
                                 }
                                 Text {
                                     anchors.centerIn: parent; text: "R" + rn
-                                    color: aiMode
-                                           ? (isAiDetected ? "#67d0ff" : "#74899f")
-                                           : (isActive ? "#67d0ff" : "#9fb3c8")
-                                    font.pixelSize: 18; font.bold: (aiMode ? isAiDetected : isActive)
+                                    color: isAccent ? cServoJogText : "#9fb3c8"
+                                    font.pixelSize: 18; font.bold: isAccent
                                 }
-                                MotionMouseArea { anchors.fill: parent; enabled: canSelect; onClicked: robotController.selectRow(rn) }
+                                MotionMouseArea { id: maRow; anchors.fill: parent; enabled: canSelect; onClicked: robotController.selectRow(rn) }
                             }
                         }
                     }
@@ -755,32 +773,31 @@ Item {
                                 property bool isReady: aiMode && (robotController.slotReady[index] === true)
                                 property bool isActive: robotController.selectedSlot === sn
                                 property bool canSelect: cameraPageRoot.ctrlMode === "auto"
-                                Layout.fillWidth: true; height: 32; radius: 5
-                                color: aiMode
-                                       ? (isActive ? Qt.rgba(0.06, 0.50, 0.34, 0.28) : (isReady ? Qt.rgba(0.04, 0.34, 0.25, 0.24) : Qt.rgba(0.03, 0.11, 0.18, 0.68)))
-                                       : (isActive ? Qt.rgba(0.07, 0.55, 0.53, 0.28) : Qt.rgba(0.03, 0.11, 0.18, 0.68))
-                                border.color: aiMode
-                                              ? (isActive ? "#3ed0b4" : (isReady ? "#1f9e86" : cBtnBaseBorder))
-                                              : (isActive ? cBtnPrimaryBorder : cBtnBaseBorder)
-                                border.width: aiMode
-                                              ? (isActive ? 3 : (isReady ? 2 : 1))
-                                              : (isActive ? 2 : 1)
+                                readonly property bool isAccent: aiMode ? isReady : isActive
+                                Layout.fillWidth: true; height: 32; radius: 12
+                                color: isAccent ? "transparent"
+                                                : (aiMode
+                                                   ? Qt.rgba(0.03, 0.11, 0.18, 0.68)
+                                                   : Qt.rgba(0.03, 0.11, 0.18, 0.68))
+                                border.color: isAccent ? cServoJogBorder : cBtnBaseBorder
+                                border.width: isAccent ? 2 : 1
+                                gradient: isAccent ? accentGradient : null
                                 opacity: aiMode
                                          ? (isReady || isActive ? 1.0 : 0.45)
                                          : (canSelect ? 1.0 : (isActive ? 1.0 : 0.45))
-                                Rectangle {
-                                    visible: isActive
-                                    anchors { top: parent.top; left: parent.left; right: parent.right }
-                                    height: 3; radius: 2; color: aiMode ? "#3ed0b4" : cBtnPrimaryBorder
+                                Gradient {
+                                    id: accentGradient
+                                    orientation: Gradient.Horizontal
+                                    GradientStop { position: 0.0; color: maSlot.pressed ? Qt.darker(cServoJogStart, 1.15) : cServoJogStart }
+                                    GradientStop { position: 1.0; color: maSlot.pressed ? Qt.darker(cServoJogEnd, 1.15) : cServoJogEnd }
                                 }
                                 Text {
                                     anchors.centerIn: parent; text: "O" + sn
-                                    color: aiMode
-                                           ? (isActive ? "#3ed0b4" : (isReady ? "#3ed0b4" : "#9fb3c8"))
-                                           : (isActive ? "#67d0ff" : "#9fb3c8")
-                                    font.pixelSize: 16; font.bold: isActive || isReady
+                                    color: isAccent ? cServoJogText : "#9fb3c8"
+                                    font.pixelSize: 16; font.bold: isAccent
                                 }
                                 MotionMouseArea {
+                                    id: maSlot
                                     anchors.fill: parent
                                     enabled: canSelect
                                     hoverScale: 1.02
@@ -805,7 +822,7 @@ Item {
                                 { lbl: "OUT_READY",    displayLbl: "OUT_READY",      icon: "icons/between_horizontal_start.svg", bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
                                 { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE", icon: "icons/arrows_up_from_line.svg",      bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
                                 { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",   icon: "icons/fold_horizontal.svg",         bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
-                                { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",   icon: "icons/package.svg",                 bgStart: cBtnPrimaryStart, bgEnd: cBtnPrimaryEnd, bc: cBtnPrimaryBorder, tc: "#ffffff" },
+                                { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",   icon: "icons/package.svg",                 bgStart: "#1C4D8D",        bgEnd: "#0c1726",        bc: "#163a52",        tc: "#ffffff" },
                                 { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",     icon: "icons/package_x.svg",               bgStart: "#E68457",        bgEnd: "#8a4210",        bc: "#E68457",        tc: "#ffffff" }
                             ]
                             delegate: Rectangle {
@@ -897,17 +914,6 @@ Item {
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#163a52" }
 
                     Text { text: "SYSTEM CONTROL"; color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
-
-                    Rectangle { Layout.fillWidth: true; height: 64; radius: 12; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
-                        gradient: Gradient {
-                            orientation: Gradient.Vertical
-                            GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker("#E05454", 1.25) : "#E05454" }
-                            GradientStop { position: 0.5; color: emMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.25) : cBtnEmergencyStart }
-                            GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker("#7a2424", 1.25) : "#7a2424" }
-                        }
-                        Text { anchors.centerIn: parent; text: "⛔  EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 22; font.bold: true; font.letterSpacing: 1.5 }
-                        MotionMouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; mainWindow.emergencyStopSynchronizedSystems() } }
-                    }
 
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 8; columnSpacing: 8
@@ -1044,15 +1050,26 @@ Item {
                             MotionMouseArea { id: resMA; anchors.fill: parent; onClicked: { cameraPageRoot.pauseLatched = false; robotController.resumeRobot() } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#163a52"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#FFE8B4"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#2B5748", 1.15) : "#2B5748" }
-                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#1A312C", 1.15) : "#1A312C" }
+                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#FFE8B4", 1.15) : "#FFE8B4" }
+                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#0c1726", 1.15) : "#0c1726" }
                             }
-                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#d6f1ff"; font.pixelSize: 19; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#ffffff"; font.pixelSize: 19; font.bold: true }
                             MotionMouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
                         }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 64; radius: 12; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
+                        gradient: Gradient {
+                            orientation: Gradient.Vertical
+                            GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker("#E05454", 1.25) : "#E05454" }
+                            GradientStop { position: 0.5; color: emMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.25) : cBtnEmergencyStart }
+                            GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker("#7a2424", 1.25) : "#7a2424" }
+                        }
+                        Text { anchors.centerIn: parent; text: "⛔  EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 22; font.bold: true; font.letterSpacing: 1.5 }
+                        MotionMouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; mainWindow.emergencyStopSynchronizedSystems() } }
                     }
                 }
             }
@@ -1157,7 +1174,7 @@ Item {
                     clip: true
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: "#1f9e86" }
+                        GradientStop { position: 0.0; color: "#A1C2BD" }
                         GradientStop { position: 1.0; color: "#163a52" }
                     }
 
@@ -1281,7 +1298,7 @@ Item {
                         GradientStop {
                             position: 0.0
                             color: {
-                                return "#1f9e86";
+                                return "#A1C2BD";
                             }
                         }
                         GradientStop {
