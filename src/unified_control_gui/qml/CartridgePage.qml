@@ -155,6 +155,11 @@ import QtGraphicalEffects 1.15
         readonly property color cGetButton: cDashboardActionStart
         readonly property color cGetButtonEnd: cDashboardActionEnd
         readonly property color cGetButtonBorder: cDashboardActionBorder
+        readonly property color cSensorIdleBg: "#15ffffff"
+        readonly property color cSensorIdleBorder: "#34d8eef5"
+        readonly property color cSensorIdleText: "#ffffff"
+        readonly property color cSensorActiveBorder: cTabSelectedBorder
+        readonly property color cSensorActiveText: "#ffffff"
         property bool jogStopStateHint: false
         property bool homingCommandLocked: false
 
@@ -1573,11 +1578,11 @@ import QtGraphicalEffects 1.15
                             // ── Tiêu đề ──
                             Text {
                                 text: "SENSOR SIGNAL"
-                                color: root.cCardTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
+                                color: root.cWhiteText; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                             }
 
                             // ── Status label ──
-                            Text { text: "STATUS"; color: root.cWhiteText; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1 }
+                            Text { text: "STATUS"; color: "#bfe0f5"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1 }
 
                             // ── Grid sensor – fillHeight để tự co vừa chiều cao còn lại ──
                             GridLayout {
@@ -1633,31 +1638,45 @@ import QtGraphicalEffects 1.15
                                         Layout.fillHeight: true          // ← mỗi nút chiếm đều phần chiều cao
                                         Layout.minimumHeight: 20         // ← thu nhỏ để fit đủ 20 sensor
 
-                                        radius: 3
-                                        color: on_ ? root.cBtnPrimaryEnd : root.cCard
-                                        border.color: on_ ? root.cBtnPrimaryBorder : root.cBorder
+                                        radius: 4
+                                        color: "transparent"
+                                        border.color: on_ ? root.cSensorActiveBorder : root.cSensorIdleBorder
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
-                                        HoverHandler { onHoveredChanged: if(!sBtn.on_) sBtn.border.color = hovered ? root.cCyan : root.cBorder }
+                                        gradient: on_ ? sensorActiveGradient : sensorIdleGradient
+                                        HoverHandler { onHoveredChanged: if(!sBtn.on_) sBtn.border.color = hovered ? root.cSensorActiveBorder : root.cSensorIdleBorder }
+                                        Gradient {
+                                            id: sensorActiveGradient
+                                            orientation: Gradient.Vertical
+                                            GradientStop { position: 0.0; color: sBtn.on_ ? root.cTabSelectedTop : root.cSensorIdleBg }
+                                            GradientStop { position: 0.54; color: sBtn.on_ ? root.cTabSelectedMid : root.cSensorIdleBg }
+                                            GradientStop { position: 1.0; color: sBtn.on_ ? root.cTabSelectedBottom : root.cSensorIdleBg }
+                                        }
+                                        Gradient {
+                                            id: sensorIdleGradient
+                                            orientation: Gradient.Vertical
+                                            GradientStop { position: 0.0; color: root.cSensorIdleBg }
+                                            GradientStop { position: 1.0; color: "#08ffffff" }
+                                        }
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 0
                                             Text {
                                                 text: model.slabel
-                                                color: root.cWhiteText
-                                                font.pixelSize: 13; font.bold: true
+                                                color: sBtn.on_ ? root.cSensorActiveText : root.cSensorIdleText
+                                                font.pixelSize: 13; font.bold: true; font.weight: Font.DemiBold
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
                                             Text {
                                                 text: model.sdesc
-                                                color: root.cWhiteText; font.pixelSize: 10
+                                                color: sBtn.on_ ? root.cSensorActiveText : root.cSensorIdleText; font.pixelSize: 10; font.bold: true
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                                 visible: model.sdesc !== ""
                                             }
                                             Rectangle {
                                                 id: dotIndicator
                                                 width: 4; height: 4; radius: 2
-                                                color: sBtn.on_ ? root.cBtnPrimaryBorder : root.cBtnBaseStart
+                                                color: sBtn.on_ ? root.cSensorActiveText : root.cSensorIdleBorder
                                                 anchors.horizontalCenter: parent.horizontalCenter
 
                                                 Repeater {
@@ -1667,7 +1686,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.centerIn: parent
                                                         width: 6; height: 6; radius: 3
                                                         color: "transparent"
-                                                        border.color: root.cBtnPrimaryBorder
+                                                        border.color: root.cSensorActiveBorder
                                                         border.width: 1
                                                         opacity: 0
                                                         visible: sBtn.on_
