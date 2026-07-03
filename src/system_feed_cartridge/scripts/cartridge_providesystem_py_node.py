@@ -1620,20 +1620,26 @@ class CartridgeSystem(Node):
         """
         return min(row_dict, key=lambda r: abs(row_dict[r] - pos_mm))
 
-    def _zone_to_row(self, trigger_pos: float, zone_table: dict) -> int:
+    def _zone_to_row(self, trigger_pos: float, zone_table: dict) -> Optional[int]:
         """
         Ánh xạ vị trí trigger_pos (mm) vào row number theo bảng zone_table.
-        zone_table: {row: [min_mm, max_mm]} — mỗi row có một khoảng vị trí.
-        Dùng khi S4 bật (cảm biến scan stack) để xác định khay đang ở row nào.
-        Trả về row 1 làm fallback nếu không khớp zone nào.
+        zone_table: {row: [biên_1, biên_2, target_mm]} — zone = [min, max] của
+        2 biên đầu. Dùng khi S4/S20 bật (cảm biến scan stack) để xác định khay
+        đang ở row nào.
+
+        Trả về None nếu không khớp zone nào (trigger rơi khe hở giữa 2 zone
+        hoặc nhiễu). Caller PHẢI xử lý None (retry scan / skip edge) — TUYỆT
+        ĐỐI không mặc định row. Sự cố 2026-07-03: fallback row1 cũ làm InY
+        chạy thẳng lên R1 khi trigger 804.9mm rơi khe 790–805 giữa zone
+        row3/row2 → Cyl1 extend sai vị trí, phải STOP khẩn.
         """
         for row, vals in zone_table.items():
             if len(vals) >= 2 and min(vals[0], vals[1]) <= trigger_pos <= max(vals[0], vals[1]):
                 return row
         self.get_logger().warn(
-            f"[zone_to_row] {trigger_pos:.1f}mm không khớp zone nào → fallback row1"
+            f"[zone_to_row] {trigger_pos:.1f}mm không khớp zone nào → None (caller xử lý retry/skip)"
         )
-        return 1
+        return None
 
     # def _calc_output_target(self, trigger_pos_mm: float) -> tuple:
     #     cfg             = self.config
@@ -3918,6 +3924,9 @@ class CartridgeSystem(Node):
           3. Disarm + log warn nếu InX drift khỏi target giữa lúc scan.
 
         Rising edge hợp lệ → tính row từ _zone_to_row → chuyển S1_INY_TO_ROW.
+        Rising edge NGOÀI mọi zone (_zone_to_row → None, trigger rơi khe hở
+        giữa 2 row / calib lệch): xử lý như noise — cùng nhánh retry/error
+        bên dưới, KHÔNG fallback row nào (sự cố 2026-07-03 @ 804.9mm).
         Hết hành trình mà không có rising edge:
           - Retry < limit (s1_scan_noise_retry_limit, default 1): → S1_RETRY_SCAN_HOME
           - Hết retry: notify error, về home + InX về inx_noise_recovery_mm, vào IDLE.
@@ -3971,31 +3980,45 @@ class CartridgeSystem(Node):
         s4_rising = (not self._s4_prev_in) and s4_now
         self._s4_prev_in = s4_now
 
+        invalid_trigger_pos = None
         if self._s4_armed and s4_rising:
             trigger_pos = self._pos(2) or iny
-            
-            row               = self._zone_to_row(trigger_pos, self.config.iny_input_zones)
-            target_mm         = self.config.iny_input_zones[row][2]
-            self._current_row = row
 
-            self.get_logger().info(
-                f"[S1 SCAN] S4 rising edge trigger @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm) - Moving directly"
-            )
-            self._s5_retry = 0
-            self._enter_in(SystemState.S1_INY_TO_ROW)
-            return
+            row = self._zone_to_row(trigger_pos, self.config.iny_input_zones)
+            if row is None:
+                # Trigger rơi khe hở giữa 2 zone (calib lệch / nhiễu) → rơi
+                # xuống nhánh fail bên dưới NGAY tick này: stop + retry scan,
+                # KHÔNG đoán row (sự cố 2026-07-03: 804.9mm hụt biên dưới
+                # row2 0.1mm → cũ fallback row1 → chạy thẳng R1).
+                invalid_trigger_pos = trigger_pos
+            else:
+                target_mm         = self.config.iny_input_zones[row][2]
+                self._current_row = row
+
+                self.get_logger().info(
+                    f"[S1 SCAN] S4 rising edge trigger @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm) - Moving directly"
+                )
+                self._s5_retry = 0
+                self._enter_in(SystemState.S1_INY_TO_ROW)
+                return
 
         timed_out = time.time() > self._step_timeout_in
         at_target = self._arrived(2) or iny >= self.config.target_scaninp1 - 2.0
-        if timed_out or at_target:
-            self.get_logger().warn("[S1 SCAN] Hết hạn scan mà không có rising edge hợp lệ của S4")
+        if timed_out or at_target or invalid_trigger_pos is not None:
+            if invalid_trigger_pos is not None:
+                self.get_logger().warn(
+                    f"[S1 SCAN] S4 trigger @ {invalid_trigger_pos:.1f}mm NGOÀI mọi zone "
+                    f"— xử lý như nhiễu (kiểm tra calib iny_input_zones)"
+                )
+            else:
+                self.get_logger().warn("[S1 SCAN] Hết hạn scan mà không có rising edge hợp lệ của S4")
             self._stop(2)
 
             if self._s1_scan_noise_retry < self._conf('s1_scan_noise_retry_limit', 1):
                 self._s1_scan_noise_retry += 1
                 self._notify(
                     'warn',
-                    'Không bắt được S4 hợp lệ',
+                    'S4 trigger ngoài zone' if invalid_trigger_pos is not None else 'Không bắt được S4 hợp lệ',
                     f'Retry scan lần {self._s1_scan_noise_retry}'
                 )
                 self._enter_in(SystemState.S1_RETRY_SCAN_HOME)
@@ -4683,8 +4706,10 @@ class CartridgeSystem(Node):
               * inx_at_target (InX tại inx_output_stack)
               * iny in [iny_scan_valid_min_mm, iny_scan_valid_max_mm]
             S4 rising edge hợp lệ → _zone_to_row(iny_output_zones) → target row →
-            enter S2A_INY_TARGETROW.
-            Hết hành trình mà S4 không trigger → fallback row 1 + warn.
+            enter S2A_INY_TARGETROW. Trigger NGOÀI mọi zone (None) → bỏ qua
+            edge, tiếp tục scan.
+            Hết hành trình mà S4 không trigger (hoặc mọi trigger đều ngoài
+            zone) → fallback row 1 + warn + pause sau khi đặt.
 
         Next: S2A_INY_TARGETROW (di chuyển đến row target @ iny_row_vel + nhả Cyl1).
         """
@@ -4797,25 +4822,34 @@ class CartridgeSystem(Node):
             if self._s4_armed_out and s4_rising:
                 trigger_pos = self._pos(2) or iny
                 row = self._zone_to_row(trigger_pos, self.config.iny_output_zones)
-                if row is not None:
-                    # Loại trừ row1 nếu đã biết Cyl3 giữ khay tại row1 → tiếp tục scan
-                    if row == 1 and self._row1_occupied:
-                        self._log_once(
-                            "S2A_SCAN_SKIP_ROW1",
-                            f"[S2A SCAN] S4 trigger @ {trigger_pos:.1f}mm trùng row1 đang occupied "
-                            f"→ bỏ qua, tiếp tục scan tìm row 2+"
-                        )
-                    else:
-                        target_mm = self.config.iny_output_zones[row][2]
-                        self._output_target_pos = target_mm
-                        self._output_row = row
-                        self.get_logger().info(
-                            f"[S2A SCAN] S4 rising edge @ {trigger_pos:.1f}mm → "
-                            f"row{row} ({target_mm:.0f}mm)"
-                        )
-                        self._stop(2)
-                        self._enter_in(SystemState.S2A_INY_TARGETROW)
-                        return
+                if row is None:
+                    # Trigger rơi khe hở giữa 2 zone / nhiễu → bỏ qua edge này,
+                    # tiếp tục scan. Hết hành trình sẽ vào nhánh fallback row1
+                    # + notify + pause sẵn có bên dưới (đang giữ khay nên vẫn
+                    # phải đặt được — khác S1 là error về home).
+                    self._log_once(
+                        "S2A_SCAN_ZONE_MISS",
+                        f"[S2A SCAN] S4 trigger @ {trigger_pos:.1f}mm NGOÀI mọi zone "
+                        f"— bỏ qua, tiếp tục scan (kiểm tra calib iny_output_zones)"
+                    )
+                # Loại trừ row1 nếu đã biết Cyl3 giữ khay tại row1 → tiếp tục scan
+                elif row == 1 and self._row1_occupied:
+                    self._log_once(
+                        "S2A_SCAN_SKIP_ROW1",
+                        f"[S2A SCAN] S4 trigger @ {trigger_pos:.1f}mm trùng row1 đang occupied "
+                        f"→ bỏ qua, tiếp tục scan tìm row 2+"
+                    )
+                else:
+                    target_mm = self.config.iny_output_zones[row][2]
+                    self._output_target_pos = target_mm
+                    self._output_row = row
+                    self.get_logger().info(
+                        f"[S2A SCAN] S4 rising edge @ {trigger_pos:.1f}mm → "
+                        f"row{row} ({target_mm:.0f}mm)"
+                    )
+                    self._stop(2)
+                    self._enter_in(SystemState.S2A_INY_TARGETROW)
+                    return
 
         # ── S6 ON fallback: arrived 970mm mà S4 không trigger row nào ─
         # (S6 OFF không vào nhánh này — đã return ở khối 2-phase phía trên)
@@ -5748,7 +5782,9 @@ class CartridgeSystem(Node):
         S4_OUTY_DROP (DROP tự gửi move — KHÔNG pre-issue ở đây, fix double-issue
         do _enter_s4 reset _cmd_sent_s4).
 
-        Hết hành trình không có edge:
+        Rising edge NGOÀI mọi zone (_zone_to_row → None): xử lý như noise —
+        đi cùng nhánh retry/fallback bên dưới, không đoán row.
+        Hết hành trình không có edge (hoặc trigger ngoài zone):
           - retry < s4_scan_noise_retry_limit (default 1) → S4_RETRY_SCAN_HOME
           - hết retry → fallback row1 + notify warn (operator kiểm tra S19/S20).
         """
@@ -5799,23 +5835,37 @@ class CartridgeSystem(Node):
         s20_rising = (not self._s20_prev) and s20_now
         self._s20_prev = s20_now
 
+        invalid_trigger_pos = None
         if self._s20_armed and s20_rising:
             trigger_pos = self._pos(5) or oy
             row = self._zone_to_row(trigger_pos, cfg.outy_output_zones)
-            target_mm = cfg.outy_output_zones[row][2]
-            self._outy_jog_pos = target_mm
-            self._s4_scan_noise_retry = 0
-            self.get_logger().info(
-                f"[S4 SCAN] S20 rising edge @ {trigger_pos:.1f}mm → "
-                f"row{row} ({target_mm:.0f}mm)"
-            )
-            self._stop(5)
-            self._enter_s4(SystemState.S4_OUTY_DROP)
-            return
+            if row is None:
+                # Trigger rơi khe hở giữa 2 zone / nhiễu → rơi xuống nhánh fail
+                # bên dưới NGAY tick này (retry scan / hết retry → fallback row1
+                # + notify vì đang giữ khay phải đặt được). Trước đây row=None
+                # không thể xảy ra (fallback row1 trong _zone_to_row) — giờ
+                # PHẢI xử lý, nếu không sẽ KeyError tại outy_output_zones[row].
+                invalid_trigger_pos = trigger_pos
+            else:
+                target_mm = cfg.outy_output_zones[row][2]
+                self._outy_jog_pos = target_mm
+                self._s4_scan_noise_retry = 0
+                self.get_logger().info(
+                    f"[S4 SCAN] S20 rising edge @ {trigger_pos:.1f}mm → "
+                    f"row{row} ({target_mm:.0f}mm)"
+                )
+                self._stop(5)
+                self._enter_s4(SystemState.S4_OUTY_DROP)
+                return
 
         timed_out = time.time() > self._step_timeout_s4
         at_target = self._arrived(5) or oy >= scan_target - 2.0
-        if timed_out or at_target:
+        if timed_out or at_target or invalid_trigger_pos is not None:
+            if invalid_trigger_pos is not None:
+                self.get_logger().warn(
+                    f"[S4 SCAN] S20 trigger @ {invalid_trigger_pos:.1f}mm NGOÀI mọi zone "
+                    f"— xử lý như nhiễu (kiểm tra calib outy_output_zones)"
+                )
             self._stop(5)
             if self._s4_scan_noise_retry < self._conf('s4_scan_noise_retry_limit', 1):
                 self._s4_scan_noise_retry += 1

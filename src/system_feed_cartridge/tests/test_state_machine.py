@@ -796,5 +796,45 @@ class TestHomingPrerequisite:
         assert node.state == SystemState.ERROR
 
 
+class TestZoneToRow:
+    """
+    _zone_to_row: map vị trí trigger (mm) → row; None khi ngoài mọi zone.
+
+    Bảng zone tái hiện sự cố 2026-07-03: iny_input_zones có khe hở 790–805
+    giữa row3 và row2 — S4 trigger 804.9mm phải trả None để scan retry,
+    KHÔNG được fallback row1 (bug cũ làm InY chạy thẳng lên R1, Cyl1
+    extend sai vị trí). Bảng dùng literal cố định, độc lập YAML thật.
+    """
+
+    INPUT_ZONES = {
+        1: [980.0, 900.0, 1010.0],
+        2: [880.0, 805.0, 920.0],
+        3: [790.0, 715.0, 830.0],
+    }
+
+    def test_inside_zone(self):
+        node = _make_node()
+        assert node._zone_to_row(950.0, self.INPUT_ZONES) == 1
+        assert node._zone_to_row(850.0, self.INPUT_ZONES) == 2
+        assert node._zone_to_row(750.0, self.INPUT_ZONES) == 3
+
+    def test_boundary_inclusive(self):
+        """Biên zone tính vào zone (≤/≥)."""
+        node = _make_node()
+        assert node._zone_to_row(805.0, self.INPUT_ZONES) == 2
+        assert node._zone_to_row(880.0, self.INPUT_ZONES) == 2
+        assert node._zone_to_row(790.0, self.INPUT_ZONES) == 3
+
+    def test_gap_returns_none_incident_20260703(self):
+        """804.9mm rơi khe hở 790–805 giữa row3/row2 → None (không đoán row)."""
+        node = _make_node()
+        assert node._zone_to_row(804.9, self.INPUT_ZONES) is None
+
+    def test_outside_all_zones_returns_none(self):
+        node = _make_node()
+        assert node._zone_to_row(50.0, self.INPUT_ZONES) is None
+        assert node._zone_to_row(2000.0, self.INPUT_ZONES) is None
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v', '--tb=short'])
