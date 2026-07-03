@@ -15,6 +15,7 @@ ApplicationWindow {
 
     property bool scaleIssueWarning: false
     property bool autoAiStartedSinceModeSelect: false
+    property string selectedCartridgeMode: cartridgeController.currentMode || "idle"
 
     signal synchronizedModeRequested(string mode)
     signal synchronizedStartRequested(string mode)
@@ -50,6 +51,7 @@ ApplicationWindow {
         var cartridgeCommandMode = cartridgeCommandModeFor(mode)
         var robotMode = robotModeFor(mode)
 
+        selectedCartridgeMode = cartridgeMode
         synchronizedModeRequested(mode)
         cartridgeController.setMode(cartridgeCommandMode)
 
@@ -78,12 +80,14 @@ ApplicationWindow {
         else
             robotController.softStopAndManual()
         autoAiStartedSinceModeSelect = false
+        selectedCartridgeMode = "manual"
         cartridgeController.stopSystem()
     }
 
     function emergencyStopSynchronizedSystems() {
         synchronizedStopRequested()
         autoAiStartedSinceModeSelect = false
+        selectedCartridgeMode = "manual"
         robotController.emergencyStop(true)
         cartridgeController.stopSystem()
     }

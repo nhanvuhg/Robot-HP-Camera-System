@@ -975,13 +975,8 @@ Item {
                                 cameraPageRoot.pendingStartUiMode = cameraPageRoot.ctrlMode
                                 cameraPageRoot.pendingStartMode = mainWindow.cartridgeModeFor(cameraPageRoot.ctrlMode)
 
-                                var confirmedMode = (cartridgeController.currentMode || "").toLowerCase()
-                                if (confirmedMode === cameraPageRoot.pendingStartMode) {
-                                    cameraPageRoot.dispatchStartAfterModeConfirmed()
-                                } else {
-                                    startModeConfirmTimer.restart()
-                                    mainWindow.syncOperationMode(cameraPageRoot.ctrlMode)
-                                }
+                                mainWindow.syncOperationMode(cameraPageRoot.ctrlMode)
+                                cameraPageRoot.dispatchStartAfterModeConfirmed()
                             } }
                         }
 

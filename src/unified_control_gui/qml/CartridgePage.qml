@@ -46,6 +46,9 @@ import QtGraphicalEffects 1.15
         property bool startCommandLocked: false
         property bool suppressJogEchoForManual: false
         property bool pauseLatched: false
+        readonly property string currentUiMode: mainWindow.selectedCartridgeMode !== ""
+                                                ? mainWindow.selectedCartridgeMode
+                                                : cartridgeController.currentMode
 
         readonly property color cBg:     "transparent"
         readonly property color cBg2:    "#990d1e32"
@@ -191,7 +194,7 @@ import QtGraphicalEffects 1.15
         }
 
         function stopFromSystemControl() {
-            if (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") {
+            if (root.currentUiMode === "manual" || root.currentUiMode === "jog") {
                 stopManualMotionOnly()
                 return
             }
@@ -233,6 +236,8 @@ import QtGraphicalEffects 1.15
                     root.homingCommandLocked = false
             }
             function onCurrentModeChanged() {
+                if (cartridgeController.currentMode !== "")
+                    mainWindow.selectedCartridgeMode = cartridgeController.currentMode
                 if (cartridgeController.currentMode === "manual") {
                     root.suppressJogEchoForManual = false
                 }
@@ -405,7 +410,7 @@ import QtGraphicalEffects 1.15
                         anchors.centerIn: parent; spacing: 6
                         Text {
                             text: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? "⟳ HOMING..."
-                                : (cartridgeController.currentMode !== "" && cartridgeController.systemState === "idle") ? "✓ HOMED"
+                                : (root.currentUiMode !== "" && cartridgeController.systemState === "idle") ? "✓ HOMED"
                                 : "○ NOT HOMED"
                             color: root.cWhiteText
                             font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
@@ -415,7 +420,7 @@ import QtGraphicalEffects 1.15
                 Item { width: 4 }
                 Rectangle {
                     id: modePill; Layout.preferredHeight: 50; radius: 6
-                    property string m: cartridgeController.currentMode
+                    property string m: root.currentUiMode
                     property bool isIdle: m === "idle" || m === ""
                     Layout.preferredWidth: mpLbl.implicitWidth + 26
                     color: Qt.rgba(0.03, 0.09, 0.16, 0.45); border.color: root.cBorder; border.width: 1
@@ -957,7 +962,7 @@ import QtGraphicalEffects 1.15
                                 spacing: 4
 
                                 // modeBlocked: đang chạy (state machine busy) HOẶC chưa chọn mode (idle)
-                                property bool modeIsIdle: cartridgeController.currentMode === "idle" || cartridgeController.currentMode === ""
+                                property bool modeIsIdle: root.currentUiMode === "idle" || root.currentUiMode === ""
                                 property bool modeBlocked: {
                                     var s = cartridgeController.systemState.toLowerCase()
                                     return s !== "" && s !== "idle" && s !== "unknown"
@@ -980,7 +985,7 @@ import QtGraphicalEffects 1.15
                                         width: parent.width
                                         height: (parent.height - 12) / 3
                                         radius: 8
-                                        property bool isModeSelected: cartridgeController.currentMode === "auto"
+                                        property bool isModeSelected: root.currentUiMode === "auto"
                                         color: "transparent"
                                         border.color: isModeSelected ? root.cModeSelectedBorder : root.cProvisionButtonBorder
                                         border.width: isModeSelected ? 2 : 1
@@ -1023,7 +1028,7 @@ import QtGraphicalEffects 1.15
                                         width: parent.width
                                         height: (parent.height - 12) / 3
                                         radius: 8
-                                        property bool isModeSelected: cartridgeController.currentMode === "ai"
+                                        property bool isModeSelected: root.currentUiMode === "ai"
                                         color: "transparent"
                                         border.color: isModeSelected ? root.cModeSelectedBorder : root.cProvisionButtonBorder
                                         border.width: isModeSelected ? 2 : 1
@@ -1066,7 +1071,7 @@ import QtGraphicalEffects 1.15
                                         width: parent.width
                                         height: (parent.height - 12) / 3
                                         radius: 8
-                                        property bool isModeSelected: cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog"
+                                        property bool isModeSelected: root.currentUiMode === "manual" || root.currentUiMode === "jog"
                                         color: "transparent"
                                         border.color: isModeSelected ? root.cModeSelectedBorder : root.cProvisionButtonBorder
                                         border.width: isModeSelected ? 2 : 1
@@ -1118,14 +1123,6 @@ import QtGraphicalEffects 1.15
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
-                                property bool stateNavLockedByAutoAiRun: mainWindow.autoAiStartedSinceModeSelect
-                                                                     && (cartridgeController.currentMode === "auto"
-                                                                         || cartridgeController.currentMode === "ai")
-                                property bool stateNavEnabled: !modeSelCol.modeIsIdle && !stateNavLockedByAutoAiRun
-                                // Không cho chạy khi chưa chọn mode hoặc AUTO/AI đã START.
-                                enabled: stateNavEnabled
-                                opacity: stateNavEnabled ? 1.0 : 0.35
-                                Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
                                     text: "SYSTEM CONTROL"; color: root.cCardTitle
@@ -1141,7 +1138,7 @@ import QtGraphicalEffects 1.15
                                             if (root.startCommandLocked)
                                                 return
                                             root.startCommandLocked = true
-                                            mainWindow.startSynchronizedSystems(cartridgeController.currentMode)
+                                            mainWindow.startSynchronizedSystems(root.currentUiMode)
                                         } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; iconSource: "qrc:/qml/icons/step_forward.svg"; bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; onClicked: { root.pauseLatched = false; cartridgeController.resumeSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP"; bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: root.stopFromSystemControl() }
@@ -1162,9 +1159,13 @@ import QtGraphicalEffects 1.15
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
-                                // Không cho chạy khi chưa chọn mode
-                                enabled: !modeSelCol.modeIsIdle
-                                opacity: modeSelCol.modeIsIdle ? 0.35 : 1.0
+                                property bool stateNavLockedByAutoAiRun: mainWindow.autoAiStartedSinceModeSelect
+                                                                     && (root.currentUiMode === "auto"
+                                                                         || root.currentUiMode === "ai")
+                                property bool stateNavEnabled: !modeSelCol.modeIsIdle && !stateNavLockedByAutoAiRun
+                                // Không cho chạy khi chưa chọn mode hoặc AUTO/AI đã START.
+                                enabled: stateNavEnabled
+                                opacity: stateNavEnabled ? 1.0 : 0.35
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
@@ -1200,15 +1201,15 @@ import QtGraphicalEffects 1.15
 
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
-                                        lbl: cartridgeController.currentMode === "jog" ? "STATE MODE" : "JOG MODE"
+                                        lbl: root.currentUiMode === "jog" ? "STATE MODE" : "JOG MODE"
                                         bg: root.cServoRunStart
                                         bgEnd: root.cServoRunEnd
                                         bc: root.cServoRunBorder
                                         tc: root.cServoRunText
-                                        isSelected: cartridgeController.currentMode === "jog" || cartridgeController.systemState.toLowerCase().indexOf("jog") !== -1
+                                        isSelected: root.currentUiMode === "jog" || cartridgeController.systemState.toLowerCase().indexOf("jog") !== -1
                                         onClicked: {
                                             root.jogStopStateHint = false
-                                            if (cartridgeController.currentMode === "jog") {
+                                            if (root.currentUiMode === "jog") {
                                                 root.suppressJogEchoForManual = true
                                                 mainWindow.syncOperationMode("manual")
                                             } else {
@@ -1234,7 +1235,7 @@ import QtGraphicalEffects 1.15
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
-                                property bool cylEnabled: cartridgeController.currentMode === "jog"
+                                property bool cylEnabled: root.currentUiMode === "jog"
                                 enabled: cylEnabled
                                 opacity: cylEnabled ? 1.0 : 0.35
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
@@ -1304,7 +1305,7 @@ import QtGraphicalEffects 1.15
                                 width: parent.width
                                 height: parent.height - 20 - 4
                                 spacing: root.gap
-                                property bool jogAllowed: cartridgeController.currentMode === "jog"
+                                property bool jogAllowed: root.currentUiMode === "jog"
 
                                 Repeater {
                                     model: ListModel {
@@ -1986,7 +1987,7 @@ import QtGraphicalEffects 1.15
             // ── PAGE 3: ROBOT CONTROL ──────────────────────────────────
             Item {
                 id: page3Root
-                property string currentMode: cartridgeController.currentMode  // bind to system mode
+                property string currentMode: root.currentUiMode  // bind to synchronized system mode
                 // MANUAL controls (JOG) stay open before START, even if AUTO / AI was selected.
                 // Only lock when the chosen AUTO / AI mode has actually been started.
                 property bool manualEnabled: currentMode === "jog"
@@ -3521,8 +3522,8 @@ import QtGraphicalEffects 1.15
 
     function checkOutTrayTimer() {
         var robotActive = robotController.systemStatus !== "IDLE" && robotController.systemStatus !== "ERROR" && robotController.systemStatus !== "UNKNOWN" && robotController.systemStatus !== "EMERGENCY_STOP";
-        var isAuto = cartridgeController.currentMode === "auto";
-        var isManualS3 = cartridgeController.currentMode === "manual" && cartridgeController.stateOut.indexOf("S3") !== -1;
+        var isAuto = root.currentUiMode === "auto";
+        var isManualS3 = root.currentUiMode === "manual" && cartridgeController.stateOut.indexOf("S3") !== -1;
         
         if (!robotController.outReady && robotActive && (isAuto || isManualS3)) {
             if (!outTrayTimer.running) {
