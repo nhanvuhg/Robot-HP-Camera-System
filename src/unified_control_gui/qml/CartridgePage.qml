@@ -193,7 +193,28 @@ import QtGraphicalEffects 1.15
                 cartridgeController.jogStop(sid)
         }
 
+        function cartridgeStateActive() {
+            var globalState = (cartridgeController.systemState || "").toLowerCase()
+            var inState = (cartridgeController.stateIn || "").toLowerCase()
+            var outState = (cartridgeController.stateOut || "").toLowerCase()
+            function busyState(s) {
+                return s !== "" && s !== "idle" && s !== "unknown"
+            }
+            return busyState(globalState) || busyState(inState) || busyState(outState)
+        }
+
+        function abortStateToJog() {
+            robotController.stopMotionOnly()
+            cartridgeController.abortToJog()
+            mainWindow.selectedCartridgeMode = "jog"
+            root.jogStopStateHint = false
+        }
+
         function stopFromSystemControl() {
+            if (root.cartridgeStateActive()) {
+                root.abortStateToJog()
+                return
+            }
             if (root.currentUiMode === "manual" || root.currentUiMode === "jog") {
                 stopManualMotionOnly()
                 return
@@ -1209,6 +1230,10 @@ import QtGraphicalEffects 1.15
                                         isSelected: root.currentUiMode === "jog" || cartridgeController.systemState.toLowerCase().indexOf("jog") !== -1
                                         onClicked: {
                                             root.jogStopStateHint = false
+                                            if (root.cartridgeStateActive()) {
+                                                root.abortStateToJog()
+                                                return
+                                            }
                                             if (root.currentUiMode === "jog") {
                                                 root.suppressJogEchoForManual = true
                                                 mainWindow.syncOperationMode("manual")
@@ -1235,7 +1260,7 @@ import QtGraphicalEffects 1.15
                             ColumnLayout {
                                 anchors.fill: parent; anchors.margins: 8
                                 spacing: 4
-                                property bool cylEnabled: root.currentUiMode === "jog"
+                                property bool cylEnabled: cartridgeController.currentMode === "jog"
                                 enabled: cylEnabled
                                 opacity: cylEnabled ? 1.0 : 0.35
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
@@ -1305,7 +1330,7 @@ import QtGraphicalEffects 1.15
                                 width: parent.width
                                 height: parent.height - 20 - 4
                                 spacing: root.gap
-                                property bool jogAllowed: root.currentUiMode === "jog"
+                                property bool jogAllowed: cartridgeController.currentMode === "jog"
 
                                 Repeater {
                                     model: ListModel {

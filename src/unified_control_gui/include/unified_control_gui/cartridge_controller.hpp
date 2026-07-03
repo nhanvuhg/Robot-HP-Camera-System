@@ -25,6 +25,7 @@ class CartridgeController : public QObject
     Q_PROPERTY(QString lastNotification READ lastNotification NOTIFY notificationReceived)
     Q_PROPERTY(QVariantList logEntries  READ logEntries       NOTIFY logEntriesChanged)
     Q_PROPERTY(QString sensorState      READ sensorState      NOTIFY sensorStateChanged)
+    Q_PROPERTY(QString stateIn          READ stateIn          NOTIFY systemStateChanged)
     Q_PROPERTY(QString stateOut         READ stateOut         NOTIFY systemStateChanged)
     Q_PROPERTY(QString uiHint           READ uiHint           NOTIFY uiHintChanged)
 
@@ -38,6 +39,7 @@ public:
     QString lastNotification() const { return last_notification_; }
     QVariantList logEntries()  const { return log_entries_; }
     QString sensorState()      const { return sensor_state_; }
+    QString stateIn()          const { return state_in_; }
     QString stateOut()         const { return state_out_; }
     QString uiHint()           const { return ui_hint_; }
 
