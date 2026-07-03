@@ -226,8 +226,10 @@ private:
     // waiting_for_new_input_ : true  = đã pub done_tray_input, đang chờ new_tray_loaded
     //                          false = tray input sẵn sàng
     std::atomic<bool> new_tray_loaded_{false};
-    std::atomic<bool> input_trays_empty_{true}; // Sensor-only: true when physical feeder conveyor is empty (S1/S2/S3=0)
-    std::atomic<bool> cartridge_drain_confirmed_{false}; // Cartridge confirms S2 finished and no S1/S2/S3 tray can feed S1
+    std::atomic<bool> input_trays_empty_{true}; // /cartridge/input_trays_empty mirror
+    std::atomic<bool> input_belt_empty_from_sensors_{true}; // Direct S1/S2/S3 parse from /providesystem/sensors_state
+    std::atomic<bool> cartridge_input_sensors_seen_{false};
+    std::atomic<bool> cartridge_drain_confirmed_{false}; // Drain accepted only when S1/S2/S3 are all OFF
     // waiting_for_new_output_: true  = đã pub done_tray_output, đang chờ new_trayoutput_loaded
     //                          false = tray output sẵn sàng
     std::atomic<bool> new_trayoutput_loaded_{false};
@@ -449,6 +451,7 @@ private:
 
     // Helper: publish done_tray_output + set waiting flag
     void publishDoneTrayOutput();
+    void requestOutputTrayChangeForDrain(const char* reason);
 
     // Helper: check if BOTH trays are ready (used in IDLE to restart)
     bool bothTraysReady() const {
@@ -639,11 +642,25 @@ void RobotLogicNode::initSubscriptions()
         "/cartridge_providesystem/new_tray_loaded", 10,
         std::bind(&RobotLogicNode::newTrayCallback, this, std::placeholders::_1));
 
-    // cartridge sensors state — 22-char binary "S1..S22"; ta cần S7 (index 6)
-    // để verify thật sự có khay tại Robot trước khi AUTO/AI bắt đầu INIT.
+    // cartridge sensors state — binary "S1..S28".
+    // S1/S2/S3 confirm feeder belt empty for pipeline drain; S7 verifies tray at robot.
     sensors_state_sub_ = create_subscription<std_msgs::msg::String>(
         "/providesystem/sensors_state", 10,
         [this](const std_msgs::msg::String::SharedPtr msg) {
+            if (msg->data.size() >= 3) {
+                bool s1 = (msg->data[0] == '1');
+                bool s2 = (msg->data[1] == '1');
+                bool s3 = (msg->data[2] == '1');
+                bool empty = !(s1 || s2 || s3);
+                bool prev_empty = input_belt_empty_from_sensors_.load();
+                input_belt_empty_from_sensors_ = empty;
+                cartridge_input_sensors_seen_ = true;
+                if (prev_empty != empty) {
+                    RCLCPP_WARN(get_logger(), "[DRAIN] S1/S2/S3 belt empty from sensors: %s",
+                        empty ? "TRUE" : "FALSE");
+                    notifyStateChange();
+                }
+            }
             if (msg->data.size() >= 7) {
                 bool prev = s7_at_robot_.load();
                 bool curr = (msg->data[6] == '1');
@@ -674,10 +691,25 @@ void RobotLogicNode::initSubscriptions()
         "/cartridge/drain", rclcpp::QoS(10).reliable(),
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             bool prev = cartridge_drain_confirmed_.load();
-            cartridge_drain_confirmed_ = msg->data;
-            if (prev != msg->data) {
-                RCLCPP_WARN(get_logger(), "[DRAIN] Cartridge drain confirmation: %s",
-                    msg->data ? "TRUE" : "FALSE");
+            bool accept = false;
+            if (msg->data) {
+                bool sensor_seen = cartridge_input_sensors_seen_.load();
+                bool s123_empty = input_belt_empty_from_sensors_.load();
+                accept = sensor_seen && s123_empty;
+                if (!sensor_seen) {
+                    RCLCPP_WARN(get_logger(),
+                        "[DRAIN] Ignored cartridge drain=true: no S1/S2/S3 sensor snapshot yet");
+                } else if (!s123_empty) {
+                    RCLCPP_WARN(get_logger(),
+                        "[DRAIN] Rejected cartridge drain=true: S1/S2/S3 still sees tray");
+                }
+            }
+            cartridge_drain_confirmed_ = accept;
+            if (prev != accept || msg->data != accept) {
+                RCLCPP_WARN(get_logger(), "[DRAIN] Cartridge drain confirmation: %s (topic=%s, sensors_empty=%s)",
+                    accept ? "TRUE" : "FALSE",
+                    msg->data ? "TRUE" : "FALSE",
+                    input_belt_empty_from_sensors_.load() ? "TRUE" : "FALSE");
                 notifyStateChange();
             }
         });
@@ -1009,6 +1041,19 @@ void RobotLogicNode::publishDoneTrayOutput()
     new_trayoutput_pub_->publish(std_msgs::msg::Bool()); // Publish false to GUI
     waiting_for_new_output_ = true;
     RCLCPP_WARN(get_logger(), "[TRAY_OUT] 📤 done_tray_output published — waiting for new_trayoutput_loaded");
+}
+
+void RobotLogicNode::requestOutputTrayChangeForDrain(const char* reason)
+{
+    if (waiting_for_new_output_.load()) {
+        RCLCPP_WARN(get_logger(),
+            "[DRAIN] Output tray change already pending — %s", reason);
+        return;
+    }
+
+    RCLCPP_WARN(get_logger(),
+        "[DRAIN] Pipeline drained — request output tray change for STATE4/STATE3 (%s)", reason);
+    publishDoneTrayOutput();
 }
 
 // ============================================================================
@@ -2197,6 +2242,7 @@ void RobotLogicNode::stateWaitFilling()
             if (cartridge_drain_confirmed_.load()) {
                 RCLCPP_INFO(get_logger(),
                     "[WAIT_FILLING] Pipeline drained + cartridge DRAIN confirmed → IDLE");
+                requestOutputTrayChangeForDrain("WAIT_FILLING");
                 transitionTo(SystemState::IDLE);
                 return;
             }
@@ -2670,11 +2716,7 @@ void RobotLogicNode::statePlaceToOutput()
                     RCLCPP_WARN(get_logger(),
                         "[PIPELINE] 📦 Pipeline drained + cartridge DRAIN confirmed -> Waiting in IDLE for new tray to auto-restart");
 
-                    // BATCH CUỐI XỬ LÝ DRAIN: Robot tự quyết định thay khay ra
-                    if (!waiting_for_new_output_.load()) {
-                        RCLCPP_WARN(get_logger(), "[DRAIN] BATCH CUỐI — Tự động đẩy khay ra (Ejecting output tray)");
-                        publishDoneTrayOutput();
-                    }
+                    requestOutputTrayChangeForDrain("PLACE_TO_OUTPUT");
 
                     transitionTo(SystemState::IDLE);
                 } else {
@@ -2793,6 +2835,7 @@ void RobotLogicNode::statePlaceToFail()
                 if (cartridge_drain_confirmed_.load()) {
                     RCLCPP_WARN(get_logger(),
                         "[PIPELINE] 📦 Pipeline drained (fail) + cartridge DRAIN confirmed -> Waiting in IDLE for new tray to auto-restart");
+                    requestOutputTrayChangeForDrain("PLACE_TO_FAIL");
                     transitionTo(SystemState::IDLE);
                 } else {
                     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,

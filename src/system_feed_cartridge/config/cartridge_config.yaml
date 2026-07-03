@@ -49,7 +49,7 @@ inx_noise_recovery_mm: 10.0
 iny_input_zones:
   1:
   - 1000.0
-  - 921.0
+  - 941.0
   - 1010.0
   2:
   - 920.0
@@ -134,41 +134,41 @@ outy_output_zones:
   - 950.0
   - 1015.0
   2:
-  - 900.0
-  - 840.0
-  - 925.0
+  - 920.0
+  - 830.0
+  - 923.0
   3:
-  - 790.0
-  - 720.0
-  - 833.0
+  - 832.0
+  - 735.0
+  - 831.0
   4:
-  - 700.0
-  - 630.0
-  - 743.0
+  - 738.0
+  - 650.0
+  - 739.0
   5:
-  - 610.0
-  - 535.0
-  - 643.0
+  - 645.0
+  - 556.0
+  - 647.0
   6:
-  - 520.0
-  - 445.0
-  - 563.0
-  7:
+  - 554.0
   - 430.0
-  - 355.0
-  - 473.0
+  - 555.0
+  7:
+  - 462.0
+  - 380.0
+  - 463.0
   8:
-  - 350.0
-  - 260.0
-  - 383.0
+  - 379.0
+  - 280.0
+  - 371.0
   9:
-  - 255.0
-  - 170.0
-  - 293.0
+  - 278.0
+  - 189.0
+  - 279.0
   10:
-  - 200.0
+  - 187.0
   - 80.0
-  - 203.0
+  - 188.0
 iny_target2: 87.0
 servo3_home: 0.0
 servo3_target2: 850.0
@@ -178,7 +178,7 @@ servo3_feed_velocity: 30.0
 outx_home: 0.0
 outx_target1: 15.0
 outx_target2: 552.0
-outx_target3: -277.0
+outx_target3: -278.0
 outy_home: 0.0
 outy_target1: 10.0
 outy_pick_pos: 160.0
@@ -186,12 +186,12 @@ outy_safe_zone: 30.0
 outy_search_velocity: 40.0
 outy_slow_vel: 30.0
 target_scanoutp2: 1000.0
-outy_scan_arm_mm: 60
+outy_scan_arm_mm: 60.0
 outy_scan_valid_min_mm: 70.0
 outy_scan_valid_max_mm: 1000.0
 s4_scan_noise_retry_limit: 2
 s4_check_servo3_safe: false
-iny_search_velocity: 50.0
+iny_search_velocity: 40.0
 iny_slow_velocity: 30.0
 position_tolerance: 2.0
 outx_safe_position_threshold: 100.0

@@ -83,7 +83,7 @@ INY_JOG_VEL          = 40
 OUTY_ROW1_LIMIT_MM   = 590.0
 TRAY_ROBOT_CHECK_TIMEOUT_S = 3.0
 JOG_OUTPUT_TIMEOUT_S = 120.0
-POSITION_TOLERANCE_HOME = 5.0   # mm — vị trí gần 0 đủ để skip re-home
+POSITION_TOLERANCE_HOME = 5.0   # mm — tolerance kiểm tra vị trí gần home
 HOME_SPEED              = 30    # mm/s cho position_task về 0
 
 # ─── Sensor IDs — matching sensors.yaml ─────────────────────────
@@ -383,7 +383,7 @@ class CartridgeSystem(Node):
         self._homing_result      = False
         self._homing_abort       = threading.Event()  # set by STOP to cancel homing thread
         self._servo_home_abort   = set()              # per-servo JOG home abort flags
-        self._homing_ref_offset  = {}                 # previous zero offsets for re-home near-zero check
+        self._homing_ref_offset  = {}                 # cleared when hardware homing must be repeated
 
         # JOG velocity — only affects JOG; state/homing velocities fixed by FAS firmware
         self._jog_velocity_ms  = 0.05   # m/s (default, overwritten by FAS read on first connect)
@@ -1845,9 +1845,7 @@ class CartridgeSystem(Node):
         homing xong mới được homing OUTX, giống rule InY trước InX ở Pos1.
 
         Logic mỗi servo:
-          - Nếu đã homed trước đó (_servo_homed_once) và vị trí gần 0 (< 5mm):
-            chỉ di chuyển về 0 bằng position_task (nhanh, không cần re-reference)
-          - Ngược lại: gọi referencing_task() theo phương pháp trong FAS firmware
+          - Luôn gọi referencing_task() theo phương pháp trong FAS firmware
             (limit switch / encoder index / torque), chờ referenced()=True
           - Kiểm tra drive thực sự di chuyển (Δ > 0.5mm) để phát hiện lỗi cơ học
 
@@ -1855,10 +1853,9 @@ class CartridgeSystem(Node):
         dừng homing ngay lập tức tại bất kỳ bước nào.
         Chạy trong background thread (_do_homing), kết quả báo qua _homing_done_event.
         """
-        """[V8] Blocking home pattern — mô phỏng dosing-machine code đã chạy thật.
-        Dùng referencing_task() blocking (không nonblocking=True), home tuần tự,
-        track _servo_homed_once để skip re-home nếu đã homed gần zero.
-        Fail loud thay vì silent-assume-home khi drive không di chuyển.
+        """[V8] Home pattern — mô phỏng dosing-machine code đã chạy thật.
+        Home tuần tự và chỉ chốt zero_offset sau khi drive báo referenced=True.
+        Fail loud thay vì silent-assume-home khi drive không sync hardware.
         """
         sequences = {
             "Pos1/Input": [(2, "InY"), (1, "InX")],
@@ -1913,142 +1910,106 @@ class CartridgeSystem(Node):
                     current_pos = mot.current_position()
                 self.get_logger().info(f"Homing {name} (S{sid}): current={current_pos}")
 
-                zero = self._homing_ref_offset.get(sid, self.zero_offset.get(sid, 0))
-                near_zero = abs(current_pos - zero) <= POSITION_TOLERANCE_HOME * COUNTS_PER_MM
+                # Luôn reference hardware. Không dùng shortcut "near zero" vì nó có
+                # thể set zero_offset cũ trước khi drive sync lại với REF thật.
+                self.get_logger().info(
+                    f"  {name}: {'first home' if not self._servo_homed_once.get(sid) else 're-home'} "
+                    f"→ referencing_task"
+                )
+                pre_pos = current_pos
 
-                if self._servo_homed_once.get(sid) and near_zero:
-                    # Đã homed, vị trí gần 0 → chỉ kéo về zero cũ, không re-reference.
-                    # Không dùng blocking=True ở đây: FAS đôi khi kẹt wait "finished"
-                    # dù target/current đã là 0, làm global state đứng HOMING_RUNNING.
-                    self.get_logger().info(f"  {name}: near zero → position_task(0) nonblocking")
+                with self._servo_lock:
+                    mot.referencing_task(nonblocking=True)
+                # Lock released immediately — _cb_stop có thể acquire lock ngay
+
+                # 3s interruptible delay: cho drive xóa stale referenced() flag từ NVM
+                # và bắt đầu chuyển động vật lý. Chia nhỏ thành nhiều bước 200ms
+                # để refresh _servo_motion_t — giữ _publish_positions đọc tươi suốt
+                # homing, GUI tracking realtime thay vì freeze sau 2s idle skip.
+                delay_start = time.time()
+                while time.time() - delay_start < 3.0:
+                    if self._homing_abort.is_set():
+                        self.get_logger().warn(f"  {name}: homing aborted (STOP) during init delay")
+                        return False
+                    self._servo_motion_t[sid] = time.time()
+                    time.sleep(0.2)
+
+                # Poll referenced() với abort check mỗi iteration + refresh motion
+                # timestamp để publish loop tiếp tục đọc tươi vị trí trong khi trục
+                # vẫn đang di chuyển về home.
+                start = time.time()
+                while time.time() - start < self.config.homing_timeout:
+                    if self._homing_abort.is_set():
+                        self.get_logger().warn(f"  {name}: homing aborted (STOP) during poll")
+                        return False
+                    self._servo_motion_t[sid] = time.time()
                     with self._servo_lock:
-                        mot.position_task(zero, HOME_SPEED, absolute=True, nonblocking=True)
-
-                    deadline = time.time() + min(10.0, self.config.move_timeout)
-                    post_pos = current_pos
-                    while time.time() < deadline:
-                        if self._homing_abort.is_set():
-                            self.get_logger().warn(f"  {name}: homing aborted (STOP) during near-zero move")
-                            return False
-                        self._servo_motion_t[sid] = time.time()
-                        with self._servo_lock:
-                            post_pos = mot.current_position()
-                        if abs(post_pos - zero) <= 0.5 * COUNTS_PER_MM:
-                            break
-                        time.sleep(0.2)
-
-                    final_delta_mm = abs(post_pos - zero) / COUNTS_PER_MM
-                    if final_delta_mm > POSITION_TOLERANCE_HOME:
+                        ref = mot.referenced()
+                    if ref:
+                        break
+                    time.sleep(0.2)
+                else:
+                    with self._servo_lock:
+                        is_ref = mot.referenced()
+                    if not is_ref:
                         self.get_logger().error(
-                            f"  {name}: near-zero move timeout, still {final_delta_mm:.2f}mm from zero"
+                            f"  {name}: homing TIMEOUT ({self.config.homing_timeout}s) — NOT referenced"
                         )
+                        self._notify_step('error', 'HOMING', f'{name} (S{sid})',
+                            f'TIMEOUT {self.config.homing_timeout}s — drive không trả referenced=True',
+                            enum_name='HOMING_RUNNING',
+                            check=[f'FAS Referencing tab method (Encoder/REF cam/Torque)',
+                                   'REF cam wiring + position',
+                                   f'PNU 11340 (homing velocity) trên drive S{sid}',
+                                   'cơ khí trục có bị kẹt không'],
+                            action=['Mở FAS Editor → tab Referencing → test home thủ công',
+                                    'STOP rồi HOMING lại sau khi fix'])
                         return False
 
-                    self._servo_homed_once[sid] = True
-                    self.zero_offset[sid] = zero
-                    self.get_logger().info(f"  {name} = 0mm (near-zero OK, offset kept)")
-                    return True
-                else:
-                    # Lần đầu hoặc đã lệch xa → referencing_task nonblocking
-                    # Lock chỉ giữ đủ để issue lệnh — STOP có thể acquire lock ngay
-                    self.get_logger().info(
-                        f"  {name}: {'first home' if not self._servo_homed_once.get(sid) else 're-home'} "
-                        f"→ referencing_task"
-                    )
-                    pre_pos = current_pos
+                # Chốt homing: referencing_task(nonblocking) chỉ set bit
+                # start_homing_procedure=True và KHÔNG tự clear. Nếu để bit treo
+                # HIGH, drive coi lệnh homing còn active → trục về tới reference
+                # xong vẫn re-trigger/dò home lại (S4 OutX xa home), home_position_set
+                # không latch ổn định → poll timeout 120s. stop_motion_task() clear
+                # start_homing_procedure=False để kết thúc homing (giống bản blocking
+                # edcon wait_for_referencing_execution).
+                with self._servo_lock:
+                    mot.stop_motion_task()
 
+                with self._servo_lock:
+                    post_pos = mot.current_position()
+
+                delta_mm = abs(post_pos - pre_pos) / COUNTS_PER_MM
+
+                if delta_mm < 0.5:
                     with self._servo_lock:
-                        mot.referencing_task(nonblocking=True)
-                    # Lock released immediately — _cb_stop có thể acquire lock ngay
-
-                    # 3s interruptible delay: cho drive xóa stale referenced() flag từ NVM
-                    # và bắt đầu chuyển động vật lý. Chia nhỏ thành nhiều bước 200ms
-                    # để refresh _servo_motion_t — giữ _publish_positions đọc tươi suốt
-                    # homing, GUI tracking realtime thay vì freeze sau 2s idle skip.
-                    delay_start = time.time()
-                    while time.time() - delay_start < 3.0:
-                        if self._homing_abort.is_set():
-                            self.get_logger().warn(f"  {name}: homing aborted (STOP) during init delay")
-                            return False
-                        self._servo_motion_t[sid] = time.time()
-                        time.sleep(0.2)
-
-                    # Poll referenced() với abort check mỗi iteration + refresh motion
-                    # timestamp để publish loop tiếp tục đọc tươi vị trí trong khi trục
-                    # vẫn đang di chuyển về home.
-                    start = time.time()
-                    while time.time() - start < self.config.homing_timeout:
-                        if self._homing_abort.is_set():
-                            self.get_logger().warn(f"  {name}: homing aborted (STOP) during poll")
-                            return False
-                        self._servo_motion_t[sid] = time.time()
-                        with self._servo_lock:
-                            ref = mot.referenced()
-                        if ref:
-                            break
-                        time.sleep(0.2)
-                    else:
-                        with self._servo_lock:
-                            is_ref = mot.referenced()
-                        if not is_ref:
-                            self.get_logger().error(
-                                f"  {name}: homing TIMEOUT ({self.config.homing_timeout}s) — NOT referenced"
-                            )
-                            self._notify_step('error', 'HOMING', f'{name} (S{sid})',
-                                f'TIMEOUT {self.config.homing_timeout}s — drive không trả referenced=True',
-                                enum_name='HOMING_RUNNING',
-                                check=[f'FAS Referencing tab method (Encoder/REF cam/Torque)',
-                                       'REF cam wiring + position',
-                                       f'PNU 11340 (homing velocity) trên drive S{sid}',
-                                       'cơ khí trục có bị kẹt không'],
-                                action=['Mở FAS Editor → tab Referencing → test home thủ công',
-                                        'STOP rồi HOMING lại sau khi fix'])
-                            return False
-
-                    # Chốt homing: referencing_task(nonblocking) chỉ set bit
-                    # start_homing_procedure=True và KHÔNG tự clear. Nếu để bit treo
-                    # HIGH, drive coi lệnh homing còn active → trục về tới reference
-                    # xong vẫn re-trigger/dò home lại (S4 OutX xa home), home_position_set
-                    # không latch ổn định → poll timeout 120s. stop_motion_task() clear
-                    # start_homing_procedure=False để kết thúc homing (giống bản blocking
-                    # edcon wait_for_referencing_execution).
-                    with self._servo_lock:
-                        mot.stop_motion_task()
-
-                    with self._servo_lock:
-                        post_pos = mot.current_position()
-
-                    delta_mm = abs(post_pos - pre_pos) / COUNTS_PER_MM
-
-                    if delta_mm < 0.5:
-                        with self._servo_lock:
-                            is_ref = mot.referenced()
-                        if not is_ref:
-                            self.get_logger().error(
-                                f"  {name}: NOT referenced + no motion (Δ={delta_mm:.2f}mm) "
-                                f"→ HOMING FAIL. Check FAS: Referencing tab method/velocity/REF-cam."
-                            )
-                            self._notify_step('error', 'HOMING', f'{name} (S{sid})',
-                                f'Drive KHÔNG di chuyển (Δ={delta_mm:.2f}mm) và không referenced',
-                                enum_name='HOMING_RUNNING',
-                                check=['FAS Referencing tab method có đúng không',
-                                       'REF cam có wire OK không',
-                                       'drive có fault không (FAS Diagnostic)',
-                                       f'PNU 11340 velocity ≠ 0 trên S{sid}'],
-                                action=['FAS Editor → Referencing tab → test',
-                                        'Acknowledge faults trên drive',
-                                        'STOP rồi HOMING lại'])
-                            return False
-                        self.get_logger().warn(
-                            f"  {name}: moved only {delta_mm:.2f}mm but drive says referenced — "
-                            f"may already be at REF position"
+                        is_ref = mot.referenced()
+                    if not is_ref:
+                        self.get_logger().error(
+                            f"  {name}: NOT referenced + no motion (Δ={delta_mm:.2f}mm) "
+                            f"→ HOMING FAIL. Check FAS: Referencing tab method/velocity/REF-cam."
                         )
+                        self._notify_step('error', 'HOMING', f'{name} (S{sid})',
+                            f'Drive KHÔNG di chuyển (Δ={delta_mm:.2f}mm) và không referenced',
+                            enum_name='HOMING_RUNNING',
+                            check=['FAS Referencing tab method có đúng không',
+                                   'REF cam có wire OK không',
+                                   'drive có fault không (FAS Diagnostic)',
+                                   f'PNU 11340 velocity ≠ 0 trên S{sid}'],
+                            action=['FAS Editor → Referencing tab → test',
+                                    'Acknowledge faults trên drive',
+                                    'STOP rồi HOMING lại'])
+                        return False
+                    self.get_logger().warn(
+                        f"  {name}: moved only {delta_mm:.2f}mm but drive says referenced — "
+                        f"may already be at REF position"
+                    )
 
-                    self._servo_homed_once[sid] = True
-                    self.zero_offset[sid] = post_pos
-                    self._need_warm_up[sid] = True  # FAS quirk: cần flush trước position_task đầu tiên
-                    self.get_logger().info(f"  {name} = 0mm (homed, Δ={delta_mm:.1f}mm)")
-                    return True
+                self._servo_homed_once[sid] = True
+                self.zero_offset[sid] = post_pos
+                self._need_warm_up[sid] = True  # FAS quirk: cần flush trước position_task đầu tiên
+                self.get_logger().info(f"  {name} = 0mm (homed, Δ={delta_mm:.1f}mm)")
+                return True
 
             except Exception as e:
                 self.get_logger().error(f"  {name} home exception: {e}")
@@ -2694,6 +2655,16 @@ class CartridgeSystem(Node):
                         # đọc tươi suốt homing → GUI hiển thị vị trí từ từ về 0
                         # thay vì freeze sau 2s idle skip. (Mirror fix fce323e
                         # cho path _do_homing.)
+                        delay_start = time.time()
+                        while time.time() - delay_start < 3.0:
+                            if sid in self._servo_home_abort:
+                                self.get_logger().warn(f"S{sid} JOG home aborted by servo STOP")
+                                with self._servo_lock:
+                                    mot.stop_motion_task()
+                                self._servo_home_abort.discard(sid)
+                                return
+                            self._servo_motion_t[sid] = time.time()
+                            time.sleep(0.2)
                         start = time.time()
                         timeout = self.config.homing_timeout
                         homed_ok = False
@@ -2792,10 +2763,9 @@ class CartridgeSystem(Node):
                 # Clear stale event nếu thread trước đã set sau STOP nhưng main
                 # loop chưa consume (state đã về IDLE).
                 self._homing_done_event.clear()
-                # Keep the previous raw encoder zero only for the near-zero
-                # optimization. zero_offset is still cleared below so state
-                # machines stay locked until this homing run completes.
-                self._homing_ref_offset = dict(self.zero_offset)
+                # Không giữ offset cũ: homing phải sync lại với hardware trước
+                # khi zero_offset được set và homing_done được publish.
+                self._homing_ref_offset.clear()
                 self.zero_offset.clear()
                 self._publish_homing_done(False)  # vfd_logic gate AUTO chờ homing mới xong
                 self._inx_moving = self._iny_moving = False
@@ -3538,7 +3508,7 @@ class CartridgeSystem(Node):
                 self._homing_done_event.clear()
                 if self._homing_result:
                     self.get_logger().info("Homing complete (main thread transition)")
-                    self._homing_ref_offset = dict(self.zero_offset)
+                    self._homing_ref_offset.clear()
                     self._publish_homing_done(True)
                     # Manual mode: KHÔNG auto-set _jog_mode — giữ nguyên label "manual"
                     # để user chủ động chọn STATE chạy. JOG chỉ kích hoạt khi STOP state.
@@ -5793,7 +5763,7 @@ class CartridgeSystem(Node):
         if oy is None:
             return
 
-        scan_target = (cfg.outy_output_zones[2][1]
+        scan_target = (max(cfg.outy_output_zones[2][0], cfg.outy_output_zones[2][1])
                        if self.sensor(S19_CHECK_TRAY_P2)
                        else getattr(cfg, 'target_scanoutp2', 500.0))
 
