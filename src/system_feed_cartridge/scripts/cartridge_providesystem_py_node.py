@@ -384,6 +384,9 @@ class CartridgeSystem(Node):
         self._homing_abort       = threading.Event()  # set by STOP to cancel homing thread
         self._servo_home_abort   = set()              # per-servo JOG home abort flags
         self._homing_ref_offset  = {}                 # cleared when hardware homing must be repeated
+        self._manual_state_cmd_lock = threading.Lock()
+        self._last_manual_state_cmd = ''
+        self._last_manual_state_cmd_t = 0.0
 
         # JOG velocity — only affects JOG; state/homing velocities fixed by FAS firmware
         self._jog_velocity_ms  = 0.05   # m/s (default, overwritten by FAS read on first connect)
@@ -2755,6 +2758,8 @@ class CartridgeSystem(Node):
         STATE3/4 cho phép bất kỳ mode nào nếu chưa đang chạy và đã homed.
         """
         cmd = msg.data.strip().upper()
+        if self._drop_duplicate_manual_state_cmd(cmd):
+            return
         if cmd == 'HOMING':
             if self.state != SystemState.HOMING_RUNNING:
                 # Clear abort flag — nếu STOP trước đó set abort mà chưa qua START,
@@ -2974,6 +2979,36 @@ class CartridgeSystem(Node):
             return
 
         self._notify('warn', f'goto_state: khong biet "{cmd}"', '')
+
+    def _manual_state_cmd_key(self, cmd: str) -> str:
+        if cmd in ('STATE1', 'STATE_1', 'S1'):
+            return 'STATE1'
+        if cmd in ('STATE2', 'STATE_2', 'S2', 'STATE2A', 'S2A'):
+            return 'STATE2'
+        if cmd in ('STATE3', 'STATE_3', 'S3'):
+            return 'STATE3'
+        if cmd in ('STATE4', 'STATE_4', 'S4'):
+            return 'STATE4'
+        if cmd == 'HOMING':
+            return 'HOMING'
+        return ''
+
+    def _drop_duplicate_manual_state_cmd(self, cmd: str) -> bool:
+        """
+        Chặn double-click/nhiều message liên tiếp từ GUI. Đây chỉ là debounce
+        cho lệnh chọn state; STOP/ABORT/IDLE không bị chặn vì là lệnh an toàn.
+        """
+        key = self._manual_state_cmd_key(cmd)
+        if not key:
+            return False
+        now = time.monotonic()
+        with self._manual_state_cmd_lock:
+            if key == self._last_manual_state_cmd and now - self._last_manual_state_cmd_t < 0.8:
+                self.get_logger().warn(f"[GOTO_STATE] Drop duplicate {key} command")
+                return True
+            self._last_manual_state_cmd = key
+            self._last_manual_state_cmd_t = now
+        return False
 
     def _s1_abort(self, reason: str):
         """

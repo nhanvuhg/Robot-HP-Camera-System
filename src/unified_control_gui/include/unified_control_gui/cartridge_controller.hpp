@@ -133,6 +133,8 @@ private:
     QString sensor_state_{"000000000000000000"};
     QString ui_hint_;                // 'press_homing' | 'press_stop' | 'switch_manual' | ''
     QTimer* ui_hint_timer_{nullptr}; // auto-clear hint sau 5s
+    QString last_goto_state_;
+    qint64 last_goto_state_ms_{0};
 
     void publishString(rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub, const QString &data);
     void publishBool(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub, bool value);

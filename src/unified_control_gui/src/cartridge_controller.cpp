@@ -218,8 +218,38 @@ void CartridgeController::setMode(const QString &mode)
 
 void CartridgeController::gotoState(const QString &state)
 {
-    publishString(goto_state_pub_, state);
-    addLog(QString("Goto state: %1").arg(state), "info");
+    const QString normalized = state.trimmed().toUpper();
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    auto activeForState = [this](const QString &cmd) {
+        const QString in = state_in_.toUpper();
+        const QString out = state_out_.toUpper();
+        if (cmd == "STATE1" || cmd == "S1" || cmd == "STATE_1")
+            return in.startsWith("S1_") || in.contains("STATE1");
+        if (cmd == "STATE2" || cmd == "S2" || cmd == "STATE_2" || cmd == "STATE2A" || cmd == "S2A")
+            return in.startsWith("S2") || in.contains("STATE2");
+        if (cmd == "STATE3" || cmd == "S3" || cmd == "STATE_3")
+            return out.startsWith("S3_") || out.contains("STATE3");
+        if (cmd == "STATE4" || cmd == "S4" || cmd == "STATE_4")
+            return out.startsWith("S4_") || out.contains("STATE4");
+        return false;
+    };
+
+    if (activeForState(normalized)) {
+        addLog(QString("Ignore duplicate active state: %1").arg(normalized), "warn");
+        return;
+    }
+
+    if (normalized == last_goto_state_ && now - last_goto_state_ms_ < 800) {
+        addLog(QString("Debounce state: %1").arg(normalized), "warn");
+        return;
+    }
+
+    last_goto_state_ = normalized;
+    last_goto_state_ms_ = now;
+
+    publishString(goto_state_pub_, normalized);
+    addLog(QString("Goto state: %1").arg(normalized), "info");
 }
 
 void CartridgeController::setTargetRow(int row)

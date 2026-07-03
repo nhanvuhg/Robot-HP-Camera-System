@@ -203,6 +203,26 @@ import QtGraphicalEffects 1.15
             return busyState(globalState) || busyState(inState) || busyState(outState)
         }
 
+        function state1Active() {
+            var s = (cartridgeController.stateIn || "").toLowerCase()
+            return s.indexOf("s1_") === 0 || s.indexOf("state1") !== -1
+        }
+
+        function state2Active() {
+            var s = (cartridgeController.stateIn || "").toLowerCase()
+            return s.indexOf("s2") === 0 || s.indexOf("state2") !== -1
+        }
+
+        function state3Active() {
+            var s = (cartridgeController.stateOut || "").toLowerCase()
+            return s.indexOf("s3_") === 0 || s.indexOf("state3") !== -1
+        }
+
+        function state4Active() {
+            var s = (cartridgeController.stateOut || "").toLowerCase()
+            return s.indexOf("s4_") === 0 || s.indexOf("state4") !== -1
+        }
+
         function abortStateToJog() {
             robotController.stopMotionOnly()
             cartridgeController.abortToJog()
@@ -1217,8 +1237,8 @@ import QtGraphicalEffects 1.15
                                             cartridgeController.gotoState("HOMING")
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 1\nKhay In"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.systemState.indexOf("S1_") !== -1 || cartridgeController.systemState.indexOf("STATE1") !== -1; glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 3\nKhay Out"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.systemState.indexOf("S3_") !== -1 || cartridgeController.systemState.indexOf("STATE3") !== -1; glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE3") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 1\nKhay In"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state1Active(); clickEnabled: !root.state1Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE1") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 3\nKhay Out"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state3Active(); clickEnabled: !root.state3Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE3") }
 
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
@@ -1242,8 +1262,8 @@ import QtGraphicalEffects 1.15
                                             }
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nKhay In"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE2") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 4\nKhay Out"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.systemState.indexOf("S4_") !== -1 || cartridgeController.systemState.indexOf("STATE4") !== -1; glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE4") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nKhay In"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state2Active(); clickEnabled: !root.state2Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE2") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 4\nKhay Out"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state4Active(); clickEnabled: !root.state4Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE4") }
                                 }
                             }
                         }

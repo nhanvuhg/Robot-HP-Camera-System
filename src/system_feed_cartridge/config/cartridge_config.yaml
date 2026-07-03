@@ -134,7 +134,7 @@ outy_output_zones:
   - 950.0
   - 1015.0
   2:
-  - 920.0
+  - 950.0
   - 830.0
   - 923.0
   3:
@@ -181,7 +181,7 @@ outx_target2: 552.0
 outx_target3: -278.0
 outy_home: 0.0
 outy_target1: 10.0
-outy_pick_pos: 160.0
+outy_pick_pos: 155.0
 outy_safe_zone: 30.0
 outy_search_velocity: 40.0
 outy_slow_vel: 30.0
