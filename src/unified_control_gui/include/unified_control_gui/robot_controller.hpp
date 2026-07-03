@@ -102,6 +102,7 @@ public slots:
     // Jog control (Manual mode)
     void jogStart(const QString& axisId);  // "j1+" "j1-" "x+" "z-" etc
     void jogStop();
+    void stopMotionOnly();
     void sendJogStep();  // callback-chaining step for continuous JOG
     void sendCartesianStep();  // ServoP streaming tick for Cartesian jog
     void setJogContinuous(bool continuous);

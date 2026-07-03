@@ -182,6 +182,21 @@ import QtGraphicalEffects 1.15
             cartridgeController.softStop()
         }
 
+        function stopManualMotionOnly() {
+            robotController.stopMotionOnly()
+            for (var sid = 1; sid <= 5; ++sid)
+                cartridgeController.jogStop(sid)
+        }
+
+        function stopFromSystemControl() {
+            if (cartridgeController.currentMode === "manual" || cartridgeController.currentMode === "jog") {
+                stopManualMotionOnly()
+                return
+            }
+
+            mainWindow.stopSynchronizedSystems()
+        }
+
         function showJogStopStateHint() {
             jogStopStateHint = true
             jogStopStateHintTimer.restart()
@@ -1123,7 +1138,7 @@ import QtGraphicalEffects 1.15
                                             mainWindow.startSynchronizedSystems(cartridgeController.currentMode)
                                         } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; iconSource: "qrc:/qml/icons/step_forward.svg"; bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; onClicked: { root.pauseLatched = false; cartridgeController.resumeSystem() } }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP"; bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: { root.cancelHoming(); mainWindow.stopSynchronizedSystems() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP"; bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: root.stopFromSystemControl() }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE"; bg: root.cStateAuxBtn; bgEnd: root.cStateAuxBtnEnd; selectedBg: root.cBtnWarningStart; selectedBgEnd: root.cBtnWarningEnd; bc: root.pauseLatched ? root.cBtnWarningBorder : root.cStateAuxBorder; tc: root.pauseLatched ? "#ffffff" : root.cStateAuxText; isSelected: root.pauseLatched; onClicked: { root.pauseLatched = true; cartridgeController.pauseSystem() } }
                                 }
                             }
@@ -1179,7 +1194,7 @@ import QtGraphicalEffects 1.15
 
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
-                                        lbl: "STATE MODE"
+                                        lbl: cartridgeController.currentMode === "jog" ? "STATE MODE" : "JOG MODE"
                                         bg: root.cServoRunStart
                                         bgEnd: root.cServoRunEnd
                                         bc: root.cServoRunBorder
@@ -1187,7 +1202,12 @@ import QtGraphicalEffects 1.15
                                         isSelected: cartridgeController.currentMode === "jog" || cartridgeController.systemState.toLowerCase().indexOf("jog") !== -1
                                         onClicked: {
                                             root.jogStopStateHint = false
-                                            mainWindow.syncOperationMode("jog")
+                                            if (cartridgeController.currentMode === "jog") {
+                                                root.suppressJogEchoForManual = true
+                                                mainWindow.syncOperationMode("manual")
+                                            } else {
+                                                mainWindow.syncOperationMode("jog")
+                                            }
                                         }
                                     }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nKhay In"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE2") }
@@ -2746,7 +2766,7 @@ import QtGraphicalEffects 1.15
                                                 w: (parent.width - 6) / 2; h: 52
                                                 fontSize: 15
                                                 bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"
-                                                onClicked: mainWindow.stopSynchronizedSystems()
+                                                onClicked: root.stopManualMotionOnly()
                                             }
                                             CBtn {
                                                 lbl: "CLEAR ERROR"

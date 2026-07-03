@@ -876,6 +876,34 @@ void RobotController::jogStop()
     stopManualJogMotion();
 }
 
+void RobotController::stopMotionOnly()
+{
+    qDebug() << "Stop motion only";
+    stopManualJogMotion();
+
+    if (dobot_stop_script_client_ && dobot_stop_script_client_->service_is_ready()) {
+        auto stopScriptReq = std::make_shared<dobot_msgs_v3::srv::StopScript::Request>();
+        dobot_stop_script_client_->async_send_request(stopScriptReq,
+            [](rclcpp::Client<dobot_msgs_v3::srv::StopScript>::SharedFuture f) {
+                try { qDebug() << "[STOP-ONLY] StopScript res:" << f.get()->res; }
+                catch (...) { qWarning() << "[STOP-ONLY] StopScript failed"; }
+            });
+    } else {
+        qWarning() << "[STOP-ONLY] StopScript service not ready";
+    }
+
+    if (pause_client_ && pause_client_->service_is_ready()) {
+        auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
+        pause_client_->async_send_request(pauseReq,
+            [](rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedFuture f) {
+                try { qDebug() << "[STOP-ONLY] Pause res:" << f.get()->res; }
+                catch (...) { qWarning() << "[STOP-ONLY] Pause failed"; }
+            });
+    } else {
+        qWarning() << "[STOP-ONLY] Pause service not ready";
+    }
+}
+
 void RobotController::getAngles()
 {
     if (!get_angle_client_->service_is_ready()) return;  // service offline → bỏ qua, không spam pending future
