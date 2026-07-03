@@ -1174,20 +1174,15 @@ import QtGraphicalEffects 1.15
 
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
-                                        lbl: cartridgeController.currentMode === "jog" ? "STATE MODE" : "STOP STATE"
-                                        bg: root.cBtnDangerStart
-                                        bgEnd: root.cBtnDangerEnd
-                                        bc: root.cBtnDangerBorder
-                                        tc: "#ffffff"
+                                        lbl: "STATE MODE"
+                                        bg: root.cServoRunStart
+                                        bgEnd: root.cServoRunEnd
+                                        bc: root.cServoRunBorder
+                                        tc: root.cServoRunText
                                         isSelected: cartridgeController.currentMode === "jog" || cartridgeController.systemState.toLowerCase().indexOf("jog") !== -1
                                         onClicked: {
                                             root.jogStopStateHint = false
-                                            if (cartridgeController.currentMode === "jog") {
-                                                root.suppressJogEchoForManual = true
-                                                mainWindow.syncOperationMode("manual")
-                                            } else {
-                                                cartridgeController.gotoState("ABORT_TO_JOG")
-                                            }
+                                            mainWindow.syncOperationMode("jog")
                                         }
                                     }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nKhay In"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.systemState.indexOf("S2A_") !== -1 || cartridgeController.systemState.indexOf("STATE2") !== -1; glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE2") }
@@ -1223,17 +1218,17 @@ import QtGraphicalEffects 1.15
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 5; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL1\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(1, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL2\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(2, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL3\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(3, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL4\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 26 && cartridgeController.sensorState.charAt(25) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(4, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL5\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 28 && cartridgeController.sensorState.charAt(27) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(5, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL1\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: "#ffffff"; selectedBgEnd: "#ffffff"; selectedTc: "#06101d"; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(1, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL2\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: "#ffffff"; selectedBgEnd: "#ffffff"; selectedTc: "#06101d"; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(2, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL3\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: "#ffffff"; selectedBgEnd: "#ffffff"; selectedTc: "#06101d"; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(3, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL4\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: "#ffffff"; selectedBgEnd: "#ffffff"; selectedTc: "#06101d"; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 26 && cartridgeController.sensorState.charAt(25) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(4, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL5\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: "#ffffff"; selectedBgEnd: "#ffffff"; selectedTc: "#06101d"; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 28 && cartridgeController.sensorState.charAt(27) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(5, true) }
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL1\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(1, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL2\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(2, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL3\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(3, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL4\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 25 && cartridgeController.sensorState.charAt(24) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(4, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL5\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 27 && cartridgeController.sensorState.charAt(26) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(5, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL1\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: "#ffffff"; selectedBgEnd: "#ffffff"; selectedTc: "#06101d"; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(1, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL2\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: "#ffffff"; selectedBgEnd: "#ffffff"; selectedTc: "#06101d"; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(2, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL3\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: "#ffffff"; selectedBgEnd: "#ffffff"; selectedTc: "#06101d"; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(3, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL4\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: "#ffffff"; selectedBgEnd: "#ffffff"; selectedTc: "#06101d"; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 25 && cartridgeController.sensorState.charAt(24) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(4, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL5\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: "#ffffff"; selectedBgEnd: "#ffffff"; selectedTc: "#06101d"; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 27 && cartridgeController.sensorState.charAt(26) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(5, false) }
                                 }
                             }
                         }
@@ -1947,10 +1942,15 @@ import QtGraphicalEffects 1.15
             Item {
                 id: page3Root
                 property string currentMode: cartridgeController.currentMode  // bind to system mode
-                // MANUAL controls (JOG) enable khi robot rảnh HOẶC dashboard đang JOG/MANUAL.
-                // Robot control không có JOG riêng → JOG/MANUAL của dashboard = manual robot,
-                // không được khóa di chuyển robot trong 2 mode này.
-                property bool manualEnabled: currentMode === "jog" || currentMode === "manual" || robotController.systemStatus === "IDLE" || robotController.systemStatus === "MANUAL" || robotController.systemStatus === "UNKNOWN" || robotController.systemStatus === ""
+                // MANUAL controls (JOG) stay open before START, even if AUTO / AI was selected.
+                // Only lock when the chosen AUTO / AI mode has actually been started.
+                property bool manualEnabled: currentMode === "jog"
+                                            || currentMode === "manual"
+                                            || !mainWindow.autoAiStartedSinceModeSelect
+                                            || robotController.systemStatus === "IDLE"
+                                            || robotController.systemStatus === "MANUAL"
+                                            || robotController.systemStatus === "UNKNOWN"
+                                            || robotController.systemStatus === ""
                 property real stepValue: 1.0
                 property int speedVal: robotController.speedRatio
                 property bool rowLocked: false
@@ -2733,7 +2733,7 @@ import QtGraphicalEffects 1.15
                                                 lbl: "CLEAR ERROR"
                                                 w: (parent.width - 6) / 2; h: 52
                                                 fontSize: 13
-                                                bg: root.cBtnWarningStart; bgEnd: root.cBtnWarningEnd; bc: root.cBtnWarningBorder; tc: root.cWhiteText
+                                                bg: "#FFE8B4"; bgEnd: "#0c1726"; bc: "#FFE8B4"; tc: root.cWhiteText
                                                 onClicked: robotController.clearError()
                                             }
                                         }
@@ -2803,7 +2803,7 @@ import QtGraphicalEffects 1.15
                                         lbl: "CLEAR ERROR"
                                         w: 170; h: 48
                                         fontSize: 13
-                                        bg: root.cBtnWarningStart; bgEnd: root.cBtnWarningEnd; bc: root.cBtnWarningBorder; tc: root.cWhiteText
+                                        bg: "#FFE8B4"; bgEnd: "#0c1726"; bc: "#FFE8B4"; tc: root.cWhiteText
                                         onClicked: robotController.clearError()
                                     }
                                 }
@@ -3087,6 +3087,7 @@ import QtGraphicalEffects 1.15
             property color bgEnd: bg       // when bgEnd != bg, use horizontal gradient
             property color selectedBg: bg
             property color selectedBgEnd: bgEnd
+            property color selectedTc: tc
             property color bc:    root.cBorder
             property color tc:    root.cText
             property bool  glassStyle: true
@@ -3242,7 +3243,7 @@ import QtGraphicalEffects 1.15
                 Text {
                     id: cbrT
                     text: cbr.lbl
-                    color: cbr.tc
+                    color: cbr.isSelected ? cbr.selectedTc : cbr.tc
                     font.pixelSize: cbr.displayFontSize
                     font.weight: Font.DemiBold
                     font.capitalization: Font.MixedCase
