@@ -1062,7 +1062,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
-                                    text: "CLEAR ERR"
+                                    text: "CLEAR"
                                     color: "#ffffff"
                                     font.pixelSize: 19
                                     font.bold: true
