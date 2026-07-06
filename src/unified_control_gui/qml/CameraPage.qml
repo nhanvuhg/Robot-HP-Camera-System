@@ -845,8 +845,8 @@ Item {
                                 required property var modelData
                                 property bool isActive: (modelData.lbl === "IN_READY" && robotController.inReady) || (modelData.lbl === "OUT_READY" && robotController.outReady)
                                 readonly property bool isReadyBtn: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
-                                property color gStart: isActive ? "#8edcff" : "#234C6A"
-                                property color gEnd:   isActive ? "#1e9ed0" : "#102739"
+                                property color gStart: (isReadyBtn && isActive) ? cBtnPrimaryStart : modelData.bgStart
+                                property color gEnd:   (isReadyBtn && isActive) ? cBtnPrimaryEnd : modelData.bgEnd
                                 Layout.fillWidth: true; height: 64; radius: 10
                                 color: "transparent"
                                 gradient: Gradient {
@@ -854,40 +854,51 @@ Item {
                                     GradientStop { position: 0.0; color: ma.pressed ? Qt.darker(gStart, 1.2) : gStart }
                                     GradientStop { position: 1.0; color: ma.pressed ? Qt.darker(gEnd, 1.2) : gEnd }
                                 }
-                                border.color: "#22445c"
+                                border.color: cBtnActionBorder
                                 border.width: 1
                                 Item {
                                     anchors.fill: parent
 
-                                    Row {
-                                        spacing: 8
-                                        anchors.centerIn: parent
+                                    Item {
+                                        id: stateIconHost
+                                        width: 38; height: 36
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        anchors.top: parent.top
+                                        anchors.topMargin: 1
 
                                         Image {
                                             source: modelData.icon.indexOf(".svg") !== -1 ? modelData.icon : ""
                                             visible: source.toString() !== ""
-                                            width: 30; height: 30
+                                            width: 34; height: 34
                                             sourceSize.width: 80
                                             sourceSize.height: 80
                                             fillMode: Image.PreserveAspectFit
                                             smooth: true
                                             mipmap: true
                                             antialiasing: true
-                                            anchors.verticalCenter: parent.verticalCenter
+                                            anchors.centerIn: parent
                                         }
 
                                         Text {
                                             text: modelData.icon.indexOf(".svg") === -1 ? modelData.icon : ""
                                             visible: text !== ""
-                                            color: "#ffffff"
+                                            color: (parent.parent.parent.isReadyBtn && parent.parent.parent.isActive) ? "#04223a" : modelData.tc
                                             font.pixelSize: 22
-                                            anchors.verticalCenter: parent.verticalCenter
+                                            anchors.centerIn: parent
                                         }
+
+                                    }
+
+                                    Row {
+                                        spacing: 6
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        anchors.top: stateIconHost.bottom
+                                        anchors.bottom: parent.bottom
 
                                         Rectangle {
                                             width: 9; height: 9; radius: 4.5
-                                            color: parent.parent.parent.isActive ? "#ffffff" : "#0b2233"
-                                            border.color: "#7fcdf5"
+                                            color: parent.parent.parent.isActive ? "#67d0ff" : "#14263c"
+                                            border.color: cBtnActionBorder
                                             border.width: 1
                                             visible: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
                                             anchors.verticalCenter: parent.verticalCenter
@@ -896,7 +907,7 @@ Item {
 
                                         Text {
                                             text: modelData.displayLbl
-                                            color: "#ffffff"
+                                            color: (parent.parent.parent.isReadyBtn && parent.parent.parent.isActive) ? "#04223a" : modelData.tc
                                             font.pixelSize: 13
                                             font.bold: true
                                             anchors.verticalCenter: parent.verticalCenter
