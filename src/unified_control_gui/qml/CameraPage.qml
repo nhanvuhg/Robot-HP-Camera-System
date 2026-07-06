@@ -1041,17 +1041,17 @@ Item {
                             } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cServoJogBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#6f9ab7"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker(cServoJogStart, 1.15) : cServoJogStart }
-                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker(cServoJogEnd, 1.15) : cServoJogEnd }
+                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#456882", 1.15) : "#456882" }
+                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#162a3a", 1.15) : "#162a3a" }
                             }
                             Row {
                                 anchors.centerIn: parent
                                 spacing: 8
                                 Image {
-                                    source: "icons/brush_cleaning_lucide_dark.svg"
+                                    source: "icons/brush_cleaning_white.svg"
                                     width: 27
                                     height: 27
                                     sourceSize.width: 96
@@ -1063,7 +1063,7 @@ Item {
                                 }
                                 Text {
                                     text: "CLEAR ERR"
-                                    color: cServoJogText
+                                    color: "#ffffff"
                                     font.pixelSize: 19
                                     font.bold: true
                                     anchors.verticalCenter: parent.verticalCenter
