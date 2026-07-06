@@ -1063,13 +1063,13 @@ Item {
                             MotionMouseArea { id: resMA; anchors.fill: parent; onClicked: { cameraPageRoot.pauseLatched = false; robotController.resumeRobot() } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#FFE8B4"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cServoJogBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#FFE8B4", 1.15) : "#FFE8B4" }
-                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#0c1726", 1.15) : "#0c1726" }
+                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker(cServoJogStart, 1.15) : cServoJogStart }
+                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker(cServoJogEnd, 1.15) : cServoJogEnd }
                             }
-                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: "#ffffff"; font.pixelSize: 19; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: cServoJogText; font.pixelSize: 19; font.bold: true }
                             MotionMouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
                         }
                     }
