@@ -980,7 +980,28 @@ Item {
                                 GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker("#3B6978", 1.15) : "#3B6978" }
                                 GradientStop { position: 1.0; color: enMA.pressed ? Qt.darker("#1A312C", 1.15) : "#1A312C" }
                             }
-                            Text { anchors.centerIn: parent; text: "ENABLE"; color: "#d6f1ff"; font.pixelSize: 19; font.bold: true }
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                Image {
+                                    source: "icons/power_lucide.svg"
+                                    width: 27
+                                    height: 27
+                                    sourceSize.width: 96
+                                    sourceSize.height: 96
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
+                                    mipmap: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                Text {
+                                    text: "ENABLE"
+                                    color: "#d6f1ff"
+                                    font.pixelSize: 19
+                                    font.bold: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                            }
                             MotionMouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
                         }
 
@@ -1004,7 +1025,28 @@ Item {
                                 GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker(cServoJogStart, 1.15) : cServoJogStart }
                                 GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker(cServoJogEnd, 1.15) : cServoJogEnd }
                             }
-                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: cServoJogText; font.pixelSize: 19; font.bold: true }
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                Image {
+                                    source: "icons/brush_cleaning_lucide_dark.svg"
+                                    width: 27
+                                    height: 27
+                                    sourceSize.width: 96
+                                    sourceSize.height: 96
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
+                                    mipmap: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                Text {
+                                    text: "CLEAR ERR"
+                                    color: cServoJogText
+                                    font.pixelSize: 19
+                                    font.bold: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                            }
                             MotionMouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
                         }
 
@@ -1065,10 +1107,27 @@ Item {
                                 color: "#000000"
                                 opacity: cameraPageRoot.pauseLatched ? 0.22 : 0.0
                             }
-                            Text {
-                                anchors.centerIn: parent; text: "PAUSE"
-                                color: "#ffffff"
-                                font.pixelSize: 19; font.bold: true
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                Image {
+                                    source: "icons/circle_pause_lucide.svg"
+                                    width: 27
+                                    height: 27
+                                    sourceSize.width: 96
+                                    sourceSize.height: 96
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
+                                    mipmap: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                Text {
+                                    text: "PAUSE"
+                                    color: "#ffffff"
+                                    font.pixelSize: 19
+                                    font.bold: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
                             }
                             MotionMouseArea { id: pauseMA; anchors.fill: parent; onClicked: { cameraPageRoot.pauseLatched = true; robotController.pauseRobot() } }
                         }

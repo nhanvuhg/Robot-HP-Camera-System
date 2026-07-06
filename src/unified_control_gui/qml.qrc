@@ -29,6 +29,9 @@
     <file alias="icons/house.svg">qml/icons/house.svg</file>
     <file alias="icons/play.svg">qml/icons/play.svg</file>
     <file alias="icons/step_forward.svg">qml/icons/step_forward.svg</file>
+    <file alias="icons/power_lucide.svg">qml/icons/power_lucide.svg</file>
+    <file alias="icons/circle_pause_lucide.svg">qml/icons/circle_pause_lucide.svg</file>
+    <file alias="icons/brush_cleaning_lucide_dark.svg">qml/icons/brush_cleaning_lucide_dark.svg</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
   <qresource prefix="/icons">
