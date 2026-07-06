@@ -258,6 +258,8 @@ class CartridgeSystem(Node):
         self._io_ready          = False
         self._io_ready_2        = False
         self._io_bg_lock        = threading.Lock()
+        self._sensor_latch_until: dict = {}
+        self._sensor_on_latch_s = max(0.0, float(getattr(self.config, 'sensor_on_latch_s', 0.10)))
 
         # Motion flags
         self._inx_moving = False
@@ -471,7 +473,8 @@ class CartridgeSystem(Node):
 
         self._connect_hardware()
 
-        self.create_timer(0.05, self._safe_control_loop)
+        control_period = max(0.01, float(getattr(self.config, 'control_loop_period_s', 0.02)))
+        self.create_timer(control_period, self._safe_control_loop)
         self.create_timer(1.0, self._config_file_watchdog)
         
         # Positions publisher chạy trong thread riêng
@@ -898,7 +901,8 @@ class CartridgeSystem(Node):
 
     def _io_bg_loop(self):
         """
-        Thread nền đọc trạng thái toàn bộ IO module với chu kỳ 50ms.
+        Thread nền đọc trạng thái toàn bộ IO module với chu kỳ cấu hình
+        `io_poll_period_s` (mặc định 20ms).
         Đọc tất cả channel của Module 1 và Module 2 vào cache (_io_sensor_cache,
         _io_sensor_cache_2) để vòng lặp điều khiển chính không bị block bởi
         latency Modbus/EtherNet/IP.
@@ -906,6 +910,7 @@ class CartridgeSystem(Node):
         và tự động spawn thread reconnect.
         """
         fail1, fail2 = 0, 0
+        poll_period = max(0.01, float(getattr(self.config, 'io_poll_period_s', 0.02)))
         while rclpy.ok():
             # Module 1
             if self.io_module is not None:
@@ -918,6 +923,7 @@ class CartridgeSystem(Node):
                                 if isinstance(ch, list):
                                     channels.extend(ch)
                         self._io_sensor_cache = channels
+                        self._update_sensor_latches_locked(channels, 1)
                         self._io_ready = True
                     fail1 = 0
                 except Exception as e:
@@ -939,6 +945,7 @@ class CartridgeSystem(Node):
                                 if isinstance(ch2, list):
                                     channels2.extend(ch2)
                         self._io_sensor_cache_2 = channels2
+                        self._update_sensor_latches_locked(channels2, 17)
                         self._io_ready_2 = True
                     fail2 = 0
                 except Exception as e:
@@ -949,7 +956,27 @@ class CartridgeSystem(Node):
                         self.get_logger().warn(f"[IO-bg 2] reconnecting: {e}")
                         threading.Thread(target=self._reconnect_io2, daemon=True).start()
             
-            time.sleep(0.05)
+            time.sleep(poll_period)
+
+    def _update_sensor_latches_locked(self, channels: list, first_sid: int):
+        """Giữ ON ngắn cho sensor để không hụt xung nhanh giữa hai lần polling."""
+        latch_s = getattr(self, '_sensor_on_latch_s', 0.0)
+        if latch_s <= 0.0:
+            return
+        until = time.time() + latch_s
+        for idx, value in enumerate(channels):
+            if value:
+                self._sensor_latch_until[first_sid + idx] = until
+
+    def _sensor_latched_locked(self, sid: int, raw: bool, now: Optional[float] = None) -> bool:
+        if raw:
+            return True
+        latch_s = getattr(self, '_sensor_on_latch_s', 0.0)
+        if latch_s <= 0.0:
+            return False
+        if now is None:
+            now = time.time()
+        return now <= self._sensor_latch_until.get(sid, 0.0)
 
     def _reconnect_io1(self):
         """Reconnect IO Module 1 sau 5s delay (tránh flood nếu lỗi liên tục)."""
@@ -979,11 +1006,19 @@ class CartridgeSystem(Node):
             ready2 = getattr(self, '_io_ready_2', False)
 
         if 1 <= sid <= 16:
-            if not ready1 or len(cache1) < sid: return False
-            return bool(cache1[sid - 1])
+            if not ready1 or len(cache1) < sid:
+                with self._io_bg_lock:
+                    return self._sensor_latched_locked(sid, False)
+            raw = bool(cache1[sid - 1])
+            with self._io_bg_lock:
+                return self._sensor_latched_locked(sid, raw)
         elif 17 <= sid <= 28:
-            if not ready2 or len(cache2) < (sid - 16): return False
-            return bool(cache2[sid - 17])
+            if not ready2 or len(cache2) < (sid - 16):
+                with self._io_bg_lock:
+                    return self._sensor_latched_locked(sid, False)
+            raw = bool(cache2[sid - 17])
+            with self._io_bg_lock:
+                return self._sensor_latched_locked(sid, raw)
         return False
 
     def sensor(self, sid: int) -> bool:
@@ -1004,6 +1039,7 @@ class CartridgeSystem(Node):
             ready2 = getattr(self, '_io_ready_2', False)
 
         results = []
+        now = time.time()
         for sid in sids:
             try:
                 if 1 <= sid <= 16:
@@ -1014,7 +1050,8 @@ class CartridgeSystem(Node):
                     raw = False
             except Exception:
                 raw = False
-            results.append(raw)
+            with self._io_bg_lock:
+                results.append(self._sensor_latched_locked(sid, raw, now))
         return tuple(results)
 
     # ── Non-blocking servo motion ─────────────────────────────────
@@ -3954,6 +3991,7 @@ class CartridgeSystem(Node):
             self._step_timeout_in = time.time() + self.config.move_timeout
             self._s4_armed        = False
             self._s4_prev_in      = self.sensor(S4_SCAN_STACK_P1)
+            self._s1_s4_on_logged = False
             self.get_logger().info(
                 f"[S1 SCAN] INY -> {scan_target:.0f}mm "
                 f"vel={self.config.iny_scan_vel}"
@@ -4000,6 +4038,12 @@ class CartridgeSystem(Node):
             trigger_pos = self._pos(2) or iny
 
             row = self._zone_to_row(trigger_pos, self.config.iny_input_zones)
+            if not getattr(self, '_s1_s4_on_logged', False):
+                zone_msg = f"row{row}" if row is not None else "NO_ZONE"
+                self.get_logger().warn(
+                    f"[S1 SCAN] S4 ON detect @ InY={trigger_pos:.1f}mm ({zone_msg})"
+                )
+                self._s1_s4_on_logged = True
             if row is None:
                 # Trigger rơi khe hở giữa 2 zone (calib lệch / nhiễu) → rơi
                 # xuống nhánh fail bên dưới NGAY tick này: stop + retry scan,
@@ -4760,9 +4804,10 @@ class CartridgeSystem(Node):
                 self.get_logger().info(
                     f"[S2A SCAN] S6 thay đổi từ A1: {self._s6_snapshot}→{fresh_s6} — refresh"
                 )
-                self._s6_snapshot = fresh_s6
+            self._s6_snapshot = fresh_s6
             self._s4_armed_out    = False
             self._s4_prev_out     = self.sensor(S4_SCAN_STACK_P1)
+            self._s2_s4_on_logged = False
             # Snapshot row1 occupancy: nếu Cyl3 đang giữ khay tại row1 (S16 ON + S6 ON)
             # → loại trừ row1 khỏi detection trong scan này.
             s16_snap, s6_snap = self._snap(S16_CYL3_EXTENDED, S6_CHECK_TRAY_P1)
@@ -4859,6 +4904,12 @@ class CartridgeSystem(Node):
             if self._s4_armed_out and s4_now:
                 trigger_pos = self._pos(2) or iny
                 row = self._zone_to_row(trigger_pos, self.config.iny_output_zones)
+                if not getattr(self, '_s2_s4_on_logged', False):
+                    zone_msg = f"row{row}" if row is not None else "NO_ZONE"
+                    self.get_logger().warn(
+                        f"[S2A SCAN] S4 ON detect @ InY={trigger_pos:.1f}mm ({zone_msg})"
+                    )
+                    self._s2_s4_on_logged = True
                 if row is None:
                     # Trigger rơi khe hở giữa 2 zone / nhiễu → bỏ qua edge này,
                     # tiếp tục scan. Hết hành trình sẽ vào nhánh fallback row1
@@ -5872,6 +5923,7 @@ class CartridgeSystem(Node):
             self._step_timeout_s4 = time.time() + cfg.move_timeout
             self._s20_armed       = False
             self._s20_prev        = self.sensor(S20_SCAN_STACK_P2)
+            self._s4_s20_on_logged = False
             self.get_logger().info(
                 f"[S4 SCAN] OutY → {scan_target:.0f}mm vel={cfg.outy_search_velocity} "
                 f"S19={'ON' if self.sensor(S19_CHECK_TRAY_P2) else 'OFF'}"
@@ -5909,6 +5961,12 @@ class CartridgeSystem(Node):
         if self._s20_armed and s20_now:
             trigger_pos = self._pos(5) or oy
             row = self._zone_to_row(trigger_pos, cfg.outy_output_zones)
+            if not getattr(self, '_s4_s20_on_logged', False):
+                zone_msg = f"row{row}" if row is not None else "NO_ZONE"
+                self.get_logger().warn(
+                    f"[S4 SCAN] S20 ON detect @ OutY={trigger_pos:.1f}mm ({zone_msg})"
+                )
+                self._s4_s20_on_logged = True
             if row is None:
                 # Trigger rơi khe hở giữa 2 zone / nhiễu → rơi xuống nhánh fail
                 # bên dưới NGAY tick này (retry scan / hết retry → fallback row1

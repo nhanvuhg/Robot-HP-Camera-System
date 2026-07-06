@@ -28,6 +28,9 @@ homing_timeout: 120.0
 move_timeout: 100.0
 cylinder_timeout: 15.0
 modbus_timeout_ms: 3000
+control_loop_period_s: 0.02
+io_poll_period_s: 0.02
+sensor_on_latch_s: 0.10
 fas_position_velocity: 0.05
 jog_velocity: 0.05
 jog_velocity_max: 0.08

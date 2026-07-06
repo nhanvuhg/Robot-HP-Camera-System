@@ -50,6 +50,9 @@ class SystemConfig(BaseModel):
     move_timeout: float = 60.0
     cylinder_timeout: float = 15.0
     modbus_timeout_ms: int = 3000
+    control_loop_period_s: float = 0.02
+    io_poll_period_s: float = 0.02
+    sensor_on_latch_s: float = 0.10
 
     # Velocity (m/s) — synced with FAS
     fas_position_velocity: float = 0.05
