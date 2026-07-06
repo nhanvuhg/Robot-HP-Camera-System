@@ -845,7 +845,7 @@ Item {
                                         width: Math.floor((sensorSect.width - 36) / 3)
                                         height: 48
                                         radius: 4
-                                        color: on_ ? "#081627" : tab.cPanel
+                                        color: on_ ? "#081627" : "transparent"
                                         border.color: on_ ? tab.cAccent : tab.cBorder
                                         border.width: 1
                                         Behavior on color       { ColorAnimation { duration: 150 } }
