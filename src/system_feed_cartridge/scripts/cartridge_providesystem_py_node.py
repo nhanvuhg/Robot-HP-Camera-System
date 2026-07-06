@@ -260,6 +260,7 @@ class CartridgeSystem(Node):
         self._io_bg_lock        = threading.Lock()
         self._sensor_latch_until: dict = {}
         self._sensor_on_latch_s = max(0.0, float(getattr(self.config, 'sensor_on_latch_s', 0.10)))
+        self._sensor_no_latch_sids = {S18_FEED_OK, S20_SCAN_STACK_P2}
 
         # Motion flags
         self._inx_moving = False
@@ -937,13 +938,8 @@ class CartridgeSystem(Node):
             # Module 2
             if self.io_module_2 is not None:
                 try:
-                    channels2 = []
                     with self._io_bg_lock:
-                        for mod in self.io_module_2.modules:
-                            if mod.is_function_supported("read_channels"):
-                                ch2 = mod.read_channels()
-                                if isinstance(ch2, list):
-                                    channels2.extend(ch2)
+                        channels2 = self._read_io2_sensor_channels_locked()
                         self._io_sensor_cache_2 = channels2
                         self._update_sensor_latches_locked(channels2, 17)
                         self._io_ready_2 = True
@@ -958,6 +954,20 @@ class CartridgeSystem(Node):
             
             time.sleep(poll_period)
 
+    def _read_io2_sensor_channels_locked(self) -> list:
+        """Read CPX 254 DI modules only: S17-S24 from first 8DI, S25-S28 from second 8DI."""
+        channels: list = []
+        di_modules = []
+        for mod in self.io_module_2.modules:
+            name = str(getattr(mod, 'name', ''))
+            if mod.is_function_supported("read_channels") and "8di" in name.lower():
+                di_modules.append(mod)
+        for mod in di_modules[:2]:
+            ch = mod.read_channels()
+            if isinstance(ch, list):
+                channels.extend(ch[:8])
+        return channels[:12]
+
     def _update_sensor_latches_locked(self, channels: list, first_sid: int):
         """Giữ ON ngắn cho sensor để không hụt xung nhanh giữa hai lần polling."""
         latch_s = getattr(self, '_sensor_on_latch_s', 0.0)
@@ -971,6 +981,8 @@ class CartridgeSystem(Node):
     def _sensor_latched_locked(self, sid: int, raw: bool, now: Optional[float] = None) -> bool:
         if raw:
             return True
+        if sid in getattr(self, '_sensor_no_latch_sids', set()):
+            return False
         latch_s = getattr(self, '_sensor_on_latch_s', 0.0)
         if latch_s <= 0.0:
             return False
