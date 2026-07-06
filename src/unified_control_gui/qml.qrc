@@ -32,6 +32,7 @@
     <file alias="icons/power_lucide.svg">qml/icons/power_lucide.svg</file>
     <file alias="icons/circle_pause_lucide.svg">qml/icons/circle_pause_lucide.svg</file>
     <file alias="icons/brush_cleaning_lucide_dark.svg">qml/icons/brush_cleaning_lucide_dark.svg</file>
+    <file alias="icons/octagon_x_lucide.svg">qml/icons/octagon_x_lucide.svg</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
   <qresource prefix="/icons">

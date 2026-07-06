@@ -1012,7 +1012,29 @@ Item {
                                 GradientStop { position: 0.5; color: stopResetMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.25) : cBtnEmergencyStart }
                                 GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker("#7a2424", 1.25) : "#7a2424" }
                             }
-                            Text { anchors.centerIn: parent; text: "STOP"; color: "#ffffff"; font.pixelSize: 19; font.bold: true; font.letterSpacing: 1.2 }
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                Image {
+                                    source: "icons/octagon_x_lucide.svg"
+                                    width: 27
+                                    height: 27
+                                    sourceSize.width: 96
+                                    sourceSize.height: 96
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
+                                    mipmap: true
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                Text {
+                                    text: "STOP"
+                                    color: "#ffffff"
+                                    font.pixelSize: 19
+                                    font.bold: true
+                                    font.letterSpacing: 1.2
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                            }
                             MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: {
                                 cameraPageRoot.modeLocked = false
                                 mainWindow.emergencyStopSynchronizedSystems()
