@@ -3922,17 +3922,17 @@ class CartridgeSystem(Node):
         """
         Quét InY từ home → target_scaninp1 (970mm) để phát hiện stack khay đầu vào.
         Logic chống nhiễu S4 (xem RULES.md RULE 3):
-          1. S4 là NO (Normally Open) → bắt **rising edge** (s4_prev OFF → now ON)
+          1. S4 ON khi đã armed → xét zone ngay (không phụ thuộc rising edge)
           2. Gate S4 armed theo 2 điều kiện AND, re-evaluate mỗi tick:
              - InX vẫn tại inx_target2 ± position_tolerance (_at_position)
              - InY ∈ [iny_scan_valid_min_mm, iny_scan_valid_max_mm]
           3. Disarm + log warn nếu InX drift khỏi target giữa lúc scan.
 
-        Rising edge hợp lệ → tính row từ _zone_to_row → chuyển S1_INY_TO_ROW.
-        Rising edge NGOÀI mọi zone (_zone_to_row → None, trigger rơi khe hở
+        S4 ON hợp lệ → tính row từ _zone_to_row → chuyển S1_INY_TO_ROW.
+        S4 ON NGOÀI mọi zone (_zone_to_row → None, trigger rơi khe hở
         giữa 2 row / calib lệch): xử lý như noise — cùng nhánh retry/error
         bên dưới, KHÔNG fallback row nào (sự cố 2026-07-03 @ 804.9mm).
-        Hết hành trình mà không có rising edge:
+        Hết hành trình mà không có S4 ON hợp lệ:
           - Retry < limit (s1_scan_noise_retry_limit, default 1): → S1_RETRY_SCAN_HOME
           - Hết retry: notify error, về home + InX về inx_noise_recovery_mm, vào IDLE.
         """
@@ -3940,8 +3940,12 @@ class CartridgeSystem(Node):
         if iny is None:
             return
 
+        row1_zone = self.config.iny_input_zones.get(1, [])
+        row1_scan_max = max(row1_zone[0], row1_zone[1]) if len(row1_zone) >= 2 else self.config.target_scaninp1
+        scan_target = max(self.config.target_scaninp1, row1_scan_max)
+
         if not self._cmd_sent_in:
-            ok = self._nb_move(2, self.config.target_scaninp1,
+            ok = self._nb_move(2, scan_target,
                                vel=self.config.iny_scan_vel)
             if not ok:
                 self._log_once("S1_SCAN_FAIL", "S1 INY scan: nb_move fail")
@@ -3951,7 +3955,7 @@ class CartridgeSystem(Node):
             self._s4_armed        = False
             self._s4_prev_in      = self.sensor(S4_SCAN_STACK_P1)
             self.get_logger().info(
-                f"[S1 SCAN] INY -> {self.config.target_scaninp1:.0f}mm "
+                f"[S1 SCAN] INY -> {scan_target:.0f}mm "
                 f"vel={self.config.iny_scan_vel}"
             )
 
@@ -3963,9 +3967,10 @@ class CartridgeSystem(Node):
         #      → cắt cả 2 đầu (chống trigger dưới 70mm và quá 970mm).
         # Nếu InX trôi khỏi target → disarm S4 ngay + log warn.
         inx_at_target = self._at_position(1, self.config.inx_target2)
+        valid_max = max(self.config.iny_scan_valid_max_mm, scan_target)
         iny_in_valid  = (self.config.iny_scan_valid_min_mm
                          <= iny <=
-                         self.config.iny_scan_valid_max_mm)
+                         valid_max)
         new_armed     = inx_at_target and iny_in_valid
 
         # Disarm + warn nếu InX trôi giữa chừng (đã armed mà giờ inx_at_target=False)
@@ -3978,15 +3983,20 @@ class CartridgeSystem(Node):
                 f"vs {self.config.inx_target2}mm, tol={self.config.position_tolerance}mm) "
                 f"— DISARM S4"
             )
+        if new_armed and not self._s4_armed:
+            self._s4_prev_in = self.sensor(S4_SCAN_STACK_P1)
         self._s4_armed = new_armed
 
         s4_now = self.sensor(S4_SCAN_STACK_P1)
-        # S4 là thường mở (NO): chạm khay chuyển từ OFF sang ON -> Rising edge
-        s4_rising = (not self._s4_prev_in) and s4_now
-        self._s4_prev_in = s4_now
+        # Khi armed, S4 ON trong zone là đủ để chốt row. Không chỉ phụ thuộc
+        # rising edge, vì sensor có thể đã ON trước lúc phần mềm armed.
+        s4_rising = self._s4_armed and (not self._s4_prev_in) and s4_now
+        if self._s4_armed:
+            self._s4_prev_in = s4_now
 
         invalid_trigger_pos = None
-        if self._s4_armed and s4_rising:
+        forced_row = None
+        if self._s4_armed and s4_now:
             trigger_pos = self._pos(2) or iny
 
             row = self._zone_to_row(trigger_pos, self.config.iny_input_zones)
@@ -4001,14 +4011,18 @@ class CartridgeSystem(Node):
                 self._current_row = row
 
                 self.get_logger().info(
-                    f"[S1 SCAN] S4 rising edge trigger @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm) - Moving directly"
+                    f"[S1 SCAN] S4 ON @ {trigger_pos:.1f}mm → row{row} ({target_mm:.0f}mm) - Moving directly"
                 )
                 self._s5_retry = 0
                 self._enter_in(SystemState.S1_INY_TO_ROW)
                 return
 
         timed_out = time.time() > self._step_timeout_in
-        at_target = self._arrived(2) or iny >= self.config.target_scaninp1 - 2.0
+        at_target = self._arrived(2) or iny >= scan_target - 2.0
+        if at_target and s4_now:
+            row_at_scan_end = self._zone_to_row(iny, self.config.iny_input_zones)
+            if row_at_scan_end is not None:
+                forced_row = row_at_scan_end
         if timed_out or at_target or invalid_trigger_pos is not None:
             if invalid_trigger_pos is not None:
                 self.get_logger().warn(
@@ -4018,6 +4032,17 @@ class CartridgeSystem(Node):
             else:
                 self.get_logger().warn("[S1 SCAN] Hết hạn scan mà không có rising edge hợp lệ của S4")
             self._stop(2)
+
+            if forced_row is not None:
+                target_mm = self.config.iny_input_zones[forced_row][2]
+                self._current_row = forced_row
+                self._s5_retry = 0
+                self.get_logger().warn(
+                    f"[S1 SCAN] Reached row{forced_row} zone @ {iny:.1f}mm with S4 ON "
+                    f"but no new rising edge → row{forced_row} ({target_mm:.0f}mm)"
+                )
+                self._enter_in(SystemState.S1_INY_TO_ROW)
+                return
 
             if self._s1_scan_noise_retry < self._conf('s1_scan_noise_retry_limit', 1):
                 self._s1_scan_noise_retry += 1
@@ -4710,7 +4735,7 @@ class CartridgeSystem(Node):
           - S6 ON (stack có khay): scan với S4 rising-edge + armed-gate (giống S1):
               * inx_at_target (InX tại inx_output_stack)
               * iny in [iny_scan_valid_min_mm, iny_scan_valid_max_mm]
-            S4 rising edge hợp lệ → _zone_to_row(iny_output_zones) → target row →
+            S4 ON hợp lệ → _zone_to_row(iny_output_zones) → target row →
             enter S2A_INY_TARGETROW. Trigger NGOÀI mọi zone (None) → bỏ qua
             edge, tiếp tục scan.
             Hết hành trình mà S4 không trigger (hoặc mọi trigger đều ngoài
@@ -4721,6 +4746,9 @@ class CartridgeSystem(Node):
         iny = self._pos(2)
         if iny is None:
             return
+        row1_zone = self.config.iny_output_zones.get(1, [])
+        row1_scan_max = max(row1_zone[0], row1_zone[1]) if len(row1_zone) >= 2 else self.config.target_scaninp1
+        scan_target = max(self.config.target_scaninp1, row1_scan_max)
 
         if not self._cmd_sent_in:
             # REFRESH S6 trước khi quyết định path scan — A1 snapshot có thể stale
@@ -4749,14 +4777,14 @@ class CartridgeSystem(Node):
                 self._s2a_s6off_phase = 1
                 self.get_logger().info("[S2A SCAN] S6=OFF stack rỗng — fast InY → 950mm @ vel=150 (phase 1)")
             else:
-                # S6 ON: scan vel=50 đến target_scaninp1 với S4 detection
-                ok = self._nb_move(2, self.config.target_scaninp1, vel=50)
+                # S6 ON: scan vel=50 đến hết vùng row1 với S4 detection
+                ok = self._nb_move(2, scan_target, vel=50)
                 if not ok:
                     self._log_once("S2A_SCAN_FAIL", "S2A scan: nb_move fail")
                     return
                 self._s2a_s6off_phase = 0
                 self.get_logger().info(
-                    f"[S2A SCAN] S6=ON — scan InY → {self.config.target_scaninp1:.0f}mm @ vel=50 "
+                    f"[S2A SCAN] S6=ON — scan InY → {scan_target:.0f}mm @ vel=50 "
                     f"row1_occupied={self._row1_occupied}"
                 )
             self._cmd_sent_in     = True
@@ -4804,9 +4832,10 @@ class CartridgeSystem(Node):
         # ── S6 ON: detect S4 (giống S1 rising-edge + armed-gate) ────
         if self._s6_snapshot:
             inx_at_target = self._at_position(1, self.config.inx_output_stack)
+            valid_max = max(self.config.iny_scan_valid_max_mm, scan_target)
             iny_in_valid  = (self.config.iny_scan_valid_min_mm
                              <= iny <=
-                             self.config.iny_scan_valid_max_mm)
+                             valid_max)
             new_armed     = inx_at_target and iny_in_valid
 
             if self._s4_armed_out and not inx_at_target:
@@ -4817,14 +4846,17 @@ class CartridgeSystem(Node):
                     f"({inx_now if inx_now is None else f'{inx_now:.2f}'}mm, "
                     f"tol={self.config.position_tolerance}mm) — DISARM S4"
                 )
+            if new_armed and not self._s4_armed_out:
+                self._s4_prev_out = self.sensor(S4_SCAN_STACK_P1)
             self._s4_armed_out = new_armed
 
             s4_now = self.sensor(S4_SCAN_STACK_P1)
             # S4 là NO: chạm khay tồn → rising edge (OFF → ON)
-            s4_rising = (not self._s4_prev_out) and s4_now
-            self._s4_prev_out = s4_now
+            s4_rising = self._s4_armed_out and (not self._s4_prev_out) and s4_now
+            if self._s4_armed_out:
+                self._s4_prev_out = s4_now
 
-            if self._s4_armed_out and s4_rising:
+            if self._s4_armed_out and s4_now:
                 trigger_pos = self._pos(2) or iny
                 row = self._zone_to_row(trigger_pos, self.config.iny_output_zones)
                 if row is None:
@@ -4849,19 +4881,31 @@ class CartridgeSystem(Node):
                     self._output_target_pos = target_mm
                     self._output_row = row
                     self.get_logger().info(
-                        f"[S2A SCAN] S4 rising edge @ {trigger_pos:.1f}mm → "
+                        f"[S2A SCAN] S4 ON @ {trigger_pos:.1f}mm → "
                         f"row{row} ({target_mm:.0f}mm)"
                     )
                     self._stop(2)
                     self._enter_in(SystemState.S2A_INY_TARGETROW)
                     return
 
-        # ── S6 ON fallback: arrived 970mm mà S4 không trigger row nào ─
+        # ── S6 ON fallback: arrived scan_target mà S4 không trigger row nào ─
         # (S6 OFF không vào nhánh này — đã return ở khối 2-phase phía trên)
         timed_out = time.time() > self._step_timeout_in
-        at_target = self._arrived(2) or iny >= self.config.target_scaninp1 - 2.0
+        at_target = self._arrived(2) or iny >= scan_target - 2.0
         if timed_out or at_target:
             self._stop(2)
+            if self.sensor(S4_SCAN_STACK_P1):
+                row_at_scan_end = self._zone_to_row(iny, self.config.iny_output_zones)
+                if row_at_scan_end is not None and not (row_at_scan_end == 1 and self._row1_occupied):
+                    target_mm = self.config.iny_output_zones[row_at_scan_end][2]
+                    self._output_target_pos = target_mm
+                    self._output_row = row_at_scan_end
+                    self.get_logger().warn(
+                        f"[S2A SCAN] Reached row{row_at_scan_end} zone @ {iny:.1f}mm with S4 ON "
+                        f"but no new rising edge → row{row_at_scan_end} ({target_mm:.0f}mm)"
+                    )
+                    self._enter_in(SystemState.S2A_INY_TARGETROW)
+                    return
             target_mm = self.config.iny_output_zones[1][2]
             self.get_logger().warn(
                 f"[S2A SCAN] S4 không trigger trong S6=ON → fallback row1 ({target_mm:.0f}mm) "
@@ -5335,6 +5379,23 @@ class CartridgeSystem(Node):
             else:
                 self._log_once("S3_CYL4_IO", "Cyl4 EXTEND chưa gửi được — chờ IO Module 2")
 
+        if (self._cmd_sent_s3
+                and self._step_start_s3
+                and now - self._step_start_s3 > CYLINDER_TIMEOUT_S):
+            self._notify_step('warn', 'STATE 3', 'Cyl4 extend',
+                f'{self._sensor_label(26)} chưa ON hoặc {self._sensor_label(25)} chưa OFF '
+                f'sau {CYLINDER_TIMEOUT_S:.0f}s — vẫn đang retry mỗi 3s',
+                check=['van Cyl4 extend', 'áp khí',
+                       f'dây {self._sensor_label(25)}/{self._sensor_label(26)}',
+                       'mapping output Cyl4 trên CPX 41'],
+                action=['Kiểm tra Cyl4 extend',
+                        'Nhấn STOP nếu cần abort State 3'])
+            self.get_logger().warn(
+                f"[S3] Cyl4 EXTEND timeout (S25={int(cyl4_ret)} S26={int(cyl4_ext)}) "
+                "— keep waiting/retrying"
+            )
+            self._step_start_s3 = now
+
         self._log_once(
             "S3_CYL4_EXTEND",
             f"Cho Cyl4 EXTEND: S25={int(cyl4_ret)} S26={int(cyl4_ext)}"
@@ -5776,18 +5837,17 @@ class CartridgeSystem(Node):
     def _s4_outy_scan_s20(self):
         """
         Scan OutY tìm row trống trong output stack:
-          1. S20 là NO → bắt RISING EDGE (prev OFF → now ON) khi chạm khay tồn.
-             KHÔNG dùng raw level — S20 kẹt ON sẽ trigger sai ngay đầu scan.
+          1. S20 ON khi đã armed → xét zone ngay.
           2. Armed gate re-evaluate mỗi tick:
              - OutX vẫn tại outx_target3 ± position_tolerance (_at_position)
              - OutY ∈ [outy_scan_valid_min_mm, outy_scan_valid_max_mm]
           3. Disarm + warn nếu OutX drift khỏi target giữa lúc scan.
 
-        Rising edge hợp lệ → _zone_to_row(outy_output_zones) → stop(5) →
+        S20 ON hợp lệ → _zone_to_row(outy_output_zones) → stop(5) →
         S4_OUTY_DROP (DROP tự gửi move — KHÔNG pre-issue ở đây, fix double-issue
         do _enter_s4 reset _cmd_sent_s4).
 
-        Rising edge NGOÀI mọi zone (_zone_to_row → None): xử lý như noise —
+        S20 ON NGOÀI mọi zone (_zone_to_row → None): xử lý như noise —
         đi cùng nhánh retry/fallback bên dưới, không đoán row.
         Hết hành trình không có edge (hoặc trigger ngoài zone):
           - retry < s4_scan_noise_retry_limit (default 1) → S4_RETRY_SCAN_HOME
@@ -5798,8 +5858,9 @@ class CartridgeSystem(Node):
         if oy is None:
             return
 
-        scan_target = (max(cfg.outy_output_zones[2][0], cfg.outy_output_zones[2][1])
-                       if self.sensor(S19_CHECK_TRAY_P2)
+        scan_row = 2 if self.sensor(S19_CHECK_TRAY_P2) else None
+        scan_target = (max(cfg.outy_output_zones[scan_row][0], cfg.outy_output_zones[scan_row][1])
+                       if scan_row is not None
                        else getattr(cfg, 'target_scanoutp2', 500.0))
 
         if not self._cmd_sent_s4:
@@ -5833,15 +5894,19 @@ class CartridgeSystem(Node):
                 f"({ox_now if ox_now is None else f'{ox_now:.2f}'}mm, "
                 f"tol={cfg.position_tolerance}mm) — DISARM S20"
             )
+        if new_armed and not self._s20_armed:
+            self._s20_prev = self.sensor(S20_SCAN_STACK_P2)
         self._s20_armed = new_armed
 
         s20_now = self.sensor(S20_SCAN_STACK_P2)
         # S20 là NO: chạm khay → OFF sang ON → rising edge
-        s20_rising = (not self._s20_prev) and s20_now
-        self._s20_prev = s20_now
+        s20_rising = self._s20_armed and (not self._s20_prev) and s20_now
+        if self._s20_armed:
+            self._s20_prev = s20_now
 
         invalid_trigger_pos = None
-        if self._s20_armed and s20_rising:
+        forced_row = None
+        if self._s20_armed and s20_now:
             trigger_pos = self._pos(5) or oy
             row = self._zone_to_row(trigger_pos, cfg.outy_output_zones)
             if row is None:
@@ -5856,7 +5921,7 @@ class CartridgeSystem(Node):
                 self._outy_jog_pos = target_mm
                 self._s4_scan_noise_retry = 0
                 self.get_logger().info(
-                    f"[S4 SCAN] S20 rising edge @ {trigger_pos:.1f}mm → "
+                    f"[S4 SCAN] S20 ON @ {trigger_pos:.1f}mm → "
                     f"row{row} ({target_mm:.0f}mm)"
                 )
                 self._stop(5)
@@ -5865,6 +5930,10 @@ class CartridgeSystem(Node):
 
         timed_out = time.time() > self._step_timeout_s4
         at_target = self._arrived(5) or oy >= scan_target - 2.0
+        if at_target and scan_row is not None:
+            row_at_scan_end = self._zone_to_row(oy, cfg.outy_output_zones)
+            if row_at_scan_end == scan_row:
+                forced_row = scan_row
         if timed_out or at_target or invalid_trigger_pos is not None:
             if invalid_trigger_pos is not None:
                 self.get_logger().warn(
@@ -5872,6 +5941,16 @@ class CartridgeSystem(Node):
                     f"— xử lý như nhiễu (kiểm tra calib outy_output_zones)"
                 )
             self._stop(5)
+            if forced_row is not None:
+                tgt = cfg.outy_output_zones[forced_row][2]
+                self.get_logger().warn(
+                    f"[S4 SCAN] Reached row{forced_row} zone @ {oy:.1f}mm without new S20 edge "
+                    f"→ place row{forced_row} ({tgt:.0f}mm)"
+                )
+                self._outy_jog_pos = tgt
+                self._s4_scan_noise_retry = 0
+                self._enter_s4(SystemState.S4_OUTY_DROP)
+                return
             if self._s4_scan_noise_retry < self._conf('s4_scan_noise_retry_limit', 1):
                 self._s4_scan_noise_retry += 1
                 self._notify('warn', 'S4: Không bắt được S20 hợp lệ',
