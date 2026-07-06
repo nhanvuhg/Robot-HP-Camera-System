@@ -1897,13 +1897,16 @@ import QtGraphicalEffects 1.15
                                 spacing: 4
 
                                 Text { text: "SERVO KEY POSITIONS (mm)"; color: root.cCardTitle; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
-                                Row { width: parent.width; spacing: parent.width * 0.015
+                                Row { width: parent.width; height: 24; spacing: parent.width * 0.015
                                     Repeater { model: ["Parameter","Value","Description"]
                                         delegate: Text {
                                             text: modelData
                                             color: root.cWhiteText
                                             font.pixelSize: 14; font.bold: true
                                             width: index===0 ? parent.width * 0.40 : index===1 ? parent.width * 0.22 : parent.width * 0.35
+                                            height: parent.height
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
                                             font.capitalization: Font.AllUppercase; font.letterSpacing: 1
                                         }
                                     }
@@ -1929,6 +1932,8 @@ import QtGraphicalEffects 1.15
                                                 color: root.cWhiteText
                                                 font { pixelSize: 18; bold: true }
                                                 width: parent.width * 0.40
+                                                height: parent.height
+                                                verticalAlignment: Text.AlignVCenter
                                                 anchors.verticalCenter: parent.verticalCenter
                                             }
                                             Rectangle {
@@ -1938,7 +1943,7 @@ import QtGraphicalEffects 1.15
                                                     id: sInput2
                                                     anchors { fill: parent; margins: 3 }
                                                     text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true
-                                                    color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter
+                                                    color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter
                                                     validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 2 }
 	                                                    Connections {
 	                                                        function onConfigRevisionChanged() {
@@ -1954,6 +1959,8 @@ import QtGraphicalEffects 1.15
                                                 color: root.cWhiteText
                                                 font.pixelSize: 16
                                                 elide: Text.ElideRight
+                                                height: parent.height
+                                                verticalAlignment: Text.AlignVCenter
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 width: parent.width * 0.35
                                             }
@@ -3475,12 +3482,12 @@ import QtGraphicalEffects 1.15
 
                     Text { text: cfgZoneCard.title; color: root.cCardTitle; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
 
-                    Row { width: parent.width; spacing: parent.width * 0.02
-                        Text { text: "Row"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.12; font.capitalization: Font.AllUppercase }
-                        Text { text: "Max"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
-                        Text { text: "Min"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
-                        Text { text: "Target"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; font.capitalization: Font.AllUppercase }
-                        Text { text: "Loc"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; font.capitalization: Font.AllUppercase }
+                    Row { width: parent.width; height: 24; spacing: parent.width * 0.02
+                        Text { text: "Row"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.12; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
+                        Text { text: "Max"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
+                        Text { text: "Min"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
+                        Text { text: "Target"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
+                        Text { text: "Loc"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
                     }
                     Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
@@ -3501,19 +3508,19 @@ import QtGraphicalEffects 1.15
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width
                                 spacing: parent.width * 0.02
-                                Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
 
 	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
-	                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+	                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
 	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; minInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][0]) : "" } } } }
 	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
-	                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+	                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
 	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; maxInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][1]) : "" } } } }
 	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
-	                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+	                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
 	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; tgtInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][2]) : "" } } } }
 
-                                Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
                             }
                             Rectangle { width: parent.width; height: 1; color: "#0c1726"; anchors.bottom: parent.bottom }
                         }
