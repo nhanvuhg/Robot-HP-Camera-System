@@ -80,6 +80,16 @@ import QtGraphicalEffects 1.15
         readonly property color cBtnActionStart:    "#163a52"
         readonly property color cBtnActionEnd:      "#081627"
         readonly property color cBtnActionBorder:   "#163a52"
+        readonly property color cBtnEnableStart:    "#3B6978"
+        readonly property color cBtnEnableEnd:      "#1A312C"
+        readonly property color cBtnEnableText:     "#d6f1ff"
+        readonly property color cBtnHomingStart:    "#3B6F8E"
+        readonly property color cBtnHomingEnd:      "#1B4058"
+        readonly property color cBtnHomingBorder:   "#4F86A6"
+        readonly property color cBtnHomingText:     "#ffffff"
+        readonly property color cBtnClearStart:     "#234C6A"
+        readonly property color cBtnClearEnd:       "#102739"
+        readonly property color cBtnClearText:      "#ffffff"
         readonly property color cBtnWarningStart:   "#8a4210"
         readonly property color cBtnWarningEnd:     "#E68457"
         readonly property color cBtnWarningBorder:  "#E68457"
@@ -158,9 +168,10 @@ import QtGraphicalEffects 1.15
         readonly property color cGetButton: cDashboardActionStart
         readonly property color cGetButtonEnd: cDashboardActionEnd
         readonly property color cGetButtonBorder: cDashboardActionBorder
-        readonly property color cSensorIdleBg: Qt.rgba(0.03, 0.11, 0.18, 0.68)
-        readonly property color cSensorIdleBorder: cBtnBaseBorder
-        readonly property color cSensorIdleText: "#9fb3c8"
+        readonly property color cSensorIdleBg: Qt.rgba(0.03, 0.11, 0.18, 0.18)
+        readonly property color cSensorIdleBorder: Qt.rgba(0.08, 0.22, 0.32, 0.42)
+        readonly property color cSensorIdleText: Qt.rgba(0.62, 0.70, 0.78, 0.55)
+        readonly property color cSensorIdleDot: Qt.rgba(0.08, 0.22, 0.32, 0.34)
         readonly property color cSensorActiveStart: "#CAE8D5"
         readonly property color cSensorActiveEnd: "#163a52"
         readonly property color cSensorActiveBorder: "#163a52"
@@ -493,10 +504,10 @@ import QtGraphicalEffects 1.15
                         radius: 9
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: faultsBtn.pressed ? Qt.darker(root.cBtnWarningStart, 1.15) : root.cBtnWarningStart }
-                            GradientStop { position: 1.0; color: faultsBtn.pressed ? Qt.darker(root.cBtnWarningEnd, 1.15) : root.cBtnWarningEnd }
+                            GradientStop { position: 0.0; color: faultsBtn.pressed ? Qt.darker(root.cBtnClearStart, 1.15) : root.cBtnClearStart }
+                            GradientStop { position: 1.0; color: faultsBtn.pressed ? Qt.darker(root.cBtnClearEnd, 1.15) : root.cBtnClearEnd }
                         }
-                        border.color: root.cBtnWarningBorder; border.width: 1
+                        border.color: root.cBtnActionBorder; border.width: 1
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     contentItem: Text {
@@ -510,14 +521,15 @@ import QtGraphicalEffects 1.15
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
                     onClicked: Qt.quit()
                     background: Rectangle {
-                        radius: 9
+                        radius: 6
+                        color: "transparent"
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: closeBtn.pressed ? Qt.darker(root.cBtnBaseStart, 1.15) : root.cBtnBaseStart }
-                            GradientStop { position: 1.0; color: closeBtn.pressed ? Qt.darker(root.cBtnBaseEnd, 1.15) : root.cBtnBaseEnd }
+                            GradientStop { position: 0.0; color: closeBtn.pressed ? Qt.darker(root.cBtnDangerStart, 1.15) : root.cBtnDangerStart }
+                            GradientStop { position: 1.0; color: closeBtn.pressed ? Qt.darker(root.cBtnDangerEnd, 1.15) : root.cBtnDangerEnd }
                         }
-                        border.color: closeBtn.hovered ? root.cBtnDangerBorder : root.cBtnBaseBorder
-                        border.width: 1
+                        border.color: root.cBtnDangerBorder
+                        border.width: 2
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Behavior on border.color { ColorAnimation { duration: 120 } }
                     }
@@ -1183,7 +1195,7 @@ import QtGraphicalEffects 1.15
                                         } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; iconSource: "qrc:/qml/icons/step_forward.svg"; bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; onClicked: { root.pauseLatched = false; cartridgeController.resumeSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP"; bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: root.stopFromSystemControl() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE"; bg: root.cStateAuxBtn; bgEnd: root.cStateAuxBtnEnd; selectedBg: root.cBtnWarningStart; selectedBgEnd: root.cBtnWarningEnd; bc: root.pauseLatched ? root.cBtnWarningBorder : root.cStateAuxBorder; tc: root.pauseLatched ? "#ffffff" : root.cStateAuxText; isSelected: root.pauseLatched; onClicked: { root.pauseLatched = true; cartridgeController.pauseSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE"; bg: root.cBtnWarningStart; bgEnd: root.cBtnWarningEnd; selectedBg: root.cBtnWarningStart; selectedBgEnd: root.cBtnWarningEnd; bc: root.cBtnWarningBorder; tc: "#ffffff"; selectedTc: "#ffffff"; isSelected: root.pauseLatched; onClicked: { root.pauseLatched = true; cartridgeController.pauseSystem() } }
                                 }
                             }
                         }
@@ -1223,10 +1235,10 @@ import QtGraphicalEffects 1.15
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
                                         lbl: "HOMING"
                                         iconSource: "qrc:/qml/icons/house.svg"
-                                        bg: root.cBtnPrimaryStart
-                                        bgEnd: root.cBtnPrimaryEnd
-                                        bc: root.cBtnPrimaryBorder
-                                        tc: "#ffffff"
+                                        bg: root.cBtnHomingStart
+                                        bgEnd: root.cBtnHomingEnd
+                                        bc: root.cBtnHomingBorder
+                                        tc: root.cBtnHomingText
                                         isSelected: root.homingBusy()
                                         clickEnabled: !root.homingBusy()
                                         blinking: cartridgeController.uiHint === "press_homing"
@@ -1457,7 +1469,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true; Layout.preferredWidth: 1
                                                     Layout.preferredHeight: cardItem.controlH
                                                     padV: 6; padH: 0; fontSize: 18
-                                                    bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; glassStyle: true
+                                                    bg: root.cBtnClearStart; bgEnd: root.cBtnClearEnd; bc: root.cBtnActionBorder; tc: root.cBtnClearText; glassStyle: true
                                                     active: servoRow.jogAllowed
                                                     inactiveOpacity: 0.22
                                                         onPressed: {
@@ -1476,7 +1488,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true; Layout.preferredWidth: 1
                                                     Layout.preferredHeight: cardItem.controlH
                                                     padV: 6; padH: 0; fontSize: 18
-                                                        bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; glassStyle: true
+                                                        bg: root.cBtnClearStart; bgEnd: root.cBtnClearEnd; bc: root.cBtnActionBorder; tc: root.cBtnClearText; glassStyle: true
                                                     active: servoRow.jogAllowed
                                                     inactiveOpacity: 0.22
                                                         onPressed: {
@@ -1497,8 +1509,8 @@ import QtGraphicalEffects 1.15
                                             Row {
                                                 spacing: 6
                                                 width: parent.width
-                                                CBtn { lbl:"HOMING"; iconSource:"qrc:/qml/icons/house.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"; active:servoRow.jogAllowed; inactiveOpacity:0.22; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
-                                                CBtn { lbl:"CLEAR"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cBtnWarningStart; bgEnd:root.cBtnWarningEnd; bc:root.cBtnWarningBorder; tc:root.cWhiteText; onClicked: cartridgeController.clearServo(model.sid) }
+                                                CBtn { lbl:"HOMING"; iconSource:"qrc:/qml/icons/house.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cBtnHomingStart; bgEnd:root.cBtnHomingEnd; bc:root.cBtnHomingBorder; tc:root.cBtnHomingText; active:servoRow.jogAllowed; inactiveOpacity:0.22; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
+                                                CBtn { lbl:"CLEAR"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked: cartridgeController.clearServo(model.sid) }
                                             }
 
                                             // TARGET POSITION Row (with input & RUN button)
@@ -1543,7 +1555,7 @@ import QtGraphicalEffects 1.15
                                                         Layout.preferredWidth: 80
                                                         Layout.preferredHeight: cardItem.controlH
                                                         padV: 0; fontSize: 16
-                                                        bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; active: servoRow.jogAllowed
+                                                        bg: root.cBtnClearStart; bgEnd: root.cBtnClearEnd; bc: root.cBtnActionBorder; tc: root.cBtnClearText; active: servoRow.jogAllowed
                                                         inactiveOpacity: 0.22
                                                         onClicked: { if(servoRow.jogAllowed) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } }
                                                     }
@@ -1596,7 +1608,7 @@ import QtGraphicalEffects 1.15
                             RowLayout { width: parent.width; height: 28
                                 Text { text: "LOG ACTIVITY"; color: root.cCardTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; Layout.preferredHeight: 26; padV:4; padH:10; fontSize: 15; bg:root.cBtnWarningStart; bgEnd:root.cBtnWarningEnd; bc:root.cBtnWarningBorder; tc:root.cWhiteText; onClicked: cartridgeController.clearLog() }
+                                CBtn { lbl:"Clear"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; Layout.preferredWidth: implicitWidth; Layout.preferredHeight: implicitHeight; padV:4; padH:10; fontSize: 15; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked: cartridgeController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 28 - 4
@@ -1714,10 +1726,11 @@ import QtGraphicalEffects 1.15
                                         color: "transparent"
                                         border.color: on_ ? root.cSensorActiveBorder : root.cSensorIdleBorder
                                         border.width: on_ ? 2 : 1
+                                        opacity: on_ ? 1.0 : 0.78
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
                                         gradient: on_ ? sensorActiveGradient : sensorIdleGradient
-                                        HoverHandler { onHoveredChanged: if(!sBtn.on_) sBtn.border.color = hovered ? root.cSensorActiveBorder : root.cSensorIdleBorder }
+                                        HoverHandler { onHoveredChanged: if(!sBtn.on_) sBtn.border.color = hovered ? Qt.rgba(root.cSensorActiveBorder.r, root.cSensorActiveBorder.g, root.cSensorActiveBorder.b, 0.45) : root.cSensorIdleBorder }
                                         Gradient {
                                             id: sensorActiveGradient
                                             orientation: Gradient.Horizontal
@@ -1728,7 +1741,7 @@ import QtGraphicalEffects 1.15
                                             id: sensorIdleGradient
                                             orientation: Gradient.Horizontal
                                             GradientStop { position: 0.0; color: root.cSensorIdleBg }
-                                            GradientStop { position: 1.0; color: Qt.darker(root.cSensorIdleBg, 1.08) }
+                                            GradientStop { position: 1.0; color: Qt.rgba(0.02, 0.07, 0.12, 0.10) }
                                         }
                                         Column {
                                             anchors.centerIn: parent
@@ -1748,7 +1761,7 @@ import QtGraphicalEffects 1.15
                                             Rectangle {
                                                 id: dotIndicator
                                                 width: 4; height: 4; radius: 2
-                                                color: sBtn.on_ ? root.cSensorActiveText : root.cSensorIdleBorder
+                                                color: sBtn.on_ ? root.cSensorActiveText : root.cSensorIdleDot
                                                 anchors.horizontalCenter: parent.horizontalCenter
 
                                                 Repeater {
@@ -2011,7 +2024,7 @@ import QtGraphicalEffects 1.15
                                 width: parent.width; height: 18
                                 Text { text: "CONFIG LOG"; color: root.cCardTitle; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; padV:3; padH:8; fontSize: 14; bg:root.cBtnWarningStart; bgEnd:root.cBtnWarningEnd; bc:root.cBtnWarningBorder; tc:root.cWhiteText; onClicked: cartridgeController.clearLog() }
+                                CBtn { lbl:"Clear"; Layout.preferredWidth: implicitWidth; Layout.preferredHeight: implicitHeight; padV:3; padH:8; fontSize: 14; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked: cartridgeController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 22
@@ -2831,7 +2844,7 @@ import QtGraphicalEffects 1.15
                                                 lbl: "CLEAR ERROR"
                                                 w: (parent.width - 6) / 2; h: 52
                                                 fontSize: 13
-                                                bg: "#FFE8B4"; bgEnd: "#0c1726"; bc: "#FFE8B4"; tc: root.cWhiteText
+                                                bg: root.cBtnClearStart; bgEnd: root.cBtnClearEnd; bc: root.cBtnActionBorder; tc: root.cBtnClearText
                                                 onClicked: robotController.clearError()
                                             }
                                         }
@@ -2901,7 +2914,7 @@ import QtGraphicalEffects 1.15
                                         lbl: "CLEAR ERROR"
                                         w: 170; h: 48
                                         fontSize: 13
-                                        bg: "#FFE8B4"; bgEnd: "#0c1726"; bc: "#FFE8B4"; tc: root.cWhiteText
+                                        bg: root.cBtnClearStart; bgEnd: root.cBtnClearEnd; bc: root.cBtnActionBorder; tc: root.cBtnClearText
                                         onClicked: robotController.clearError()
                                     }
                                 }
@@ -2922,7 +2935,7 @@ import QtGraphicalEffects 1.15
                                 width: parent.width; height: 18
                                 Text { text: "ROBOT LOG"; color: root.cCardTitle; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; padV:3; padH:8; fontSize:14; bg:root.cBtnWarningStart; bgEnd:root.cBtnWarningEnd; bc:root.cBtnWarningBorder; tc:root.cWhiteText; onClicked:robotController.clearLog() }
+                                CBtn { lbl:"Clear"; Layout.preferredWidth: implicitWidth; Layout.preferredHeight: implicitHeight; padV:3; padH:8; fontSize:14; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked:robotController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 22
