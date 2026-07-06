@@ -854,7 +854,7 @@ Item {
                                     GradientStop { position: 0.0; color: ma.pressed ? Qt.darker(gStart, 1.2) : gStart }
                                     GradientStop { position: 1.0; color: ma.pressed ? Qt.darker(gEnd, 1.2) : gEnd }
                                 }
-                                border.color: modelData.bc
+                                border.color: cBtnActionBorder
                                 border.width: 1
                                 Item {
                                     anchors.fill: parent
@@ -898,7 +898,7 @@ Item {
                                         Rectangle {
                                             width: 9; height: 9; radius: 4.5
                                             color: parent.parent.parent.isActive ? "#67d0ff" : "#14263c"
-                                            border.color: modelData.bc
+                                            border.color: cBtnActionBorder
                                             border.width: 1
                                             visible: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
                                             anchors.verticalCenter: parent.verticalCenter
@@ -934,7 +934,7 @@ Item {
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 8; columnSpacing: 8
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnPrimaryBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: startMA.pressed ? Qt.darker(cBtnPrimaryStart, 1.15) : cBtnPrimaryStart }
@@ -974,7 +974,7 @@ Item {
                             } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#163a52"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker("#3B6978", 1.15) : "#3B6978" }
@@ -1005,7 +1005,7 @@ Item {
                             MotionMouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 2
                             gradient: Gradient {
                                 orientation: Gradient.Vertical
                                 GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker("#E05454", 1.25) : "#E05454" }
@@ -1041,7 +1041,7 @@ Item {
                             } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#5f8aa6"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#234C6A", 1.15) : "#234C6A" }
@@ -1072,7 +1072,7 @@ Item {
                             MotionMouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cServoRunBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: resMA.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
@@ -1105,7 +1105,7 @@ Item {
 
                         Rectangle {
                             Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"
-                            border.color: "#E68457"
+                            border.color: cBtnActionBorder
                             border.width: cameraPageRoot.pauseLatched ? 2 : 1
                             transform: Translate { y: cameraPageRoot.pauseLatched ? 2 : 0 }
                             gradient: Gradient {
