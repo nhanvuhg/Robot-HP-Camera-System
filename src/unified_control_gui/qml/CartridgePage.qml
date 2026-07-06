@@ -165,6 +165,14 @@ import QtGraphicalEffects 1.15
         readonly property color cSensorActiveEnd: "#163a52"
         readonly property color cSensorActiveBorder: "#163a52"
         readonly property color cSensorActiveText: "#06101d"
+        readonly property color cSignalIdleBg: Qt.rgba(0.03, 0.12, 0.19, 0.34)
+        readonly property color cSignalIdleBorder: "#22445c"
+        readonly property color cSignalIdleText: "#9fbfd2"
+        readonly property color cSignalActiveStart: "#67d0ff"
+        readonly property color cSignalActiveMid: "#1d7fa5"
+        readonly property color cSignalActiveEnd: "#163a52"
+        readonly property color cSignalActiveBorder: "#67d0ff"
+        readonly property color cSignalActiveText: "#ffffff"
         property bool jogStopStateHint: false
         property bool homingCommandLocked: false
 
@@ -1638,9 +1646,7 @@ import QtGraphicalEffects 1.15
                     Rectangle {
                         x: parent.width - root.sensorW
                         y: 0; width: root.sensorW; height: root.outerH
-                        color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
-                        GlassHighlight {}
-                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cControlBorder }
+                        color: "transparent"; border.color: "transparent"; radius: 6
 
                         ColumnLayout {
                             anchors.fill: parent
@@ -1712,81 +1718,91 @@ import QtGraphicalEffects 1.15
 
                                         radius: 4
                                         color: "transparent"
-                                        border.color: on_ ? root.cSensorActiveBorder : root.cSensorIdleBorder
+                                        border.color: on_ ? root.cSignalActiveBorder : root.cSignalIdleBorder
                                         border.width: on_ ? 2 : 1
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
                                         gradient: on_ ? sensorActiveGradient : sensorIdleGradient
-                                        HoverHandler { onHoveredChanged: if(!sBtn.on_) sBtn.border.color = hovered ? root.cSensorActiveBorder : root.cSensorIdleBorder }
+                                        HoverHandler { onHoveredChanged: if(!sBtn.on_) sBtn.border.color = hovered ? root.cSignalActiveBorder : root.cSignalIdleBorder }
                                         Gradient {
                                             id: sensorActiveGradient
-                                            orientation: Gradient.Horizontal
-                                            GradientStop { position: 0.0; color: root.cSensorActiveStart }
-                                            GradientStop { position: 1.0; color: root.cSensorActiveEnd }
+                                            orientation: Gradient.Vertical
+                                            GradientStop { position: 0.0; color: Qt.rgba(root.cSignalActiveStart.r, root.cSignalActiveStart.g, root.cSignalActiveStart.b, 0.90) }
+                                            GradientStop { position: 0.55; color: root.cSignalActiveMid }
+                                            GradientStop { position: 1.0; color: root.cSignalActiveEnd }
                                         }
                                         Gradient {
                                             id: sensorIdleGradient
-                                            orientation: Gradient.Horizontal
-                                            GradientStop { position: 0.0; color: root.cSensorIdleBg }
-                                            GradientStop { position: 1.0; color: Qt.darker(root.cSensorIdleBg, 1.08) }
+                                            orientation: Gradient.Vertical
+                                            GradientStop { position: 0.0; color: root.cSignalIdleBg }
+                                            GradientStop { position: 1.0; color: Qt.rgba(0.02, 0.08, 0.13, 0.26) }
                                         }
                                         Column {
                                             anchors.centerIn: parent
-                                            spacing: 0
+                                            spacing: 1
                                             Text {
                                                 text: model.slabel
-                                                color: sBtn.on_ ? root.cSensorActiveText : root.cSensorIdleText
+                                                color: sBtn.on_ ? root.cSignalActiveText : root.cSignalIdleText
                                                 font.pixelSize: 13; font.bold: true; font.weight: Font.DemiBold
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
-                                            Text {
-                                                text: model.sdesc
-                                                color: sBtn.on_ ? root.cSensorActiveText : root.cSensorIdleText; font.pixelSize: 10; font.bold: true
-                                                anchors.horizontalCenter: parent.horizontalCenter
-                                                visible: model.sdesc !== ""
-                                            }
-                                            Rectangle {
-                                                id: dotIndicator
-                                                width: 4; height: 4; radius: 2
-                                                color: sBtn.on_ ? root.cSensorActiveText : root.cSensorIdleBorder
+                                            Item {
+                                                width: 16; height: 10
                                                 anchors.horizontalCenter: parent.horizontalCenter
 
-                                                Repeater {
-                                                    model: 2
-                                                    delegate: Rectangle {
-                                                        id: ripple
-                                                        anchors.centerIn: parent
-                                                        width: 6; height: 6; radius: 3
-                                                        color: "transparent"
-                                                        border.color: root.cSensorActiveBorder
-                                                        border.width: 1
-                                                        opacity: 0
-                                                        visible: sBtn.on_
+                                                Rectangle {
+                                                    id: dotIndicator
+                                                    anchors.centerIn: parent
+                                                    width: sBtn.on_ ? 8 : 6
+                                                    height: width
+                                                    radius: width / 2
+                                                    color: sBtn.on_ ? root.cSignalActiveText : "transparent"
+                                                    border.color: sBtn.on_ ? root.cSignalActiveText : root.cSignalIdleBorder
+                                                    border.width: 1
 
-                                                        SequentialAnimation {
-                                                            running: sBtn.on_
-                                                            loops: Animation.Infinite
-                                                            PauseAnimation { duration: index * 1000 }
-                                                            ParallelAnimation {
-                                                                NumberAnimation {
-                                                                    target: ripple
-                                                                    property: "opacity"
-                                                                    from: 0.8; to: 0.0
-                                                                    duration: 1500
-                                                                    easing.type: Easing.OutQuad
+                                                    Repeater {
+                                                        model: 2
+                                                        delegate: Rectangle {
+                                                            id: ripple
+                                                            anchors.centerIn: parent
+                                                            width: 6; height: 6; radius: 3
+                                                            color: "transparent"
+                                                            border.color: root.cSignalActiveBorder
+                                                            border.width: 1
+                                                            opacity: 0
+                                                            visible: sBtn.on_
+
+                                                            SequentialAnimation {
+                                                                running: sBtn.on_
+                                                                loops: Animation.Infinite
+                                                                PauseAnimation { duration: index * 1000 }
+                                                                ParallelAnimation {
+                                                                    NumberAnimation {
+                                                                        target: ripple
+                                                                        property: "opacity"
+                                                                        from: 0.8; to: 0.0
+                                                                        duration: 1500
+                                                                        easing.type: Easing.OutQuad
+                                                                    }
+                                                                    NumberAnimation {
+                                                                        target: ripple
+                                                                        property: "scale"
+                                                                        from: 1.0; to: 4.2
+                                                                        duration: 1500
+                                                                        easing.type: Easing.OutQuad
+                                                                    }
                                                                 }
-                                                                NumberAnimation {
-                                                                    target: ripple
-                                                                    property: "scale"
-                                                                    from: 1.0; to: 5.0
-                                                                    duration: 1500
-                                                                    easing.type: Easing.OutQuad
-                                                                }
+                                                                PauseAnimation { duration: (1 - index) * 1000 }
                                                             }
-                                                            PauseAnimation { duration: (1 - index) * 1000 }
                                                         }
                                                     }
                                                 }
+                                            }
+                                            Text {
+                                                text: model.sdesc
+                                                color: sBtn.on_ ? root.cSignalActiveText : root.cSignalIdleText; font.pixelSize: 10; font.bold: true
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                visible: model.sdesc !== ""
                                             }
                                         }
                                     }
