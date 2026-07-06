@@ -934,15 +934,17 @@ Item {
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 8; columnSpacing: 8
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnDangerBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
                             gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker(cBtnDangerStart, 1.15) : cBtnDangerStart }
-                                GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker(cBtnDangerEnd, 1.15) : cBtnDangerEnd }
+                                orientation: Gradient.Vertical
+                                GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker("#E05454", 1.25) : "#E05454" }
+                                GradientStop { position: 0.5; color: stopResetMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.25) : cBtnEmergencyStart }
+                                GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker("#7a2424", 1.25) : "#7a2424" }
                             }
-                            Text { anchors.centerIn: parent; text: "⏹ STOP"; color: "#d6f1ff"; font.pixelSize: 19; font.bold: true }
+                            Text { anchors.centerIn: parent; text: "STOP"; color: "#ffffff"; font.pixelSize: 19; font.bold: true; font.letterSpacing: 1.2 }
                             MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: {
-                                mainWindow.stopSynchronizedSystems()
+                                cameraPageRoot.modeLocked = false
+                                mainWindow.emergencyStopSynchronizedSystems()
                             } }
                         }
 
@@ -1072,16 +1074,6 @@ Item {
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 64; radius: 12; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
-                        gradient: Gradient {
-                            orientation: Gradient.Vertical
-                            GradientStop { position: 0.0; color: emMA.pressed ? Qt.darker("#E05454", 1.25) : "#E05454" }
-                            GradientStop { position: 0.5; color: emMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.25) : cBtnEmergencyStart }
-                            GradientStop { position: 1.0; color: emMA.pressed ? Qt.darker("#7a2424", 1.25) : "#7a2424" }
-                        }
-                        Text { anchors.centerIn: parent; text: "⛔  EMERGENCY STOP"; color: "#ffffff"; font.pixelSize: 22; font.bold: true; font.letterSpacing: 1.5 }
-                        MotionMouseArea { id: emMA; anchors.fill: parent; onClicked: { cameraPageRoot.modeLocked = false; mainWindow.emergencyStopSynchronizedSystems() } }
-                    }
                 }
             }
         }
