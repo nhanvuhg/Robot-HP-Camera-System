@@ -1041,11 +1041,11 @@ Item {
                             } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#6f9ab7"; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#5f8aa6"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#456882", 1.15) : "#456882" }
-                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#162a3a", 1.15) : "#162a3a" }
+                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#234C6A", 1.15) : "#234C6A" }
+                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#102739", 1.15) : "#102739" }
                             }
                             Row {
                                 anchors.centerIn: parent
