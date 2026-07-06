@@ -84,7 +84,7 @@ Item {
     function getCartridgeStats() {
         var list = hpController.cartridgePressures;
         if (!list || list.length === 0) {
-            return "Min 0.0 | Avg 0.0 | Max\n0.0 mbar";
+            return "Min 0.0   Avg 0.0   Max\n0.0 mbar";
         }
         var minVal = Number.MAX_VALUE;
         var maxVal = -Number.MAX_VALUE;
@@ -99,9 +99,9 @@ Item {
                 count++;
             }
         }
-        if (count === 0) return "Min 0.0 | Avg 0.0 | Max\n0.0 mbar";
+        if (count === 0) return "Min 0.0   Avg 0.0   Max\n0.0 mbar";
         var avgVal = sum / count;
-        return "Min " + minVal.toFixed(1) + " | Avg " + avgVal.toFixed(1) + " | Max\n" + maxVal.toFixed(1) + " mbar";
+        return "Min " + minVal.toFixed(1) + "   Avg " + avgVal.toFixed(1) + "   Max\n" + maxVal.toFixed(1) + " mbar";
     }
 
     // Calculated from systemStatus - block mode change when robot is running
