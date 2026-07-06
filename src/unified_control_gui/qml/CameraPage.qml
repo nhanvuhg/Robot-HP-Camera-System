@@ -934,30 +934,6 @@ Item {
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 8; columnSpacing: 8
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
-                            gradient: Gradient {
-                                orientation: Gradient.Vertical
-                                GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker("#E05454", 1.25) : "#E05454" }
-                                GradientStop { position: 0.5; color: stopResetMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.25) : cBtnEmergencyStart }
-                                GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker("#7a2424", 1.25) : "#7a2424" }
-                            }
-                            Text { anchors.centerIn: parent; text: "STOP"; color: "#ffffff"; font.pixelSize: 19; font.bold: true; font.letterSpacing: 1.2 }
-                            MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: {
-                                cameraPageRoot.modeLocked = false
-                                mainWindow.emergencyStopSynchronizedSystems()
-                            } }
-                        }
-
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#163a52"; border.width: 1
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker("#3B6978", 1.15) : "#3B6978" }
-                                GradientStop { position: 1.0; color: enMA.pressed ? Qt.darker("#1A312C", 1.15) : "#1A312C" }
-                            }
-                            Text { anchors.centerIn: parent; text: "ENABLE"; color: "#d6f1ff"; font.pixelSize: 19; font.bold: true }
-                            MotionMouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
-                        }
-
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnPrimaryBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
@@ -998,38 +974,38 @@ Item {
                             } }
                         }
 
-                        Rectangle {
-                            Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"
-                            border.color: "#E68457"
-                            border.width: cameraPageRoot.pauseLatched ? 2 : 1
-                            transform: Translate { y: cameraPageRoot.pauseLatched ? 2 : 0 }
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: "#163a52"; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop {
-                                    position: 0.0
-                                    color: pauseMA.pressed || cameraPageRoot.pauseLatched
-                                           ? Qt.darker("#8a4210", 1.12)
-                                           : "#8a4210"
-                                }
-                                GradientStop {
-                                    position: 1.0
-                                    color: pauseMA.pressed || cameraPageRoot.pauseLatched
-                                           ? Qt.darker("#E68457", 1.12)
-                                           : "#E68457"
-                                }
+                                GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker("#3B6978", 1.15) : "#3B6978" }
+                                GradientStop { position: 1.0; color: enMA.pressed ? Qt.darker("#1A312C", 1.15) : "#1A312C" }
                             }
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: parent.radius
-                                color: "#000000"
-                                opacity: cameraPageRoot.pauseLatched ? 0.22 : 0.0
+                            Text { anchors.centerIn: parent; text: "ENABLE"; color: "#d6f1ff"; font.pixelSize: 19; font.bold: true }
+                            MotionMouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
+                        }
+
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
+                            gradient: Gradient {
+                                orientation: Gradient.Vertical
+                                GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker("#E05454", 1.25) : "#E05454" }
+                                GradientStop { position: 0.5; color: stopResetMA.pressed ? Qt.darker(cBtnEmergencyStart, 1.25) : cBtnEmergencyStart }
+                                GradientStop { position: 1.0; color: stopResetMA.pressed ? Qt.darker("#7a2424", 1.25) : "#7a2424" }
                             }
-                            Text {
-                                anchors.centerIn: parent; text: "PAUSE"
-                                color: "#ffffff"
-                                font.pixelSize: 19; font.bold: true
+                            Text { anchors.centerIn: parent; text: "STOP"; color: "#ffffff"; font.pixelSize: 19; font.bold: true; font.letterSpacing: 1.2 }
+                            MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: {
+                                cameraPageRoot.modeLocked = false
+                                mainWindow.emergencyStopSynchronizedSystems()
+                            } }
+                        }
+
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cServoJogBorder; border.width: 1
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker(cServoJogStart, 1.15) : cServoJogStart }
+                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker(cServoJogEnd, 1.15) : cServoJogEnd }
                             }
-                            MotionMouseArea { id: pauseMA; anchors.fill: parent; onClicked: { cameraPageRoot.pauseLatched = true; robotController.pauseRobot() } }
+                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: cServoJogText; font.pixelSize: 19; font.bold: true }
+                            MotionMouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
                         }
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cServoRunBorder; border.width: 1
@@ -1063,14 +1039,38 @@ Item {
                             MotionMouseArea { id: resMA; anchors.fill: parent; onClicked: { cameraPageRoot.pauseLatched = false; robotController.resumeRobot() } }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cServoJogBorder; border.width: 1
+                        Rectangle {
+                            Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"
+                            border.color: "#E68457"
+                            border.width: cameraPageRoot.pauseLatched ? 2 : 1
+                            transform: Translate { y: cameraPageRoot.pauseLatched ? 2 : 0 }
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker(cServoJogStart, 1.15) : cServoJogStart }
-                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker(cServoJogEnd, 1.15) : cServoJogEnd }
+                                GradientStop {
+                                    position: 0.0
+                                    color: pauseMA.pressed || cameraPageRoot.pauseLatched
+                                           ? Qt.darker("#8a4210", 1.12)
+                                           : "#8a4210"
+                                }
+                                GradientStop {
+                                    position: 1.0
+                                    color: pauseMA.pressed || cameraPageRoot.pauseLatched
+                                           ? Qt.darker("#E68457", 1.12)
+                                           : "#E68457"
+                                }
                             }
-                            Text { anchors.centerIn: parent; text: "CLEAR ERR"; color: cServoJogText; font.pixelSize: 19; font.bold: true }
-                            MotionMouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: parent.radius
+                                color: "#000000"
+                                opacity: cameraPageRoot.pauseLatched ? 0.22 : 0.0
+                            }
+                            Text {
+                                anchors.centerIn: parent; text: "PAUSE"
+                                color: "#ffffff"
+                                font.pixelSize: 19; font.bold: true
+                            }
+                            MotionMouseArea { id: pauseMA; anchors.fill: parent; onClicked: { cameraPageRoot.pauseLatched = true; robotController.pauseRobot() } }
                         }
                     }
 
