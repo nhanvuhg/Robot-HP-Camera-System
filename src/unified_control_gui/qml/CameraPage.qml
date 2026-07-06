@@ -66,30 +66,19 @@ Item {
     }
 
     function pressureFillStart(cls) {
-        if (cls === "low") return "#ff725c";
-        if (cls === "limit") return "#ffd166";
-        if (cls === "high") return "#7fcdf5";
-        return "#45f0b8";
+        return "#8edcff";
     }
 
     function pressureFillEnd(cls) {
-        if (cls === "low") return "#c52f28";
-        if (cls === "limit") return "#e2761b";
-        if (cls === "high") return "#1c79a8";
-        return "#1f9e86";
+        return "#1e9ed0";
     }
 
     function pressureTrackColor(cls) {
-        if (cls === "low") return "#2a1114";
-        if (cls === "limit") return "#2d1f0a";
         return "#071421";
     }
 
     function pressureTextColor(cls) {
-        if (cls === "low") return "#ff8a76";
-        if (cls === "limit") return "#ffd166";
-        if (cls === "high") return "#9ae2ff";
-        return "#d9fff4";
+        return "#8edcff";
     }
 
     function getCartridgeStats() {
@@ -1130,11 +1119,11 @@ Item {
         Layout.fillHeight: true
         implicitHeight: 64
         radius: 10
-        color: cls === "low" ? Qt.rgba(0.20, 0.05, 0.06, 0.62) : cPanel2
+        color: cPanel2
         clip: true
-        border.color: cls === "low" ? "#ff725c" : cls === "limit" ? "#ffd166" : "#163a52"
-        border.width: cls === "low" ? 2 : 1
-        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#7fcdf5" : (parent.cls === "low" ? "#ff725c" : parent.cls === "limit" ? "#ffd166" : "#163a52") }
+        border.color: "#163a52"
+        border.width: 1
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#7fcdf5" : "#163a52" }
         ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 16
@@ -1186,7 +1175,7 @@ Item {
                 radius: height / 2
                 antialiasing: true
                 color: pressureTrackColor(cls)
-                border.color: cls === "low" ? "#6f211e" : "#22445c"
+                border.color: "#22445c"
                 border.width: 1
                 clip: true
 
@@ -1255,11 +1244,11 @@ Item {
         Layout.fillHeight: true
         implicitHeight: 60
         radius: 6
-        color:        cls === "low" ? Qt.rgba(0.20, 0.05, 0.06, 0.62) : cPanel2
+        color:        cPanel2
         clip:         true
-        border.color: cls === "low" ? "#ff725c" : cls === "limit" ? "#ffd166" : "#163a52"
-        border.width: cls === "low" ? 2 : 1
-        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#7fcdf5" : (parent.cls === "low" ? "#ff725c" : parent.cls === "limit" ? "#ffd166" : "#163a52") }
+        border.color: "#163a52"
+        border.width: 1
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#7fcdf5" : "#163a52" }
         ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 14
@@ -1320,7 +1309,7 @@ Item {
                 radius: height / 2
                 antialiasing: true
                 color: pressureTrackColor(cls)
-                border.color: cls === "low" ? "#6f211e" : "#22445c"
+                border.color: "#22445c"
                 border.width: 1
                 clip: true
 
