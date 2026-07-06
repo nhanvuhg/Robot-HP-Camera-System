@@ -70,7 +70,7 @@ Item {
     }
 
     function pressureFillEnd(cls) {
-        return "#1e9ed0";
+        return "#0a3d56";
     }
 
     function pressureTrackColor(cls) {
@@ -511,7 +511,7 @@ Item {
                         spacing: 8
                         PCard { lbl: "S1 Chamber";   val: hpController.pressureS1; maxVal: 1200; cardIndex: 0 }
                         PCard { lbl: "S2 Cartridge"; val: hpController.pressureS2; maxVal: 1200; cardIndex: 1 }
-                        PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1000; cardIndex: 2 }
+                        PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1200; cardIndex: 2 }
                     }
 
                     Item { height: 10 } // Spacer
@@ -1200,6 +1200,7 @@ Item {
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
                         GradientStop { position: 0.0; color: pressureFillStart(cls) }
+                        GradientStop { position: 0.55; color: "#1e9ed0" }
                         GradientStop { position: 1.0; color: pressureFillEnd(cls) }
                     }
 
@@ -1334,6 +1335,7 @@ Item {
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
                         GradientStop { position: 0.0; color: pressureFillStart(cls) }
+                        GradientStop { position: 0.55; color: "#1e9ed0" }
                         GradientStop { position: 1.0; color: pressureFillEnd(cls) }
                     }
 
