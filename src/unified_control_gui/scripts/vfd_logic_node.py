@@ -30,6 +30,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
 from std_msgs.msg import Bool, Int32, String
+import time
 
 
 class VfdLogicNode(Node):
@@ -61,12 +62,14 @@ class VfdLogicNode(Node):
         self.cartridge_homed = False  # False cho tới khi cartridge publish homing_done=True
         self.op_mode = self.MODE_MANUAL  # default — match cartridge default
         self.current_cmd = False
+        self.run_started_at = None
+        self.run_timeout_s = float(self.declare_parameter('run_timeout_s', 30.0).value)
 
         self.publish_cmd(False)
         self.create_timer(0.5, self._heartbeat)
 
         self.get_logger().info(
-            "VFD Logic Node started — AUTO/AI: gate by homing+S1/S2; MANUAL: gate STATE 1")
+            f"VFD Logic Node started — AUTO/AI: gate by homing+S1/S2; MANUAL: gate STATE 1; timeout={self.run_timeout_s:.1f}s")
 
     def homing_cb(self, msg):
         if msg.data == self.cartridge_homed:
@@ -114,13 +117,15 @@ class VfdLogicNode(Node):
         self.s1_state, self.s2_state, self.s3_state = s1, s2, s3
         self.evaluate_logic()
 
-    def _sensor_decision(self):
+    def _sensor_decision(self, allow_carry=True):
         """Logic sensor chung: S3 ưu tiên dừng, S1|S2 ON → RUN, không thì giữ."""
         if self.s3_state:
             return False, "S3 ON"
         if self.s1_state or self.s2_state:
             return True, "S1/S2 ON"
-        return self.current_cmd, "carry-over (gap)"
+        if allow_carry:
+            return self.current_cmd, "carry-over (gap)"
+        return False, "S1/S2 recheck OFF"
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # ⚠️  CRITICAL ZONE — đọc memory feedback_critical_code_zones.md trước khi sửa.
@@ -132,24 +137,25 @@ class VfdLogicNode(Node):
     # Đừng unify 2 mode hoặc bỏ subscribe /robot/set_mode hoặc bỏ
     # subscription /cartridge/homing_done.
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    def evaluate_logic(self):
+    def evaluate_logic(self, allow_carry=True):
         if self.op_mode in (self.MODE_AUTO, self.MODE_AI):
             if not self.cartridge_homed:
                 new_cmd, reason = False, f"{self._mode_name(self.op_mode)} chưa homing (chờ START)"
             else:
-                new_cmd, sub = self._sensor_decision()
+                new_cmd, sub = self._sensor_decision(allow_carry)
                 reason = f"{self._mode_name(self.op_mode)} {sub}"
         elif self.op_mode == self.MODE_MANUAL:
             if not self.in_state1:
                 new_cmd, reason = False, "MANUAL gate CLOSED (not STATE 1)"
             else:
-                new_cmd, sub = self._sensor_decision()
+                new_cmd, sub = self._sensor_decision(allow_carry)
                 reason = f"MANUAL STATE 1 {sub}"
         else:
             new_cmd, reason = False, f"mode={self._mode_name(self.op_mode)}"
 
         if new_cmd != self.current_cmd:
             self.current_cmd = new_cmd
+            self.run_started_at = time.monotonic() if new_cmd else None
             self.publish_cmd(self.current_cmd)
             self.get_logger().info(
                 f"VFD → {'RUN' if new_cmd else 'STOP'} ({reason})")
@@ -160,9 +166,27 @@ class VfdLogicNode(Node):
         self.pub_run.publish(msg)
 
     def _heartbeat(self):
+        self._check_run_timeout()
         # Re-publish hiện tại để rs485_bus_node trên RevPi A đồng bộ
         # sau reconnect/restart.
         self.publish_cmd(self.current_cmd)
+
+    def _check_run_timeout(self):
+        if not self.current_cmd or self.run_started_at is None or self.s3_state:
+            return
+        elapsed = time.monotonic() - self.run_started_at
+        if elapsed < self.run_timeout_s:
+            return
+
+        # Noise guard: S1/S2 can blip ON once, then all sensors go OFF. The
+        # normal gap carry-over would keep RUN forever if S3 never arrives.
+        # Stop once, then re-evaluate the real S1/S2 state without carry-over.
+        self.current_cmd = False
+        self.run_started_at = None
+        self.publish_cmd(False)
+        self.get_logger().warn(
+            f"VFD safety timeout {self.run_timeout_s:.1f}s without S3 → STOP, recheck S1/S2")
+        self.evaluate_logic(allow_carry=False)
 
 
 def main(args=None):

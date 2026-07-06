@@ -78,7 +78,7 @@ public:
     // ── Safety timeout: VFD chạy quá run_timeout_s_ giây mà chưa thấy STOP
     //    (S3 trigger từ Pi 5) → tự dừng. Bảo vệ trường hợp S3 nhiễu/cảm biến
     //    chết/vfd_logic_node treo. Reset timer mỗi khi cmd_run flip false→true.
-    run_timeout_s_ = declare_parameter<double>("run_timeout_s", 50.0);
+    run_timeout_s_ = declare_parameter<double>("run_timeout_s", 30.0);
     run_start_steady_ = std::chrono::steady_clock::time_point{};  // not running
 
     // ── Subscribers — chỉ lưu desired, apply trong reconcile ─
@@ -353,12 +353,12 @@ private:
   int last_freq_written_{INT_MIN};
 
   // Safety auto-stop timer: track thời điểm cmd_run flip false→true, force
-  // stop nếu vượt run_timeout_s_ (default 50s). Bảo vệ khi S3 nhiễu/cảm biến
+  // stop nếu vượt run_timeout_s_ (default 30s). Bảo vệ khi S3 nhiễu/cảm biến
   // chết. Sau timeout VFD dừng; nếu vfd_logic heartbeat re-publish true (S1/S2
-  // vẫn ON) → bắt edge → chạy thêm 50s nữa. Không latch.
+  // vẫn ON) → bắt edge → chạy thêm một chu kỳ timeout nữa. Không latch.
   std::mutex run_timer_mutex_;
   std::chrono::steady_clock::time_point run_start_steady_{};
-  double run_timeout_s_{50.0};
+  double run_timeout_s_{30.0};
 
   int reconnect_count_{0};
   int fail_count_{0};
