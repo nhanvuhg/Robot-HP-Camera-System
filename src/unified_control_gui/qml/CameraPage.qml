@@ -65,6 +65,33 @@ Item {
         return "ok";
     }
 
+    function pressureFillStart(cls) {
+        if (cls === "low") return "#ff725c";
+        if (cls === "limit") return "#ffd166";
+        if (cls === "high") return "#7fcdf5";
+        return "#45f0b8";
+    }
+
+    function pressureFillEnd(cls) {
+        if (cls === "low") return "#c52f28";
+        if (cls === "limit") return "#e2761b";
+        if (cls === "high") return "#1c79a8";
+        return "#1f9e86";
+    }
+
+    function pressureTrackColor(cls) {
+        if (cls === "low") return "#2a1114";
+        if (cls === "limit") return "#2d1f0a";
+        return "#071421";
+    }
+
+    function pressureTextColor(cls) {
+        if (cls === "low") return "#ff8a76";
+        if (cls === "limit") return "#ffd166";
+        if (cls === "high") return "#9ae2ff";
+        return "#d9fff4";
+    }
+
     function getCartridgeStats() {
         var list = hpController.cartridgePressures;
         if (!list || list.length === 0) {
@@ -1098,15 +1125,16 @@ Item {
         property real   val: 0
         property real   maxVal: 1000
         property int    cardIndex: 0
+        readonly property string cls: classifyPressure(val, maxVal * 0.18, maxVal * 0.35, maxVal * 0.90)
         Layout.fillWidth: true
         Layout.fillHeight: true
         implicitHeight: 64
         radius: 10
-        color: cPanel2
+        color: cls === "low" ? Qt.rgba(0.20, 0.05, 0.06, 0.62) : cPanel2
         clip: true
-        border.color: "#163a52"
-        border.width: 1
-        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#1a4a6e" : "#163a52" }
+        border.color: cls === "low" ? "#ff725c" : cls === "limit" ? "#ffd166" : "#163a52"
+        border.width: cls === "low" ? 2 : 1
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#7fcdf5" : (parent.cls === "low" ? "#ff725c" : parent.cls === "limit" ? "#ffd166" : "#163a52") }
         ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 16
@@ -1136,14 +1164,14 @@ Item {
                     Layout.alignment: Qt.AlignVCenter
                     Text {
                         text: val.toFixed(1)
-                        color: cBtnBaseText
+                        color: pressureTextColor(cls)
                         font.pixelSize: 26
                         font.bold: true
                         font.family: "monospace"
                     }
                     Text {
                         text: "mbar"
-                        color: cBtnBaseText
+                        color: pressureTextColor(cls)
                         font.pixelSize: 13
                         font.bold: true
                         Layout.alignment: Qt.AlignBottom
@@ -1157,8 +1185,21 @@ Item {
                 Layout.preferredHeight: 12
                 radius: height / 2
                 antialiasing: true
-                color: "#163a52"
+                color: pressureTrackColor(cls)
+                border.color: cls === "low" ? "#6f211e" : "#22445c"
+                border.width: 1
                 clip: true
+
+                Repeater {
+                    model: Math.max(0, Math.floor(pcBarContainer.width / 34))
+                    Rectangle {
+                        x: index * 34
+                        width: 1
+                        height: pcBarContainer.height
+                        color: "#2d5870"
+                        opacity: 0.42
+                    }
+                }
 
                 Rectangle {
                     id: pcFilledBar
@@ -1169,8 +1210,8 @@ Item {
                     clip: true
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: "#A1C2BD" }
-                        GradientStop { position: 1.0; color: "#163a52" }
+                        GradientStop { position: 0.0; color: pressureFillStart(cls) }
+                        GradientStop { position: 1.0; color: pressureFillEnd(cls) }
                     }
 
                     onWidthChanged: {
@@ -1214,11 +1255,11 @@ Item {
         Layout.fillHeight: true
         implicitHeight: 60
         radius: 6
-        color:        cPanel2
+        color:        cls === "low" ? Qt.rgba(0.20, 0.05, 0.06, 0.62) : cPanel2
         clip:         true
-        border.color: "#163a52"
-        border.width: 1
-        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#1a4a6e" : "#163a52" }
+        border.color: cls === "low" ? "#ff725c" : cls === "limit" ? "#ffd166" : "#163a52"
+        border.width: cls === "low" ? 2 : 1
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? "#7fcdf5" : (parent.cls === "low" ? "#ff725c" : parent.cls === "limit" ? "#ffd166" : "#163a52") }
         ColumnLayout {
             anchors.fill: parent
             anchors.leftMargin: 14
@@ -1257,14 +1298,14 @@ Item {
                     Layout.alignment: Qt.AlignVCenter
                     Text {
                         text: cartVal.toFixed(1)
-                        color: cBtnBaseText
+                        color: pressureTextColor(cls)
                         font.pixelSize: 21
                         font.bold: true
                         font.family: "monospace"
                     }
                     Text {
                         text: "mbar"
-                        color: cBtnBaseText
+                        color: pressureTextColor(cls)
                         font.pixelSize: 13
                         font.bold: true
                         Layout.alignment: Qt.AlignBottom
@@ -1278,8 +1319,21 @@ Item {
                 Layout.preferredHeight: 12
                 radius: height / 2
                 antialiasing: true
-                color: "#163a52"
+                color: pressureTrackColor(cls)
+                border.color: cls === "low" ? "#6f211e" : "#22445c"
+                border.width: 1
                 clip: true
+
+                Repeater {
+                    model: Math.max(0, Math.floor(barContainer.width / 34))
+                    Rectangle {
+                        x: index * 34
+                        width: 1
+                        height: barContainer.height
+                        color: "#2d5870"
+                        opacity: 0.42
+                    }
+                }
 
                 Rectangle {
                     id: cartFilledBar
@@ -1290,18 +1344,8 @@ Item {
                     clip: true
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
-                        GradientStop {
-                            position: 0.0
-                            color: {
-                                return "#A1C2BD";
-                            }
-                        }
-                        GradientStop {
-                            position: 1.0
-                            color: {
-                                return "#163a52";
-                            }
-                        }
+                        GradientStop { position: 0.0; color: pressureFillStart(cls) }
+                        GradientStop { position: 1.0; color: pressureFillEnd(cls) }
                     }
 
                     onWidthChanged: {
