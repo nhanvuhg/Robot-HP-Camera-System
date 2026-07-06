@@ -1179,17 +1179,6 @@ Item {
                 border.width: 1
                 clip: true
 
-                Repeater {
-                    model: Math.max(0, Math.floor(pcBarContainer.width / 34))
-                    Rectangle {
-                        x: index * 34
-                        width: 1
-                        height: pcBarContainer.height
-                        color: "#2d5870"
-                        opacity: 0.42
-                    }
-                }
-
                 Rectangle {
                     id: pcFilledBar
                     height: parent.height
@@ -1313,17 +1302,6 @@ Item {
                 border.color: "#22445c"
                 border.width: 1
                 clip: true
-
-                Repeater {
-                    model: Math.max(0, Math.floor(barContainer.width / 34))
-                    Rectangle {
-                        x: index * 34
-                        width: 1
-                        height: barContainer.height
-                        color: "#2d5870"
-                        opacity: 0.42
-                    }
-                }
 
                 Rectangle {
                     id: cartFilledBar
