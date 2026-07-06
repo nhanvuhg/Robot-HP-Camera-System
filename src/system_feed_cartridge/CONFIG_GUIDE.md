@@ -91,7 +91,6 @@ ros2 run system_feed_cartridge cartridge_system_py
 
 ### **Servo 3: Put Tray (Đẩy Khay)**
 - [ ] `servo3_home`: 0.0 mm (mặc định)
-- [ ] `servo3_push_position`: Vị trí đẩy khay ra cho robot
 
 ### **Servo 4: OutX (Trục X Đầu Ra)**
 - [ ] `outx_home`: 0.0 mm (mặc định)

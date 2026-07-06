@@ -40,6 +40,9 @@ Item {
     readonly property color cBtnActionStart:    "#163a52"
     readonly property color cBtnActionEnd:      "#081627"
     readonly property color cBtnActionBorder:   "#163a52"
+    readonly property color cBtnClearStart:     "#234C6A"
+    readonly property color cBtnClearEnd:       "#102739"
+    readonly property color cBtnClearText:      "#ffffff"
     readonly property color cBtnDangerStart:    "#E05454"
     readonly property color cBtnDangerEnd:      "#7a2424"
     readonly property color cBtnDangerBorder:   "#E05454"
@@ -845,8 +848,9 @@ Item {
                                 required property var modelData
                                 property bool isActive: (modelData.lbl === "IN_READY" && robotController.inReady) || (modelData.lbl === "OUT_READY" && robotController.outReady)
                                 readonly property bool isReadyBtn: modelData.lbl === "IN_READY" || modelData.lbl === "OUT_READY"
-                                property color gStart: (isReadyBtn && isActive) ? cBtnPrimaryStart : modelData.bgStart
-                                property color gEnd:   (isReadyBtn && isActive) ? cBtnPrimaryEnd : modelData.bgEnd
+                                property color gStart: (isReadyBtn && isActive) ? cBtnClearStart : modelData.bgStart
+                                property color gEnd:   (isReadyBtn && isActive) ? cBtnClearEnd : modelData.bgEnd
+                                property color labelColor: (isReadyBtn && isActive) ? cBtnClearText : modelData.tc
                                 Layout.fillWidth: true; height: 64; radius: 10
                                 color: "transparent"
                                 gradient: Gradient {
@@ -882,7 +886,7 @@ Item {
                                         Text {
                                             text: modelData.icon.indexOf(".svg") === -1 ? modelData.icon : ""
                                             visible: text !== ""
-                                            color: (parent.parent.parent.isReadyBtn && parent.parent.parent.isActive) ? "#04223a" : modelData.tc
+                                            color: parent.parent.parent.labelColor
                                             font.pixelSize: 22
                                             anchors.centerIn: parent
                                         }
@@ -907,7 +911,7 @@ Item {
 
                                         Text {
                                             text: modelData.displayLbl
-                                            color: (parent.parent.parent.isReadyBtn && parent.parent.parent.isActive) ? "#04223a" : modelData.tc
+                                            color: parent.parent.parent.labelColor
                                             font.pixelSize: 13
                                             font.bold: true
                                             anchors.verticalCenter: parent.verticalCenter
@@ -1044,8 +1048,8 @@ Item {
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker("#234C6A", 1.15) : "#234C6A" }
-                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker("#102739", 1.15) : "#102739" }
+                                GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker(cBtnClearStart, 1.15) : cBtnClearStart }
+                                GradientStop { position: 1.0; color: clrMA.pressed ? Qt.darker(cBtnClearEnd, 1.15) : cBtnClearEnd }
                             }
                             Row {
                                 anchors.centerIn: parent

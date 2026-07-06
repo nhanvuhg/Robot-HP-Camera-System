@@ -338,6 +338,8 @@ class CartridgeSystem(Node):
         # True = ép Servo3 về home 0mm ở S3_SERVO3_TARGET1 (sau overshoot 850 chưa
         # thấy S18). Fresh trigger = False → S17 ON thì giữ vị trí, đẩy tiếp.
         self._s3_force_home     = False
+        self._s3_finish_after_home_check = False
+        self._s3_output_loaded  = False
 
         # ── STATE S4 runtime ─────────────────────────────────────────
         self.state_s4           = SystemState.IDLE
@@ -1565,6 +1567,28 @@ class CartridgeSystem(Node):
         self._cmd_sent_s4    = False
         self._step_start_s4  = 0.0
         self._step_timeout_s4 = 0.0
+
+    def _servo3_at_last_tray_position(self) -> bool:
+        """True khi Servo3 đang ở vị trí khay cuối của stack output."""
+        return self._at_position(3, self.config.servo3_target2, tol=5.0)
+
+    def _s4_hold_cyl4_if_s17_on(self) -> bool:
+        """Trong STATE 4, S17 ON nghĩa là Cyl4 phải giữ platform cho tới lúc lấy khay cuối."""
+        if not self.sensor(S17_PLATFORM):
+            return True
+        cyl4_ret, cyl4_ext = self._snap(S25_CYL4_RETRACTED, S26_CYL4_EXTENDED)
+        if cyl4_ext and not cyl4_ret:
+            return True
+        now = time.time()
+        if not self._cyl4_retract_sent or now - self._cyl4_retry_t >= 3.0:
+            self._cyl4_extend()
+            self._cyl4_retract_sent = True
+            self._cyl4_retry_t = now
+        self._log_once(
+            "S4_HOLD_CYL4_S17",
+            f"S4 giữ Cyl4 EXTEND khi S17 ON: S25={int(cyl4_ret)} S26={int(cyl4_ext)}"
+        )
+        return False
 
     def _error(self, msg: str):
         """
@@ -2972,6 +2996,8 @@ class CartridgeSystem(Node):
             self._drive_warm_t = -1.0  # FAS drive warm-up
             self._sync_mode_jog()
             self._s3_force_home = False   # fresh trigger: S17 ON thì giữ vị trí, đẩy tiếp
+            self._s3_finish_after_home_check = False
+            self._s3_output_loaded = False
             self._notify('info', 'STATE 3 (manual)', 'Bắt đầu cấp khay output')
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
             return
@@ -3759,6 +3785,8 @@ class CartridgeSystem(Node):
             self.get_logger().info("[S3-IDLE] S17 ON + S18 OFF >= 5s → STATE 3")
             self._guide_logged.discard("S3_IDLE_S17_OFF")
             self._s3_force_home = False   # fresh trigger: S17 ON thì giữ vị trí, đẩy tiếp
+            self._s3_finish_after_home_check = False
+            self._s3_output_loaded = False
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
             return
 
@@ -5298,8 +5326,9 @@ class CartridgeSystem(Node):
           - S17 ON và KHÔNG bị ép về home (_s3_force_home=False): GIỮ NGUYÊN vị trí
             Servo3 hiện tại → đi thẳng S3_CHECK_S17 → feed tiếp tới servo3_target2
             (cấp khay kế trong cùng chồng, KHÔNG reset về 0 — 1 chồng tới 10 khay).
-          - S17 OFF hoặc _s3_force_home=True (vừa đẩy tới 850 mà S18 chưa ON): đưa
-            Servo3 về servo3_home (0mm) rồi re-check S17 (S3_CHECK_S17 confirm 2s).
+          - S17 OFF hoặc _s3_force_home=True: đưa Servo3 về servo3_home (0mm).
+            Nếu _s3_finish_after_home_check=True thì đọc lại S17 rồi complete,
+            không chờ khay mới.
         Verify _arrived AND _at_position(3, servo3_home) trước transition.
         Timeout → resend (KHÔNG vào ERROR — tránh clear zero_offset / re-home cả 5 servo).
         """
@@ -5328,6 +5357,18 @@ class CartridgeSystem(Node):
             elif self._arrived(3) and self._at_position(3, cfg.servo3_home):
                 self._cmd_sent_s3   = False
                 self._s3_force_home = False   # đã về home, clear cờ overshoot
+                if self._s3_finish_after_home_check:
+                    self._s3_finish_after_home_check = False
+                    s17_now = self.sensor(S17_PLATFORM)
+                    if s17_now:
+                        self._cyl4_extend()
+                    else:
+                        self._cyl4_retract()
+                    self.get_logger().info(
+                        f"[S3] Servo3 returned home after target2 empty; S17={'ON' if s17_now else 'OFF'}"
+                    )
+                    self._enter_s3(SystemState.S3_COMPLETE)
+                    return
                 self._enter_s3(SystemState.S3_CHECK_S17)
 
     def _s3_check_s17(self):
@@ -5478,18 +5519,6 @@ class CartridgeSystem(Node):
         Timeout move_timeout → _error().
         """
         cfg = self.config
-        # Khi khay đã rời sensor platform, nhả Cylinder 4. Motion Servo 3 đã
-        # được phép bắt đầu từ feedback extend hợp lệ nên không cần dừng giữa chừng.
-        if not self.sensor(S17_PLATFORM):
-            cyl4_ret, cyl4_ext = self._snap(S25_CYL4_RETRACTED, S26_CYL4_EXTENDED)
-            now = time.time()
-            if not (cyl4_ret and not cyl4_ext) and (
-                not self._cyl4_retract_sent or now - self._cyl4_retry_t >= 3.0
-            ):
-                self._cyl4_retract()
-                self._cyl4_retract_sent = True
-                self._cyl4_retry_t = now
-
         if not self._cmd_sent_s3:
             ok = self._nb_move(3, cfg.servo3_target2, vel=int(cfg.servo3_feed_velocity))
             if not ok:
@@ -5514,6 +5543,7 @@ class CartridgeSystem(Node):
         else:
             if self.sensor(S18_FEED_OK):
                 self._stop(3)
+                self._s3_output_loaded = True
                 self.get_logger().info("[S3] S18 ON -> Dung Servo 3 som")
                 self._enter_s3(SystemState.S3_WAIT_S18)
                 return
@@ -5526,9 +5556,11 @@ class CartridgeSystem(Node):
             # đã ở target2, tránh đọc nhầm drive flag rồi quay về 10mm vô lý.
             elif (self._arrived(3) and self._at_position(3, cfg.servo3_target2)
                   and time.time() - self._step_start_s3 > 0.5):
-                self.get_logger().warn("[S3] Servo3 tới 850mm chưa thấy S18 -> về home (0mm) xét lại S17")
-                self._notify('warn', 'Cấp khay', 'Servo3 tới 850mm chưa thấy S18 — về 0mm xét lại S17 rồi cấp lại')
-                self._s3_force_home = True   # ép S3_SERVO3_TARGET1 về 0mm (overshoot)
+                self._s3_output_loaded = False
+                self._s3_finish_after_home_check = True
+                self.get_logger().info("[S3] Servo3 tới target2 nhưng S18 OFF -> hết khay tại vị trí cuối, về home check S17")
+                self._notify('info', 'State 3', 'Servo3 tới vị trí khay cuối nhưng S18 OFF — về home check S17')
+                self._s3_force_home = True
                 self._enter_s3(SystemState.S3_SERVO3_TARGET1)
 
     def _s3_wait_s18(self):
@@ -5546,6 +5578,7 @@ class CartridgeSystem(Node):
             self._log_once("S3_WAIT_S18", "S18 ON -> Confirming 2s...")
 
         if time.time() - self._step_start_s3 >= 2.0:
+            self._s3_output_loaded = True
             self.get_logger().info("[S3] S18 confirmed 2s -> Feed Success")
             self._enter_s3(SystemState.S3_COMPLETE)
             return
@@ -5553,9 +5586,16 @@ class CartridgeSystem(Node):
     def _s3_complete(self):
         self._pub_cartridge_busy(False)
         self._pub_cartridge_pos2_busy(False)
-        self.pub_newtray_output.publish(Bool(data=True))
-        self._notify('info', 'State 3 done', 'Cap khay thanh pham thanh cong')
-        self.get_logger().info("[S3] COMPLETE — pub new_trayoutput_loaded")
+        if self._s3_output_loaded:
+            self.pub_newtray_output.publish(Bool(data=True))
+            self._notify('info', 'State 3 done', 'Cap khay thanh pham thanh cong')
+            self.get_logger().info("[S3] COMPLETE — pub new_trayoutput_loaded")
+        else:
+            self.pub_newtray_output.publish(Bool(data=False))
+            self._notify('info', 'State 3 done', 'Khong co khay tai vi tri cap — da ve home check S17')
+            self.get_logger().info("[S3] COMPLETE — no tray loaded at S18")
+        self._s3_output_loaded = False
+        self._s3_finish_after_home_check = False
         self._enter_s3(SystemState.IDLE)
 
     # ══════════════════════════════════════════════════════════════
@@ -5589,6 +5629,9 @@ class CartridgeSystem(Node):
             self._drive_warm_t = 0.0
         # ─────────────────────────────────────────────────────────────
 
+        if not self._s4_hold_cyl4_if_s17_on():
+            return
+
         if not self._cmd_sent_s4:
             self._pub_cartridge_busy(True)
             self._pub_cartridge_pos2_busy(True)
@@ -5621,6 +5664,8 @@ class CartridgeSystem(Node):
         S4_OUTY_PICK (Cyl2 đã được retract ở bước đầu STATE 4).
         """
         cfg = self.config
+        if not self._s4_hold_cyl4_if_s17_on():
+            return
         if not self._outy_safe():
             self._log_once("S4_OX2_OYSAFE", "[S4] OutY chưa safe — khóa OutX")
             return
@@ -5648,6 +5693,8 @@ class CartridgeSystem(Node):
         Nếu chưa đúng thì gửi Cyl2 RETRACT và retry mỗi 3s, không cho vào
         S4_CHECK_OUTY_SAFE cho tới khi feedback hợp lệ.
         """
+        if not self._s4_hold_cyl4_if_s17_on():
+            return
         cyl2_ret, cyl2_ext = self._snap(S21_CYL2_RETRACTED, S22_CYL2_EXTENDED)
         if cyl2_ret and not cyl2_ext:
             self.get_logger().info("[S4] Cyl2 RETRACT ready: S21 ON + S22 OFF -> CHECK_OUTY_SAFE")
@@ -5692,6 +5739,8 @@ class CartridgeSystem(Node):
 
         """
         cfg = self.config
+        if not self._s4_hold_cyl4_if_s17_on():
+            return
         if not self._cmd_sent_s4:
             ok = self._nb_move(5, cfg.outy_pick_pos, vel =140)
             if not ok:
@@ -5725,7 +5774,12 @@ class CartridgeSystem(Node):
             self._cmd_sent_s4   = True
         if cyl2_ext and not cyl2_ret:
             self.get_logger().info("[S4] S22 ON + S21 OFF — Cyl2 kẹp khay OK")
-            self._enter_s4(SystemState.S4_CYL4_RETRACT)
+            if self._servo3_at_last_tray_position():
+                self.get_logger().info("[S4] Servo3 ở target2 khay cuối -> RETRACT Cyl4 để nhả platform")
+                self._enter_s4(SystemState.S4_CYL4_RETRACT)
+            else:
+                self.get_logger().info("[S4] Servo3 chưa ở target2 -> giữ Cyl4 EXTEND, bỏ qua nhả platform")
+                self._enter_s4(SystemState.S4_OUTY_TARGET1)
             return
         if time.time() > self._cyl2_retry_t:
             self.get_logger().info("[S4] Retry Cyl2 extend")
@@ -6282,8 +6336,18 @@ class CartridgeSystem(Node):
         # vô hạn, không tick + state_s3 vẫn IDLE → S3 không chạy. Fix: trả
         # state_s4 về IDLE, kích S3 qua dispatcher đúng.
         self._enter_s4(SystemState.IDLE)
-        if self._can_start_s3():
+        if (not self.sensor(S18_FEED_OK)
+                and not self.sensor(S17_PLATFORM)
+                and self._servo3_at_last_tray_position()):
+            self.get_logger().info("[S4→S3] S18 OFF + S17 OFF sau khi lấy khay cuối -> Servo3 về home check S17")
+            self._s3_output_loaded = False
+            self._s3_finish_after_home_check = True
+            self._s3_force_home = True
+            self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
+        elif self._can_start_s3():
             self.get_logger().info("[S4→S3] S17 ON + S18 OFF → cấp khay output mới")
+            self._s3_output_loaded = False
+            self._s3_finish_after_home_check = False
             self._enter_s3(SystemState.S3_CHECK_OUTXY_SAFE)
 
 

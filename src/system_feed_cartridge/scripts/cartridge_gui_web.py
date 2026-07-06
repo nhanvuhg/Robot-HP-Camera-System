@@ -33,7 +33,6 @@ CONFIG_RANGES = {
     "iny_home":             (0.0,   200.0),
     "iny_safe_zone":        (5.0,   200.0),
     "iny_place":            (10.0,  700.0),
-    "servo3_push_position": (10.0,  400.0),
     "outx_home":            (0.0,   200.0),
     "outx_target":          (10.0,  700.0),
     "outy_home":            (0.0,   200.0),

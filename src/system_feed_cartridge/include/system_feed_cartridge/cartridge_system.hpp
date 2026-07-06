@@ -79,7 +79,6 @@ struct Config {
     double iny_home;
     double iny_target2;
     double servo3_home;
-    double servo3_push_position;
     double outx_home;
     double outx_target1;
     double outx_target2;
