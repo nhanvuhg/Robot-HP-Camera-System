@@ -1005,7 +1005,7 @@ Item {
                             MotionMouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 2
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
                             gradient: Gradient {
                                 orientation: Gradient.Vertical
                                 GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker("#E05454", 1.25) : "#E05454" }
@@ -1105,7 +1105,7 @@ Item {
 
                         Rectangle {
                             Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"
-                            border.color: cBtnActionBorder
+                            border.color: "#E68457"
                             border.width: cameraPageRoot.pauseLatched ? 2 : 1
                             transform: Translate { y: cameraPageRoot.pauseLatched ? 2 : 0 }
                             gradient: Gradient {
