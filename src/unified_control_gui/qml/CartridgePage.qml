@@ -1646,9 +1646,7 @@ import QtGraphicalEffects 1.15
                     Rectangle {
                         x: parent.width - root.sensorW
                         y: 0; width: root.sensorW; height: root.outerH
-                        color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
-                        GlassHighlight {}
-                        HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cControlBorder }
+                        color: "transparent"; border.color: "transparent"; radius: 6
 
                         ColumnLayout {
                             anchors.fill: parent
@@ -1724,7 +1722,21 @@ import QtGraphicalEffects 1.15
                                         border.width: on_ ? 2 : 1
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        gradient: on_ ? sensorActiveGradient : sensorIdleGradient
                                         HoverHandler { onHoveredChanged: if(!sBtn.on_) sBtn.border.color = hovered ? root.cSignalActiveBorder : root.cSignalIdleBorder }
+                                        Gradient {
+                                            id: sensorActiveGradient
+                                            orientation: Gradient.Vertical
+                                            GradientStop { position: 0.0; color: Qt.rgba(root.cSignalActiveStart.r, root.cSignalActiveStart.g, root.cSignalActiveStart.b, 0.90) }
+                                            GradientStop { position: 0.55; color: root.cSignalActiveMid }
+                                            GradientStop { position: 1.0; color: root.cSignalActiveEnd }
+                                        }
+                                        Gradient {
+                                            id: sensorIdleGradient
+                                            orientation: Gradient.Vertical
+                                            GradientStop { position: 0.0; color: root.cSignalIdleBg }
+                                            GradientStop { position: 1.0; color: Qt.rgba(0.02, 0.08, 0.13, 0.26) }
+                                        }
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 1
