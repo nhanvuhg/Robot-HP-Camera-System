@@ -466,7 +466,6 @@ QString RobotController::restartGui()
     const QString message = QString("Restarting GUI (helper PID %1)").arg(helperPid);
     qDebug() << message;
     emit serviceCallResult(true, message);
-    QTimer::singleShot(250, QCoreApplication::instance(), &QCoreApplication::quit);
     return message;
 }
 

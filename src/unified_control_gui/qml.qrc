@@ -36,6 +36,9 @@
     <file alias="icons/octagon_x_lucide.svg">qml/icons/octagon_x_lucide.svg</file>
     <file alias="icons/refresh_cw.svg">qml/icons/refresh_cw.svg</file>
     <file alias="icons/list_restart.svg">qml/icons/list_restart.svg</file>
+    <file alias="icons/user_cog.svg">qml/icons/user_cog.svg</file>
+    <file alias="icons/weight_tilde_lucide.svg">qml/icons/weight_tilde_lucide.svg</file>
+    <file alias="icons/weight_tilde_lucide_red.svg">qml/icons/weight_tilde_lucide_red.svg</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
   <qresource prefix="/icons">
@@ -57,6 +60,9 @@
     <file>qml/icons/camera.svg</file>
     <file>qml/icons/refresh_cw.svg</file>
     <file>qml/icons/list_restart.svg</file>
+    <file>qml/icons/user_cog.svg</file>
+    <file>qml/icons/weight_tilde_lucide.svg</file>
+    <file>qml/icons/weight_tilde_lucide_red.svg</file>
     <file>qml/icons/bg_servers.jpg</file>
   </qresource>
 </RCC>

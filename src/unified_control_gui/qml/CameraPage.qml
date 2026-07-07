@@ -261,7 +261,7 @@ Item {
                     spacing: 10
 
                     ScreenshotButton {
-                        Layout.preferredWidth: 60; Layout.preferredHeight: 50
+                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onCaptureRequested: {
                             robotController.captureScreenshot()
                         }
@@ -269,7 +269,7 @@ Item {
 
                     MotionButton {
                         id: refreshNodesBtn
-                        Layout.preferredWidth: 60; Layout.preferredHeight: 50
+                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: robotController.restartSystemNodes()
                         background: Rectangle {
                             radius: 6
@@ -301,7 +301,7 @@ Item {
 
                     MotionButton {
                         id: restartGuiBtn
-                        Layout.preferredWidth: 60; Layout.preferredHeight: 50
+                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: robotController.restartGui()
                         background: Rectangle {
                             radius: 6
@@ -342,9 +342,7 @@ Item {
 
                     MotionButton {
                         id: cartridgePageBtn
-                        text: "CARTRIDGE SYSTEM  ▸"
-                        Layout.preferredHeight: 50
-                        font.pixelSize: 16; font.bold: true
+                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: stackView.push(cartridgePage)
                         background: Rectangle {
                             radius: 6
@@ -358,10 +356,12 @@ Item {
                             }
                         }
                         contentItem: Item {
-                            Text {
-                                anchors.fill: parent
-                                text: cartridgePageBtn.text; font: cartridgePageBtn.font
-                                color: cBtnBaseText; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                            Image {
+                                anchors.centerIn: parent
+                                source: "qrc:/qml/icons/user_cog.svg"
+                                width: 34; height: 34
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
                             }
                             HoverHint {
                                 visible: cartridgePageBtn.hovered
@@ -372,20 +372,37 @@ Item {
                         }
                     }
 
-                    RowLayout {
-                        spacing: 5
-                        Text {
-                            text: "IGNORE SCALE"
-                            font.pixelSize: 14; font.bold: true
-                            color: ignoreScaleToggle.checked ? "#f0735c" : "#9fb3c8"
-                            verticalAlignment: Text.AlignVCenter
+                    MotionButton {
+                        id: ignoreScaleBtn
+                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        onClicked: robotController.ignoreScale = !robotController.ignoreScale
+                        background: Rectangle {
+                            radius: 6
+                            color: "transparent"
+                            border.color: robotController.ignoreScale ? cBad : cServoRunBorder
+                            border.width: 2
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: ignoreScaleBtn.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
+                                GradientStop { position: 1.0; color: ignoreScaleBtn.pressed ? Qt.darker(cServoRunEnd, 1.15) : cServoRunEnd }
+                            }
+                            Behavior on border.color { ColorAnimation { duration: 140 } }
                         }
-                        Switch {
-                            id: ignoreScaleToggle
-                            checked: robotController.ignoreScale
-                            onCheckedChanged: {
-                                if (robotController.ignoreScale !== checked)
-                                    robotController.ignoreScale = checked;
+                        contentItem: Item {
+                            Image {
+                                anchors.centerIn: parent
+                                source: robotController.ignoreScale
+                                        ? "qrc:/qml/icons/weight_tilde_lucide_red.svg"
+                                        : "qrc:/qml/icons/weight_tilde_lucide.svg"
+                                width: 34; height: 34
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
+                            }
+                            HoverHint {
+                                visible: ignoreScaleBtn.hovered
+                                label: "Ignore Scale"
+                                bc: robotController.ignoreScale ? cBad : cServoRunBorder
+                                tc: robotController.ignoreScale ? cBad : cBtnBaseText
                             }
                         }
                     }

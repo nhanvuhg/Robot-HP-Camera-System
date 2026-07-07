@@ -38,10 +38,26 @@ if [ -f "$WS/install/setup.bash" ]; then
   set -u
 fi
 
-sleep 1
+if [ ! -x "$GUI_BIN" ]; then
+  echo "ERROR: GUI binary not found: $GUI_BIN"
+  exit 1
+fi
+
+echo "Starting GUI: $GUI_BIN"
+nohup "$GUI_BIN" > "$GUI_LOG" 2>&1 < /dev/null &
+NEW_PID=$!
+disown "$NEW_PID" 2>/dev/null || true
+echo "New GUI PID=$NEW_PID"
+
+sleep 2
+
+if ! ps -p "$NEW_PID" >/dev/null 2>&1; then
+  echo "ERROR: New GUI exited immediately; keep old GUI alive"
+  exit 1
+fi
 
 if [ -n "$OLD_PID" ] && ps -p "$OLD_PID" >/dev/null 2>&1; then
-  echo "Old GUI still alive, terminating PID=$OLD_PID"
+  echo "New GUI is alive, terminating old GUI PID=$OLD_PID"
   kill -TERM "$OLD_PID" 2>/dev/null || true
   sleep 1
 fi
@@ -49,14 +65,4 @@ fi
 if [ -n "$OLD_PID" ] && ps -p "$OLD_PID" >/dev/null 2>&1; then
   echo "Old GUI still alive, killing PID=$OLD_PID"
   kill -KILL "$OLD_PID" 2>/dev/null || true
-  sleep 1
 fi
-
-if [ ! -x "$GUI_BIN" ]; then
-  echo "ERROR: GUI binary not found: $GUI_BIN"
-  exit 1
-fi
-
-echo "Starting GUI: $GUI_BIN"
-"$GUI_BIN" > "$GUI_LOG" 2>&1 &
-echo "New GUI PID=$!"
