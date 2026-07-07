@@ -79,6 +79,8 @@ install(TARGETS
 
 install(PROGRAMS
   scripts/vfd_logic_node.py
+  scripts/restart_system_nodes.sh
+  scripts/restart_gui.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 

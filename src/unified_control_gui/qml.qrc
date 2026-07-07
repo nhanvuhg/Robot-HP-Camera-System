@@ -33,6 +33,8 @@
     <file alias="icons/circle_pause_lucide.svg">qml/icons/circle_pause_lucide.svg</file>
     <file alias="icons/brush_cleaning_lucide_dark.svg">qml/icons/brush_cleaning_lucide_dark.svg</file>
     <file alias="icons/octagon_x_lucide.svg">qml/icons/octagon_x_lucide.svg</file>
+    <file alias="icons/refresh_cw.svg">qml/icons/refresh_cw.svg</file>
+    <file alias="icons/list_restart.svg">qml/icons/list_restart.svg</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
   <qresource prefix="/icons">
@@ -52,6 +54,8 @@
     <file>qml/icons/file_sliders.svg</file>
     <file>qml/icons/monitor_cloud.svg</file>
     <file>qml/icons/camera.svg</file>
+    <file>qml/icons/refresh_cw.svg</file>
+    <file>qml/icons/list_restart.svg</file>
     <file>qml/icons/bg_servers.jpg</file>
   </qresource>
 </RCC>

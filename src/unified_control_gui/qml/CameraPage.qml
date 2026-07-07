@@ -267,6 +267,102 @@ Item {
                         }
                     }
 
+                    MotionButton {
+                        id: refreshNodesBtn
+                        Layout.preferredWidth: 60; Layout.preferredHeight: 50
+                        onClicked: robotController.restartSystemNodes()
+                        background: Rectangle {
+                            radius: 6
+                            color: "transparent"
+                            border.color: cBtnBaseBorder
+                            border.width: 2
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: refreshNodesBtn.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
+                                GradientStop { position: 1.0; color: refreshNodesBtn.pressed ? Qt.darker(cBtnBaseEnd, 1.15) : cBtnBaseEnd }
+                            }
+                        }
+                        contentItem: Item {
+                            Image {
+                                anchors.centerIn: parent
+                                source: "qrc:/qml/icons/list_restart.svg"
+                                width: 34; height: 34
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
+                            }
+                            Rectangle {
+                                id: refreshNodesHint
+                                visible: refreshNodesBtn.hovered
+                                opacity: refreshNodesBtn.hovered ? 1.0 : 0.0
+                                width: refreshNodesHintText.implicitWidth + 16
+                                height: 22
+                                x: (parent.width - width) / 2
+                                y: parent.height + 6
+                                radius: 5
+                                color: "#e606101d"
+                                border.color: cBtnBaseBorder
+                                border.width: 1
+                                z: 20
+                                Text {
+                                    id: refreshNodesHintText
+                                    anchors.centerIn: parent
+                                    text: "Restart Node"
+                                    color: cBtnBaseText
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                }
+                            }
+                        }
+                    }
+
+                    MotionButton {
+                        id: restartGuiBtn
+                        Layout.preferredWidth: 60; Layout.preferredHeight: 50
+                        onClicked: robotController.restartGui()
+                        background: Rectangle {
+                            radius: 6
+                            color: "transparent"
+                            border.color: cBtnBaseBorder
+                            border.width: 2
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: restartGuiBtn.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
+                                GradientStop { position: 1.0; color: restartGuiBtn.pressed ? Qt.darker(cBtnBaseEnd, 1.15) : cBtnBaseEnd }
+                            }
+                        }
+                        contentItem: Item {
+                            Image {
+                                anchors.centerIn: parent
+                                source: "qrc:/qml/icons/refresh_cw.svg"
+                                width: 34; height: 34
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
+                            }
+                            Rectangle {
+                                id: restartGuiHint
+                                visible: restartGuiBtn.hovered
+                                opacity: restartGuiBtn.hovered ? 1.0 : 0.0
+                                width: restartGuiHintText.implicitWidth + 16
+                                height: 22
+                                x: (parent.width - width) / 2
+                                y: parent.height + 6
+                                radius: 5
+                                color: "#e606101d"
+                                border.color: cBtnBaseBorder
+                                border.width: 1
+                                z: 20
+                                Text {
+                                    id: restartGuiHintText
+                                    anchors.centerIn: parent
+                                    text: "Restart GUI"
+                                    color: cBtnBaseText
+                                    font.pixelSize: 11
+                                    font.bold: true
+                                }
+                            }
+                        }
+                    }
+
                     Item {
                         Layout.fillWidth: true
                         Text {

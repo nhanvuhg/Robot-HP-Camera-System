@@ -137,6 +137,8 @@ public slots:
     void publishScaleResult(bool pass);
 
     Q_INVOKABLE QString captureScreenshot();
+    Q_INVOKABLE QString restartSystemNodes();
+    Q_INVOKABLE QString restartGui();
 
 signals:
     void systemStatusChanged();

@@ -10,6 +10,7 @@
 #include <QMetaObject>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QCoreApplication>
 #include <sstream>
 #include <thread>
 
@@ -386,6 +387,87 @@ QString RobotController::captureScreenshot()
     qDebug() << "Screenshot saved:" << outputPath;
     emit serviceCallResult(true, "Screenshot saved: " + outputPath);
     return outputPath;
+}
+
+QString RobotController::restartSystemNodes()
+{
+    QString scriptPath = "/home/pi/ros2_ws/install/unified_control_gui/lib/unified_control_gui/restart_system_nodes.sh";
+    if (!QFile::exists(scriptPath)) {
+        scriptPath = "/home/pi/ros2_ws/src/unified_control_gui/scripts/restart_system_nodes.sh";
+    }
+
+    if (!QFile::exists(scriptPath)) {
+        const QString message = "Restart script not found";
+        qWarning() << message << scriptPath;
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    if (!env.contains("DISPLAY") || env.value("DISPLAY").isEmpty()) {
+        env.insert("DISPLAY", ":0");
+    }
+    env.insert("ROS2_WS", "/home/pi/ros2_ws");
+
+    QProcess process;
+    process.setProcessEnvironment(env);
+    process.setWorkingDirectory("/home/pi/ros2_ws");
+
+    qint64 pid = 0;
+    const bool started = process.startDetached("/bin/bash", QStringList() << scriptPath, "/home/pi/ros2_ws", &pid);
+    if (!started) {
+        const QString message = "Cannot start restart script";
+        qWarning() << message << scriptPath;
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+
+    const QString message = QString("Restarting system nodes (PID %1)").arg(pid);
+    qDebug() << message;
+    emit serviceCallResult(true, message);
+    return message;
+}
+
+QString RobotController::restartGui()
+{
+    QString scriptPath = "/home/pi/ros2_ws/install/unified_control_gui/lib/unified_control_gui/restart_gui.sh";
+    if (!QFile::exists(scriptPath)) {
+        scriptPath = "/home/pi/ros2_ws/src/unified_control_gui/scripts/restart_gui.sh";
+    }
+
+    if (!QFile::exists(scriptPath)) {
+        const QString message = "Restart GUI script not found";
+        qWarning() << message << scriptPath;
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    if (!env.contains("DISPLAY") || env.value("DISPLAY").isEmpty()) {
+        env.insert("DISPLAY", ":0");
+    }
+    env.insert("ROS2_WS", "/home/pi/ros2_ws");
+
+    QProcess process;
+    process.setProcessEnvironment(env);
+    process.setWorkingDirectory("/home/pi/ros2_ws");
+
+    const QString currentPid = QString::number(QCoreApplication::applicationPid());
+    qint64 helperPid = 0;
+    const bool started = process.startDetached("/bin/bash", QStringList() << scriptPath << currentPid,
+                                               "/home/pi/ros2_ws", &helperPid);
+    if (!started) {
+        const QString message = "Cannot start restart GUI script";
+        qWarning() << message << scriptPath;
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+
+    const QString message = QString("Restarting GUI (helper PID %1)").arg(helperPid);
+    qDebug() << message;
+    emit serviceCallResult(true, message);
+    QTimer::singleShot(250, QCoreApplication::instance(), &QCoreApplication::quit);
+    return message;
 }
 
 void RobotController::enableSystem(bool enable)
