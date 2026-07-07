@@ -83,6 +83,9 @@ import QtGraphicalEffects 1.15
         readonly property color cBtnEnableStart:    "#3B6978"
         readonly property color cBtnEnableEnd:      "#1A312C"
         readonly property color cBtnEnableText:     "#d6f1ff"
+        readonly property color cCylinderActiveStart:cBtnClearStart
+        readonly property color cCylinderActiveEnd:  cBtnClearEnd
+        readonly property color cCylinderActiveText: cBtnClearText
         readonly property color cBtnHomingStart:    "#3B6F8E"
         readonly property color cBtnHomingEnd:      "#1B4058"
         readonly property color cBtnHomingBorder:   "#4F86A6"
@@ -147,10 +150,11 @@ import QtGraphicalEffects 1.15
         readonly property color cDashboardActionEnd: cBtnActionEnd
         readonly property color cDashboardActionBorder: cBtnActionBorder
         readonly property color cDashboardActionText: "#ffffff"
-        readonly property color cModeSelectedTop: cBtnPrimaryStart
-        readonly property color cModeSelectedMid: "#163a52"
-        readonly property color cModeSelectedBottom: cBtnPrimaryEnd
-        readonly property color cModeSelectedBorder: cBtnPrimaryBorder
+        readonly property color cModeSelectedTop: "#A1C2BD"
+        readonly property color cModeSelectedMid: "#5C8580"
+        readonly property color cModeSelectedBottom: "#163a52"
+        readonly property color cModeSelectedBorder: "#163a52"
+        readonly property color cModeSelectedText: "#06101d"
         readonly property color cDashCardInner: Qt.rgba(cUnifiedBtn.r, cUnifiedBtn.g, cUnifiedBtn.b, 0.82)
         readonly property color cDashCardField: Qt.rgba(cUnifiedBtn.r, cUnifiedBtn.g, cUnifiedBtn.b, 0.82)
         readonly property color cDashCardBorder: cBorder
@@ -392,20 +396,28 @@ import QtGraphicalEffects 1.15
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
                     onClicked: stackView.pop()
                     background: Rectangle {
-                        radius: 9
+                        radius: 6
+                        color: "transparent"
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
                             GradientStop { position: 0.0; color: backBtn.pressed ? Qt.darker(root.cBtnBaseStart, 1.15) : root.cBtnBaseStart }
                             GradientStop { position: 1.0; color: backBtn.pressed ? Qt.darker(root.cBtnBaseEnd, 1.15) : root.cBtnBaseEnd }
                         }
                         border.color: root.cBtnBaseBorder
-                        border.width: 1
+                        border.width: 2
                     }
                     contentItem: Image {
+                        id: backIcon
                         source: "qrc:/icons/qml/icons/reply_arrow.svg"
                         width: 24; height: 24
                         anchors.centerIn: parent
                         fillMode: Image.PreserveAspectFit; smooth: true
+                        visible: false
+                    }
+                    ColorOverlay {
+                        anchors.fill: backIcon
+                        source: backIcon
+                        color: root.cWhiteText
                     }
                 }
                 ScreenshotButton {
@@ -1049,7 +1061,7 @@ import QtGraphicalEffects 1.15
                                             radius: parent.radius
                                             visible: autoModeRect.isModeSelected || autoModeMA.pressed
                                             gradient: Gradient {
-                                                orientation: Gradient.Vertical
+                                                orientation: Gradient.Horizontal
                                                 GradientStop { position: 0.0; color: autoModeMA.pressed ? root.pressGradientColor(root.cModeSelectedTop) : root.cModeSelectedTop }
                                                 GradientStop { position: 0.54; color: autoModeMA.pressed ? root.pressGradientColor(root.cModeSelectedMid) : root.cModeSelectedMid }
                                                 GradientStop { position: 1.0; color: autoModeMA.pressed ? root.pressGradientColor(root.cModeSelectedBottom) : root.cModeSelectedBottom }
@@ -1070,8 +1082,8 @@ import QtGraphicalEffects 1.15
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            Text { text: "AUTO"; color: root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                            Text { text: "Automatic"; color: root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "AUTO"; color: autoModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "Automatic"; color: autoModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
 
@@ -1092,7 +1104,7 @@ import QtGraphicalEffects 1.15
                                             radius: parent.radius
                                             visible: aiModeRect.isModeSelected || aiModeMA.pressed
                                             gradient: Gradient {
-                                                orientation: Gradient.Vertical
+                                                orientation: Gradient.Horizontal
                                                 GradientStop { position: 0.0; color: aiModeMA.pressed ? root.pressGradientColor(root.cModeSelectedTop) : root.cModeSelectedTop }
                                                 GradientStop { position: 0.54; color: aiModeMA.pressed ? root.pressGradientColor(root.cModeSelectedMid) : root.cModeSelectedMid }
                                                 GradientStop { position: 1.0; color: aiModeMA.pressed ? root.pressGradientColor(root.cModeSelectedBottom) : root.cModeSelectedBottom }
@@ -1113,8 +1125,8 @@ import QtGraphicalEffects 1.15
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            Text { text: "AI MODE"; color: root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                            Text { text: "Camera AI"; color: root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "AI MODE"; color: aiModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "Camera AI"; color: aiModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
 
@@ -1135,7 +1147,7 @@ import QtGraphicalEffects 1.15
                                             radius: parent.radius
                                             visible: manualModeRect.isModeSelected || manualModeMA.pressed
                                             gradient: Gradient {
-                                                orientation: Gradient.Vertical
+                                                orientation: Gradient.Horizontal
                                                 GradientStop { position: 0.0; color: manualModeMA.pressed ? root.pressGradientColor(root.cModeSelectedTop) : root.cModeSelectedTop }
                                                 GradientStop { position: 0.54; color: manualModeMA.pressed ? root.pressGradientColor(root.cModeSelectedMid) : root.cModeSelectedMid }
                                                 GradientStop { position: 1.0; color: manualModeMA.pressed ? root.pressGradientColor(root.cModeSelectedBottom) : root.cModeSelectedBottom }
@@ -1156,8 +1168,8 @@ import QtGraphicalEffects 1.15
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            Text { text: "MANUAL"; color: root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                            Text { text: "Direct Control"; color: root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "MANUAL"; color: manualModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: "Direct Control"; color: manualModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
                                 }
@@ -1202,7 +1214,7 @@ import QtGraphicalEffects 1.15
 
                         // ── State Navigation ─────────────────────
                         Rectangle {
-                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.313
+                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.281
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
@@ -1282,7 +1294,7 @@ import QtGraphicalEffects 1.15
 
                         // ── Control Cylinder ──────────────────────
                         Rectangle {
-                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.313
+                            Layout.preferredWidth: (parent.width - root.sensorW - root.gap) * 0.345
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             color: root.cControlPanel; border.color: root.cControlBorder; radius: 6
@@ -1307,17 +1319,17 @@ import QtGraphicalEffects 1.15
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 5; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL1\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cSensorActiveStart; selectedBgEnd: root.cSensorActiveEnd; selectedTc: root.cSensorActiveText; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(1, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL2\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cSensorActiveStart; selectedBgEnd: root.cSensorActiveEnd; selectedTc: root.cSensorActiveText; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(2, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL3\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cSensorActiveStart; selectedBgEnd: root.cSensorActiveEnd; selectedTc: root.cSensorActiveText; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(3, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL4\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cSensorActiveStart; selectedBgEnd: root.cSensorActiveEnd; selectedTc: root.cSensorActiveText; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 26 && cartridgeController.sensorState.charAt(25) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(4, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL5\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cSensorActiveStart; selectedBgEnd: root.cSensorActiveEnd; selectedTc: root.cSensorActiveText; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 28 && cartridgeController.sensorState.charAt(27) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(5, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL1\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(1, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL2\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(2, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL3\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(3, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL4\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 26 && cartridgeController.sensorState.charAt(25) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(4, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL5\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 28 && cartridgeController.sensorState.charAt(27) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(5, true) }
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL1\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cSensorActiveStart; selectedBgEnd: root.cSensorActiveEnd; selectedTc: root.cSensorActiveText; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(1, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL2\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cSensorActiveStart; selectedBgEnd: root.cSensorActiveEnd; selectedTc: root.cSensorActiveText; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(2, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL3\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cSensorActiveStart; selectedBgEnd: root.cSensorActiveEnd; selectedTc: root.cSensorActiveText; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(3, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL4\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cSensorActiveStart; selectedBgEnd: root.cSensorActiveEnd; selectedTc: root.cSensorActiveText; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 25 && cartridgeController.sensorState.charAt(24) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(4, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "CYL5\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cSensorActiveStart; selectedBgEnd: root.cSensorActiveEnd; selectedTc: root.cSensorActiveText; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 27 && cartridgeController.sensorState.charAt(26) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(5, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL1\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(1, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL2\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(2, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL3\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(3, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL4\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 25 && cartridgeController.sensorState.charAt(24) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(4, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL5\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 27 && cartridgeController.sensorState.charAt(26) === '1'; glassStyle: isSelected; onClicked: cartridgeController.cylinderCmd(5, false) }
                                 }
                             }
                         }
@@ -1439,9 +1451,14 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true
                                                     Layout.preferredHeight: cardItem.controlH
                                                     radius: 6
-                                                    color: Qt.rgba(0.06, 0.19, 0.26, 0.82)
-                                                    border.color: root.cFunctionFieldBorder
+                                                    color: "transparent"
+                                                    border.color: root.cDashButtonBorder
                                                     border.width: 1
+                                                    gradient: Gradient {
+                                                        orientation: Gradient.Horizontal
+                                                        GradientStop { position: 0.0; color: root.cDashButton }
+                                                        GradientStop { position: 1.0; color: root.cDashButtonEnd }
+                                                    }
                                                     Text {
                                                         id: velText
                                                         anchors.centerIn: parent
@@ -1469,7 +1486,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true; Layout.preferredWidth: 1
                                                     Layout.preferredHeight: cardItem.controlH
                                                     padV: 6; padH: 0; fontSize: 18
-                                                    bg: root.cBtnClearStart; bgEnd: root.cBtnClearEnd; bc: root.cBtnActionBorder; tc: root.cBtnClearText; glassStyle: true
+                                                    bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; glassStyle: true
                                                     active: servoRow.jogAllowed
                                                     inactiveOpacity: 0.22
                                                         onPressed: {
@@ -1488,7 +1505,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true; Layout.preferredWidth: 1
                                                     Layout.preferredHeight: cardItem.controlH
                                                     padV: 6; padH: 0; fontSize: 18
-                                                        bg: root.cBtnClearStart; bgEnd: root.cBtnClearEnd; bc: root.cBtnActionBorder; tc: root.cBtnClearText; glassStyle: true
+                                                        bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; glassStyle: true
                                                     active: servoRow.jogAllowed
                                                     inactiveOpacity: 0.22
                                                         onPressed: {
@@ -1509,8 +1526,8 @@ import QtGraphicalEffects 1.15
                                             Row {
                                                 spacing: 6
                                                 width: parent.width
-                                                CBtn { lbl:"HOMING"; iconSource:"qrc:/qml/icons/house.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cBtnHomingStart; bgEnd:root.cBtnHomingEnd; bc:root.cBtnHomingBorder; tc:root.cBtnHomingText; active:servoRow.jogAllowed; inactiveOpacity:0.22; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
-                                                CBtn { lbl:"CLEAR"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked: cartridgeController.clearServo(model.sid) }
+                                                CBtn { lbl:"HOMING"; iconSource:"qrc:/qml/icons/house.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cServoRunStart; bgEnd:root.cServoRunEnd; bc:root.cServoRunBorder; tc:root.cServoRunText; active:servoRow.jogAllowed; inactiveOpacity:0.22; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
+                                                CBtn { lbl:"CLEAR"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cServoRunStart; bgEnd:root.cServoRunEnd; bc:root.cServoRunBorder; tc:root.cServoRunText; onClicked: cartridgeController.clearServo(model.sid) }
                                             }
 
                                             // TARGET POSITION Row (with input & RUN button)
@@ -1530,9 +1547,14 @@ import QtGraphicalEffects 1.15
                                                         Layout.fillWidth: true
                                                         Layout.preferredHeight: cardItem.controlH
                                                         radius: 6
-                                                        color: Qt.rgba(0.06, 0.19, 0.26, 0.82)
-                                                        border.color: root.cFunctionFieldBorder
+                                                        color: "transparent"
+                                                        border.color: root.cDashButtonBorder
                                                         border.width: 1
+                                                        gradient: Gradient {
+                                                            orientation: Gradient.Horizontal
+                                                            GradientStop { position: 0.0; color: root.cDashButton }
+                                                            GradientStop { position: 1.0; color: root.cDashButtonEnd }
+                                                        }
                                                         TextInput {
                                                             id: posIn
                                                             anchors.fill: parent; anchors.margins: 4
@@ -1555,7 +1577,7 @@ import QtGraphicalEffects 1.15
                                                         Layout.preferredWidth: 80
                                                         Layout.preferredHeight: cardItem.controlH
                                                         padV: 0; fontSize: 16
-                                                        bg: root.cBtnClearStart; bgEnd: root.cBtnClearEnd; bc: root.cBtnActionBorder; tc: root.cBtnClearText; active: servoRow.jogAllowed
+                                                        bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; active: servoRow.jogAllowed
                                                         inactiveOpacity: 0.22
                                                         onClicked: { if(servoRow.jogAllowed) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } }
                                                     }
@@ -1564,13 +1586,17 @@ import QtGraphicalEffects 1.15
 
                                             // Limits display
                                             Text {
-                                                text: model.sid === 1 ? "Min: -322 | Max: 560" : (model.sid === 2 ? "Min: -80 | Max: 1025" : "")
+                                                text: model.sid === 1 ? "Min: -322 | Max: 560"
+                                                    : (model.sid === 2 ? "Min: -80 | Max: 1025"
+                                                    : (model.sid === 3 ? "Min: -25 | Max: 870"
+                                                    : (model.sid === 4 ? "Min: -320 | Max: 605"
+                                                    : (model.sid === 5 ? "Min: -25 | Max: 1025" : ""))))
                                                 color: root.cWhiteText
                                                 font.pixelSize: 13
                                                 font.bold: true
                                                 width: parent.width
                                                 horizontalAlignment: Text.AlignHCenter
-                                                visible: model.sid === 1 || model.sid === 2
+                                                visible: model.sid >= 1 && model.sid <= 5
                                             }
 
                                             // STOP button (full width safety button at bottom)
