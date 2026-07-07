@@ -5,6 +5,7 @@ MotionButton {
     id: control
 
     property int countdown: 0
+    property string hintText: "Chụp ảnh"
 
     signal captureRequested()
 
@@ -60,6 +61,13 @@ MotionButton {
                 font.pixelSize: 18
                 font.bold: true
             }
+        }
+
+        HoverHint {
+            visible: control.hovered && control.countdown === 0
+            label: control.hintText
+            bc: "#1a4a6e"
+            tc: "#d6f1ff"
         }
     }
 

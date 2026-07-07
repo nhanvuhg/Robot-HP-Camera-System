@@ -419,9 +419,16 @@ import QtGraphicalEffects 1.15
                         source: backIcon
                         color: root.cWhiteText
                     }
+                    HoverHint {
+                        visible: backBtn.hovered
+                        label: "Quay lại"
+                        bc: root.cBtnBaseBorder
+                        tc: root.cBtnBaseText
+                    }
                 }
                 ScreenshotButton {
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    hintText: "Chụp ảnh"
                     onCaptureRequested: {
                         robotController.captureScreenshot()
                     }
@@ -448,27 +455,11 @@ import QtGraphicalEffects 1.15
                             anchors.centerIn: parent
                             fillMode: Image.PreserveAspectFit; smooth: true
                         }
-                        Rectangle {
-                            id: restartNodesHint
+                        HoverHint {
                             visible: restartNodesBtn.hovered
-                            opacity: restartNodesBtn.hovered ? 1.0 : 0.0
-                            width: restartNodesHintText.implicitWidth + 16
-                            height: 22
-                            x: (parent.width - width) / 2
-                            y: parent.height + 6
-                            radius: 5
-                            color: "#e606101d"
-                            border.color: root.cBtnBaseBorder
-                            border.width: 1
-                            z: 20
-                            Text {
-                                id: restartNodesHintText
-                                anchors.centerIn: parent
-                                text: "Restart Node"
-                                color: root.cBtnBaseText
-                                font.pixelSize: 11
-                                font.bold: true
-                            }
+                            label: "Restart Node"
+                            bc: root.cBtnBaseBorder
+                            tc: root.cBtnBaseText
                         }
                     }
                 }
@@ -494,27 +485,11 @@ import QtGraphicalEffects 1.15
                             anchors.centerIn: parent
                             fillMode: Image.PreserveAspectFit; smooth: true
                         }
-                        Rectangle {
-                            id: restartGuiHint
+                        HoverHint {
                             visible: restartGuiBtn.hovered
-                            opacity: restartGuiBtn.hovered ? 1.0 : 0.0
-                            width: restartGuiHintText.implicitWidth + 16
-                            height: 22
-                            x: (parent.width - width) / 2
-                            y: parent.height + 6
-                            radius: 5
-                            color: "#e606101d"
-                            border.color: root.cBtnBaseBorder
-                            border.width: 1
-                            z: 20
-                            Text {
-                                id: restartGuiHintText
-                                anchors.centerIn: parent
-                                text: "Restart GUI"
-                                color: root.cBtnBaseText
-                                font.pixelSize: 11
-                                font.bold: true
-                            }
+                            label: "Restart GUI"
+                            bc: root.cBtnBaseBorder
+                            tc: root.cBtnBaseText
                         }
                     }
                 }
@@ -614,9 +589,18 @@ import QtGraphicalEffects 1.15
                         border.color: root.cBtnActionBorder; border.width: 1
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
-                    contentItem: Text {
-                        text: parent.text; font: parent.font; color: root.cWhiteText
-                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                    contentItem: Item {
+                        Text {
+                            anchors.fill: parent
+                            text: faultsBtn.text; font: faultsBtn.font; color: root.cWhiteText
+                            horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                        }
+                        HoverHint {
+                            visible: faultsBtn.hovered
+                            label: "Clear Error"
+                            bc: root.cBtnActionBorder
+                            tc: root.cWhiteText
+                        }
                     }
                 }
                 Item { width: 4 }
@@ -637,15 +621,20 @@ import QtGraphicalEffects 1.15
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Behavior on border.color { ColorAnimation { duration: 120 } }
                     }
-                    contentItem: Image {
-                        source: "qrc:/icons/qml/icons/power_settings.svg"
-                        width: 24; height: 24
-                        anchors.centerIn: parent
-                        fillMode: Image.PreserveAspectFit; smooth: true
+                    contentItem: Item {
+                        Image {
+                            source: "qrc:/icons/qml/icons/power_settings.svg"
+                            width: 30; height: 30
+                            anchors.centerIn: parent
+                            fillMode: Image.PreserveAspectFit; smooth: true
+                        }
+                        HoverHint {
+                            visible: closeBtn.hovered
+                            label: "Tắt giao diện"
+                            bc: root.cBtnDangerBorder
+                            tc: root.cWhiteText
+                        }
                     }
-                    ToolTip.visible: hovered
-                    ToolTip.delay: 500
-                    ToolTip.text: "Tắt giao diện"
                 }
                 Item { width: 4 }
             }

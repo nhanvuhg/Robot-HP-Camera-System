@@ -290,27 +290,11 @@ Item {
                                 fillMode: Image.PreserveAspectFit
                                 smooth: true
                             }
-                            Rectangle {
-                                id: refreshNodesHint
+                            HoverHint {
                                 visible: refreshNodesBtn.hovered
-                                opacity: refreshNodesBtn.hovered ? 1.0 : 0.0
-                                width: refreshNodesHintText.implicitWidth + 16
-                                height: 22
-                                x: (parent.width - width) / 2
-                                y: parent.height + 6
-                                radius: 5
-                                color: "#e606101d"
-                                border.color: cBtnBaseBorder
-                                border.width: 1
-                                z: 20
-                                Text {
-                                    id: refreshNodesHintText
-                                    anchors.centerIn: parent
-                                    text: "Restart Node"
-                                    color: cBtnBaseText
-                                    font.pixelSize: 11
-                                    font.bold: true
-                                }
+                                label: "Restart Node"
+                                bc: cBtnBaseBorder
+                                tc: cBtnBaseText
                             }
                         }
                     }
@@ -338,27 +322,11 @@ Item {
                                 fillMode: Image.PreserveAspectFit
                                 smooth: true
                             }
-                            Rectangle {
-                                id: restartGuiHint
+                            HoverHint {
                                 visible: restartGuiBtn.hovered
-                                opacity: restartGuiBtn.hovered ? 1.0 : 0.0
-                                width: restartGuiHintText.implicitWidth + 16
-                                height: 22
-                                x: (parent.width - width) / 2
-                                y: parent.height + 6
-                                radius: 5
-                                color: "#e606101d"
-                                border.color: cBtnBaseBorder
-                                border.width: 1
-                                z: 20
-                                Text {
-                                    id: restartGuiHintText
-                                    anchors.centerIn: parent
-                                    text: "Restart GUI"
-                                    color: cBtnBaseText
-                                    font.pixelSize: 11
-                                    font.bold: true
-                                }
+                                label: "Restart GUI"
+                                bc: cBtnBaseBorder
+                                tc: cBtnBaseText
                             }
                         }
                     }
@@ -373,6 +341,7 @@ Item {
                     }
 
                     MotionButton {
+                        id: cartridgePageBtn
                         text: "CARTRIDGE SYSTEM  ▸"
                         Layout.preferredHeight: 50
                         font.pixelSize: 16; font.bold: true
@@ -388,9 +357,18 @@ Item {
                                 GradientStop { position: 1.0; color: "#06101d" }
                             }
                         }
-                        contentItem: Text {
-                            text: parent.text; font: parent.font
-                            color: cBtnBaseText; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                        contentItem: Item {
+                            Text {
+                                anchors.fill: parent
+                                text: cartridgePageBtn.text; font: cartridgePageBtn.font
+                                color: cBtnBaseText; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                            }
+                            HoverHint {
+                                visible: cartridgePageBtn.hovered
+                                label: "Cartridge Page"
+                                bc: cBtnBaseBorder
+                                tc: cBtnBaseText
+                            }
                         }
                     }
 
@@ -413,6 +391,7 @@ Item {
                     }
 
                     MotionButton {
+                        id: settingsBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: {
                             var comp = Qt.createComponent("frm_settings.qml")
@@ -445,10 +424,17 @@ Item {
                                 fillMode: Image.PreserveAspectFit
                                 smooth: true
                             }
+                            HoverHint {
+                                visible: settingsBtn.hovered
+                                label: "Camera Setting"
+                                bc: cServoRunBorder
+                                tc: cBtnBaseText
+                            }
                         }
                     }
 
                     MotionButton {
+                        id: closeGuiBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onClicked: Qt.quit()
                         background: Rectangle {
@@ -462,7 +448,20 @@ Item {
                                 GradientStop { position: 1.0; color: cBtnDangerEnd }
                             }
                         }
-                        contentItem: Image { source: "qrc:/icons/qml/icons/power_settings.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true }
+                        contentItem: Item {
+                            Image {
+                                anchors.centerIn: parent
+                                source: "qrc:/icons/qml/icons/power_settings.svg"
+                                width: 30; height: 30
+                                fillMode: Image.PreserveAspectFit; smooth: true
+                            }
+                            HoverHint {
+                                visible: closeGuiBtn.hovered
+                                label: "Tắt giao diện"
+                                bc: cBtnDangerBorder
+                                tc: "#ffffff"
+                            }
+                        }
                     }
                 }
             }
