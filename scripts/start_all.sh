@@ -323,15 +323,23 @@ fi
 # ── [8] QML GUI (native, HDMI) ──
 LOG_QML="$LOG_DIR/unified_gui.log"
 QML_BIN="$WS/install/unified_control_gui/lib/unified_control_gui/unified_control_gui"
-if [ -n "${DISPLAY:-}" ]; then
+GUI_RESTART_FLAG="/tmp/unified_gui_restart_requested"
+
+start_qml_gui() {
+  if [ -n "${DISPLAY:-}" ]; then
     echo "  [8] 🖥️  QML GUI (DISPLAY=$DISPLAY)..."
     "$QML_BIN" > "$LOG_QML" 2>&1 &
     PID_QML_GUI=$!
     echo "        PID=$PID_QML_GUI  Log: $LOG_QML"
     echo "$PID_QML_GUI" >> "$PIDFILE"
-else
+  else
     echo "  [8] ⚠️  DISPLAY not set — skipping QML GUI"
-fi
+    PID_QML_GUI=""
+  fi
+}
+
+rm -f "$GUI_RESTART_FLAG"
+start_qml_gui
 
 # ══════════════════════════════════════════
 # [9] RS485 BUS NODE — RevPi A (Loadcell + VFD)
@@ -392,13 +400,20 @@ echo ""
 echo "Press Ctrl+C to stop all"
 echo ""
 
-# Monitor — GUI exit (bất kỳ lý do gì) → dừng toàn bộ hệ thống.
+# Monitor — GUI exit thường → dừng toàn bộ hệ thống.
+# GUI exit code 42 hoặc restart flag → chỉ restart lại QML GUI, giữ node khác.
 # Bỏ auto-restart crash: user yêu cầu khi tắt file không retry/reconnect lại
 # GUI; tránh "zombie restart" che lỗi cứng (Hailo oops, OOM, segfault...).
 while true; do
     if [ -n "${PID_QML_GUI:-}" ]; then
         wait "$PID_QML_GUI" 2>/dev/null
         GUI_EXIT=$?
+        if [ "$GUI_EXIT" -eq 42 ] || [ -f "$GUI_RESTART_FLAG" ]; then
+            echo "[GUI] 🔄 Restart requested (code=$GUI_EXIT)"
+            rm -f "$GUI_RESTART_FLAG"
+            start_qml_gui
+            continue
+        fi
         echo "[GUI] 🔴 Exited (code=$GUI_EXIT) — dừng hệ thống"
         break
     else

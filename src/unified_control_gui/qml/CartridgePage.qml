@@ -442,10 +442,10 @@ import QtGraphicalEffects 1.15
                         color: "transparent"
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: restartNodesBtn.pressed ? Qt.darker(root.cBtnBaseStart, 1.15) : root.cBtnBaseStart }
-                            GradientStop { position: 1.0; color: restartNodesBtn.pressed ? Qt.darker(root.cBtnBaseEnd, 1.15) : root.cBtnBaseEnd }
+                            GradientStop { position: 0.0; color: restartNodesBtn.pressed ? Qt.darker(root.cServoRunStart, 1.15) : root.cServoRunStart }
+                            GradientStop { position: 1.0; color: restartNodesBtn.pressed ? Qt.darker(root.cServoRunEnd, 1.15) : root.cServoRunEnd }
                         }
-                        border.color: root.cBtnBaseBorder
+                        border.color: root.cServoRunBorder
                         border.width: 2
                     }
                     contentItem: Item {
@@ -458,8 +458,8 @@ import QtGraphicalEffects 1.15
                         HoverHint {
                             visible: restartNodesBtn.hovered
                             label: "Restart Node"
-                            bc: root.cBtnBaseBorder
-                            tc: root.cBtnBaseText
+                            bc: root.cServoRunBorder
+                            tc: root.cServoRunText
                         }
                     }
                 }
@@ -472,10 +472,10 @@ import QtGraphicalEffects 1.15
                         color: "transparent"
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: restartGuiBtn.pressed ? Qt.darker(root.cBtnBaseStart, 1.15) : root.cBtnBaseStart }
-                            GradientStop { position: 1.0; color: restartGuiBtn.pressed ? Qt.darker(root.cBtnBaseEnd, 1.15) : root.cBtnBaseEnd }
+                            GradientStop { position: 0.0; color: restartGuiBtn.pressed ? Qt.darker(root.cServoRunStart, 1.15) : root.cServoRunStart }
+                            GradientStop { position: 1.0; color: restartGuiBtn.pressed ? Qt.darker(root.cServoRunEnd, 1.15) : root.cServoRunEnd }
                         }
-                        border.color: root.cBtnBaseBorder
+                        border.color: root.cServoRunBorder
                         border.width: 2
                     }
                     contentItem: Item {
@@ -488,17 +488,12 @@ import QtGraphicalEffects 1.15
                         HoverHint {
                             visible: restartGuiBtn.hovered
                             label: "Restart GUI"
-                            bc: root.cBtnBaseBorder
-                            tc: root.cBtnBaseText
+                            bc: root.cServoRunBorder
+                            tc: root.cServoRunText
                         }
                     }
                 }
                 Item { width: 6 }
-                Text {
-                    text: "ROS2 - CARTRIDGE PROVISION SYSTEM"
-                    color: root.cWhiteText
-                    font.pixelSize: 24; font.bold: true; font.letterSpacing: 1.5
-                }
                 Item { Layout.fillWidth: true }
                 Rectangle {
                     id: stateBadge
@@ -533,27 +528,10 @@ import QtGraphicalEffects 1.15
                 }
                 Item { width: 4 }
                 Rectangle {
-                    Layout.preferredHeight: 50; radius: 6
-                    Layout.preferredWidth: hmRow.implicitWidth + 24
-                    color: Qt.rgba(0.03, 0.09, 0.16, 0.45); border.color: root.cBorder; border.width: 1
-                    Row {
-                        id: hmRow
-                        anchors.centerIn: parent; spacing: 6
-                        Text {
-                            text: cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1 ? "⟳ HOMING..."
-                                : (root.currentUiMode !== "" && cartridgeController.systemState === "idle") ? "✓ HOMED"
-                                : "○ NOT HOMED"
-                            color: root.cWhiteText
-                            font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
-                        }
-                    }
-                }
-                Item { width: 4 }
-                Rectangle {
                     id: modePill; Layout.preferredHeight: 50; radius: 6
                     property string m: root.currentUiMode
                     property bool isIdle: m === "idle" || m === ""
-                    Layout.preferredWidth: mpLbl.implicitWidth + 26
+                    Layout.preferredWidth: mpRow.implicitWidth + 26
                     color: Qt.rgba(0.03, 0.09, 0.16, 0.45); border.color: root.cBorder; border.width: 1
 
                     // Nhấp nháy khi chưa chọn mode
@@ -564,12 +542,27 @@ import QtGraphicalEffects 1.15
                     }
                     opacity: modePill.isIdle ? 1.0 : 1.0
 
-                    Text {
-                        id: mpLbl
+                    Row {
+                        id: mpRow
                         anchors.centerIn: parent
-                        text: modePill.isIdle ? "⚠  SELECT MODE" : modePill.m.toUpperCase()
-                        color: root.cWhiteText
-                        font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
+                        spacing: modePill.isIdle ? 7 : 0
+
+                        Image {
+                            visible: modePill.isIdle
+                            source: "qrc:/qml/icons/message_circle_warning.svg"
+                            width: 22; height: 22
+                            anchors.verticalCenter: parent.verticalCenter
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
+                        }
+
+                        Text {
+                            id: mpLbl
+                            text: modePill.isIdle ? "SELECT MODE" : modePill.m.toUpperCase()
+                            color: root.cWhiteText
+                            font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
                     }
                 }
                 Item { width: 4 }
@@ -637,6 +630,14 @@ import QtGraphicalEffects 1.15
                     }
                 }
                 Item { width: 4 }
+            }
+
+            Text {
+                anchors.centerIn: parent
+                text: "ROS2 - CARTRIDGE PROVISION SYSTEM"
+                color: root.cAccent
+                font.pixelSize: 24; font.bold: true; font.letterSpacing: 1.5
+                z: 11
             }
         }
 

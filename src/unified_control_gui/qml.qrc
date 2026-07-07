@@ -39,6 +39,7 @@
     <file alias="icons/user_cog.svg">qml/icons/user_cog.svg</file>
     <file alias="icons/weight_tilde_lucide.svg">qml/icons/weight_tilde_lucide.svg</file>
     <file alias="icons/weight_tilde_lucide_red.svg">qml/icons/weight_tilde_lucide_red.svg</file>
+    <file alias="icons/message_circle_warning.svg">qml/icons/message_circle_warning.svg</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
   <qresource prefix="/icons">
@@ -63,6 +64,7 @@
     <file>qml/icons/user_cog.svg</file>
     <file>qml/icons/weight_tilde_lucide.svg</file>
     <file>qml/icons/weight_tilde_lucide_red.svg</file>
+    <file>qml/icons/message_circle_warning.svg</file>
     <file>qml/icons/bg_servers.jpg</file>
   </qresource>
 </RCC>

@@ -23,12 +23,13 @@ MotionButton {
 
     background: Rectangle {
         radius: 6
-        color: control.pressed ? "#18374d" : "transparent"
-        border.color: "#1a4a6e"
+        color: "transparent"
+        border.color: "#163a52"
         border.width: 2
-
-        Behavior on color {
-            ColorAnimation { duration: 100 }
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: control.pressed ? Qt.darker("#1C4D8D", 1.15) : "#1C4D8D" }
+            GradientStop { position: 1.0; color: control.pressed ? Qt.darker("#0c1726", 1.15) : "#0c1726" }
         }
     }
 

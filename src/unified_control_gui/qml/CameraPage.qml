@@ -274,12 +274,12 @@ Item {
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: cBtnBaseBorder
+                            border.color: cServoRunBorder
                             border.width: 2
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: refreshNodesBtn.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
-                                GradientStop { position: 1.0; color: refreshNodesBtn.pressed ? Qt.darker(cBtnBaseEnd, 1.15) : cBtnBaseEnd }
+                                GradientStop { position: 0.0; color: refreshNodesBtn.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
+                                GradientStop { position: 1.0; color: refreshNodesBtn.pressed ? Qt.darker(cServoRunEnd, 1.15) : cServoRunEnd }
                             }
                         }
                         contentItem: Item {
@@ -293,7 +293,7 @@ Item {
                             HoverHint {
                                 visible: refreshNodesBtn.hovered
                                 label: "Restart Node"
-                                bc: cBtnBaseBorder
+                                bc: cServoRunBorder
                                 tc: cBtnBaseText
                             }
                         }
@@ -306,12 +306,12 @@ Item {
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: cBtnBaseBorder
+                            border.color: cServoRunBorder
                             border.width: 2
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: restartGuiBtn.pressed ? Qt.darker(cBtnBaseStart, 1.15) : cBtnBaseStart }
-                                GradientStop { position: 1.0; color: restartGuiBtn.pressed ? Qt.darker(cBtnBaseEnd, 1.15) : cBtnBaseEnd }
+                                GradientStop { position: 0.0; color: restartGuiBtn.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
+                                GradientStop { position: 1.0; color: restartGuiBtn.pressed ? Qt.darker(cServoRunEnd, 1.15) : cServoRunEnd }
                             }
                         }
                         contentItem: Item {
@@ -325,7 +325,7 @@ Item {
                             HoverHint {
                                 visible: restartGuiBtn.hovered
                                 label: "Restart GUI"
-                                bc: cBtnBaseBorder
+                                bc: cServoRunBorder
                                 tc: cBtnBaseText
                             }
                         }
@@ -336,7 +336,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: "ROS 2 - INKOBOT MONITORING SYSTEM"
-                            font.pixelSize: 24; font.bold: true; color: "#ffffff"; font.letterSpacing: 2
+                            font.pixelSize: 24; font.bold: true; color: cAccent; font.letterSpacing: 2
                         }
                     }
 
@@ -347,12 +347,12 @@ Item {
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: "#163a52"
+                            border.color: cServoRunBorder
                             border.width: 2
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: "#0c1726" }
-                                GradientStop { position: 1.0; color: "#06101d" }
+                                GradientStop { position: 0.0; color: cartridgePageBtn.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
+                                GradientStop { position: 1.0; color: cartridgePageBtn.pressed ? Qt.darker(cServoRunEnd, 1.15) : cServoRunEnd }
                             }
                         }
                         contentItem: Item {
@@ -366,7 +366,7 @@ Item {
                             HoverHint {
                                 visible: cartridgePageBtn.hovered
                                 label: "Cartridge Page"
-                                bc: cBtnBaseBorder
+                                bc: cServoRunBorder
                                 tc: cBtnBaseText
                             }
                         }

@@ -61,6 +61,7 @@ GUI_LOG="$LOG_DIR/unified_gui.log"
 
 PID_NODE=""
 PID_GUI=""
+GUI_RESTART_FLAG="/tmp/unified_gui_restart_requested"
 
 cleanup() {
   echo ""
@@ -85,16 +86,21 @@ PID_NODE=$!
 echo "        PID=$PID_NODE"
 sleep 3
 
-# [2/2] Unified Control GUI
-if [ -n "${DISPLAY:-}" ]; then
+start_qml_gui() {
+  if [ -n "${DISPLAY:-}" ]; then
     echo "  [2/2] Starting Unified Control GUI (DISPLAY=$DISPLAY)... Log: $GUI_LOG"
     ros2 run unified_control_gui unified_control_gui > "$GUI_LOG" 2>&1 &
     PID_GUI=$!
     echo "        PID=$PID_GUI"
-else
+  else
     echo "  ⚠️  DISPLAY not set - skipping GUI"
     PID_GUI=""
-fi
+  fi
+}
+
+# [2/2] Unified Control GUI
+rm -f "$GUI_RESTART_FLAG"
+start_qml_gui
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -106,5 +112,19 @@ echo "  tail -f $NODE_LOG"
 echo "  tail -f $GUI_LOG"
 echo ""
 
-# Wait indefinitely
-while true; do sleep 3600; done
+# Wait indefinitely; exit code 42 means GUI requested a self-restart.
+while true; do
+  if [ -n "${PID_GUI:-}" ]; then
+    wait "$PID_GUI" 2>/dev/null
+    GUI_EXIT=$?
+    if [ "$GUI_EXIT" -eq 42 ] || [ -f "$GUI_RESTART_FLAG" ]; then
+      echo "  🔄 GUI restart requested (code=$GUI_EXIT)"
+      rm -f "$GUI_RESTART_FLAG"
+      start_qml_gui
+      continue
+    fi
+    echo "  GUI exited (code=$GUI_EXIT). Launcher stays alive."
+    PID_GUI=""
+  fi
+  sleep 3
+done
