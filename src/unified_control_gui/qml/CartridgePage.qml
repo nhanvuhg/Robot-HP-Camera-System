@@ -68,6 +68,7 @@ import QtGraphicalEffects 1.15
         readonly property color cTabSelectedMid: Qt.rgba(0.40, 0.63, 0.77, 0.66)
         readonly property color cTabSelectedBottom: Qt.rgba(0.29, 0.48, 0.60, 0.56)
         readonly property color cTabSelectedBorder: Qt.rgba(1, 1, 1, 0.12)
+        readonly property color cTabSelectedContent: "#06101d"
         readonly property color cHover:  "#40ffffff"
         // Shared liquid-glass action palette — aligned with CameraPage.
         readonly property color cBtnBaseStart:      "#0c1726"
@@ -1005,7 +1006,7 @@ import QtGraphicalEffects 1.15
                                 ColorOverlay {
                                     anchors.fill: tabIconImage
                                     source: tabIconImage
-                                    color: root.cWhiteText
+                                    color: tabButton.isSelected ? root.cTabSelectedContent : root.cWhiteText
                                 }
                             }
 
@@ -1014,7 +1015,7 @@ import QtGraphicalEffects 1.15
                                 font.pixelSize: 14
                                 font.bold: true
                                 font.letterSpacing: 0
-                                color: root.cWhiteText
+                                color: tabButton.isSelected ? root.cTabSelectedContent : root.cWhiteText
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                                 width: tabButton.width - 4
