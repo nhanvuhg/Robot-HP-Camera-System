@@ -430,18 +430,50 @@ QString RobotController::restartSystemNodes()
 
 QString RobotController::restartGui()
 {
-    QFile flag("/tmp/unified_gui_restart_requested");
-    if (flag.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        flag.write("1\n");
-        flag.close();
+    const bool managedByLauncher =
+        QProcessEnvironment::systemEnvironment().value("UNIFIED_GUI_MANAGED_RESTART") == "1";
+
+    if (managedByLauncher) {
+        QFile flag("/tmp/unified_gui_restart_requested");
+        if (flag.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            flag.write("1\n");
+            flag.close();
+        }
+
+        const QString message = "Restarting GUI";
+        qDebug() << message;
+        emit serviceCallResult(true, message);
+        QTimer::singleShot(150, QCoreApplication::instance(), []() {
+            QCoreApplication::exit(42);
+        });
+        return message;
     }
 
-    const QString message = "Restarting GUI";
+    QString scriptPath = "/home/pi/ros2_ws/install/unified_control_gui/lib/unified_control_gui/restart_gui.sh";
+    if (!QFile::exists(scriptPath)) {
+        scriptPath = "/home/pi/ros2_ws/src/unified_control_gui/scripts/restart_gui.sh";
+    }
+    if (!QFile::exists(scriptPath)) {
+        const QString message = "Restart GUI script not found";
+        qWarning() << message << scriptPath;
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+
+    qint64 pid = 0;
+    const QString oldPid = QString::number(QCoreApplication::applicationPid());
+    const bool started = QProcess::startDetached("bash", QStringList() << scriptPath << oldPid,
+                                                 "/home/pi/ros2_ws", &pid);
+    if (!started) {
+        const QString message = "Cannot start Restart GUI script";
+        qWarning() << message << scriptPath;
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+
+    const QString message = QString("Restarting GUI (PID %1)").arg(pid);
     qDebug() << message;
     emit serviceCallResult(true, message);
-    QTimer::singleShot(150, QCoreApplication::instance(), []() {
-        QCoreApplication::exit(42);
-    });
     return message;
 }
 

@@ -89,7 +89,7 @@ sleep 3
 start_qml_gui() {
   if [ -n "${DISPLAY:-}" ]; then
     echo "  [2/2] Starting Unified Control GUI (DISPLAY=$DISPLAY)... Log: $GUI_LOG"
-    ros2 run unified_control_gui unified_control_gui > "$GUI_LOG" 2>&1 &
+    UNIFIED_GUI_MANAGED_RESTART=1 ros2 run unified_control_gui unified_control_gui > "$GUI_LOG" 2>&1 &
     PID_GUI=$!
     echo "        PID=$PID_GUI"
   else

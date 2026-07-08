@@ -44,7 +44,7 @@ if [ ! -x "$GUI_BIN" ]; then
 fi
 
 echo "Starting GUI: $GUI_BIN"
-nohup "$GUI_BIN" > "$GUI_LOG" 2>&1 < /dev/null &
+setsid "$GUI_BIN" > "$GUI_LOG" 2>&1 < /dev/null &
 NEW_PID=$!
 disown "$NEW_PID" 2>/dev/null || true
 echo "New GUI PID=$NEW_PID"
