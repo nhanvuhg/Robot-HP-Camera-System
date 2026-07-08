@@ -36,10 +36,28 @@ Item {
     readonly property color cBtnPrimaryEnd:  "#163a52"
     readonly property color cBtnActionStart: "#1a4a6e"
     readonly property color cBtnActionEnd:   "#0c1726"
+    readonly property color cBtnActionHoverStart: "#1a4a6e"
+    readonly property color cBtnActionHoverEnd:   "#163a52"
+    readonly property color cBtnActionPressStart: "#163a52"
+    readonly property color cBtnActionPressEnd:   "#04080f"
     readonly property color cBtnWarnStart:   "#8a4210"
     readonly property color cBtnWarnEnd:     "#E68457"
     readonly property color cBtnDangerStart: "#E05454"
     readonly property color cBtnDangerEnd:   "#7a2424"
+    readonly property color cControlPanel:   "#990d1e32"
+    readonly property color cControlBorder:  "#1affffff"
+    readonly property color cControlHover:   "#40ffffff"
+    readonly property color cSensorIdleBg:   Qt.rgba(0.03, 0.11, 0.18, 0.18)
+    readonly property color cSensorIdleBorder: Qt.rgba(0.08, 0.22, 0.32, 0.42)
+    readonly property color cSensorIdleText: Qt.rgba(0.62, 0.70, 0.78, 0.55)
+    readonly property color cSensorIdleDot:  Qt.rgba(0.08, 0.22, 0.32, 0.34)
+    readonly property color cSensorActiveStart: "#CAE8D5"
+    readonly property color cSensorActiveEnd:   "#163a52"
+    readonly property color cSensorActiveBorder:"#163a52"
+    readonly property color cSensorActiveText:  "#06101d"
+    readonly property color cIoActiveStart:     cBtnActionStart
+    readonly property color cIoActiveEnd:       cBtnActionEnd
+    readonly property color cIoActiveText:      "#ffffff"
 
     readonly property string monoFamily:  "JetBrains Mono, DejaVu Sans Mono, Consolas, monospace"
 
@@ -798,10 +816,11 @@ Item {
                             Layout.minimumHeight: implicitHeight
                             Layout.alignment: Qt.AlignTop
 
-                            Grid {
+                            GridLayout {
                                 width: sensorSect.width - 24
                                 columns: 3
-                                spacing: 6
+                                columnSpacing: 4
+                                rowSpacing: 4
 
                                 Repeater {
                                     model: [
@@ -846,24 +865,40 @@ Item {
                                             return classifyState(rawVal) === "on";
                                         }
 
-                                        width: Math.floor((sensorSect.width - 36) / 3)
-                                        height: 48
+                                        Layout.preferredWidth: Math.floor((sensorSect.width - 36) / 3)
+                                        Layout.preferredHeight: 48
                                         radius: 4
-                                        color: on_ ? "#081627" : tab.cPanel
-                                        border.color: on_ ? tab.cAccent : tab.cBorder
-                                        border.width: 1
+                                        color: "transparent"
+                                        border.color: on_ ? tab.cSensorActiveBorder : tab.cSensorIdleBorder
+                                        border.width: on_ ? 2 : 1
+                                        opacity: on_ ? 1.0 : 0.78
                                         Behavior on color       { ColorAnimation { duration: 150 } }
                                         Behavior on border.color { ColorAnimation { duration: 150 } }
+                                        gradient: on_ ? sensorActiveGradient : sensorIdleGradient
+                                        HoverHandler { onHoveredChanged: if (!sBtn.on_) sBtn.border.color = hovered ? Qt.rgba(tab.cSensorActiveBorder.r, tab.cSensorActiveBorder.g, tab.cSensorActiveBorder.b, 0.45) : tab.cSensorIdleBorder }
+
+                                        Gradient {
+                                            id: sensorActiveGradient
+                                            orientation: Gradient.Horizontal
+                                            GradientStop { position: 0.0; color: tab.cSensorActiveStart }
+                                            GradientStop { position: 1.0; color: tab.cSensorActiveEnd }
+                                        }
+                                        Gradient {
+                                            id: sensorIdleGradient
+                                            orientation: Gradient.Horizontal
+                                            GradientStop { position: 0.0; color: tab.cSensorIdleBg }
+                                            GradientStop { position: 1.0; color: Qt.rgba(0.02, 0.07, 0.12, 0.10) }
+                                        }
 
                                         Column {
                                             anchors.centerIn: parent
                                             width: parent.width - 6
-                                            spacing: 4
+                                            spacing: 2
 
                                             Text {
                                                 width: parent.width
                                                 text: getSensorLabel(modelData)
-                                                color: sBtn.on_ ? tab.cAccent : tab.cText
+                                                color: sBtn.on_ ? tab.cSensorActiveText : tab.cSensorIdleText
                                                 font.pixelSize: 10
                                                 font.bold: true
                                                 wrapMode: Text.WrapAnywhere
@@ -873,7 +908,7 @@ Item {
                                             Rectangle {
                                                 id: dotIndicator
                                                 width: 6; height: 6; radius: 3
-                                                color: sBtn.on_ ? tab.cAccent : "#163a52"
+                                                color: sBtn.on_ ? tab.cSensorActiveText : tab.cSensorIdleDot
                                                 anchors.horizontalCenter: parent.horizontalCenter
 
                                                 Repeater {
@@ -883,7 +918,7 @@ Item {
                                                         anchors.centerIn: parent
                                                         width: 8; height: 8; radius: 4
                                                         color: "transparent"
-                                                        border.color: tab.cAccent
+                                                        border.color: tab.cSensorActiveBorder
                                                         border.width: 1
                                                         opacity: 0
                                                         visible: sBtn.on_
@@ -1085,10 +1120,11 @@ Item {
         property bool  noTitle: false
         default property alias contentChildren: ci.children
 
-        color: bgColor; radius: 8
+        color: bgColor; radius: 6
         border.color: borderColor; border.width: 1
         implicitHeight: inner.implicitHeight + 24
         Layout.preferredHeight: implicitHeight
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? cControlHover : borderColor }
 
         ColumnLayout {
             id: inner
@@ -1112,6 +1148,7 @@ Item {
     }
 
     component TbBtn: Rectangle {
+        id: tbBtn
         property string lbl: "Btn"
         property string variant: "default"
         signal clicked
@@ -1129,19 +1166,24 @@ Item {
                                           : variant === "danger"  ? cBtnDangerEnd
                                           : variant === "action"  ? cBtnActionEnd : cBtnBaseEnd
         readonly property color baseFg:     "#ffffff"
+        readonly property color currentStart: ma.pressed ? Qt.darker(gradStart, 1.18) : (ma.containsMouse ? Qt.lighter(gradStart, 1.08) : gradStart)
+        readonly property color currentEnd:   ma.pressed ? Qt.darker(gradEnd, 1.18) : (ma.containsMouse ? Qt.lighter(gradEnd, 1.08) : gradEnd)
 
         implicitWidth: Math.max(80, t.implicitWidth + 26)
         implicitHeight: 38
-        radius: 6
-        color: "transparent"
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.0; color: ma.pressed ? Qt.darker(gradStart, 1.18) : (ma.containsMouse ? Qt.lighter(gradStart, 1.08) : gradStart) }
-            GradientStop { position: 1.0; color: ma.pressed ? Qt.darker(gradEnd, 1.18) : (ma.containsMouse ? Qt.lighter(gradEnd, 1.08) : gradEnd) }
+        radius: 8
+        color: currentStart
+        border.color: "transparent"
+        border.width: 0
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: tbBtn.currentStart }
+                GradientStop { position: 1.0; color: tbBtn.currentEnd }
+            }
         }
-        border.color: ma.pressed ? Qt.lighter(baseBorder, 1.15) : baseBorder
-        border.width: 1
-        Behavior on border.color { ColorAnimation { duration: 90 } }
 
         Text {
             id: t; anchors.centerIn: parent
@@ -1151,6 +1193,11 @@ Item {
         MotionMouseArea {
             id: ma; anchors.fill: parent
             hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+            hoverScale: 1.012
+            pressScale: 0.99
+            shadowEnabled: false
+            shimmerEnabled: false
+            raiseOnHover: true
             onClicked: parent.clicked()
         }
     }
@@ -1435,40 +1482,78 @@ Item {
             }
             // Action A button
             Rectangle {
-                Layout.preferredWidth: 76; Layout.preferredHeight: 34; radius: 6
-                color: "transparent"
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: ioToggle.aActive ? cBtnPrimaryStart : cBtnActionStart }
-                    GradientStop { position: 1.0; color: ioToggle.aActive ? cBtnPrimaryEnd : cBtnActionEnd }
+                id: actionABtn
+                property bool held: false
+                property bool hovered: false
+                readonly property color startColor: held ? cBtnActionPressStart : (hovered ? cBtnActionHoverStart : (ioToggle.aActive ? cIoActiveStart : cBtnBaseStart))
+                readonly property color endColor: held ? cBtnActionPressEnd : (hovered ? cBtnActionHoverEnd : (ioToggle.aActive ? cIoActiveEnd : cBtnBaseEnd))
+                Layout.preferredWidth: 76; Layout.preferredHeight: 34; radius: 8
+                color: startColor
+                border.color: "transparent"; border.width: 0
+                Rectangle {
+                    anchors.fill: parent
+                    radius: parent.radius
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: actionABtn.startColor }
+                        GradientStop { position: 1.0; color: actionABtn.endColor }
+                    }
                 }
-                border.color: ioToggle.aActive ? cOk : cAccent; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: actA
-                    color: "#ffffff"
+                    color: ioToggle.aActive ? cIoActiveText : "#ffffff"
                     font.pixelSize: 16; font.bold: true
                 }
                 MotionMouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                    hoverScale: 1.012
+                    pressScale: 0.99
+                    shadowEnabled: false
+                    shimmerEnabled: false
+                    raiseOnHover: true
+                    onPressed: actionABtn.held = true
+                    onReleased: actionABtn.held = false
+                    onCanceled: actionABtn.held = false
+                    onEntered: actionABtn.hovered = true
+                    onExited: { actionABtn.hovered = false; actionABtn.held = false }
                     onClicked: hpController.publishManual(ioId, actA)
                 }
             }
             Rectangle {
-                Layout.preferredWidth: 76; Layout.preferredHeight: 34; radius: 6
-                color: "transparent"
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: ioToggle.bActive ? cBtnPrimaryStart : cBtnActionStart }
-                    GradientStop { position: 1.0; color: ioToggle.bActive ? cBtnPrimaryEnd : cBtnActionEnd }
+                id: actionBBtn
+                property bool held: false
+                property bool hovered: false
+                readonly property color startColor: held ? cBtnActionPressStart : (hovered ? cBtnActionHoverStart : (ioToggle.bActive ? cIoActiveStart : cBtnBaseStart))
+                readonly property color endColor: held ? cBtnActionPressEnd : (hovered ? cBtnActionHoverEnd : (ioToggle.bActive ? cIoActiveEnd : cBtnBaseEnd))
+                Layout.preferredWidth: 76; Layout.preferredHeight: 34; radius: 8
+                color: startColor
+                border.color: "transparent"; border.width: 0
+                Rectangle {
+                    anchors.fill: parent
+                    radius: parent.radius
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: actionBBtn.startColor }
+                        GradientStop { position: 1.0; color: actionBBtn.endColor }
+                    }
                 }
-                border.color: ioToggle.bActive ? cOk : cAccent; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: actB
-                    color: "#ffffff"
+                    color: ioToggle.bActive ? cIoActiveText : "#ffffff"
                     font.pixelSize: 16; font.bold: true
                 }
                 MotionMouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                    hoverScale: 1.012
+                    pressScale: 0.99
+                    shadowEnabled: false
+                    shimmerEnabled: false
+                    raiseOnHover: true
+                    onPressed: actionBBtn.held = true
+                    onReleased: actionBBtn.held = false
+                    onCanceled: actionBBtn.held = false
+                    onEntered: actionBBtn.hovered = true
+                    onExited: { actionBBtn.hovered = false; actionBBtn.held = false }
                     onClicked: hpController.publishManual(ioId, actB)
                 }
             }
@@ -1477,6 +1562,7 @@ Item {
 
     // Press-and-hold jog button: publishes "rev"/"fwd" on press, "stop" on release
     component JogBtn: Rectangle {
+        id: jogBtn
         property string lbl: "JOG"
         property string dir: "fwd"  // "fwd" | "rev"
         property string variant: "default"
@@ -1492,14 +1578,18 @@ Item {
                                           : variant === "danger"  ? cBtnDangerEnd : cBtnBaseEnd
         readonly property color baseFg:     "#ffffff"
         implicitWidth: 140; implicitHeight: 46
-        radius: 6
-        color: "transparent"
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.0; color: _pressed ? Qt.darker(gradStart, 1.18) : gradStart }
-            GradientStop { position: 1.0; color: _pressed ? Qt.darker(gradEnd, 1.18) : gradEnd }
+        radius: 8
+        color: _pressed ? Qt.darker(gradStart, 1.18) : gradStart
+        border.color: "transparent"; border.width: 0
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: jogBtn._pressed ? Qt.darker(jogBtn.gradStart, 1.18) : jogBtn.gradStart }
+                GradientStop { position: 1.0; color: jogBtn._pressed ? Qt.darker(jogBtn.gradEnd, 1.18) : jogBtn.gradEnd }
+            }
         }
-        border.color: baseBorder; border.width: 1
         Text {
             anchors.centerIn: parent; text: lbl; color: baseFg
             font.pixelSize: 21; font.bold: true
@@ -1507,6 +1597,11 @@ Item {
         MotionMouseArea {
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
+            hoverScale: 1.012
+            pressScale: 0.99
+            shadowEnabled: false
+            shimmerEnabled: false
+            raiseOnHover: true
             onPressed:   { parent._pressed = true;  hpController.publishString("servo_jog", dir) }
             onReleased:  { parent._pressed = false; hpController.publishString("servo_jog", "stop") }
             onCanceled:  { parent._pressed = false; hpController.publishString("servo_jog", "stop") }
@@ -1557,14 +1652,38 @@ Item {
             }
             Text { text: item.unit || ""; color: cMuted; font.pixelSize: 19; Layout.preferredWidth: 38 }
             Rectangle {
-                implicitWidth: 60; implicitHeight: 32; radius: 4
-                color: "#081627"; border.color: cAccent; border.width: 1
+                id: setBtn
+                property bool held: false
+                property bool hovered: false
+                readonly property color startColor: held ? cBtnActionPressStart : (hovered ? cBtnActionHoverStart : cBtnActionStart)
+                readonly property color endColor: held ? cBtnActionPressEnd : (hovered ? cBtnActionHoverEnd : cBtnActionEnd)
+                implicitWidth: 60; implicitHeight: 32; radius: 8
+                color: startColor; border.color: "transparent"; border.width: 0
+                Rectangle {
+                    anchors.fill: parent
+                    radius: parent.radius
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: setBtn.startColor }
+                        GradientStop { position: 1.0; color: setBtn.endColor }
+                    }
+                }
                 Text {
-                    anchors.centerIn: parent; text: "Set"; color: cAccent
+                    anchors.centerIn: parent; text: "Set"; color: "#ffffff"
                     font.pixelSize: 19; font.bold: true
                 }
                 MotionMouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                    hoverScale: 1.012
+                    pressScale: 0.99
+                    shadowEnabled: false
+                    shimmerEnabled: false
+                    raiseOnHover: true
+                    onPressed: setBtn.held = true
+                    onReleased: setBtn.held = false
+                    onCanceled: setBtn.held = false
+                    onEntered: setBtn.hovered = true
+                    onExited: { setBtn.hovered = false; setBtn.held = false }
                     onClicked: tab.publishSetting(item, inp.text)
                 }
             }

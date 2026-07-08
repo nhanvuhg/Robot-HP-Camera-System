@@ -953,8 +953,8 @@ Item {
                                 { lbl: "OUT_READY",    displayLbl: "OUT_READY",      icon: "icons/between_horizontal_start.svg", bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
                                 { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE", icon: "icons/arrows_up_from_line.svg",      bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
                                 { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",   icon: "icons/fold_horizontal.svg",         bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
-                                { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",   icon: "icons/package.svg",                 bgStart: "#1C4D8D",        bgEnd: "#0c1726",        bc: "#163a52",        tc: "#ffffff" },
-                                { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",     icon: "icons/package_x.svg",               bgStart: "#E68457",        bgEnd: "#8a4210",        bc: "#E68457",        tc: "#ffffff" }
+                                { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",   icon: "icons/package.svg",                 bgStart: "#1C4D8D",        bgEnd: "#0c1726",        bc: "#0c1726",        tc: "#ffffff" },
+                                { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",     icon: "icons/package_x.svg",               bgStart: "#E68457",        bgEnd: "#8a4210",        bc: "#8a4210",        tc: "#ffffff" }
                             ]
                             delegate: Rectangle {
                                 required property var modelData
@@ -963,6 +963,7 @@ Item {
                                 property color gStart: (isReadyBtn && isActive) ? cBtnClearStart : modelData.bgStart
                                 property color gEnd:   (isReadyBtn && isActive) ? cBtnClearEnd : modelData.bgEnd
                                 property color labelColor: (isReadyBtn && isActive) ? cBtnClearText : modelData.tc
+                                property color roleBorder: (isReadyBtn && isActive) ? cBtnActionBorder : modelData.bc
                                 Layout.fillWidth: true; height: 64; radius: 10
                                 color: "transparent"
                                 gradient: Gradient {
@@ -970,8 +971,9 @@ Item {
                                     GradientStop { position: 0.0; color: ma.pressed ? Qt.darker(gStart, 1.2) : gStart }
                                     GradientStop { position: 1.0; color: ma.pressed ? Qt.darker(gEnd, 1.2) : gEnd }
                                 }
-                                border.color: cBtnActionBorder
+                                border.color: ma.containsMouse || ma.pressed ? Qt.lighter(roleBorder, 1.06) : roleBorder
                                 border.width: 1
+                                Behavior on border.color { ColorAnimation { duration: 110 } }
                                 Item {
                                     anchors.fill: parent
 
@@ -1030,7 +1032,15 @@ Item {
                                         }
                                     }
                                 }
-                                MotionMouseArea { id: ma; anchors.fill: parent; onClicked: {
+                                MotionMouseArea {
+                                    id: ma
+                                    anchors.fill: parent
+                                    hoverScale: 1.012
+                                    pressScale: 0.99
+                                    shadowEnabled: false
+                                    shimmerEnabled: false
+                                    raiseOnHover: true
+                                    onClicked: {
                                     if (modelData.lbl === "IN_READY") robotController.simulateInputTrayReady()
                                     else if (modelData.lbl === "OUT_READY") robotController.simulateOutputTrayReady()
                                     else if (modelData.lbl === "PICK_INPUT") robotController.simulateFeedChamber()
@@ -1038,7 +1048,8 @@ Item {
                                     else if (modelData.lbl === "PLACE_OUTPUT") robotController.gotoState("PLACE_TO_OUTPUT")
                                     else if (modelData.lbl === "PLACE_FAIL") robotController.gotoState("PLACE_TO_FAIL")
                                     else robotController.gotoState(modelData.lbl)
-                                }}
+                                    }
+                                }
                             }
                         }
                     }
@@ -1050,7 +1061,8 @@ Item {
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 8; columnSpacing: 8
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: startMA.containsMouse || startMA.pressed ? Qt.lighter(cBtnPrimaryEnd, 1.06) : cBtnPrimaryEnd; border.width: 1
+                            Behavior on border.color { ColorAnimation { duration: 110 } }
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: startMA.pressed ? Qt.darker(cBtnPrimaryStart, 1.15) : cBtnPrimaryStart }
@@ -1078,7 +1090,15 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                             }
-                            MotionMouseArea { id: startMA; anchors.fill: parent; onClicked: {
+                            MotionMouseArea {
+                                id: startMA
+                                anchors.fill: parent
+                                hoverScale: 1.012
+                                pressScale: 0.99
+                                shadowEnabled: false
+                                shimmerEnabled: false
+                                raiseOnHover: true
+                                onClicked: {
                                 if (cameraPageRoot.startCommandLocked)
                                     return
                                 cameraPageRoot.startCommandLocked = true
@@ -1087,10 +1107,12 @@ Item {
 
                                 mainWindow.syncOperationMode(cameraPageRoot.ctrlMode)
                                 cameraPageRoot.dispatchStartAfterModeConfirmed()
-                            } }
+                                }
+                            }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: enMA.containsMouse || enMA.pressed ? Qt.lighter("#1A312C", 1.06) : "#1A312C"; border.width: 1
+                            Behavior on border.color { ColorAnimation { duration: 110 } }
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: enMA.pressed ? Qt.darker("#3B6978", 1.15) : "#3B6978" }
@@ -1118,10 +1140,20 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                             }
-                            MotionMouseArea { id: enMA; anchors.fill: parent; onClicked: robotController.enableSystem(true) }
+                            MotionMouseArea {
+                                id: enMA
+                                anchors.fill: parent
+                                hoverScale: 1.012
+                                pressScale: 0.99
+                                shadowEnabled: false
+                                shimmerEnabled: false
+                                raiseOnHover: true
+                                onClicked: robotController.enableSystem(true)
+                            }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnEmergencyBorder; border.width: 2
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: stopResetMA.containsMouse || stopResetMA.pressed ? Qt.lighter(cBtnDangerEnd, 1.06) : cBtnDangerEnd; border.width: 1
+                            Behavior on border.color { ColorAnimation { duration: 110 } }
                             gradient: Gradient {
                                 orientation: Gradient.Vertical
                                 GradientStop { position: 0.0; color: stopResetMA.pressed ? Qt.darker("#E05454", 1.25) : "#E05454" }
@@ -1151,13 +1183,23 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                             }
-                            MotionMouseArea { id: stopResetMA; anchors.fill: parent; onClicked: {
+                            MotionMouseArea {
+                                id: stopResetMA
+                                anchors.fill: parent
+                                hoverScale: 1.012
+                                pressScale: 0.99
+                                shadowEnabled: false
+                                shimmerEnabled: false
+                                raiseOnHover: true
+                                onClicked: {
                                 cameraPageRoot.modeLocked = false
                                 mainWindow.emergencyStopSynchronizedSystems()
-                            } }
+                                }
+                            }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: clrMA.containsMouse || clrMA.pressed ? Qt.lighter(cBtnClearEnd, 1.06) : cBtnClearEnd; border.width: 1
+                            Behavior on border.color { ColorAnimation { duration: 110 } }
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: clrMA.pressed ? Qt.darker(cBtnClearStart, 1.15) : cBtnClearStart }
@@ -1185,10 +1227,20 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                             }
-                            MotionMouseArea { id: clrMA; anchors.fill: parent; onClicked: robotController.clearError() }
+                            MotionMouseArea {
+                                id: clrMA
+                                anchors.fill: parent
+                                hoverScale: 1.012
+                                pressScale: 0.99
+                                shadowEnabled: false
+                                shimmerEnabled: false
+                                raiseOnHover: true
+                                onClicked: robotController.clearError()
+                            }
                         }
 
-                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: cBtnActionBorder; border.width: 1
+                        Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: resMA.containsMouse || resMA.pressed ? Qt.lighter(cServoRunEnd, 1.06) : cServoRunEnd; border.width: 1
+                            Behavior on border.color { ColorAnimation { duration: 110 } }
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: resMA.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
@@ -1216,14 +1268,24 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                             }
-                            MotionMouseArea { id: resMA; anchors.fill: parent; onClicked: { cameraPageRoot.pauseLatched = false; robotController.resumeRobot() } }
+                            MotionMouseArea {
+                                id: resMA
+                                anchors.fill: parent
+                                hoverScale: 1.012
+                                pressScale: 0.99
+                                shadowEnabled: false
+                                shimmerEnabled: false
+                                raiseOnHover: true
+                                onClicked: { cameraPageRoot.pauseLatched = false; robotController.resumeRobot() }
+                            }
                         }
 
                         Rectangle {
                             Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"
-                            border.color: "#E68457"
+                            border.color: pauseMA.containsMouse || pauseMA.pressed || cameraPageRoot.pauseLatched ? Qt.lighter("#8a4210", 1.06) : "#8a4210"
                             border.width: cameraPageRoot.pauseLatched ? 2 : 1
                             transform: Translate { y: cameraPageRoot.pauseLatched ? 2 : 0 }
+                            Behavior on border.color { ColorAnimation { duration: 110 } }
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop {
@@ -1267,7 +1329,16 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                             }
-                            MotionMouseArea { id: pauseMA; anchors.fill: parent; onClicked: { cameraPageRoot.pauseLatched = true; robotController.pauseRobot() } }
+                            MotionMouseArea {
+                                id: pauseMA
+                                anchors.fill: parent
+                                hoverScale: 1.012
+                                pressScale: 0.99
+                                shadowEnabled: false
+                                shimmerEnabled: false
+                                raiseOnHover: true
+                                onClicked: { cameraPageRoot.pauseLatched = true; robotController.pauseRobot() }
+                            }
                         }
                     }
 
