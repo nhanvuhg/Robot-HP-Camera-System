@@ -10,10 +10,10 @@ MotionButton {
     signal captureRequested()
 
     enabled: countdown === 0
-    hoverScale: 1.02
-    pressScale: 0.97
+    hoverScale: 1.012
+    pressScale: 0.99
     shadowEnabled: false
-    shimmerEnabled: true
+    shimmerEnabled: false
     shimmerColor: "#55d4faff"
     opacity: countdown > 0 ? 0.82 : 1.0
 
@@ -24,8 +24,8 @@ MotionButton {
     background: Rectangle {
         radius: 6
         color: "transparent"
-        border.color: "#163a52"
-        border.width: 2
+        border.color: "#0c1726"
+        border.width: 1
         gradient: Gradient {
             orientation: Gradient.Horizontal
             GradientStop { position: 0.0; color: control.pressed ? Qt.darker("#1C4D8D", 1.15) : "#1C4D8D" }
@@ -67,7 +67,7 @@ MotionButton {
         HoverHint {
             visible: control.hovered && control.countdown === 0
             label: control.hintText
-            bc: "#1a4a6e"
+            bc: "#0c1726"
             tc: "#d6f1ff"
         }
     }

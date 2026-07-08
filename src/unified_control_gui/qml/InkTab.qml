@@ -220,6 +220,13 @@ Item {
                                     GradientStop { position: 1.0; color: tareBtn.down ? cActionPressEnd : (tareBtn.hovered ? cActionHoverEnd : cActionEnd) }
                                 }
                             }
+                            contentItem: Text {
+                                text: tareBtn.text
+                                color: "#ffffff"
+                                font: tareBtn.font
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
                         }
                         MotionButton {
                             id: resetTareBtn

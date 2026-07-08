@@ -77,7 +77,7 @@ import QtGraphicalEffects 1.15
         readonly property color cBtnBaseText:       "#d6f1ff"
         readonly property color cBtnPrimaryStart:   "#1f9e86"
         readonly property color cBtnPrimaryEnd:     "#163a52"
-        readonly property color cBtnPrimaryBorder:  "#3ed0b4"
+        readonly property color cBtnPrimaryBorder:  cBtnPrimaryEnd
         readonly property color cBtnActionStart:    "#163a52"
         readonly property color cBtnActionEnd:      "#081627"
         readonly property color cBtnActionBorder:   "#163a52"
@@ -89,27 +89,27 @@ import QtGraphicalEffects 1.15
         readonly property color cCylinderActiveText: cBtnClearText
         readonly property color cBtnHomingStart:    "#3B6F8E"
         readonly property color cBtnHomingEnd:      "#1B4058"
-        readonly property color cBtnHomingBorder:   "#4F86A6"
+        readonly property color cBtnHomingBorder:   cBtnHomingEnd
         readonly property color cBtnHomingText:     "#ffffff"
         readonly property color cBtnClearStart:     "#234C6A"
         readonly property color cBtnClearEnd:       "#102739"
         readonly property color cBtnClearText:      "#ffffff"
         readonly property color cBtnWarningStart:   "#8a4210"
         readonly property color cBtnWarningEnd:     "#E68457"
-        readonly property color cBtnWarningBorder:  "#E68457"
+        readonly property color cBtnWarningBorder:  cBtnWarningStart
         readonly property color cBtnDangerStart:    "#E05454"
         readonly property color cBtnDangerEnd:      "#7a2424"
-        readonly property color cBtnDangerBorder:   "#E05454"
+        readonly property color cBtnDangerBorder:   cBtnDangerEnd
         readonly property color cBtnEmergencyStart: "#E05454"
         readonly property color cBtnEmergencyEnd:   "#9c3030"
-        readonly property color cBtnEmergencyBorder:"#E05454"
+        readonly property color cBtnEmergencyBorder: cBtnEmergencyEnd
         readonly property color cServoJogStart:     "#1a4a6e"
         readonly property color cServoJogEnd:       "#0c1726"
-        readonly property color cServoJogBorder:    "#163a52"
+        readonly property color cServoJogBorder:    cServoJogEnd
         readonly property color cServoJogText:      "#ffffff"
         readonly property color cServoRunStart:     "#1a4a6e"
         readonly property color cServoRunEnd:       "#0c1726"
-        readonly property color cServoRunBorder:    "#163a52"
+        readonly property color cServoRunBorder:    cServoRunEnd
         readonly property color cServoRunText:      "#ffffff"
         readonly property color cUnifiedBtn: cBtnBaseStart
         readonly property color cInReadyLayer: cBtnBaseStart
@@ -139,7 +139,7 @@ import QtGraphicalEffects 1.15
         readonly property color cStateAuxBtnEnd: cBtnBaseEnd
         readonly property color cStateAuxBorder: cBtnBaseBorder
         readonly property color cStateAuxText: cBtnBaseText
-        readonly property color cFieldBorder: "#67d0ff"
+        readonly property color cFieldBorder: cFunctionFieldBorder
         readonly property color cDashPanel: Qt.rgba(0.06, 0.10, 0.16, 0.34)
         readonly property color cDashCard: cDashPanel
         // Đồng bộ navy-teal với CameraPage: panel = cPanel, card = cPanel2,
@@ -395,17 +395,19 @@ import QtGraphicalEffects 1.15
                 MotionButton {
                     id: backBtn
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    hoverScale: 1.012
+                    pressScale: 0.99
                     onClicked: stackView.pop()
                     background: Rectangle {
                         radius: 6
                         color: "transparent"
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: backBtn.pressed ? Qt.darker(root.cBtnBaseStart, 1.15) : root.cBtnBaseStart }
-                            GradientStop { position: 1.0; color: backBtn.pressed ? Qt.darker(root.cBtnBaseEnd, 1.15) : root.cBtnBaseEnd }
+                            GradientStop { position: 0.0; color: backBtn.pressed ? Qt.darker(root.cServoRunStart, 1.15) : root.cServoRunStart }
+                            GradientStop { position: 1.0; color: backBtn.pressed ? Qt.darker(root.cServoRunEnd, 1.15) : root.cServoRunEnd }
                         }
-                        border.color: root.cBtnBaseBorder
-                        border.width: 2
+                        border.color: root.cServoRunEnd
+                        border.width: 1
                     }
                     contentItem: Image {
                         id: backIcon
@@ -423,8 +425,8 @@ import QtGraphicalEffects 1.15
                     HoverHint {
                         visible: backBtn.hovered
                         label: "Quay lại"
-                        bc: root.cBtnBaseBorder
-                        tc: root.cBtnBaseText
+                        bc: root.cServoRunEnd
+                        tc: root.cServoRunText
                     }
                 }
                 ScreenshotButton {
@@ -437,6 +439,8 @@ import QtGraphicalEffects 1.15
                 MotionButton {
                     id: restartNodesBtn
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    hoverScale: 1.012
+                    pressScale: 0.99
                     onClicked: robotController.restartSystemNodes()
                     background: Rectangle {
                         radius: 6
@@ -446,8 +450,8 @@ import QtGraphicalEffects 1.15
                             GradientStop { position: 0.0; color: restartNodesBtn.pressed ? Qt.darker(root.cServoRunStart, 1.15) : root.cServoRunStart }
                             GradientStop { position: 1.0; color: restartNodesBtn.pressed ? Qt.darker(root.cServoRunEnd, 1.15) : root.cServoRunEnd }
                         }
-                        border.color: root.cServoRunBorder
-                        border.width: 2
+                        border.color: root.cServoRunEnd
+                        border.width: 1
                     }
                     contentItem: Item {
                         Image {
@@ -459,7 +463,7 @@ import QtGraphicalEffects 1.15
                         HoverHint {
                             visible: restartNodesBtn.hovered
                             label: "Restart Node"
-                            bc: root.cServoRunBorder
+                            bc: root.cServoRunEnd
                             tc: root.cServoRunText
                         }
                     }
@@ -467,6 +471,8 @@ import QtGraphicalEffects 1.15
                 MotionButton {
                     id: restartGuiBtn
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    hoverScale: 1.012
+                    pressScale: 0.99
                     onClicked: robotController.restartGui()
                     background: Rectangle {
                         radius: 6
@@ -476,8 +482,8 @@ import QtGraphicalEffects 1.15
                             GradientStop { position: 0.0; color: restartGuiBtn.pressed ? Qt.darker(root.cServoRunStart, 1.15) : root.cServoRunStart }
                             GradientStop { position: 1.0; color: restartGuiBtn.pressed ? Qt.darker(root.cServoRunEnd, 1.15) : root.cServoRunEnd }
                         }
-                        border.color: root.cServoRunBorder
-                        border.width: 2
+                        border.color: root.cServoRunEnd
+                        border.width: 1
                     }
                     contentItem: Item {
                         Image {
@@ -489,7 +495,7 @@ import QtGraphicalEffects 1.15
                         HoverHint {
                             visible: restartGuiBtn.hovered
                             label: "Restart GUI"
-                            bc: root.cServoRunBorder
+                            bc: root.cServoRunEnd
                             tc: root.cServoRunText
                         }
                     }
@@ -571,16 +577,18 @@ import QtGraphicalEffects 1.15
                     id: faultsBtn
                     text: "CLEAR ERROR"
                     Layout.preferredWidth: 130; Layout.preferredHeight: 50
+                    hoverScale: 1.012
+                    pressScale: 0.99
                     font.pixelSize: 13; font.bold: true
                     onClicked: cartridgeController.resetFaults()
                     background: Rectangle {
-                        radius: 9
+                        radius: 6
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
                             GradientStop { position: 0.0; color: faultsBtn.pressed ? Qt.darker(root.cBtnClearStart, 1.15) : root.cBtnClearStart }
                             GradientStop { position: 1.0; color: faultsBtn.pressed ? Qt.darker(root.cBtnClearEnd, 1.15) : root.cBtnClearEnd }
                         }
-                        border.color: root.cBtnActionBorder; border.width: 1
+                        border.color: root.cBtnClearEnd; border.width: 1
                         Behavior on color { ColorAnimation { duration: 120 } }
                     }
                     contentItem: Item {
@@ -592,7 +600,7 @@ import QtGraphicalEffects 1.15
                         HoverHint {
                             visible: faultsBtn.hovered
                             label: "Clear Error"
-                            bc: root.cBtnActionBorder
+                            bc: root.cBtnClearEnd
                             tc: root.cWhiteText
                         }
                     }
@@ -601,6 +609,8 @@ import QtGraphicalEffects 1.15
                 MotionButton {
                     id: closeBtn
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    hoverScale: 1.012
+                    pressScale: 0.99
                     onClicked: Qt.quit()
                     background: Rectangle {
                         radius: 6
@@ -610,8 +620,8 @@ import QtGraphicalEffects 1.15
                             GradientStop { position: 0.0; color: closeBtn.pressed ? Qt.darker(root.cBtnDangerStart, 1.15) : root.cBtnDangerStart }
                             GradientStop { position: 1.0; color: closeBtn.pressed ? Qt.darker(root.cBtnDangerEnd, 1.15) : root.cBtnDangerEnd }
                         }
-                        border.color: root.cBtnDangerBorder
-                        border.width: 2
+                        border.color: root.cBtnDangerEnd
+                        border.width: 1
                         Behavior on color { ColorAnimation { duration: 120 } }
                         Behavior on border.color { ColorAnimation { duration: 120 } }
                     }
@@ -625,7 +635,7 @@ import QtGraphicalEffects 1.15
                         HoverHint {
                             visible: closeBtn.hovered
                             label: "Tắt giao diện"
-                            bc: root.cBtnDangerBorder
+                            bc: root.cBtnDangerEnd
                             tc: root.cWhiteText
                         }
                     }
@@ -2060,7 +2070,7 @@ import QtGraphicalEffects 1.15
                                             }
                                             Rectangle {
                                                 width: parent.width * 0.22; height: 36; radius: 5
-                                                color: "#081627"; border.color: root.cFieldBorder; border.width: 2
+                                                color: "#081627"; border.color: root.cFieldBorder; border.width: 1
                                                 TextInput {
                                                     id: sInput2
                                                     anchors { fill: parent; margins: 3 }
@@ -2175,6 +2185,12 @@ import QtGraphicalEffects 1.15
                 property int speedVal: robotController.speedRatio
                 property bool rowLocked: false
                 property int jogStep: 1               // 0.1, 1, 5, 10
+                readonly property int titleFont: 20
+                readonly property int labelFont: 14
+                readonly property int buttonFont: 16
+                readonly property int valueFont: 20
+                readonly property int inputFont: 16
+                readonly property int helperFont: 13
 
                 Item {
                     id: p3Inner
@@ -2207,7 +2223,7 @@ import QtGraphicalEffects 1.15
                             Text {
                                 text: "LOCKED — " + page3Root.currentMode.toUpperCase() + " MODE"
                                 color: root.cWhiteText
-                                font.pixelSize: 12; font.bold: true; font.letterSpacing: 1
+                                font.pixelSize: page3Root.labelFont; font.bold: true; font.letterSpacing: 1
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                         }
@@ -2252,7 +2268,7 @@ import QtGraphicalEffects 1.15
                                         spacing: 6
                                         Row { spacing: 6
                                             Rectangle { width: 4; height: 16; radius: 1; color: root.cCardTitle; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "CARTESIAN (mm)"; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
+                                            Text { text: "CARTESIAN (mm)"; color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
                                         }
                                         Repeater {
                                             id: cartRep
@@ -2280,7 +2296,7 @@ import QtGraphicalEffects 1.15
                                                     }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
                                                     MotionMouseArea { id: negMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                                 Rectangle {
@@ -2290,7 +2306,7 @@ import QtGraphicalEffects 1.15
                                                         GradientStop { position: 0.0; color: root.cFunctionFieldStart }
                                                         GradientStop { position: 1.0; color: root.cFunctionFieldEnd }
                                                     }
-                                                    Text { anchors.centerIn: parent; text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0.0000"; color: root.cWhiteText; font.pixelSize: 20; font.family: "monospace"; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0.0000"; color: root.cWhiteText; font.pixelSize: page3Root.valueFont; font.bold: true }
                                                 }
                                                 Rectangle {
                                                     id: posBtn
@@ -2304,7 +2320,7 @@ import QtGraphicalEffects 1.15
                                                     }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
                                                     MotionMouseArea { id: posMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                             }
@@ -2315,12 +2331,12 @@ import QtGraphicalEffects 1.15
                                                 id: cartInputs
                                                 model: ["X","Y","Z","RX","RY","RZ"]
                                                 delegate: Column { spacing: 2; width: (cartCol.width - 15) / 6
-                                                    Text { text: modelData; color: root.cCardTitle; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                    Text { text: modelData; color: root.cCardTitle; font.pixelSize: page3Root.helperFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                                     Rectangle {
                                                         width: parent.width; height: 40; radius: 4; color: root.cDashCardField; border.color: root.cFunctionFieldBorder; border.width: 1
                                                         TextInput { id: cartInp
                                                             anchors { fill: parent; margins: 2 }
-                                                            color: root.cWhiteText; font.pixelSize: 16; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; clip: true
+                                                            color: root.cWhiteText; font.pixelSize: page3Root.inputFont; font.bold: true; horizontalAlignment: Text.AlignHCenter; clip: true
                                                             text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0"
                                                             selectByMouse: true; verticalAlignment: Text.AlignVCenter; validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
                                                         }
@@ -2356,7 +2372,7 @@ import QtGraphicalEffects 1.15
                                                     Text {
                                                         text: "GET POSE"
                                                         color: root.cWhiteText
-                                                        font.pixelSize: 14
+                                                        font.pixelSize: page3Root.labelFont
                                                         font.bold: true
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
@@ -2392,7 +2408,7 @@ import QtGraphicalEffects 1.15
                                                     Text {
                                                         text: "SEND MovL"
                                                         color: root.cWhiteText
-                                                        font.pixelSize: 14
+                                                        font.pixelSize: page3Root.labelFont
                                                         font.bold: true
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
@@ -2418,7 +2434,7 @@ import QtGraphicalEffects 1.15
                                         spacing: 6
                                         Row { spacing: 6
                                             Rectangle { width: 4; height: 16; radius: 1; color: root.cCardTitle; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "JOINT (deg)"; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
+                                            Text { text: "JOINT (deg)"; color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
                                         }
                                         Repeater {
                                             id: jointRep
@@ -2438,7 +2454,7 @@ import QtGraphicalEffects 1.15
                                                     }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
                                                     MotionMouseArea { id: jnMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                                 Rectangle {
@@ -2448,7 +2464,7 @@ import QtGraphicalEffects 1.15
                                                         GradientStop { position: 0.0; color: root.cFunctionFieldStart }
                                                         GradientStop { position: 1.0; color: root.cFunctionFieldEnd }
                                                     }
-                                                    Text { anchors.centerIn: parent; text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0.0000"; color: root.cWhiteText; font.pixelSize: 20; font.family: "monospace"; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0.0000"; color: root.cWhiteText; font.pixelSize: page3Root.valueFont; font.bold: true }
                                                 }
                                                 Rectangle {
                                                     id: jpBtn
@@ -2462,7 +2478,7 @@ import QtGraphicalEffects 1.15
                                                     }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
-                                                    Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: root.cWhiteText; font.pixelSize: 16; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
                                                     MotionMouseArea { id: jpMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
                                                 }
                                             }
@@ -2473,12 +2489,12 @@ import QtGraphicalEffects 1.15
                                                 id: jointInputs
                                                 model: ["J1","J2","J3","J4","J5","J6"]
                                                 delegate: Column { spacing: 2; width: (jointCol.width - 15) / 6
-                                                    Text { text: modelData; color: root.cCardTitle; font.pixelSize: 12; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                                    Text { text: modelData; color: root.cCardTitle; font.pixelSize: page3Root.helperFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                                     Rectangle {
                                                         width: parent.width; height: 40; radius: 4; color: root.cDashCardField; border.color: root.cFunctionFieldBorder; border.width: 1
                                                         TextInput {
                                                             anchors { fill: parent; margins: 2 }
-                                                            color: root.cWhiteText; font.pixelSize: 16; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true
+                                                            color: root.cWhiteText; font.pixelSize: page3Root.inputFont; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true
                                                             text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0"
                                                             selectByMouse: true; validator: DoubleValidator { notation: DoubleValidator.StandardNotation }
                                                         }
@@ -2514,7 +2530,7 @@ import QtGraphicalEffects 1.15
                                                     Text {
                                                         text: "GET ANGLES"
                                                         color: root.cWhiteText
-                                                        font.pixelSize: 14
+                                                        font.pixelSize: page3Root.labelFont
                                                         font.bold: true
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
@@ -2554,7 +2570,7 @@ import QtGraphicalEffects 1.15
                                                     Text {
                                                         text: "SEND MovJ"
                                                         color: root.cWhiteText
-                                                        font.pixelSize: 14
+                                                        font.pixelSize: page3Root.labelFont
                                                         font.bold: true
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
@@ -2569,7 +2585,7 @@ import QtGraphicalEffects 1.15
 
                                         // ── SAVE TO YAML ─────────────────────
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder; opacity: 0.5 }
-                                        Text { text: "SAVE POSE TO YAML"; color: root.cCardTitle; font.pixelSize: 8; font.bold: true; font.letterSpacing: 0.8 }
+                                        Text { text: "SAVE POSE TO YAML"; color: root.cCardTitle; font.pixelSize: page3Root.helperFont; font.bold: true; font.letterSpacing: 0.8 }
 
                                         Row { spacing: 4; width: parent.width
                                             // Name / comment input
@@ -2581,13 +2597,13 @@ import QtGraphicalEffects 1.15
                                                 Text {
                                                     anchors { fill: parent; leftMargin: 8; verticalCenter: parent.verticalCenter }
                                                     text: poseNameInput.text.length === 0 ? "pose name / comment..." : ""
-                                                    color: root.cWhiteText; font.pixelSize: 14; font.family: "monospace"
+                                                    color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
                                                 TextInput {
                                                     id: poseNameInput
                                                     anchors { fill: parent; leftMargin: 8; rightMargin: 4; topMargin: 4; bottomMargin: 4 }
-                                                    color: root.cWhiteText; font.pixelSize: 14; font.family: "monospace"
+                                                    color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true
                                                     clip: true; selectByMouse: true; verticalAlignment: Text.AlignVCenter
                                                 }
                                             }
@@ -2621,7 +2637,7 @@ import QtGraphicalEffects 1.15
                                                     Text {
                                                         text: "SAVE"
                                                         color: root.cWhiteText
-                                                        font.pixelSize: 13
+                                                        font.pixelSize: page3Root.helperFont
                                                         font.bold: true
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
@@ -2631,7 +2647,7 @@ import QtGraphicalEffects 1.15
                                                     visible: savePoseBtn.saving
                                                     text: "✓ SAVED"
                                                     color: root.cWhiteText
-                                                    font.pixelSize: 13
+                                                    font.pixelSize: page3Root.helperFont
                                                     font.bold: true
                                                 }
                                                     MotionMouseArea {
@@ -2669,12 +2685,12 @@ import QtGraphicalEffects 1.15
                                         Text {
                                             id: saveStatusText
                                             width: parent.width; wrapMode: Text.WordWrap
-                                            text: ""; font.pixelSize: 12; font.family: "monospace"
+                                            text: ""; font.pixelSize: page3Root.helperFont
                                             color: root.cWhiteText
                                         }
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder; opacity: 0.5 }
-                                        Text { text: "LOAD SAVED POSE"; color: root.cCardTitle; font.pixelSize: 11; font.bold: true; font.letterSpacing: 0.8 }
+                                        Text { text: "LOAD SAVED POSE"; color: root.cCardTitle; font.pixelSize: page3Root.helperFont; font.bold: true; font.letterSpacing: 0.8 }
 
                                         Rectangle {
                                             id: savedPosesLoaderRect
@@ -2710,8 +2726,8 @@ import QtGraphicalEffects 1.15
                                                 }
 
                                                 Text {
-                                                    text: " SAVED POSITIONS (" + savedPosesLoaderRect.savedPoses.length + ")"
-                                                    color: root.cWhiteText; font.pixelSize: 14; font.bold: true
+                                                    text: " LIST POSITION (" + savedPosesLoaderRect.savedPoses.length + ")"
+                                                    color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
                                             }
@@ -2719,7 +2735,7 @@ import QtGraphicalEffects 1.15
                                             Text {
                                                 anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
                                                 text: "▼"
-                                                color: root.cWhiteText; font.pixelSize: 12
+                                                color: root.cWhiteText; font.pixelSize: page3Root.helperFont
                                             }
 
                                             MotionMouseArea {
@@ -2746,11 +2762,11 @@ import QtGraphicalEffects 1.15
                                         spacing: 6
                                         Row { spacing: 6
                                             Rectangle { width: 4; height: 16; radius: 1; color: root.cCardTitle; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "I/O CONTROL"; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.2 }
+                                            Text { text: "I/O CONTROL"; color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
                                         }
 
                                         // Step Value
-                                        Text { text: "STEP VALUE"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "STEP VALUE"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row { spacing: 4; width: parent.width
                                             Repeater {
                                                 model: [0.1, 1, 5, 10]
@@ -2767,14 +2783,14 @@ import QtGraphicalEffects 1.15
                                                         GradientStop { position: 0.0; color: (stepMA.pressed || stepBtn.selected) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
                                                         GradientStop { position: 1.0; color: (stepMA.pressed || stepBtn.selected) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
                                                     }
-                                                    Text { anchors.centerIn: parent; text: modelData; color: root.cWhiteText; font.pixelSize: 14; font.bold: true }
+                                                    Text { anchors.centerIn: parent; text: modelData; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                                     MotionMouseArea { id: stepMA; anchors.fill: parent; onClicked: page3Root.stepValue = modelData }
                                                 }
                                             }
                                         }
 
                                         // Hardware Speed (read-only from Dobot)
-                                        Text { text: "HW SPEED"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "HW SPEED"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Rectangle {
                                             width: parent.width; height: 36; radius: 5
                                             color: "transparent"; border.color: root.cFunctionFieldBorder; border.width: 1
@@ -2788,19 +2804,19 @@ import QtGraphicalEffects 1.15
                                                 spacing: 6
                                                 Text {
                                                     text: "⚙ Dobot:"
-                                                    color: root.cWhiteText; font.pixelSize: 14
+                                                    color: root.cWhiteText; font.pixelSize: page3Root.labelFont
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
                                                 Text {
                                                     text: robotController.hwSpeedRatio + "%"
-                                                    color: root.cWhiteText; font.pixelSize: 18; font.bold: true; font.family: "monospace"
+                                                    color: root.cWhiteText; font.pixelSize: page3Root.valueFont; font.bold: true
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
                                             }
                                         }
 
                                         // Set Speed (interactive slider)
-                                        Text { text: "SET SPEED %"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "SET SPEED %"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row { spacing: 4; width: parent.width; height: 36
                                             Slider {
                                                 id: speedSlider
@@ -2815,7 +2831,7 @@ import QtGraphicalEffects 1.15
                                             }
                                             Rectangle {
                                                 width: 50; height: 34; radius: 5; color: root.cFunctionFieldEnd; border.color: root.cFunctionFieldBorder; border.width: 1
-                                                TextInput { anchors.centerIn: parent; width: 44; color: root.cWhiteText; font.pixelSize: 14; font.family: "monospace"; font.bold: true; horizontalAlignment: Text.AlignHCenter
+                                                TextInput { anchors.centerIn: parent; width: 44; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true; horizontalAlignment: Text.AlignHCenter
                                                     text: page3Root.speedVal
                                                     validator: IntValidator { bottom: 1; top: 100 }
                                                     selectByMouse: true
@@ -2827,7 +2843,7 @@ import QtGraphicalEffects 1.15
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
                                         // Gripper DO1 — valve 5/3: GẮP (ch0=T,ch1=F) / NHẢ (ch0=F,ch1=T)
-                                        Text { text: "GRIPPER (DO1)"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "GRIPPER (DO1)"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row {
                                             id: rowGripper
                                             property bool isOn: robotController.gripperOn
@@ -2837,7 +2853,7 @@ import QtGraphicalEffects 1.15
                                         }
 
                                         // Picker DO2 — valve 5/3: GẮP (ch2=T,ch3=F) / NHẢ (ch2=F,ch3=T)
-                                        Text { text: "PICKER (DO2)"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "PICKER (DO2)"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row {
                                             id: rowPicker
                                             property bool isOn: robotController.pickerOn
@@ -2847,7 +2863,7 @@ import QtGraphicalEffects 1.15
                                         }
 
                                         // Cyl loadcell DO6 — CPX 27.253 ch8/ch9: KẸP (ch9) / NHẢ (ch8)
-                                        Text { text: "CYL LOADCELL (DO6)"; color: root.cWhiteText; font.pixelSize: 12; font.bold: true }
+                                        Text { text: "CYL LOADCELL (DO6)"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row {
                                             id: rowCylLoadcell
                                             property bool isOn: robotController.cylLoadcellOn
@@ -2970,7 +2986,7 @@ import QtGraphicalEffects 1.15
                             spacing: 4
                             RowLayout {
                                 width: parent.width; height: 18
-                                Text { text: "ROBOT LOG"; color: root.cCardTitle; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
+                                Text { text: "ROBOT LOG"; color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
                                 CBtn { lbl:"Clear"; Layout.preferredWidth: implicitWidth; Layout.preferredHeight: implicitHeight; padV:3; padH:8; fontSize:14; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked:robotController.clearLog() }
                             }
@@ -2985,7 +3001,7 @@ import QtGraphicalEffects 1.15
                                     delegate: Text {
                                         width: parent ? parent.width : 100
                                         text: "[" + modelData.time + "] " + modelData.msg
-                                        font.pixelSize: 12; font.family: "monospace"
+                                        font.pixelSize: page3Root.helperFont
                                         color: root.cWhiteText
                                         wrapMode: Text.WordWrap
                                     }
@@ -3018,7 +3034,7 @@ import QtGraphicalEffects 1.15
                         width: parent.width * 0.9; height: parent.height * 0.8
                         anchors.centerIn: parent
                         color: "#04080f"
-                        border.color: "#67d0ff"; border.width: 2
+                        border.color: root.cFunctionFieldBorder; border.width: 1
                         radius: 8
 
                         // Prevent clicking inside from closing
@@ -3038,7 +3054,7 @@ import QtGraphicalEffects 1.15
                                 width: parent.width; height: 34
                                 Text {
                                     text: "📋 CHỌN TOẠ ĐỘ ROBOT ĐÃ LƯU"
-                                    color: root.cWhiteText; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.2
+                                    color: root.cWhiteText; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.left: parent.left
                                 }
@@ -3048,7 +3064,7 @@ import QtGraphicalEffects 1.15
                                     border.color: "#f0735c"
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    Text { anchors.centerIn: parent; text: "✕"; color: root.cWhiteText; font.pixelSize: 18; font.bold: true }
+                                    Text { anchors.centerIn: parent; text: "✕"; color: root.cWhiteText; font.pixelSize: page3Root.titleFont; font.bold: true }
                                     MotionMouseArea {
                                         id: closeMA; anchors.fill: parent; onClicked: poseSelectorPopup.visible = false
                                     }
@@ -3070,7 +3086,7 @@ import QtGraphicalEffects 1.15
                                     delegate: Rectangle {
                                         width: poseListView.width; height: 72
                                         color: itemMA.pressed ? root.pressColor("#0c1726") : (itemMA.containsMouse ? "#081627" : "#06101d")
-                                        border.color: itemMA.containsMouse ? "#67d0ff" : "#0c1726"; border.width: 1
+                                        border.color: itemMA.containsMouse ? root.cFunctionFieldBorder : "#0c1726"; border.width: 1
                                         radius: 6
 
                                         Row {
@@ -3244,6 +3260,8 @@ import QtGraphicalEffects 1.15
             property color renderedBg: (glassStyle && visualBg.a > 0) ? Qt.rgba(visualBg.r, visualBg.g, visualBg.b, 0.96) : visualBg
             property color renderedBgEnd: (glassStyle && visualBgEnd.a > 0) ? Qt.rgba(visualBgEnd.r, visualBgEnd.g, visualBgEnd.b, 0.96) : visualBgEnd
             property color renderedBc: glassStyle ? Qt.rgba(bc.r, bc.g, bc.b, 0.90) : bc
+            readonly property bool gradientFilled: renderedBgEnd !== renderedBg && renderedBg.a > 0 && renderedBgEnd.a > 0
+            readonly property color blendedBorder: renderedBc
             property bool  active: true
             property bool  clickEnabled: active
             property real  inactiveOpacity: 0.4
@@ -3264,6 +3282,7 @@ import QtGraphicalEffects 1.15
             signal clicked(); signal pressed(); signal released()
 
             implicitWidth:  w > 0 ? w : cbrT.implicitWidth + padH * 2
+                            + (iconSource !== "" ? displayFontSize * 1.45 + 7 : 0)
             implicitHeight: h > 0 ? h : cbrT.implicitHeight + padV * 2
             radius: glassStyle ? 10 : 6
             property bool _heldVisual: _pressed
@@ -3278,12 +3297,11 @@ import QtGraphicalEffects 1.15
                 renderedBg
             )
             border.color: {
-                if (!glassStyle && renderedBgEnd !== renderedBg) return "transparent"
-                if (isSelected) return Qt.lighter(renderedBc, 1.2)
-                if (_hovered) return Qt.lighter(renderedBc, 1.08)
-                return renderedBc
+                if (isSelected) return Qt.lighter(blendedBorder, gradientFilled ? 1.06 : 1.12)
+                if (_hovered) return Qt.lighter(blendedBorder, gradientFilled ? 1.06 : 1.08)
+                return blendedBorder
             }
-            border.width: (!glassStyle && renderedBgEnd !== renderedBg) ? 0 : 1
+            border.width: 1
             opacity: active ? 1.0 : inactiveOpacity
 
             Behavior on color        { ColorAnimation { duration: 100 } }
@@ -3530,7 +3548,7 @@ import QtGraphicalEffects 1.15
                             anchors.verticalCenter: parent.verticalCenter; spacing: 0
                             Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 13; font.bold: true
                                    width: 46; anchors.verticalCenter: parent.verticalCenter }
-                            Rectangle { width: 94; height: 30; radius: 4; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
+                            Rectangle { width: 94; height: 30; radius: 4; color: "#081627"; border.color: root.cFieldBorder; border.width: 1
                                 TextInput { id: rowInput; anchors { fill: parent; margins: 4 }
                                     text: "0.0"
                                     font.pixelSize: 14; font.family: "monospace"; color: root.cWhiteText
@@ -3629,13 +3647,13 @@ import QtGraphicalEffects 1.15
                                 spacing: parent.width * 0.02
                                 Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
 
-	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
+	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 1
 	                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
 	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; minInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][0]) : "" } } } }
-	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
+	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 1
 	                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
 	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; maxInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][1]) : "" } } } }
-	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 2
+	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 1
 	                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
 	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; tgtInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][2]) : "" } } } }
 

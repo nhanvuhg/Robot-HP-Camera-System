@@ -270,12 +270,14 @@ Item {
                     MotionButton {
                         id: refreshNodesBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        hoverScale: 1.012
+                        pressScale: 0.99
                         onClicked: robotController.restartSystemNodes()
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: cServoRunBorder
-                            border.width: 2
+                            border.color: cServoRunEnd
+                            border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: refreshNodesBtn.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
@@ -293,7 +295,7 @@ Item {
                             HoverHint {
                                 visible: refreshNodesBtn.hovered
                                 label: "Restart Node"
-                                bc: cServoRunBorder
+                                bc: cServoRunEnd
                                 tc: cBtnBaseText
                             }
                         }
@@ -302,12 +304,14 @@ Item {
                     MotionButton {
                         id: restartGuiBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        hoverScale: 1.012
+                        pressScale: 0.99
                         onClicked: robotController.restartGui()
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: cServoRunBorder
-                            border.width: 2
+                            border.color: cServoRunEnd
+                            border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: restartGuiBtn.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
@@ -325,7 +329,7 @@ Item {
                             HoverHint {
                                 visible: restartGuiBtn.hovered
                                 label: "Restart GUI"
-                                bc: cServoRunBorder
+                                bc: cServoRunEnd
                                 tc: cBtnBaseText
                             }
                         }
@@ -343,12 +347,14 @@ Item {
                     MotionButton {
                         id: cartridgePageBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        hoverScale: 1.012
+                        pressScale: 0.99
                         onClicked: stackView.push(cartridgePage)
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: cServoRunBorder
-                            border.width: 2
+                            border.color: cServoRunEnd
+                            border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: cartridgePageBtn.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
@@ -366,7 +372,7 @@ Item {
                             HoverHint {
                                 visible: cartridgePageBtn.hovered
                                 label: "Cartridge Page"
-                                bc: cServoRunBorder
+                                bc: cServoRunEnd
                                 tc: cBtnBaseText
                             }
                         }
@@ -375,12 +381,14 @@ Item {
                     MotionButton {
                         id: ignoreScaleBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        hoverScale: 1.012
+                        pressScale: 0.99
                         onClicked: robotController.ignoreScale = !robotController.ignoreScale
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: robotController.ignoreScale ? cBad : cServoRunBorder
-                            border.width: 2
+                            border.color: robotController.ignoreScale ? cBtnDangerEnd : cServoRunEnd
+                            border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: ignoreScaleBtn.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
@@ -401,7 +409,7 @@ Item {
                             HoverHint {
                                 visible: ignoreScaleBtn.hovered
                                 label: "Ignore Scale"
-                                bc: robotController.ignoreScale ? cBad : cServoRunBorder
+                                bc: robotController.ignoreScale ? cBtnDangerEnd : cServoRunEnd
                                 tc: robotController.ignoreScale ? cBad : cBtnBaseText
                             }
                         }
@@ -410,6 +418,8 @@ Item {
                     MotionButton {
                         id: settingsBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        hoverScale: 1.012
+                        pressScale: 0.99
                         onClicked: {
                             var comp = Qt.createComponent("frm_settings.qml")
                             if (comp.status === Component.Ready) {
@@ -424,8 +434,8 @@ Item {
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: cServoRunBorder
-                            border.width: 2
+                            border.color: cServoRunEnd
+                            border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: cServoRunStart }
@@ -444,7 +454,7 @@ Item {
                             HoverHint {
                                 visible: settingsBtn.hovered
                                 label: "Camera Setting"
-                                bc: cServoRunBorder
+                                bc: cServoRunEnd
                                 tc: cBtnBaseText
                             }
                         }
@@ -453,12 +463,14 @@ Item {
                     MotionButton {
                         id: closeGuiBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        hoverScale: 1.012
+                        pressScale: 0.99
                         onClicked: Qt.quit()
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: cBtnDangerBorder
-                            border.width: 2
+                            border.color: cBtnDangerEnd
+                            border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
                                 GradientStop { position: 0.0; color: cBtnDangerStart }
@@ -475,7 +487,7 @@ Item {
                             HoverHint {
                                 visible: closeGuiBtn.hovered
                                 label: "Tắt giao diện"
-                                bc: cBtnDangerBorder
+                                bc: cBtnDangerEnd
                                 tc: "#ffffff"
                             }
                         }

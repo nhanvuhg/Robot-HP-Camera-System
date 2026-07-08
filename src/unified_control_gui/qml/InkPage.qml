@@ -186,6 +186,13 @@ Item {
                             font.pixelSize: 16; font.bold: true
                             onClicked: scaleController.tare()
                             background: Rectangle { radius: 6; color: "#36b6ff" }
+                            contentItem: Text {
+                                text: parent.text
+                                color: "#ffffff"
+                                font: parent.font
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                            }
                         }
                         MotionButton {
     opacity: down ? 0.8 : 1.0
