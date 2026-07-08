@@ -40,39 +40,11 @@ Item {
 
     property var numpadTarget: null
 
-    function parseKvPipe(raw) {
-        var out = {};
-        if (!raw) return out;
-        var parts = String(raw).split("|");
-        for (var i = 0; i < parts.length; i++) {
-            var part = parts[i];
-            var idx = part.indexOf('=');
-            var alt = part.indexOf(':');
-            var pos = idx >= 0 ? idx : alt;
-            if (pos >= 0) out[part.substring(0, pos).trim()] = part.substring(pos + 1).trim();
-        }
-        return out;
-    }
-
-    Connections {
-        target: hpController
-        function onInkStatusChanged() {
-            var map = parseKvPipe(hpController.inkStatus);
-            if (map["CODE"] !== undefined && mapInkNameInput && !mapInkNameInput.activeFocus) {
-                mapInkNameInput.text = map["CODE"];
-            }
-            if (map["LOT_PI"] !== undefined && mapLotPiInput && !mapLotPiInput.activeFocus) {
-                mapLotPiInput.text = map["LOT_PI"];
-            }
-            if (map["LOT_CI"] !== undefined && mapLotCiInput && !mapLotCiInput.activeFocus) {
-                mapLotCiInput.text = map["LOT_CI"];
-            }
-        }
-    }
-
     // CartridgePage visual tokens — colors only; behavior and layout stay unchanged.
     readonly property color cBg:               "transparent"
     readonly property color cBorder:           "#1affffff"
+    readonly property color cFrameBorder:      "#263548"
+    readonly property color cFieldBorder:      "#2b4a5c"
     readonly property color cText:             "#ffffff"
     readonly property color cAccent:           "#67d0ff"
     readonly property color cPanel:            "#990d1e32"
@@ -105,6 +77,16 @@ Item {
     readonly property color cSuccess:          "#3ed0b4"
     readonly property color cDanger:           "#f0735c"
     readonly property color cWarning:          "#f5a623"
+    readonly property int titleFont:           20
+    readonly property int sectionFont:         18
+    readonly property int labelFont:           14
+    readonly property int helperFont:          12
+    readonly property int tableFont:           13
+    readonly property int buttonFont:          16
+    readonly property int inputFont:           16
+    readonly property int valueFont:           20
+    readonly property int weightFont:          56
+    readonly property int resultFont:          32
 
     Rectangle { anchors.fill: parent; color: cBg }
 
@@ -128,7 +110,7 @@ Item {
                 Layout.preferredWidth: 600
                 Layout.fillHeight: true
                 color: cPanel
-                border.color: cBorder
+                border.color: cFrameBorder
                 border.width: 1
                 radius: 8
 
@@ -137,7 +119,7 @@ Item {
                     anchors.margins: 20
                     spacing: 12
 
-                    Text { text: "LIVE WEIGHT DISPLAY"; color: cAccent; font.pixelSize: 22; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: "LIVE WEIGHT DISPLAY"; color: cAccent; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                     
                     Rectangle { Layout.fillWidth: true; height: 1; color: cBorder }
                     
@@ -147,13 +129,13 @@ Item {
                         Text {
                             text: "● LOADCELL: " + scaleController.loadcellStatus
                             color: (scaleController.loadcellStatus == "OK" || scaleController.loadcellStatus == "SIM") ? cSuccess : cDanger
-                            font.pixelSize: 16
+	                            font.pixelSize: labelFont
                             font.bold: true
                         }
                         Text {
                             text: "Scale node: ● " + (scaleController.scaleNodeConnected ? "CONNECTED" : "DISCONNECTED")
                             color: scaleController.scaleNodeConnected ? cSuccess : cDanger
-                            font.pixelSize: 16
+	                            font.pixelSize: labelFont
                             font.bold: true
                         }
                     }
@@ -162,15 +144,15 @@ Item {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 110
                         color: cFieldStrong
-                        border.color: cAccent
-                        border.width: 2
+                        border.color: cFieldBorder
+                        border.width: 1
                         radius: 8
                         
                         Text {
                             anchors.centerIn: parent
                             text: scaleController.currentWeight.toFixed(1) + " g"
                             color: "#ffffff"
-                            font.pixelSize: 64
+	                            font.pixelSize: weightFont
                             font.bold: true
                         }
                     }
@@ -179,7 +161,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: 8
                         
-                        Text { text: "Status:"; color: cSubText; font.pixelSize: 16 }
+	                        Text { text: "Status:"; color: cSubText; font.pixelSize: labelFont }
                         Rectangle {
                             width: 140; height: 35; radius: 6
                             color: {
@@ -190,13 +172,13 @@ Item {
                                 if(s === "FAIL") return cDanger;
                                 return cDisabled;
                             }
-                            Text { anchors.centerIn: parent; text: scaleController.monitorStatus; color: "#fff"; font.pixelSize: 16; font.bold: true }
+	                            Text { anchors.centerIn: parent; text: scaleController.monitorStatus; color: "#fff"; font.pixelSize: labelFont; font.bold: true }
                         }
                         
                         Item { Layout.fillWidth: true }
                         
-                        Text { text: "Profile:"; color: cSubText; font.pixelSize: 16 }
-                        Text { text: scaleController.activeProfile === "" ? "NOT SELECTED" : scaleController.activeProfile; color: cAccent; font.pixelSize: 18; font.bold: true }
+	                        Text { text: "Profile:"; color: cSubText; font.pixelSize: labelFont }
+	                        Text { text: scaleController.activeInkName === "NONE" ? "NOT SELECTED" : scaleController.activeInkName; color: cAccent; font.pixelSize: valueFont; font.bold: true }
                     }
 
                     RowLayout {
@@ -210,7 +192,7 @@ Item {
                             opacity: down ? 0.8 : 1.0
                             text: "TARE"
                             Layout.fillWidth: true; Layout.preferredHeight: 50; Layout.maximumHeight: 50
-                            font.pixelSize: 16; font.bold: true
+	                            font.pixelSize: buttonFont; font.bold: true
                             onClicked: scaleController.tare()
                             background: Rectangle {
                                 radius: 6
@@ -233,7 +215,7 @@ Item {
                             opacity: down ? 0.8 : 1.0
                             text: "RESET TARE"
                             Layout.fillWidth: true; Layout.preferredHeight: 50; Layout.maximumHeight: 50
-                            font.pixelSize: 16; font.bold: true
+	                            font.pixelSize: buttonFont; font.bold: true
                             onClicked: scaleController.resetTare()
                             background: Rectangle {
                                 radius: 6
@@ -251,22 +233,22 @@ Item {
                     // ── MOVED: CALIBRATE SCALE ──
                     RowLayout {
                         Layout.fillWidth: true
-                        Text { text: "CALIBRATE SCALE"; color: cAccent; font.pixelSize: 18; font.bold: true }
+	                        Text { text: "CALIBRATE SCALE"; color: cAccent; font.pixelSize: sectionFont; font.bold: true }
                         Item { Layout.fillWidth: true }
-                        Text { text: "Status: " + scaleController.calStatus; color: cWarning; font.pixelSize: 14; font.bold: true }
+	                        Text { text: "Status: " + scaleController.calStatus; color: cWarning; font.pixelSize: labelFont; font.bold: true }
                     }
 
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 70
                         color: cCard
-                        border.color: cBorder
+                        border.color: cFrameBorder
                         radius: 6
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 10
                             ColumnLayout {
-                                Text { text: "STEP 1 — Empty Scale"; color: "#ecc45a"; font.pixelSize: 14; font.bold: true }
-                                Text { text: "Ensure NOTHING is on the scale."; color: "#c7dcef"; font.pixelSize: 12 }
+	                                Text { text: "STEP 1 — Empty Scale"; color: "#ecc45a"; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: "Ensure NOTHING is on the scale."; color: "#c7dcef"; font.pixelSize: helperFont }
                             }
                             Item { Layout.fillWidth: true }
                             MotionButton {
@@ -274,7 +256,7 @@ Item {
                                 opacity: down ? 0.8 : 1.0
                                 text: "SET ZERO"
                                 Layout.preferredWidth: 120; Layout.preferredHeight: 35
-                                font.pixelSize: 14; font.bold: true
+	                                font.pixelSize: labelFont; font.bold: true
                                 onClicked: scaleController.startCalibration()
                                 background: Rectangle {
                                     radius: 4
@@ -316,7 +298,7 @@ Item {
                                             return "STEP 2 — Place Standard Weight";
                                         }
                                         color: "#ecc45a"
-                                        font.pixelSize: 13; font.bold: true
+	                                        font.pixelSize: tableFont; font.bold: true
                                     }
                                     Text {
                                         text: {
@@ -326,7 +308,7 @@ Item {
                                             if (scaleController.calStatus === "CONTINUE_CAL_4/5") return "Suggested: 1000g";
                                             return "Enter known weight below";
                                         }
-                                        color: cSubText; font.pixelSize: 11
+	                                        color: cSubText; font.pixelSize: helperFont
                                     }
                                 }
                                 Item { Layout.fillWidth: true }
@@ -363,14 +345,14 @@ Item {
                                     id: tfCalW
                                     placeholderText: "Enter value (g)"; placeholderTextColor: cSubText
                                     Layout.fillWidth: true; Layout.preferredHeight: 45
-                                    font.pixelSize: 24; font.bold: true; color: cWarning
+	                                    font.pixelSize: valueFont; font.bold: true; color: cWarning
                                     horizontalAlignment: TextInput.AlignHCenter
                                     verticalAlignment: TextInput.AlignVCenter
                                     validator: DoubleValidator{}
                                     text: scaleController.lastKnownCalWeight.toString()
                                     enabled: calActive
                                     readOnly: true
-                                    background: Rectangle { color: cField; radius: 6; border.color: cAccent; border.width: 1 }
+                                    background: Rectangle { color: cField; radius: 6; border.color: cFieldBorder; border.width: 1 }
                                     MotionMouseArea {
                                         anchors.fill: parent
                                         onClicked: {
@@ -385,7 +367,7 @@ Item {
                                     opacity: down ? 0.8 : 1.0
                                     text: scaleController.calStatus === "CONTINUE_CAL_4/5" ? "FINISH" : "APPLY"
                                     Layout.preferredWidth: 120; Layout.preferredHeight: 45
-                                    font.pixelSize: 18; font.bold: true
+	                                    font.pixelSize: buttonFont; font.bold: true
                                     onClicked: {
                                         scaleController.setLastKnownCalWeight(parseFloat(tfCalW.text))
                                         scaleController.setKnownCalibration(scaleController.lastKnownCalWeight)
@@ -411,7 +393,7 @@ Item {
  
                     Rectangle { Layout.fillWidth: true; height: 2; color: cBorder }
  
-                    Text { text: "PRODUCTION RESULTS"; color: cAccent; font.pixelSize: 18; font.bold: true; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
+	                    Text { text: "PRODUCTION RESULTS"; color: cAccent; font.pixelSize: sectionFont; font.bold: true; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
  
                     // ── STAT CARDS ROW ──
                     RowLayout {
@@ -419,34 +401,34 @@ Item {
                         // TOTAL card
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 100; radius: 8
-                            color: cCard; border.color: cAccent; border.width: 1
+	                            color: cCard; border.color: cFrameBorder; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-                                Text { text: "TOTAL"; color: cSubText; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: scaleController.totalBatch.toString(); color: "#ffffff"; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#bfe0f5"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: "TOTAL"; color: cSubText; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: scaleController.totalBatch.toString(); color: "#ffffff"; font.pixelSize: resultFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: "batch"; color: "#bfe0f5"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // PASS card
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 100; radius: 8
-                            color: Qt.rgba(0.13, 0.77, 0.37, 0.15); border.color: cSuccess; border.width: 1
+	                            color: Qt.rgba(0.13, 0.77, 0.37, 0.15); border.color: cFrameBorder; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-                                Text { text: "✓ PASS"; color: "#3ed0b4"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: scaleController.passBatch.toString(); color: cSuccess; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#1f9e86"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: "✓ PASS"; color: "#3ed0b4"; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: scaleController.passBatch.toString(); color: cSuccess; font.pixelSize: resultFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: "batch"; color: "#1f9e86"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // FAIL card
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 100; radius: 8
-                            color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cDanger; border.width: 1
+	                            color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cFrameBorder; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-                                Text { text: "✗ FAIL"; color: "#f5a394"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: scaleController.failBatch.toString(); color: cDanger; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#b53527"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: "✗ FAIL"; color: "#f5a394"; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: scaleController.failBatch.toString(); color: cDanger; font.pixelSize: resultFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: "batch"; color: "#b53527"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                     }
@@ -460,8 +442,8 @@ Item {
                             border.color: scaleController.consecFails >= 3 ? cDanger : cBorder; border.width: 1
                             RowLayout {
                                 anchors.centerIn: parent; spacing: 8
-                                Text { text: "⚠ CONSECUTIVE FAILS:"; color: cSubText; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
-                                Text { text: scaleController.consecFails.toString(); color: scaleController.consecFails >= 3 ? cDanger : cWarning; font.pixelSize: 28; font.bold: true; font.family: "monospace" }
+	                                Text { text: "⚠ CONSECUTIVE FAILS:"; color: cSubText; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1 }
+	                                Text { text: scaleController.consecFails.toString(); color: scaleController.consecFails >= 3 ? cDanger : cWarning; font.pixelSize: valueFont; font.bold: true }
                             }
                         }
                         MotionButton {
@@ -469,7 +451,7 @@ Item {
                             opacity: down ? 0.8 : 1.0
                             text: "RESET BATCH"
                             Layout.preferredWidth: 130; Layout.preferredHeight: 48
-                            font.pixelSize: 16; font.bold: true
+	                            font.pixelSize: buttonFont; font.bold: true
                             onClicked: scaleController.resetBatch()
                             background: Rectangle {
                                 radius: 6
@@ -494,7 +476,7 @@ Item {
                 Layout.preferredWidth: 600
                 Layout.fillHeight: true
                 color: cPanel
-                border.color: cBorder
+                border.color: cFrameBorder
                 border.width: 1
                 radius: 8
 
@@ -504,7 +486,7 @@ Item {
                     spacing: 15
 
                     // Title
-                    Text { text: "INK PROFILES"; color: "#67d0ff"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                    Text { text: "INK PROFILES"; color: "#67d0ff"; font.pixelSize: titleFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
                     
                     // ── MỤC CHỌN MỰC TƯƠNG TỰ 'SELECT MODE' ──
                     Rectangle { Layout.fillWidth: true; height: 1; color: cBorder; opacity: 0.5 }
@@ -513,27 +495,20 @@ Item {
                         Layout.fillWidth: true
                         spacing: 20
                         
-                        // Cột 1: Chọn Mực
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            Text { text: "SELECT INK PROFILE"; color: "#67d0ff"; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
+	                        // Cột 1: Chọn Mực
+	                        ColumnLayout {
+	                            Layout.fillWidth: true
+	                            Layout.preferredWidth: 560
+	                            Text { text: "SELECT INK PROFILE"; color: "#67d0ff"; font.pixelSize: tableFont; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
-                                color: cField; border.color: cAccent; border.width: 1
-                                ComboBox {
-                                    id: inkSelector
-                                    onCurrentIndexChanged: {
-                                        if (currentIndex >= 0 && mapInkNameInput) {
-                                            var selectedInk = inkModel.get(currentIndex);
-                                            mapInkNameInput.text = selectedInk.name || "";
-                                            mapLotPiInput.text = selectedInk.lot_pi || "";
-                                            mapLotCiInput.text = selectedInk.lot_ci || "";
-                                        }
-                                    }
-                                    anchors.fill: parent; anchors.margins: 1
-                                    model: inkModel
-                                    textRole: "name"
-                                    font.pixelSize: 14; font.bold: true
+                                color: cField; border.color: cFieldBorder; border.width: 1
+	                                ComboBox {
+	                                    id: inkSelector
+	                                    anchors.fill: parent; anchors.margins: 1
+	                                    model: inkModel
+	                                    textRole: "display"
+	                                    font.pixelSize: labelFont; font.bold: true
                                     background: Rectangle { color: "transparent" }
                                     indicator: Image {
                                         x: inkSelector.width - width - 10
@@ -550,27 +525,27 @@ Item {
                                     contentItem: Text { text: inkSelector.currentIndex >= 0 ? inkSelector.displayText : "-- Select Ink --"; font: inkSelector.font; color: cAccent; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
                                     popup: Popup {
                                         y: inkSelector.height; width: inkSelector.width; implicitHeight: contentItem.implicitHeight + 36; padding: 0
-                                        background: Rectangle { color: cField; border.color: cAccent; border.width: 1; radius: 4 }
+                                        background: Rectangle { color: cField; border.color: cFieldBorder; border.width: 1; radius: 4 }
                                         contentItem: Column {
                                             width: parent.width
                                             // Table Header
                                             Rectangle {
-                                                width: parent.width; height: 30; color: cCard
+	                                                width: parent.width; height: 32; color: cCard
                                                 Row {
-                                                    anchors.fill: parent; spacing: 0
-                                                    Item { width: parent.width * 0.10; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: cAccent; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.24 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "ID INK"; color: cAccent; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "LOT PI"; color: cAccent; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "LOT CI"; color: cAccent; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: cAccent; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: cDanger; font.pixelSize: 11; font.bold: true } }
-                                                }
-                                            }
+	                                                    anchors.fill: parent; spacing: 0
+	                                                    Item { width: parent.width * 0.07; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                    Item { width: parent.width * 0.16 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "SCAN CODE"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                    Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "INK NAME"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                    Item { width: parent.width * 0.13 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "TOTAL KG"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                    Item { width: parent.width * 0.34 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "LOT PI"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                }
+	                                            }
                                             Rectangle { width: parent.width; height: 2; color: cAccent }
                                             // Table Rows
                                             ListView {
@@ -580,30 +555,23 @@ Item {
                                         }
                                     }
                                     delegate: ItemDelegate {
-                                        width: inkSelector.width; height: 34
+	                                        width: inkSelector.width; height: 38
                                         contentItem: Item {
                                             anchors.fill: parent
-                                            Row {
-                                                anchors.fill: parent; spacing: 0
-                                                Item { width: parent.width * 0.10; height: parent.height; Text { anchors.centerIn: parent; text: (index+1).toString(); color: inkSelector.highlightedIndex === index ? cSelectedText : cSubText; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
-                                                Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                Item { width: parent.width * 0.24 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.name; color: inkSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 13; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
-                                                Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.lot_pi || "--"; color: inkSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 12; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
-                                                Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.lot_ci || "--"; color: inkSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 12; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
-                                                Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.centerIn: parent; text: model.density.toFixed(2) + " g"; color: inkSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 12; font.bold: true; font.family: "monospace" } }
-                                                Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                Item {
-                                                    width: parent.width * 0.12 - 1; height: parent.height
-                                                    Rectangle {
-                                                        anchors.centerIn: parent; width: 22; height: 22; radius: 4; color: delInkMA.pressed ? "#b53527" : cDanger
-                                                        Text { anchors.centerIn: parent; text: "✕"; font.bold: true; font.pixelSize: 12; color: "#fff" }
-                                                        MotionMouseArea { id: delInkMA; anchors.fill: parent; onClicked: { scaleController.deleteInkProfile(model.name); } }
-                                                    }
-                                                }
-                                            }
+	                                            Row {
+	                                                anchors.fill: parent; spacing: 0
+	                                                Item { width: parent.width * 0.07; height: parent.height; Text { anchors.centerIn: parent; text: (index+1).toString(); color: inkSelector.highlightedIndex === index ? cSelectedText : cText; font.pixelSize: labelFont; font.bold: true } }
+	                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                Item { width: parent.width * 0.16 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: model.scan_code || "--"; color: inkSelector.highlightedIndex === index ? cSelectedText : cText; font.pixelSize: labelFont; font.bold: true; elide: Text.ElideRight; width: parent.width - 12 } }
+	                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: model.ink_name || model.name || "--"; color: inkSelector.highlightedIndex === index ? cSelectedText : cText; font.pixelSize: labelFont; font.bold: true; elide: Text.ElideRight; width: parent.width - 12 } }
+	                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                Item { width: parent.width * 0.13 - 1; height: parent.height; Text { anchors.centerIn: parent; text: Number(model.total_kg || 0).toFixed(2); color: inkSelector.highlightedIndex === index ? cSelectedText : cText; font.pixelSize: labelFont; font.bold: true } }
+	                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: Number(model.density || 0).toFixed(2); color: inkSelector.highlightedIndex === index ? cSelectedText : cText; font.pixelSize: labelFont; font.bold: true } }
+	                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                Item { width: parent.width * 0.34 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: model.lot_pi || "--"; color: inkSelector.highlightedIndex === index ? cSelectedText : cText; font.pixelSize: labelFont; font.bold: true; elide: Text.ElideRight; width: parent.width - 12 } }
+	                                            }
                                             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: cBorder }
                                         }
                                         background: Rectangle { color: inkSelector.highlightedIndex === index ? cAccent : cField }
@@ -612,19 +580,21 @@ Item {
                             }
                         }
 
-                        // Cột 2: Chọn Vỏ
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            Text { text: "SELECT CARTRIDGE TYPE"; color: cAccent; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
+	                        // Cột 2: Chọn Vỏ
+	                        ColumnLayout {
+	                            Layout.fillWidth: false
+	                            Layout.preferredWidth: 340
+	                            Layout.maximumWidth: 360
+	                            Text { text: "SELECT CARTRIDGE TYPE"; color: cAccent; font.pixelSize: tableFont; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
-                                color: cField; border.color: cAccent; border.width: 1
+                                color: cField; border.color: cFieldBorder; border.width: 1
                                 ComboBox {
                                     id: cartSelector
                                     anchors.fill: parent; anchors.margins: 1
                                     model: cartModel
                                     textRole: "name"
-                                    font.pixelSize: 14; font.bold: true
+	                                    font.pixelSize: labelFont; font.bold: true
                                     background: Rectangle { color: "transparent" }
                                     indicator: Image {
                                         x: cartSelector.width - width - 10
@@ -641,20 +611,20 @@ Item {
                                     contentItem: Text { text: cartSelector.currentIndex >= 0 ? cartSelector.displayText : "-- Select Cartridge --"; font: cartSelector.font; color: cAccent; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
                                     popup: Popup {
                                         y: cartSelector.height; width: cartSelector.width; implicitHeight: contentItem.implicitHeight + 36; padding: 0
-                                        background: Rectangle { color: cField; border.color: cAccent; border.width: 1; radius: 4 }
+                                        background: Rectangle { color: cField; border.color: cFieldBorder; border.width: 1; radius: 4 }
                                         contentItem: Column {
                                             width: parent.width
                                             Rectangle {
-                                                width: parent.width; height: 30; color: cCard
+	                                                width: parent.width; height: 32; color: cCard
                                                 Row {
                                                     anchors.fill: parent; spacing: 0
-                                                    Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: cAccent; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART NAME"; color: cAccent; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART WEIGHT"; color: cAccent; font.pixelSize: 12; font.bold: true } }
-                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: cDanger; font.pixelSize: 11; font.bold: true } }
+	                                                    Item { width: parent.width * 0.14; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                    Item { width: parent.width * 0.46 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "CART NAME"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                    Item { width: parent.width * 0.30 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART WEIGHT"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                    Item { width: parent.width * 0.10 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: cDanger; font.pixelSize: tableFont; font.bold: true } }
                                                 }
                                             }
                                             Rectangle { width: parent.width; height: 2; color: cAccent }
@@ -665,22 +635,22 @@ Item {
                                         }
                                     }
                                     delegate: ItemDelegate {
-                                        width: cartSelector.width; height: 34
+	                                        width: cartSelector.width; height: 38
                                         contentItem: Item {
                                             anchors.fill: parent
                                             Row {
                                                 anchors.fill: parent; spacing: 0
-                                                Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: (index+1).toString(); color: cartSelector.highlightedIndex === index ? cSelectedText : cSubText; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
-                                                Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.name; color: cartSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 13; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
-                                                Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: model.density.toFixed(2) + " g"; color: cartSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
-                                                Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                Item {
-                                                    width: parent.width * 0.12 - 1; height: parent.height
+	                                                Item { width: parent.width * 0.14; height: parent.height; Text { anchors.centerIn: parent; text: (index+1).toString(); color: cartSelector.highlightedIndex === index ? cSelectedText : cText; font.pixelSize: labelFont; font.bold: true } }
+	                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                Item { width: parent.width * 0.46 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: model.name; color: cartSelector.highlightedIndex === index ? cSelectedText : cText; font.pixelSize: labelFont; font.bold: true; elide: Text.ElideRight; width: parent.width - 12 } }
+	                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                Item { width: parent.width * 0.30 - 1; height: parent.height; Text { anchors.centerIn: parent; text: model.density.toFixed(2) + " g"; color: cartSelector.highlightedIndex === index ? cSelectedText : cText; font.pixelSize: labelFont; font.bold: true } }
+	                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+	                                                Item {
+	                                                    width: parent.width * 0.10 - 1; height: parent.height
                                                     Rectangle {
                                                         anchors.centerIn: parent; width: 22; height: 22; radius: 4; color: delCartMA.pressed ? "#b53527" : cDanger
-                                                        Text { anchors.centerIn: parent; text: "✕"; font.bold: true; font.pixelSize: 12; color: "#fff" }
+	                                                        Text { anchors.centerIn: parent; text: "✕"; font.bold: true; font.pixelSize: helperFont; color: "#fff" }
                                                         MotionMouseArea { id: delCartMA; anchors.fill: parent; onClicked: { scaleController.deleteCartProfile(model.name); } }
                                                     }
                                                 }
@@ -695,94 +665,101 @@ Item {
                     }
 
                     // --- DETAILS AREA ---
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 250
-                        color: cCard; border.color: cBorder; border.width: 1; radius: 6
+	                    Rectangle {
+	                        Layout.fillWidth: true
+	                        Layout.preferredHeight: 300
+	                        color: cCard; border.color: cFrameBorder; border.width: 1; radius: 6
                         
                         GridLayout {
                             anchors.fill: parent; anchors.margins: 15
                             columns: 3; rowSpacing: 15; columnSpacing: 30
  
-                            // Row 1
-                            RowLayout {
-                                Text { text: "ID INK:"; color: cSubText; font.pixelSize: 14; font.bold: true }
-                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
-                            }
-                            RowLayout {
-                                Text { text: "DENSITY:"; color: cSubText; font.pixelSize: 14; font.bold: true }
-                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).density.toFixed(2) + " g" : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
-                            }
-                            RowLayout {
-                                Text { text: "RELATIVE ERROR (g):"; color: cAccent; font.pixelSize: 14; font.bold: true }
-                                Rectangle {
-                                    width: 70; height: 35; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    TextInput {
-                                        id: relativeErrorInput
-                                        anchors.fill: parent; anchors.margins: 2; color: cAccent; font.pixelSize: 16; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.family: "monospace"
-                                        text: "1.0"
-                                        readOnly: true
-                                        MotionMouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = relativeErrorInput; numpadPopup.currentValue = relativeErrorInput.text; numpadPopup.open() } }
-                                    }
-                                }
-                            }
- 
-                            // Row 2
-                            RowLayout {
-                                Text { text: "CARTRIDGE TYPE:"; color: cSubText; font.pixelSize: 14; font.bold: true }
-                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
-                            }
-                            RowLayout {
-                                Text { text: "CART WEIGHT:"; color: cSubText; font.pixelSize: 14; font.bold: true }
-                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).density.toFixed(2) + " g" : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
-                            }
-                            RowLayout {
-                                Text { text: "ML FILL (ml):"; color: cAccent; font.pixelSize: 14; font.bold: true }
-                                Rectangle {
-                                    width: 70; height: 35; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    TextInput {
-                                        id: inkCapacityInput
-                                        anchors.fill: parent; anchors.margins: 2; color: cAccent; font.pixelSize: 16; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.family: "monospace"
-                                        text: scaleController.inkCapacity.toString()
-                                        readOnly: true
-                                        MotionMouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = inkCapacityInput; numpadPopup.currentValue = inkCapacityInput.text; numpadPopup.open() } }
-                                        Connections {
-                                            target: scaleController
-                                            function onInkCapacityChanged() {
-                                                if (inkTab.numpadTarget !== inkCapacityInput) {
-                                                    inkCapacityInput.text = scaleController.inkCapacity.toString();
-                                                }
-                                            }
-                                        }
-                                        onTextChanged: {
-                                            var testVal = parseFloat(text.replace(",", ".")) || 0.0;
-                                            if (testVal > 70.0) {
-                                                text = "70.0";
-                                            }
-                                        }
-                                    }
-                                }
-                            }
- 
- 
-                            // Row 3: Current ML Fill
-                            RowLayout {
-                                Text { text: "CURRENT ML FILL:"; color: cSubText; font.pixelSize: 14; font.bold: true }
-                                Rectangle {
-                                    width: 80; height: 35; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    Text {
-                                        anchors.centerIn: parent; text: scaleController.currentMlFill.toFixed(1) + " ml"; color: cSuccess; font.pixelSize: 16; font.bold: true; font.family: "monospace"
-                                    }
-                                }
-                            }
-                            RowLayout {
-                                Text { text: "ID INK:"; color: cSubText; font.pixelSize: 14; font.bold: true }
-                                Text { text: mapInkNameInput.text !== "" ? mapInkNameInput.text : "--"; color: cAccent; font.pixelSize: 16; font.bold: true; font.family: "monospace" }
-                            }
-                            RowLayout {
-                                Text { text: "LOT PI/CI:"; color: cSubText; font.pixelSize: 14; font.bold: true }
-                                Text { text: (mapLotPiInput.text !== "" ? mapLotPiInput.text : "--") + " / " + (mapLotCiInput.text !== "" ? mapLotCiInput.text : "--"); color: cAccent; font.pixelSize: 16; font.bold: true; font.family: "monospace" }
-                            }
+	                            // Row 1
+	                            RowLayout {
+	                                Text { text: "SCAN CODE:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).scan_code : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+	                            }
+	                            RowLayout {
+	                                Text { text: "INK NAME:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: inkSelector.currentIndex >= 0 ? (inkModel.get(inkSelector.currentIndex).ink_name || inkModel.get(inkSelector.currentIndex).name) : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+	                            }
+	                            RowLayout {
+	                                Text { text: "TOTAL KG:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: inkSelector.currentIndex >= 0 ? Number(inkModel.get(inkSelector.currentIndex).total_kg || 0).toFixed(2) : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+	                            }
+
+	                            // Row 2
+	                            RowLayout {
+	                                Text { text: "DENSITY:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: inkSelector.currentIndex >= 0 ? Number(inkModel.get(inkSelector.currentIndex).density || 0).toFixed(2) + " g/ml" : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+	                            }
+	                            RowLayout {
+	                                Text { text: "LOT PI:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: inkSelector.currentIndex >= 0 ? (inkModel.get(inkSelector.currentIndex).lot_pi || "--") : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+	                            }
+	                            RowLayout {
+			                                Text { text: "RELATIVE ERROR (g):"; color: cWarning; font.pixelSize: labelFont; font.bold: true }
+		                                Rectangle {
+		                                    width: 70; height: 35; color: cField; border.color: cWarning; border.width: 0.5; radius: 4
+		                                    TextInput {
+		                                        id: relativeErrorInput
+			                                        anchors.fill: parent; anchors.margins: 2; color: cWarning; font.pixelSize: inputFont; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+	                                        text: "1.0"
+	                                        readOnly: true
+	                                        MotionMouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = relativeErrorInput; numpadPopup.currentValue = relativeErrorInput.text; numpadPopup.open() } }
+	                                    }
+	                                }
+	                            }
+
+	                            // Row 3
+	                            RowLayout {
+	                                Text { text: "CARTRIDGE TYPE:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+	                            }
+	                            RowLayout {
+	                                Text { text: "CART WEIGHT:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: cartSelector.currentIndex >= 0 ? Number(cartModel.get(cartSelector.currentIndex).density || 0).toFixed(2) + " g" : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+	                            }
+	                            RowLayout {
+			                                Text { text: "TYPE WEIGHT FILL:"; color: cAccent; font.pixelSize: labelFont; font.bold: true }
+	                                Rectangle {
+	                                    width: 70; height: 35; color: cField; border.color: cFieldBorder; border.width: 1; radius: 4
+	                                    TextInput {
+	                                        id: inkCapacityInput
+	                                        anchors.fill: parent; anchors.margins: 2; color: cAccent; font.pixelSize: inputFont; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+		                                        text: scaleController.currentMlFill.toFixed(1)
+		                                        readOnly: true
+		                                        MotionMouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = inkCapacityInput; numpadPopup.currentValue = inkCapacityInput.text; numpadPopup.open() } }
+		                                        Connections {
+		                                            target: scaleController
+		                                            function onCurrentMlFillChanged() {
+		                                                if (inkTab.numpadTarget !== inkCapacityInput) {
+		                                                    inkCapacityInput.text = scaleController.currentMlFill.toFixed(1);
+		                                                }
+		                                            }
+	                                        }
+	                                        onTextChanged: {
+	                                            var testVal = parseFloat(text.replace(",", ".")) || 0.0;
+	                                            if (testVal > 70.0) {
+	                                                text = "70.0";
+	                                            }
+	                                        }
+	                                    }
+	                                }
+	                            }
+
+	                            // Row 4
+	                            RowLayout {
+	                                Text { text: "CURRENT ML FILL:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Rectangle {
+	                                    width: 80; height: 35; color: cField; border.color: cFieldBorder; border.width: 1; radius: 4
+	                                    Text {
+	                                        anchors.centerIn: parent; text: scaleController.currentMlFill.toFixed(1) + " ml"; color: cSuccess; font.pixelSize: inputFont; font.bold: true
+	                                    }
+	                                }
+	                            }
+	                            Item { Layout.fillWidth: true }
+	                            Item { Layout.fillWidth: true }
  
                             // Row 4: CONFIRM BTN & CLEAR SELECTION
                             RowLayout {
@@ -801,19 +778,27 @@ Item {
                                             GradientStop { position: 1.0; color: applyTargetBtn.down ? cActionPressEnd : (applyTargetBtn.hovered ? cActionHoverEnd : cActionEnd) }
                                         }
                                     }
-                                    contentItem: Text { text: parent.text; font.pixelSize: 16; font.bold: true; color: "#ffffff"; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
-                                    onClicked: {
-                                        if (inkSelector.currentIndex >= 0 && cartSelector.currentIndex >= 0) {
-                                            var inkN = inkModel.get(inkSelector.currentIndex).name;
-                                            var inkD = inkModel.get(inkSelector.currentIndex).density;
-                                            var cartN = cartModel.get(cartSelector.currentIndex).name;
-                                            var cartD = cartModel.get(cartSelector.currentIndex).density;
-                                            var relE = parseFloat(relativeErrorInput.text.replace(",", ".")) || 0.0;
-                                            var mlCap = parseFloat(inkCapacityInput.text.replace(",", ".")) || 0.0;
-                                            if (mlCap > 70.0) mlCap = 70.0;
-                                            scaleController.confirmTarget(inkN, inkD, cartN, cartD, relE, mlCap);
-                                        }
-                                    }
+	                                    contentItem: Text { text: parent.text; font.pixelSize: buttonFont; font.bold: true; color: "#ffffff"; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
+	                                    onClicked: {
+	                                        if (inkSelector.currentIndex >= 0 && cartSelector.currentIndex >= 0) {
+	                                            var selectedInk = inkModel.get(inkSelector.currentIndex);
+	                                            var scanCode = String(selectedInk.scan_code || "").trim();
+	                                            var inkN = selectedInk.ink_name || selectedInk.name;
+	                                            var inkD = Number(selectedInk.density || selectedInk.density_g_ml || 0.89);
+	                                            var cartN = cartModel.get(cartSelector.currentIndex).name;
+	                                            var cartD = Number(cartModel.get(cartSelector.currentIndex).density || 0.0);
+	                                            var relE = parseFloat(relativeErrorInput.text.replace(",", ".")) || 0.0;
+	                                            var mlCap = parseFloat(inkCapacityInput.text.replace(",", ".")) || 0.0;
+	                                            if (mlCap > 70.0) mlCap = 70.0;
+	                                            if (scanCode !== "") {
+	                                                hpController.publishString("ink_batch_code", JSON.stringify({
+	                                                    "value": scanCode,
+	                                                    "operator": "QML"
+	                                                }));
+	                                            }
+	                                            scaleController.confirmTarget(inkN, inkD, cartN, cartD, relE, mlCap);
+	                                        }
+	                                    }
                                 }
                                 MotionButton {
                                     id: clearSelectionBtn
@@ -847,21 +832,18 @@ Item {
                                             }
                                             Text {
                                                 text: "CLEAR SELECTION"
-                                                font.pixelSize: 13
+	                                                font.pixelSize: tableFont
                                                 font.bold: true
                                                 color: "#ffffff"
                                                 anchors.verticalCenter: parent.verticalCenter
                                             }
                                         }
                                     }
-                                    onClicked: {
-                                        inkSelector.currentIndex = -1;
-                                        cartSelector.currentIndex = -1;
-                                        mapInkNameInput.text = "";
-                                        mapLotPiInput.text = "";
-                                        mapLotCiInput.text = "";
-                                    }
-                                }
+	                                    onClicked: {
+	                                        inkSelector.currentIndex = -1;
+	                                        cartSelector.currentIndex = -1;
+	                                    }
+	                                }
                             }
                         }
                     }
@@ -872,14 +854,14 @@ Item {
                         spacing: 15
                         
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cBorder; border.width: 1; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cFrameBorder; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
-                                Text { text: "TOTAL BATCH (g)"; color: cSubText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: scaleController.totalBatchWeight.toFixed(2); color: cAccent; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { text: "TOTAL BATCH (g)"; color: cSubText; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { text: scaleController.totalBatchWeight.toFixed(2); color: cAccent; font.pixelSize: valueFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cWarning; border.width: 1; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cFrameBorder; border.width: 1; radius: 6
                             Row { anchors.centerIn: parent; spacing: 8
                                 Image {
                                     source: "icons/weight_tilde_yellow.svg"
@@ -893,13 +875,13 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Column { spacing: 2; anchors.verticalCenter: parent.verticalCenter
-                                Text { text: "MIN WEIGHT (g)"; color: cWarning; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: scaleController.minWeight.toFixed(2); color: cWarning; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { text: "MIN WEIGHT (g)"; color: cWarning; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { text: scaleController.minWeight.toFixed(2); color: cWarning; font.pixelSize: valueFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                 }
                             }
                         }
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cSuccess; border.width: 1; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cFrameBorder; border.width: 1; radius: 6
                             Row { anchors.centerIn: parent; spacing: 8
                                 Image {
                                     source: "icons/weight_tilde.svg"
@@ -913,229 +895,16 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Column { spacing: 2; anchors.verticalCenter: parent.verticalCenter
-                                Text { text: "MAX WEIGHT (g)"; color: cSuccess; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: scaleController.maxWeight.toFixed(2); color: cSuccess; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { text: "MAX WEIGHT (g)"; color: cSuccess; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { text: scaleController.maxWeight.toFixed(2); color: cSuccess; font.pixelSize: valueFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                 }
                             }
                         }
                     }
  
-                    // --- ROW 4: CREATE PROFILE ---
-                    Rectangle { Layout.fillWidth: true; height: 1; color: cBorder }
-                    Text { text: "CREATE NEW PROFILE"; color: cAccent; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
- 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 20
- 
-                        // Create Ink
-                        Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 280; color: cCard; border.color: cBorder; border.width: 1; radius: 6
-                            GridLayout {
-                                anchors.fill: parent; anchors.margins: 15; columns: 3; columnSpacing: 15; rowSpacing: 12
-                                
-                                // Row 1 labels (Profile identity)
-                                Text { text: "ID INK"; color: cSubText; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.preferredWidth: 160 }
-                                Text { text: "LOT PI"; color: cSubText; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.preferredWidth: 200 }
-                                Text { text: "LOT CI"; color: cSubText; font.pixelSize: 13; font.bold: true; Layout.fillWidth: false; Layout.preferredWidth: 110 }
- 
-                                // Row 1 inputs (Profile identity)
-                                Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredWidth: 160; Layout.preferredHeight: 40; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    TextInput {
-                                        id: mapInkNameInput
-                                        anchors.fill: parent; anchors.margins: 4
-                                        color: "#ffffff"; font.pixelSize: 18; font.bold: true
-                                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                                        clip: true
-                                    }
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "--ID Ink--"
-                                        color: cDisabled; font.pixelSize: 14; font.italic: true
-                                        visible: mapInkNameInput.text.length === 0 && !mapInkNameInput.activeFocus
-                                    }
-                                }
-                                Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredWidth: 200; Layout.preferredHeight: 40; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    TextInput {
-                                        id: mapLotPiInput
-                                        anchors.fill: parent; anchors.margins: 4
-                                        color: "#ffffff"; font.pixelSize: 18; font.bold: true
-                                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                                        clip: true
-                                    }
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "--Lot PI--"
-                                        color: cDisabled; font.pixelSize: 14; font.italic: true
-                                        visible: mapLotPiInput.text.length === 0 && !mapLotPiInput.activeFocus
-                                    }
-                                }
-                                Rectangle {
-                                    Layout.fillWidth: false; Layout.preferredWidth: 110; Layout.preferredHeight: 40; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    TextInput {
-                                        id: mapLotCiInput
-                                        anchors.fill: parent; anchors.margins: 4
-                                        color: "#ffffff"; font.pixelSize: 18; font.bold: true
-                                        horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                                        clip: true
-                                    }
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "--Lot CI--"
-                                        color: cDisabled; font.pixelSize: 14; font.italic: true
-                                        visible: mapLotCiInput.text.length === 0 && !mapLotCiInput.activeFocus
-                                    }
-                                }
-
-                                Text { text: "DENSITY (g)"; color: cSubText; font.pixelSize: 14; font.bold: true; Layout.columnSpan: 3 }
-                                Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 40; Layout.columnSpan: 3; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    TextInput { id: newInkDensity; anchors.fill: parent; anchors.margins: 4; color: cAccent; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MotionMouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = newInkDensity; numpadPopup.currentValue = newInkDensity.text; numpadPopup.open() } } }
-                                }
- 
-                                // Row 3 Buttons: Save Profile & Apply Batch Info
-                                RowLayout {
-                                    Layout.fillWidth: true; Layout.columnSpan: 3; spacing: 15
-                                    MotionButton {
-                                        id: saveInkBtn
-                                        opacity: down ? 0.8 : 1.0
-                                        text: "SAVE INK PROFILE"
-                                        Layout.preferredHeight: 45; Layout.fillWidth: true
-                                        background: Rectangle {
-                                            radius: 6
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: saveInkBtn.down ? cResumePressStart : (saveInkBtn.hovered ? cResumeHoverStart : cResumeStart) }
-                                                GradientStop { position: 1.0; color: saveInkBtn.down ? cResumePressEnd : (saveInkBtn.hovered ? cResumeHoverEnd : cResumeEnd) }
-                                            }
-                                        }
-                                        contentItem: Row {
-                                            spacing: 8
-                                            anchors.centerIn: parent
-                                            Image {
-                                                source: "icons/download.svg"
-                                                width: 20; height: 20
-                                                fillMode: Image.PreserveAspectFit
-                                                smooth: true
-                                                anchors.verticalCenter: parent.verticalCenter
-                                            }
-                                            Text {
-                                                text: saveInkBtn.text
-                                                color: "#ffffff"
-                                                font.pixelSize: 15
-                                                font.bold: true
-                                                anchors.verticalCenter: parent.verticalCenter
-                                            }
-                                        }
-                                        onClicked: {
-                                            var d = parseFloat(newInkDensity.text.replace(",", "."));
-                                            if (d > 0 && mapInkNameInput.text.trim() !== "") {
-                                                scaleController.createInkProfileWithBatch(
-                                                    mapInkNameInput.text.trim(),
-                                                    d,
-                                                    mapLotPiInput.text.trim(),
-                                                    mapLotCiInput.text.trim()
-                                                );
-                                                newInkDensity.text = "0.0";
-                                            }
-                                        }
-                                    }
-                                    MotionButton {
-                                        id: applyBatchBtn
-                                        opacity: down ? 0.8 : 1.0
-                                        text: "APPLY BATCH INFO"
-                                        Layout.preferredHeight: 45; Layout.fillWidth: true
-                                        background: Rectangle {
-                                            radius: 6
-                                            gradient: Gradient {
-                                                orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: applyBatchBtn.down ? cActionPressStart : (applyBatchBtn.hovered ? cActionHoverStart : cActionStart) }
-                                                GradientStop { position: 1.0; color: applyBatchBtn.down ? cActionPressEnd : (applyBatchBtn.hovered ? cActionHoverEnd : cActionEnd) }
-                                            }
-                                        }
-                                        contentItem: Text { text: parent.text; color: "#ffffff"; font.pixelSize: 15; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
-                                        onClicked: {
-                                            var payload = {
-                                                "action": "set_fields",
-                                                "code": mapInkNameInput.text.trim(),
-                                                "lot_pi": mapLotPiInput.text.trim(),
-                                                "lot_ci": mapLotCiInput.text.trim(),
-                                                "operator": "QML"
-                                            };
-                                            hpController.publishString("ink_batch_code", JSON.stringify(payload));
-                                        }
-                                    }
-                                }
-                            }
-                        }
- 
-                        // Create Cart
-                        Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 280; color: cCard; border.color: cBorder; border.width: 1; radius: 6
-                            GridLayout {
-                                anchors.fill: parent; anchors.margins: 15; columns: 2; columnSpacing: 15; rowSpacing: 15
-                                Text { text: "CART NAME"; color: cSubText; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "CART WEIGHT (g)"; color: cSubText; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                                
-                                Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 40; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    TextInput { id: newCartName; anchors.fill: parent; anchors.margins: 4; color: "#ffffff"; font.pixelSize: 18; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true }
-                                    Text { anchors.centerIn: parent; text: "--Type Cart Name--"; color: cDisabled; font.pixelSize: 15; font.italic: true; visible: newCartName.text.length === 0 && !newCartName.activeFocus }
-                                }
-                                Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 40; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    TextInput { id: newCartDensity; anchors.fill: parent; anchors.margins: 4; color: cAccent; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MotionMouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = newCartDensity; numpadPopup.currentValue = newCartDensity.text; numpadPopup.open() } } }
-                                }
-                                
-                                Item { Layout.fillHeight: true; Layout.columnSpan: 2 }
-                                
-                                MotionButton {
-                                    id: saveCartBtn
-                                    opacity: down ? 0.8 : 1.0
-                                    text: "SAVE CART PROFILE"
-                                    Layout.preferredHeight: 45; Layout.fillWidth: true; Layout.columnSpan: 2
-                                    background: Rectangle {
-                                        radius: 6
-                                        gradient: Gradient {
-                                            orientation: Gradient.Horizontal
-                                            GradientStop { position: 0.0; color: saveCartBtn.down ? cResumePressStart : (saveCartBtn.hovered ? cResumeHoverStart : cResumeStart) }
-                                            GradientStop { position: 1.0; color: saveCartBtn.down ? cResumePressEnd : (saveCartBtn.hovered ? cResumeHoverEnd : cResumeEnd) }
-                                        }
-                                    }
-                                    contentItem: Row {
-                                        spacing: 8
-                                        anchors.centerIn: parent
-                                        Image {
-                                            source: "icons/download.svg"
-                                            width: 20; height: 20
-                                            fillMode: Image.PreserveAspectFit
-                                            smooth: true
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-                                        Text {
-                                            text: saveCartBtn.text
-                                            color: "#ffffff"
-                                            font.pixelSize: 16
-                                            font.bold: true
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-                                    }
-                                    onClicked: {
-                                        var d = parseFloat(newCartDensity.text.replace(",", "."));
-                                        if (d > 0 && newCartName.text.trim() !== "") {
-                                            scaleController.createCartProfile(newCartName.text.trim(), d);
-                                            newCartName.text = ""; newCartDensity.text = "0.0";
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+	                }
+	            }
+	        }
     }    // ── Persistent banner: hiện khi operator chọn NO ở zero-drift popup ──
     // Set bởi scaleController.dismissZeroDrift(); clear khi tare() đc gọi.
     Rectangle {
@@ -1155,7 +924,7 @@ Item {
             spacing: 10
             Text {
                 text: "⚠  TEMPO NOT YET TARED — press TARE to clear drift"
-                color: "#0c1726"; font.pixelSize: 16; font.bold: true
+	                color: "#0c1726"; font.pixelSize: buttonFont; font.bold: true
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
@@ -1163,8 +932,8 @@ Item {
                 id: driftTareBtn
                 text: "TARE"
                 Layout.preferredWidth: 80; Layout.preferredHeight: 28
-                font.pixelSize: 13; font.bold: true
-                background: Rectangle { color: cField; border.color: cAccent; border.width: 1; radius: 4 }
+	                font.pixelSize: tableFont; font.bold: true
+                background: Rectangle { color: cField; border.color: cFieldBorder; border.width: 1; radius: 4 }
                 contentItem: Text {
                     text: parent.text; color: cAccent
                     font: parent.font
@@ -1184,18 +953,18 @@ Item {
         width: 500; height: 200
         modal: true
         closePolicy: Popup.NoAutoClose
-        background: Rectangle { color: cCard; border.color: cDanger; border.width: 2; radius: 10 }
+        background: Rectangle { color: cCard; border.color: cDanger; border.width: 1; radius: 10 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20
-            Text { text: "WARNING: OVERLOAD!"; color: cDanger; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-            Text { text: "Scale load exceeds maximum limit. Check immediately."; color: cSubText; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
+	            Text { text: "WARNING: OVERLOAD!"; color: cDanger; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	            Text { text: "Scale load exceeds maximum limit. Check immediately."; color: cSubText; font.pixelSize: buttonFont; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
             MotionButton {
                 id: ackOverloadBtn
                 opacity: down ? 0.8 : 1.0
                 text: "ACKNOWLEDGE"
                 Layout.alignment: Qt.AlignHCenter
-                font.pixelSize: 18; font.bold: true
+	                font.pixelSize: buttonFont; font.bold: true
                 onClicked: { scaleController.ackOverload(); overloadPopup.close() }
                 background: Rectangle {
                     radius: 6
@@ -1217,11 +986,11 @@ Item {
         width: 500; height: 200
         modal: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-        background: Rectangle { color: cCard; border.color: cAccent; border.width: 2; radius: 10 }
+        background: Rectangle { color: cCard; border.color: cFrameBorder; border.width: 1; radius: 10 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20
-            Text { text: "Zero Drift Warning"; color: cAccent; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-            Text { text: "Loadcell zero drift detected. Re-tare recommended."; color: cSubText; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
+	            Text { text: "Zero Drift Warning"; color: cAccent; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	            Text { text: "Loadcell zero drift detected. Re-tare recommended."; color: cSubText; font.pixelSize: buttonFont; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
@@ -1232,7 +1001,7 @@ Item {
                     text: "TARE NOW"
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 45
-                    font.pixelSize: 18; font.bold: true
+	                    font.pixelSize: buttonFont; font.bold: true
                     onClicked: { scaleController.tare(); zeroDriftPopup.close() }
                     background: Rectangle {
                         radius: 6
@@ -1249,7 +1018,7 @@ Item {
                     text: "NO"
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 45
-                    font.pixelSize: 18; font.bold: true
+	                    font.pixelSize: buttonFont; font.bold: true
                     onClicked: { scaleController.dismissZeroDrift(); zeroDriftPopup.close() }
                     background: Rectangle { color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cDanger; border.width: 1; radius: 6 }
                     contentItem: Text { text: parent.text; color: cDanger; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
@@ -1274,18 +1043,18 @@ Item {
         property string currentValue: "0.0"
         property bool isNewEntry: true
         onOpened: isNewEntry = true
-        background: Rectangle { color: cCard; radius: 12; border.color: cAccent; border.width: 2 }
+        background: Rectangle { color: cCard; radius: 12; border.color: cFrameBorder; border.width: 1 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 15; spacing: 8
-            Text { text: "ENTER VALUE (g)"; color: cAccent; font.pixelSize: 16; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	            Text { text: "ENTER VALUE (g)"; color: cAccent; font.pixelSize: buttonFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
             Rectangle {
                 Layout.fillWidth: true; Layout.preferredHeight: 50; radius: 6
-                color: cField; border.color: cAccent; border.width: 1
+                color: cField; border.color: cFieldBorder; border.width: 1
                 Text {
                     id: numpadDisplay
                     anchors.centerIn: parent
                     text: numpadPopup.currentValue
-                    color: cAccent; font.pixelSize: 28; font.bold: true; font.family: "monospace"
+	                    color: cAccent; font.pixelSize: valueFont + 4; font.bold: true
                 }
             }
             GridLayout {
@@ -1296,10 +1065,10 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true; Layout.fillHeight: true; radius: 6
                         color: numBtnMA.pressed ? cAccent : cField
-                        border.color: cBorder; border.width: 1
+                        border.color: cFrameBorder; border.width: 1
                         Text {
                             anchors.centerIn: parent
-                            text: modelData; color: "#fff"; font.pixelSize: 22; font.bold: true
+	                            text: modelData; color: "#fff"; font.pixelSize: valueFont; font.bold: true
                         }
                         MotionMouseArea {
                             id: numBtnMA; anchors.fill: parent
@@ -1340,7 +1109,7 @@ Item {
                 MotionButton {
                     opacity: down ? 0.8 : 1.0
                     text: "CANCEL"; Layout.fillWidth: true; Layout.preferredHeight: 44
-                    font.pixelSize: 14; font.bold: true
+	                    font.pixelSize: labelFont; font.bold: true
                     onClicked: numpadPopup.close()
                     background: Rectangle { radius: 6; color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cDanger }
                     contentItem: Text { text: parent.text; font: parent.font; color: cDanger; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
@@ -1349,7 +1118,7 @@ Item {
                     id: numpadOkBtn
                     opacity: down ? 0.8 : 1.0
                     text: "OK"; Layout.fillWidth: true; Layout.preferredHeight: 44
-                    font.pixelSize: 14; font.bold: true
+	                    font.pixelSize: labelFont; font.bold: true
                     onClicked: {
                         if (inkTab.numpadTarget) {
                             inkTab.numpadTarget.text = numpadPopup.currentValue;

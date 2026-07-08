@@ -12,6 +12,57 @@
 #include <pwd.h>
 #include <unistd.h>
 
+namespace {
+
+QStringList parseCsvLine(const QString& line)
+{
+    QStringList fields;
+    QString current;
+    bool inQuotes = false;
+
+    for (int i = 0; i < line.size(); ++i) {
+        const QChar ch = line.at(i);
+        if (ch == '"') {
+            if (inQuotes && i + 1 < line.size() && line.at(i + 1) == '"') {
+                current.append('"');
+                ++i;
+            } else {
+                inQuotes = !inQuotes;
+            }
+        } else if (ch == ',' && !inQuotes) {
+            fields.append(current.trimmed());
+            current.clear();
+        } else {
+            current.append(ch);
+        }
+    }
+    fields.append(current.trimmed());
+    return fields;
+}
+
+int csvColumnIndex(const QStringList& headers, const QString& name)
+{
+    const QString wanted = name.trimmed().toLower();
+    for (int i = 0; i < headers.size(); ++i) {
+        if (headers.at(i).trimmed().toLower() == wanted) return i;
+    }
+    return -1;
+}
+
+QString csvValue(const QStringList& row, int index)
+{
+    return (index >= 0 && index < row.size()) ? row.at(index).trimmed() : QString();
+}
+
+float csvFloatValue(const QString& raw, float fallback = 0.0f)
+{
+    bool ok = false;
+    const float value = raw.trimmed().replace(',', '.').toFloat(&ok);
+    return ok ? value : fallback;
+}
+
+} // namespace
+
 ScaleController::ScaleController(rclcpp::Node::SharedPtr node, QObject *parent)
     : QObject(parent), node_(node)
 {
@@ -171,6 +222,7 @@ void ScaleController::confirmTarget(const QString& inkName, float inkDensity, co
     active_ink_name_ = inkName;
     active_cart_name_ = cartName;
     ink_capacity_ = inkCapacity;
+    current_ml_fill_ = inkCapacity;
     
     // Publish ml fill back to machine just in case
     auto mlMsg = std_msgs::msg::Float32();
@@ -184,6 +236,7 @@ void ScaleController::confirmTarget(const QString& inkName, float inkDensity, co
 
     emit targetChanged();
     emit inkCapacityChanged();
+    emit currentMlFillChanged();
 
     auto fmsg = std_msgs::msg::Float32();
     fmsg.data = total_batch_weight_;
@@ -289,24 +342,48 @@ void ScaleController::setKnownCalibration(float weight)
 QVariantList ScaleController::getInkProfiles()
 {
     QVariantList list;
-    const char *homedir = getenv("HOME") ? getenv("HOME") : getpwuid(getuid())->pw_dir;
-    QString yaml_path = QString("%1/.ros/ink_profiles_new.yaml").arg(homedir);
+    QString csvPath = QString::fromLocal8Bit(qgetenv("FILL_HP_INK_CODE_FILE"));
+    if (csvPath.trimmed().isEmpty()) {
+        csvPath = "/home/pi/ink_codes.csv";
+    }
 
-    QFile file(yaml_path);
+    QFile file(csvPath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return list;
-    QString content = file.readAll();
-    file.close();
 
-    QRegularExpression re("\\s*([A-Za-z0-9_ -]+):\\s*\\n\\s*density_g:\\s*([0-9.]+)(?:\\s*\\n\\s*lot_pi:\\s*([^\\n]*))?(?:\\s*\\n\\s*lot_ci:\\s*([^\\n]*))?");
-    QRegularExpressionMatchIterator i = re.globalMatch(content);
-    while (i.hasNext()) {
-        QRegularExpressionMatch match = i.next();
-        if (match.captured(1) == "profiles") continue;
+    QTextStream stream(&file);
+    if (stream.atEnd()) return list;
+
+    const QStringList headers = parseCsvLine(stream.readLine());
+    const int scanIdx = csvColumnIndex(headers, "scan_code");
+    const int inkIdx = csvColumnIndex(headers, "ink_name");
+    const int totalIdx = csvColumnIndex(headers, "total_kg");
+    const int densityIdx = csvColumnIndex(headers, "density_g_ml");
+    const int lotPiIdx = csvColumnIndex(headers, "lot_pi");
+
+    while (!stream.atEnd()) {
+        const QString line = stream.readLine().trimmed();
+        if (line.isEmpty()) continue;
+
+        const QStringList row = parseCsvLine(line);
+        const QString scanCode = csvValue(row, scanIdx);
+        if (scanCode.isEmpty()) continue;
+
+        const QString inkName = csvValue(row, inkIdx).isEmpty() ? scanCode : csvValue(row, inkIdx);
+        const float totalKg = csvFloatValue(csvValue(row, totalIdx));
+        float density = csvFloatValue(csvValue(row, densityIdx), 0.89f);
+        if (density <= 0.0f) density = 0.89f;
+        const QString lotPi = csvValue(row, lotPiIdx);
+
         QVariantMap map;
-        map["name"] = match.captured(1).trimmed();
-        map["density"] = match.captured(2).toFloat();
-        map["lot_pi"] = match.captured(3).trimmed();
-        map["lot_ci"] = match.captured(4).trimmed();
+        map["scan_code"] = scanCode;
+        map["name"] = inkName;
+        map["ink_name"] = inkName;
+        map["display"] = QString("%1 - %2").arg(scanCode, inkName);
+        map["total_kg"] = totalKg;
+        map["density"] = density;
+        map["density_g_ml"] = density;
+        map["lot_pi"] = lotPi;
+        map["lot_ci"] = "";
         list.append(map);
     }
     return list;

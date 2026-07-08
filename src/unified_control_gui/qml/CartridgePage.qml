@@ -3443,58 +3443,38 @@ import QtGraphicalEffects 1.15
             property bool activeChoice: false
             property bool pressed: false
             property bool hovered: false
+            readonly property color gradStart: activeChoice ? root.cGetButton : root.cMovJButton
+            readonly property color gradEnd: activeChoice ? root.cGetButtonEnd : root.cMovJButtonEnd
+            readonly property color gradBorder: activeChoice ? root.cGetButtonBorder : root.cMovJButtonBorder
 
             signal clicked()
 
             radius: 8
             color: "transparent"
-            border.color: activeChoice ? "transparent" : (hovered ? Qt.lighter(root.cBtnBaseBorder, 1.16) : root.cBtnBaseBorder)
+            border.color: gradBorder
             border.width: 1
-
-            Behavior on border.color { ColorAnimation { duration: 100 } }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: parent.radius
-                visible: ioBtn.activeChoice
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: ioBtn.pressed ? Qt.darker(root.cCylinderActiveStart, root.cPressGradientDarken) : root.cCylinderActiveStart }
-                    GradientStop { position: 1.0; color: ioBtn.pressed ? Qt.darker(root.cCylinderActiveEnd, root.cPressGradientDarken) : root.cCylinderActiveEnd }
-                }
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: parent.radius
-                visible: ioBtn.activeChoice
-                gradient: Gradient {
-                    orientation: Gradient.Vertical
-                    GradientStop { position: 0.0; color: ioBtn.pressed ? Qt.rgba(0, 0, 0, 0.12) : Qt.rgba(1, 1, 1, 0.18) }
-                    GradientStop { position: 0.52; color: ioBtn.pressed ? Qt.rgba(0, 0, 0, 0.08) : Qt.rgba(1, 1, 1, 0.06) }
-                    GradientStop { position: 1.0; color: ioBtn.pressed ? Qt.rgba(0, 0, 0, 0.22) : Qt.rgba(0, 0, 0, 0.08) }
-                }
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: ioBtn.pressed ? root.pressGradientColor(ioBtn.gradStart) : ioBtn.gradStart }
+                GradientStop { position: 1.0; color: ioBtn.pressed ? root.pressGradientColor(ioBtn.gradEnd) : ioBtn.gradEnd }
             }
 
             Text {
                 anchors.centerIn: parent
                 anchors.verticalCenterOffset: ioBtn.pressed ? 1 : 0
                 text: ioBtn.lbl
-                color: ioBtn.activeChoice ? root.cCylinderActiveText : root.cBtnBaseText
-                font.pixelSize: 15
+                color: root.cWhiteText
+                font.pixelSize: page3Root.labelFont
                 font.bold: true
-                Behavior on color { ColorAnimation { duration: 80 } }
             }
 
             MotionMouseArea {
                 anchors.fill: parent
                 hoverEnabled: true
-                hoverScale: 1.015
+                hoverScale: 1.02
                 pressScale: 0.985
                 shadowEnabled: false
-                shimmerEnabled: true
-                shimmerWhilePressed: true
-                shimmerColor: "#88ffffff"
+                shimmerEnabled: false
                 raiseOnHover: false
                 onClicked: ioBtn.clicked()
                 onPressed: ioBtn.pressed = true
