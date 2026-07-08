@@ -297,7 +297,7 @@ QVariantList ScaleController::getInkProfiles()
     QString content = file.readAll();
     file.close();
 
-    QRegularExpression re("\\s*([A-Za-z0-9_ -]+):\\s*\\n\\s*density_g:\\s*([0-9.]+)");
+    QRegularExpression re("\\s*([A-Za-z0-9_ -]+):\\s*\\n\\s*density_g:\\s*([0-9.]+)(?:\\s*\\n\\s*lot_pi:\\s*([^\\n]*))?(?:\\s*\\n\\s*lot_ci:\\s*([^\\n]*))?");
     QRegularExpressionMatchIterator i = re.globalMatch(content);
     while (i.hasNext()) {
         QRegularExpressionMatch match = i.next();
@@ -305,6 +305,8 @@ QVariantList ScaleController::getInkProfiles()
         QVariantMap map;
         map["name"] = match.captured(1).trimmed();
         map["density"] = match.captured(2).toFloat();
+        map["lot_pi"] = match.captured(3).trimmed();
+        map["lot_ci"] = match.captured(4).trimmed();
         list.append(map);
     }
     return list;
@@ -336,6 +338,12 @@ QVariantList ScaleController::getCartProfiles()
 
 bool ScaleController::createInkProfile(const QString& name, float density)
 {
+    return createInkProfileWithBatch(name, density, QString(), QString());
+}
+
+bool ScaleController::createInkProfileWithBatch(const QString& idInk, float density, const QString& lotPi, const QString& lotCi)
+{
+    QString name = idInk.trimmed();
     if (name.isEmpty()) return false;
     const char *homedir = getenv("HOME") ? getenv("HOME") : getpwuid(getuid())->pw_dir;
     QString yaml_path = QString("%1/.ros/ink_profiles_new.yaml").arg(homedir);
@@ -347,7 +355,20 @@ bool ScaleController::createInkProfile(const QString& name, float density)
         file.close();
     }
     if (!content.contains("profiles:")) content = "profiles:\n";
-    QString newProfile = QString("  %1:\n    density_g: %2\n").arg(name, QString::number(density, 'f', 2));
+    QString safeLotPi = lotPi.trimmed();
+    QString safeLotCi = lotCi.trimmed();
+    safeLotPi.replace('\n', ' ');
+    safeLotCi.replace('\n', ' ');
+
+    QString escaped = QRegularExpression::escape(name);
+    QRegularExpression existing(QString("  %1:\\s*\\n(?:    [A-Za-z0-9_]+:\\s*[^\\n]*\\n)+").arg(escaped));
+    content.remove(existing);
+
+    QString newProfile = QString("  %1:\n    density_g: %2\n    lot_pi: %3\n    lot_ci: %4\n")
+                             .arg(name,
+                                  QString::number(density, 'f', 2),
+                                  safeLotPi,
+                                  safeLotCi);
     if (!content.endsWith('\n')) content += "\n";
     content += newProfile;
 

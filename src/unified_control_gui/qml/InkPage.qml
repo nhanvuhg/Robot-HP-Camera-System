@@ -474,7 +474,7 @@ Item {
                                                     Rectangle { width: 1; height: parent.height; color: "#14263c" }
                                                     Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "INK NAME"; color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: "#14263c" }
-                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART WEIGHT"; color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: "#14263c" }
                                                     Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: "#f0735c"; font.pixelSize: 11; font.bold: true } }
                                                 }
@@ -625,7 +625,7 @@ Item {
                                 Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: "#f5a623"; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
-                                Text { text: "DENSITY CARTRIDGE:"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
+                                Text { text: "CART WEIGHT:"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
                                 Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).density.toFixed(2) + " g" : "--"; color: "#f5a623"; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
@@ -719,17 +719,17 @@ Item {
                             }
                         }
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: "#04080f"; border.color: "#f0735c"; border.width: 1; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: "#04080f"; border.color: "#f5a623"; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
-                                Text { text: "MIN WEIGHT (g)"; color: "#9fb3c8"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: scaleController.minWeight.toFixed(2); color: "#3ed0b4"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: "MIN WEIGHT (g)"; color: "#f5a623"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: scaleController.minWeight.toFixed(2); color: "#f5a623"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 65; color: "#04080f"; border.color: "#3ed0b4"; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
-                                Text { text: "MAX WEIGHT (g)"; color: "#9fb3c8"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: scaleController.maxWeight.toFixed(2); color: "#f0735c"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: "MAX WEIGHT (g)"; color: "#3ed0b4"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: scaleController.maxWeight.toFixed(2); color: "#3ed0b4"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
                     }
@@ -750,7 +750,7 @@ Item {
                             GridLayout {
                                 anchors.fill: parent; anchors.margins: 15; columns: 2; columnSpacing: 15; rowSpacing: 15
                                 Text { text: "INK NAME"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "DENSITY (g)"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: "CART WEIGHT (g)"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                                 
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#06101d"; border.color: "#67d0ff"; border.width: 2; radius: 4

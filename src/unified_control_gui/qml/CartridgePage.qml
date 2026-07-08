@@ -102,11 +102,11 @@ import QtGraphicalEffects 1.15
         readonly property color cBtnEmergencyStart: "#E05454"
         readonly property color cBtnEmergencyEnd:   "#9c3030"
         readonly property color cBtnEmergencyBorder:"#E05454"
-        readonly property color cServoJogStart:     "#1A1A2E"
-        readonly property color cServoJogEnd:       "#1A1A2E"
+        readonly property color cServoJogStart:     "#1a4a6e"
+        readonly property color cServoJogEnd:       "#0c1726"
         readonly property color cServoJogBorder:    "#163a52"
         readonly property color cServoJogText:      "#ffffff"
-        readonly property color cServoRunStart:     "#1C4D8D"
+        readonly property color cServoRunStart:     "#1a4a6e"
         readonly property color cServoRunEnd:       "#0c1726"
         readonly property color cServoRunBorder:    "#163a52"
         readonly property color cServoRunText:      "#ffffff"
@@ -1013,7 +1013,6 @@ import QtGraphicalEffects 1.15
                                 text: model.t
                                 font.pixelSize: 14
                                 font.bold: true
-                                font.weight: Font.DemiBold
                                 font.letterSpacing: 0
                                 color: root.cWhiteText
                                 horizontalAlignment: Text.AlignHCenter
@@ -1353,6 +1352,7 @@ import QtGraphicalEffects 1.15
                                         bgEnd: root.cServoRunEnd
                                         bc: root.cServoRunBorder
                                         tc: root.cServoRunText
+                                        glassStyle: false
                                         isSelected: root.currentUiMode === "jog" || cartridgeController.systemState.toLowerCase().indexOf("jog") !== -1
                                         onClicked: {
                                             root.jogStopStateHint = false
@@ -1568,7 +1568,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true; Layout.preferredWidth: 1
                                                     Layout.preferredHeight: cardItem.controlH
                                                     padV: 6; padH: 0; fontSize: 18
-                                                    bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; glassStyle: true
+                                                    bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; glassStyle: false
                                                     active: servoRow.jogAllowed
                                                     inactiveOpacity: 0.22
                                                         onPressed: {
@@ -1587,7 +1587,7 @@ import QtGraphicalEffects 1.15
                                                     Layout.fillWidth: true; Layout.preferredWidth: 1
                                                     Layout.preferredHeight: cardItem.controlH
                                                     padV: 6; padH: 0; fontSize: 18
-                                                        bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; glassStyle: true
+                                                        bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; glassStyle: false
                                                     active: servoRow.jogAllowed
                                                     inactiveOpacity: 0.22
                                                         onPressed: {
@@ -1608,8 +1608,8 @@ import QtGraphicalEffects 1.15
                                             Row {
                                                 spacing: 6
                                                 width: parent.width
-                                                CBtn { lbl:"HOMING"; iconSource:"qrc:/qml/icons/house.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cServoRunStart; bgEnd:root.cServoRunEnd; bc:root.cServoRunBorder; tc:root.cServoRunText; active:servoRow.jogAllowed; inactiveOpacity:0.22; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
-                                                CBtn { lbl:"CLEAR"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cServoRunStart; bgEnd:root.cServoRunEnd; bc:root.cServoRunBorder; tc:root.cServoRunText; onClicked: cartridgeController.clearServo(model.sid) }
+                                                CBtn { lbl:"HOMING"; iconSource:"qrc:/qml/icons/house.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cServoRunStart; bgEnd:root.cServoRunEnd; bc:root.cServoRunBorder; tc:root.cServoRunText; glassStyle:false; active:servoRow.jogAllowed; inactiveOpacity:0.22; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
+                                                CBtn { lbl:"CLEAR"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cServoRunStart; bgEnd:root.cServoRunEnd; bc:root.cServoRunBorder; tc:root.cServoRunText; glassStyle:false; onClicked: cartridgeController.clearServo(model.sid) }
                                             }
 
                                             // TARGET POSITION Row (with input & RUN button)
@@ -1659,7 +1659,7 @@ import QtGraphicalEffects 1.15
                                                         Layout.preferredWidth: 80
                                                         Layout.preferredHeight: cardItem.controlH
                                                         padV: 0; fontSize: 16
-                                                        bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; active: servoRow.jogAllowed
+                                                        bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; glassStyle: false; active: servoRow.jogAllowed
                                                         inactiveOpacity: 0.22
                                                         onClicked: { if(servoRow.jogAllowed) { var v=parseFloat(posIn.text); if(!isNaN(v)) cartridgeController.moveServo(model.sid,v) } }
                                                     }
@@ -1857,7 +1857,7 @@ import QtGraphicalEffects 1.15
                                             Text {
                                                 text: model.slabel
                                                 color: sBtn.on_ ? root.cSensorActiveText : root.cSensorIdleText
-                                                font.pixelSize: 13; font.bold: true; font.weight: Font.DemiBold
+                                                font.pixelSize: 13; font.bold: true
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
                                             Text {
@@ -2090,7 +2090,7 @@ import QtGraphicalEffects 1.15
                                 }
 
                                 Row { spacing: 8; topPadding: 8
-                                    CBtn { lbl:"Save All"; padV:10; padH:22; fontSize: 18; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
+                                    CBtn { lbl:"Save All"; iconSource:"icons/download.svg"; padV:10; padH:22; fontSize: 18; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
                                         onClicked: {
                                             for (var i = 0; i < servoRepeater2.count; i++) {
                                                 var item = servoRepeater2.itemAt(i)
@@ -3264,7 +3264,7 @@ import QtGraphicalEffects 1.15
 
             implicitWidth:  w > 0 ? w : cbrT.implicitWidth + padH * 2
             implicitHeight: h > 0 ? h : cbrT.implicitHeight + padV * 2
-            radius: 10
+            radius: glassStyle ? 10 : 6
             property bool _heldVisual: _pressed
 
             // Outline (renderedBg.a==0): pressed/selected/hover hiện fill teal mờ
@@ -3277,11 +3277,12 @@ import QtGraphicalEffects 1.15
                 renderedBg
             )
             border.color: {
+                if (!glassStyle && renderedBgEnd !== renderedBg) return "transparent"
                 if (isSelected) return Qt.lighter(renderedBc, 1.2)
                 if (_hovered) return Qt.lighter(renderedBc, 1.08)
                 return renderedBc
             }
-            border.width: 1
+            border.width: (!glassStyle && renderedBgEnd !== renderedBg) ? 0 : 1
             opacity: active ? 1.0 : inactiveOpacity
 
             Behavior on color        { ColorAnimation { duration: 100 } }
@@ -3292,7 +3293,7 @@ import QtGraphicalEffects 1.15
             Rectangle {
                 anchors.fill: parent
                 radius: parent.radius
-                visible: cbr.glassStyle && cbr.renderedBgEnd !== cbr.renderedBg
+                visible: cbr.renderedBgEnd !== cbr.renderedBg
                 z: -1
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
@@ -3393,8 +3394,7 @@ import QtGraphicalEffects 1.15
                     text: cbr.lbl
                     color: cbr.isSelected ? cbr.selectedTc : cbr.tc
                     font.pixelSize: cbr.displayFontSize
-                    font.weight: Font.DemiBold
-                    font.capitalization: Font.MixedCase
+                    font.bold: true
                     anchors.verticalCenter: parent.verticalCenter
                     Behavior on color { ColorAnimation { duration: 80 } }
                 }
@@ -3402,13 +3402,13 @@ import QtGraphicalEffects 1.15
 
             MotionMouseArea { anchors.fill: parent; hoverEnabled: true
                 enabled: cbr.clickEnabled
-                hoverScale: cbr.glassStyle ? 1.015 : 1.03
-                pressScale: 0.985
+                hoverScale: cbr.glassStyle ? 1.012 : 1.012
+                pressScale: cbr.glassStyle ? 0.985 : 0.99
                 shadowEnabled: false
-                shimmerEnabled: cbr.active
+                shimmerEnabled: cbr.glassStyle && cbr.active
                 shimmerWhilePressed: true
                 shimmerColor: cbr.glassStyle ? "#88ffffff" : "#55d4faff"
-                raiseOnHover: false
+                raiseOnHover: true
                 onClicked:       { if(cbr.clickEnabled) cbr.clicked() }
                 onPressed:       { cbr._pressed = true;  cbr.pressed() }
                 onReleased:      { cbr._pressed = false; cbr.released() }
@@ -3463,7 +3463,7 @@ import QtGraphicalEffects 1.15
                 text: ioBtn.lbl
                 color: ioBtn.activeChoice ? root.cCylinderActiveText : root.cBtnBaseText
                 font.pixelSize: 15
-                font.weight: Font.DemiBold
+                font.bold: true
                 Behavior on color { ColorAnimation { duration: 80 } }
             }
 
@@ -3558,7 +3558,7 @@ import QtGraphicalEffects 1.15
                 }
 
                 Row { spacing: 6; topPadding: 8
-                    CBtn { lbl:"Save"; padV:8; padH:18; fontSize: 17; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
+                    CBtn { lbl:"Save"; iconSource:"icons/download.svg"; padV:8; padH:18; fontSize: 17; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
                         onClicked: {
                             var positions = {}
                             for (var i = 0; i < cfgRepeater.count; i++) {
@@ -3645,7 +3645,7 @@ import QtGraphicalEffects 1.15
                     }
 
                     Row { spacing: 8; topPadding: 8
-                        CBtn { lbl:"Save"; padV:10; padH:22; fontSize: 18; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
+                        CBtn { lbl:"Save"; iconSource:"icons/download.svg"; padV:10; padH:22; fontSize: 18; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
                             onClicked: {
                                 var positions = {}
                                 for (var i = 0; i < cfgZoneRepeater.count; i++) {

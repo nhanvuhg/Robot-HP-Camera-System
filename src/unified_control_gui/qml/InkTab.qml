@@ -80,7 +80,7 @@ Item {
     readonly property color cField:            Qt.rgba(0.06, 0.19, 0.26, 0.82)
     readonly property color cFieldStrong:      "#081627"
     readonly property color cMuted:            "#74899f"
-    readonly property color cSubText:          "#bfe0f5"
+    readonly property color cSubText:          "#ffffff"
     readonly property color cDisabled:         "#74899f"
     readonly property color cSelectedText:     "#04080f"
     readonly property color cActionStart:      "#1a4a6e"
@@ -89,6 +89,19 @@ Item {
     readonly property color cActionHoverEnd:   "#163a52"
     readonly property color cActionPressStart: "#163a52"
     readonly property color cActionPressEnd:   "#04080f"
+    readonly property color cResumeStart:      "#1C4D8D"
+    readonly property color cResumeEnd:        "#0c1726"
+    readonly property color cResumeHoverStart: "#245fa8"
+    readonly property color cResumeHoverEnd:   "#163a52"
+    readonly property color cResumePressStart: "#173e72"
+    readonly property color cResumePressEnd:   "#081627"
+    readonly property color cPauseStart:       "#8a4210"
+    readonly property color cPauseEnd:         "#E68457"
+    readonly property color cPauseHoverStart:  "#a65315"
+    readonly property color cPauseHoverEnd:    "#f09a6d"
+    readonly property color cPausePressStart:  "#6f350d"
+    readonly property color cPausePressEnd:    "#c76c3f"
+    readonly property color cPauseBorder:      "#E68457"
     readonly property color cSuccess:          "#3ed0b4"
     readonly property color cDanger:           "#f0735c"
     readonly property color cWarning:          "#f5a623"
@@ -219,8 +232,8 @@ Item {
                                 radius: 6
                                 gradient: Gradient {
                                     orientation: Gradient.Horizontal
-                                    GradientStop { position: 0.0; color: resetTareBtn.down ? "#e2761b" : (resetTareBtn.hovered ? "#ecc45a" : cWarning) }
-                                    GradientStop { position: 1.0; color: resetTareBtn.down ? "#e2761b" : (resetTareBtn.hovered ? "#e2761b" : cWarning) }
+                                    GradientStop { position: 0.0; color: resetTareBtn.down ? cPausePressStart : (resetTareBtn.hovered ? cPauseHoverStart : cPauseStart) }
+                                    GradientStop { position: 1.0; color: resetTareBtn.down ? cPausePressEnd : (resetTareBtn.hovered ? cPauseHoverEnd : cPauseEnd) }
                                 }
                             }
                         }
@@ -504,7 +517,10 @@ Item {
                                     id: inkSelector
                                     onCurrentIndexChanged: {
                                         if (currentIndex >= 0 && mapInkNameInput) {
-                                            mapInkNameInput.text = inkModel.get(currentIndex).name;
+                                            var selectedInk = inkModel.get(currentIndex);
+                                            mapInkNameInput.text = selectedInk.name || "";
+                                            mapLotPiInput.text = selectedInk.lot_pi || "";
+                                            mapLotCiInput.text = selectedInk.lot_ci || "";
                                         }
                                     }
                                     anchors.fill: parent; anchors.margins: 1
@@ -535,11 +551,15 @@ Item {
                                                 width: parent.width; height: 30; color: cCard
                                                 Row {
                                                     anchors.fill: parent; spacing: 0
-                                                    Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.10; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: cAccent; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "INK NAME"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.24 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "ID INK"; color: cAccent; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "LOT PI"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                    Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "LOT CI"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                    Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: cAccent; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: cBorder }
                                                     Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: cDanger; font.pixelSize: 11; font.bold: true } }
                                                 }
@@ -558,11 +578,15 @@ Item {
                                             anchors.fill: parent
                                             Row {
                                                 anchors.fill: parent; spacing: 0
-                                                Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: (index+1).toString(); color: inkSelector.highlightedIndex === index ? cSelectedText : cSubText; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
+                                                Item { width: parent.width * 0.10; height: parent.height; Text { anchors.centerIn: parent; text: (index+1).toString(); color: inkSelector.highlightedIndex === index ? cSelectedText : cSubText; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
                                                 Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.name; color: inkSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 13; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
+                                                Item { width: parent.width * 0.24 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.name; color: inkSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 13; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
                                                 Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: model.density.toFixed(2) + " g"; color: inkSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 13; font.bold: true; font.family: "monospace" } }
+                                                Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.lot_pi || "--"; color: inkSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 12; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
+                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 6; anchors.verticalCenter: parent.verticalCenter; text: model.lot_ci || "--"; color: inkSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 12; font.bold: true; font.family: "monospace"; elide: Text.ElideRight; width: parent.width - 10 } }
+                                                Rectangle { width: 1; height: parent.height; color: cBorder }
+                                                Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.centerIn: parent; text: model.density.toFixed(2) + " g"; color: inkSelector.highlightedIndex === index ? cSelectedText : cAccent; font.pixelSize: 12; font.bold: true; font.family: "monospace" } }
                                                 Rectangle { width: 1; height: parent.height; color: cBorder }
                                                 Item {
                                                     width: parent.width * 0.12 - 1; height: parent.height
@@ -621,7 +645,7 @@ Item {
                                                     Rectangle { width: 1; height: parent.height; color: cBorder }
                                                     Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART NAME"; color: cAccent; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: cBorder }
-                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: cAccent; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART WEIGHT"; color: cAccent; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: cBorder }
                                                     Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: cDanger; font.pixelSize: 11; font.bold: true } }
                                                 }
@@ -675,7 +699,7 @@ Item {
  
                             // Row 1
                             RowLayout {
-                                Text { text: "INK NAME:"; color: cSubText; font.pixelSize: 14; font.bold: true }
+                                Text { text: "ID INK:"; color: cSubText; font.pixelSize: 14; font.bold: true }
                                 Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
@@ -702,7 +726,7 @@ Item {
                                 Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
-                                Text { text: "DENSITY CARTRIDGE:"; color: cSubText; font.pixelSize: 14; font.bold: true }
+                                Text { text: "CART WEIGHT:"; color: cSubText; font.pixelSize: 14; font.bold: true }
                                 Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).density.toFixed(2) + " g" : "--"; color: cAccent; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
@@ -745,7 +769,7 @@ Item {
                                 }
                             }
                             RowLayout {
-                                Text { text: "ID INK NAME:"; color: cSubText; font.pixelSize: 14; font.bold: true }
+                                Text { text: "ID INK:"; color: cSubText; font.pixelSize: 14; font.bold: true }
                                 Text { text: mapInkNameInput.text !== "" ? mapInkNameInput.text : "--"; color: cAccent; font.pixelSize: 16; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
@@ -785,16 +809,26 @@ Item {
                                     }
                                 }
                                 MotionButton {
+                                    id: clearSelectionBtn
                                     opacity: down ? 0.8 : 1.0
                                     text: "CLEAR SELECTION"
                                     Layout.preferredHeight: 50; Layout.preferredWidth: 160
-                                    background: Rectangle { color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cDanger; border.width: 1; radius: 5 }
+                                    background: Rectangle {
+                                        border.color: cPauseBorder
+                                        border.width: 1
+                                        radius: 5
+                                        gradient: Gradient {
+                                            orientation: Gradient.Horizontal
+                                            GradientStop { position: 0.0; color: clearSelectionBtn.down ? cPausePressStart : (clearSelectionBtn.hovered ? cPauseHoverStart : cPauseStart) }
+                                            GradientStop { position: 1.0; color: clearSelectionBtn.down ? cPausePressEnd : (clearSelectionBtn.hovered ? cPauseHoverEnd : cPauseEnd) }
+                                        }
+                                    }
                                     contentItem: Item {
                                         Row {
                                             anchors.centerIn: parent
                                             spacing: 7
                                             Image {
-                                                source: "icons/brush_cleaning.svg"
+                                                source: "icons/brush_cleaning_white.svg"
                                                 width: 24; height: 24
                                                 sourceSize.width: 96
                                                 sourceSize.height: 96
@@ -808,7 +842,7 @@ Item {
                                                 text: "CLEAR SELECTION"
                                                 font.pixelSize: 13
                                                 font.bold: true
-                                                color: cDanger
+                                                color: "#ffffff"
                                                 anchors.verticalCenter: parent.verticalCenter
                                             }
                                         }
@@ -816,6 +850,9 @@ Item {
                                     onClicked: {
                                         inkSelector.currentIndex = -1;
                                         cartSelector.currentIndex = -1;
+                                        mapInkNameInput.text = "";
+                                        mapLotPiInput.text = "";
+                                        mapLotCiInput.text = "";
                                     }
                                 }
                             }
@@ -835,10 +872,10 @@ Item {
                             }
                         }
                         Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cDanger; border.width: 1; radius: 6
+                            Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cWarning; border.width: 1; radius: 6
                             Row { anchors.centerIn: parent; spacing: 8
                                 Image {
-                                    source: "icons/weight_tilde.svg"
+                                    source: "icons/weight_tilde_yellow.svg"
                                     width: 28; height: 28
                                     sourceSize.width: 96
                                     sourceSize.height: 96
@@ -849,8 +886,8 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Column { spacing: 2; anchors.verticalCenter: parent.verticalCenter
-                                Text { text: "MIN WEIGHT (g)"; color: cSubText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: scaleController.minWeight.toFixed(2); color: cSuccess; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: "MIN WEIGHT (g)"; color: cWarning; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: scaleController.minWeight.toFixed(2); color: cWarning; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
                                 }
                             }
                         }
@@ -869,8 +906,8 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Column { spacing: 2; anchors.verticalCenter: parent.verticalCenter
-                                Text { text: "MAX WEIGHT (g)"; color: cSubText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                Text { text: scaleController.maxWeight.toFixed(2); color: cDanger; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: "MAX WEIGHT (g)"; color: cSuccess; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: scaleController.maxWeight.toFixed(2); color: cSuccess; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
                                 }
                             }
                         }
@@ -890,27 +927,12 @@ Item {
                             GridLayout {
                                 anchors.fill: parent; anchors.margins: 15; columns: 3; columnSpacing: 15; rowSpacing: 12
                                 
-                                // Row 1 labels
-                                Text { text: "INK NAME"; color: cSubText; font.pixelSize: 14; font.bold: true; Layout.columnSpan: 2 }
-                                Text { text: "DENSITY (g)"; color: cSubText; font.pixelSize: 14; font.bold: true }
-                                
-                                // Row 1 inputs
-                                Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 40; Layout.columnSpan: 2; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    TextInput { id: newInkName; anchors.fill: parent; anchors.margins: 4; color: "#ffffff"; font.pixelSize: 18; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true }
-                                    Text { anchors.centerIn: parent; text: "--Type Ink Name--"; color: cDisabled; font.pixelSize: 15; font.italic: true; visible: newInkName.text.length === 0 && !newInkName.activeFocus }
-                                }
-                                Rectangle {
-                                    Layout.fillWidth: true; Layout.preferredHeight: 40; color: cField; border.color: cAccent; border.width: 1; radius: 4
-                                    TextInput { id: newInkDensity; anchors.fill: parent; anchors.margins: 4; color: cAccent; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MotionMouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = newInkDensity; numpadPopup.currentValue = newInkDensity.text; numpadPopup.open() } } }
-                                }
- 
-                                // Row 2 labels (Mapping)
-                                Text { text: "ID INK NAME"; color: cSubText; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.preferredWidth: 160 }
+                                // Row 1 labels (Profile identity)
+                                Text { text: "ID INK"; color: cSubText; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.preferredWidth: 160 }
                                 Text { text: "LOT PI"; color: cSubText; font.pixelSize: 13; font.bold: true; Layout.fillWidth: true; Layout.preferredWidth: 200 }
                                 Text { text: "LOT CI"; color: cSubText; font.pixelSize: 13; font.bold: true; Layout.fillWidth: false; Layout.preferredWidth: 110 }
  
-                                // Row 2 inputs (Mapping)
+                                // Row 1 inputs (Profile identity)
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredWidth: 160; Layout.preferredHeight: 40; color: cField; border.color: cAccent; border.width: 1; radius: 4
                                     TextInput {
@@ -922,7 +944,7 @@ Item {
                                     }
                                     Text {
                                         anchors.centerIn: parent
-                                        text: "--ID Ink Name--"
+                                        text: "--ID Ink--"
                                         color: cDisabled; font.pixelSize: 14; font.italic: true
                                         visible: mapInkNameInput.text.length === 0 && !mapInkNameInput.activeFocus
                                     }
@@ -959,6 +981,12 @@ Item {
                                         visible: mapLotCiInput.text.length === 0 && !mapLotCiInput.activeFocus
                                     }
                                 }
+
+                                Text { text: "DENSITY (g)"; color: cSubText; font.pixelSize: 14; font.bold: true; Layout.columnSpan: 3 }
+                                Rectangle {
+                                    Layout.fillWidth: true; Layout.preferredHeight: 40; Layout.columnSpan: 3; color: cField; border.color: cAccent; border.width: 1; radius: 4
+                                    TextInput { id: newInkDensity; anchors.fill: parent; anchors.margins: 4; color: cAccent; font.pixelSize: 18; font.bold:true; font.family: "monospace"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; readOnly: true; text: "0.0"; MotionMouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = newInkDensity; numpadPopup.currentValue = newInkDensity.text; numpadPopup.open() } } }
+                                }
  
                                 // Row 3 Buttons: Save Profile & Apply Batch Info
                                 RowLayout {
@@ -972,16 +1000,38 @@ Item {
                                             radius: 6
                                             gradient: Gradient {
                                                 orientation: Gradient.Horizontal
-                                                GradientStop { position: 0.0; color: saveInkBtn.down ? cActionPressStart : (saveInkBtn.hovered ? cActionHoverStart : cActionStart) }
-                                                GradientStop { position: 1.0; color: saveInkBtn.down ? cActionPressEnd : (saveInkBtn.hovered ? cActionHoverEnd : cActionEnd) }
+                                                GradientStop { position: 0.0; color: saveInkBtn.down ? cResumePressStart : (saveInkBtn.hovered ? cResumeHoverStart : cResumeStart) }
+                                                GradientStop { position: 1.0; color: saveInkBtn.down ? cResumePressEnd : (saveInkBtn.hovered ? cResumeHoverEnd : cResumeEnd) }
                                             }
                                         }
-                                        contentItem: Text { text: parent.text; color: "#ffffff"; font.pixelSize: 15; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
+                                        contentItem: Row {
+                                            spacing: 8
+                                            anchors.centerIn: parent
+                                            Image {
+                                                source: "icons/download.svg"
+                                                width: 20; height: 20
+                                                fillMode: Image.PreserveAspectFit
+                                                smooth: true
+                                                anchors.verticalCenter: parent.verticalCenter
+                                            }
+                                            Text {
+                                                text: saveInkBtn.text
+                                                color: "#ffffff"
+                                                font.pixelSize: 15
+                                                font.bold: true
+                                                anchors.verticalCenter: parent.verticalCenter
+                                            }
+                                        }
                                         onClicked: {
                                             var d = parseFloat(newInkDensity.text.replace(",", "."));
-                                            if (d > 0 && newInkName.text.trim() !== "") {
-                                                scaleController.createInkProfile(newInkName.text.trim(), d);
-                                                newInkName.text = ""; newInkDensity.text = "0.0";
+                                            if (d > 0 && mapInkNameInput.text.trim() !== "") {
+                                                scaleController.createInkProfileWithBatch(
+                                                    mapInkNameInput.text.trim(),
+                                                    d,
+                                                    mapLotPiInput.text.trim(),
+                                                    mapLotCiInput.text.trim()
+                                                );
+                                                newInkDensity.text = "0.0";
                                             }
                                         }
                                     }
@@ -1020,7 +1070,7 @@ Item {
                             GridLayout {
                                 anchors.fill: parent; anchors.margins: 15; columns: 2; columnSpacing: 15; rowSpacing: 15
                                 Text { text: "CART NAME"; color: cSubText; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "DENSITY (g)"; color: cSubText; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: "CART WEIGHT (g)"; color: cSubText; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                                 
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredHeight: 40; color: cField; border.color: cAccent; border.width: 1; radius: 4
@@ -1043,11 +1093,28 @@ Item {
                                         radius: 6
                                         gradient: Gradient {
                                             orientation: Gradient.Horizontal
-                                            GradientStop { position: 0.0; color: saveCartBtn.down ? cActionPressStart : (saveCartBtn.hovered ? cActionHoverStart : cActionStart) }
-                                            GradientStop { position: 1.0; color: saveCartBtn.down ? cActionPressEnd : (saveCartBtn.hovered ? cActionHoverEnd : cActionEnd) }
+                                            GradientStop { position: 0.0; color: saveCartBtn.down ? cResumePressStart : (saveCartBtn.hovered ? cResumeHoverStart : cResumeStart) }
+                                            GradientStop { position: 1.0; color: saveCartBtn.down ? cResumePressEnd : (saveCartBtn.hovered ? cResumeHoverEnd : cResumeEnd) }
                                         }
                                     }
-                                    contentItem: Text { text: parent.text; color: "#ffffff"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
+                                    contentItem: Row {
+                                        spacing: 8
+                                        anchors.centerIn: parent
+                                        Image {
+                                            source: "icons/download.svg"
+                                            width: 20; height: 20
+                                            fillMode: Image.PreserveAspectFit
+                                            smooth: true
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                        Text {
+                                            text: saveCartBtn.text
+                                            color: "#ffffff"
+                                            font.pixelSize: 16
+                                            font.bold: true
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                    }
                                     onClicked: {
                                         var d = parseFloat(newCartDensity.text.replace(",", "."));
                                         if (d > 0 && newCartName.text.trim() !== "") {

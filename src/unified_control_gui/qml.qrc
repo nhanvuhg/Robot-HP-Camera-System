@@ -27,6 +27,7 @@
     <file alias="icons/brush_cleaning_white.svg">qml/icons/brush_cleaning_white.svg</file>
     <file alias="icons/folder_search.svg">qml/icons/folder_search.svg</file>
     <file alias="icons/weight_tilde.svg">qml/icons/weight_tilde.svg</file>
+    <file alias="icons/weight_tilde_yellow.svg">qml/icons/weight_tilde_yellow.svg</file>
     <file alias="icons/house.svg">qml/icons/house.svg</file>
     <file alias="icons/play.svg">qml/icons/play.svg</file>
     <file alias="icons/step_forward.svg">qml/icons/step_forward.svg</file>
@@ -62,6 +63,7 @@
     <file>qml/icons/refresh_cw.svg</file>
     <file>qml/icons/list_restart.svg</file>
     <file>qml/icons/user_cog.svg</file>
+    <file>qml/icons/weight_tilde_yellow.svg</file>
     <file>qml/icons/weight_tilde_lucide.svg</file>
     <file>qml/icons/weight_tilde_lucide_red.svg</file>
     <file>qml/icons/message_circle_warning.svg</file>

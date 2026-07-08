@@ -62,6 +62,7 @@ public slots:
     QVariantList getInkProfiles();
     QVariantList getCartProfiles();
     bool createInkProfile(const QString& name, float density);
+    bool createInkProfileWithBatch(const QString& idInk, float density, const QString& lotPi, const QString& lotCi);
     bool createCartProfile(const QString& name, float density);
     bool deleteInkProfile(const QString& name);
     bool deleteCartProfile(const QString& name);
