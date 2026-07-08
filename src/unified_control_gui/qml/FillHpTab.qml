@@ -17,9 +17,9 @@ Item {
     readonly property color cPanel:       "#990d1e32"
     readonly property color cPanel2:      "#8806101d"
     readonly property color cBorder:      "#1affffff"
-    readonly property color cText:        "#c7dcef"
-    readonly property color cMuted:       "#9fb3c8"
-    readonly property color cAccent:      "#7fcdf5"
+    readonly property color cText:        "#ffffff"
+    readonly property color cMuted:       "#bfe0f5"
+    readonly property color cAccent:      "#67d0ff"
     readonly property color cAccentSoft:  Qt.rgba(0.42, 0.75, 0.95, 0.16)
     readonly property color cOk:          "#3ed0b4"
     readonly property color cOkBg:        Qt.rgba(0.0, 0.90, 0.46, 0.15)
@@ -30,6 +30,16 @@ Item {
     readonly property color cBadBg:       Qt.rgba(1.0, 0.32, 0.32, 0.15)
     readonly property color cIdle:        "#74899f"
     readonly property color cIdleBg:      Qt.rgba(0.32, 0.38, 0.44, 0.15)
+    readonly property color cBtnBaseStart:"#0c1726"
+    readonly property color cBtnBaseEnd:  "#06101d"
+    readonly property color cBtnPrimaryStart:"#1f9e86"
+    readonly property color cBtnPrimaryEnd:  "#163a52"
+    readonly property color cBtnActionStart: "#1a4a6e"
+    readonly property color cBtnActionEnd:   "#0c1726"
+    readonly property color cBtnWarnStart:   "#8a4210"
+    readonly property color cBtnWarnEnd:     "#E68457"
+    readonly property color cBtnDangerStart: "#E05454"
+    readonly property color cBtnDangerEnd:   "#7a2424"
 
     readonly property string monoFamily:  "JetBrains Mono, DejaVu Sans Mono, Consolas, monospace"
 
@@ -606,25 +616,22 @@ Item {
                                     Layout.fillHeight: true
                                     Layout.alignment: Qt.AlignTop
 
-                                    Item {
-                                        anchors.fill: parent
+                                    ColumnLayout {
+                                        width: parent.width
                                         enabled: tab.modeStr === "MANUAL"
                                         opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                        spacing: 8
                                         Behavior on opacity { NumberAnimation { duration: 150 } }
-                                        ColumnLayout {
-                                            anchors.fill: parent
-                                            spacing: 6
-                                            Repeater {
-                                                model: tab.cylinderModel
-                                                IoToggle {
-                                                    Layout.fillWidth: true
-                                                    Layout.fillHeight: true
-                                                    ioId:      modelData.id
-                                                    statusKey: modelData.statusKey
-                                                    ioLabel:   modelData.label
-                                                    actA:      modelData.a
-                                                    actB:      modelData.b
-                                                }
+                                        Repeater {
+                                            model: tab.cylinderModel
+                                            IoToggle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 48
+                                                ioId:      modelData.id
+                                                statusKey: modelData.statusKey
+                                                ioLabel:   modelData.label
+                                                actA:      modelData.a
+                                                actB:      modelData.b
                                             }
                                         }
                                     }
@@ -760,25 +767,22 @@ Item {
                             Layout.fillHeight: true
                             Layout.minimumHeight: implicitHeight
                             Layout.alignment: Qt.AlignTop
-                            Item {
-                                anchors.fill: parent
+                            ColumnLayout {
+                                width: parent.width
                                 enabled: tab.modeStr === "MANUAL"
                                 opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                spacing: 8
                                 Behavior on opacity { NumberAnimation { duration: 150 } }
-                                ColumnLayout {
-                                    anchors.fill: parent
-                                    spacing: 3
-                                    Repeater {
-                                        model: tab.valveModel
-                                        IoToggle {
-                                            Layout.fillWidth: true
-                                            Layout.fillHeight: true
-                                            ioId:      modelData.id
-                                            statusKey: modelData.statusKey
-                                            ioLabel:   modelData.label
-                                            actA:      modelData.a
-                                            actB:      modelData.b
-                                        }
+                                Repeater {
+                                    model: tab.valveModel
+                                    IoToggle {
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: 48
+                                        ioId:      modelData.id
+                                        statusKey: modelData.statusKey
+                                        ioLabel:   modelData.label
+                                        actA:      modelData.a
+                                        actB:      modelData.b
                                     }
                                 }
                             }
@@ -1112,24 +1116,32 @@ Item {
         property string variant: "default"
         signal clicked
 
-        readonly property color baseBorder: variant === "primary" ? cAccent
+        readonly property color baseBorder: variant === "primary" ? cOk
                                           : variant === "warn"    ? cWarn
-                                          : variant === "danger"  ? cBad : cBorder
-        readonly property color baseBg:     variant === "primary" ? "#081627"
-                                          : variant === "warn"    ? "#2a1c08"
-                                          : variant === "danger"  ? "#2c0f0e" : cPanel2
-        readonly property color baseFg:     variant === "primary" ? cAccent
-                                          : variant === "warn"    ? cWarn
-                                          : variant === "danger"  ? cBad : cText
+                                          : variant === "danger"  ? cBad
+                                          : variant === "action"  ? cAccent : "#163a52"
+        readonly property color gradStart:  variant === "primary" ? cBtnPrimaryStart
+                                          : variant === "warn"    ? cBtnWarnStart
+                                          : variant === "danger"  ? cBtnDangerStart
+                                          : variant === "action"  ? cBtnActionStart : cBtnBaseStart
+        readonly property color gradEnd:    variant === "primary" ? cBtnPrimaryEnd
+                                          : variant === "warn"    ? cBtnWarnEnd
+                                          : variant === "danger"  ? cBtnDangerEnd
+                                          : variant === "action"  ? cBtnActionEnd : cBtnBaseEnd
+        readonly property color baseFg:     "#ffffff"
 
         implicitWidth: Math.max(80, t.implicitWidth + 26)
         implicitHeight: 38
         radius: 6
-        color: ma.pressed ? Qt.darker(baseBg, 1.35)
-             : ma.containsMouse ? Qt.darker(baseBg, 0.85) : baseBg
+        color: "transparent"
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: ma.pressed ? Qt.darker(gradStart, 1.18) : (ma.containsMouse ? Qt.lighter(gradStart, 1.08) : gradStart) }
+            GradientStop { position: 1.0; color: ma.pressed ? Qt.darker(gradEnd, 1.18) : (ma.containsMouse ? Qt.lighter(gradEnd, 1.08) : gradEnd) }
+        }
         border.color: ma.pressed ? Qt.lighter(baseBorder, 1.15) : baseBorder
         border.width: 1
-        Behavior on color { ColorAnimation { duration: 90 } }
+        Behavior on border.color { ColorAnimation { duration: 90 } }
 
         Text {
             id: t; anchors.centerIn: parent
@@ -1145,14 +1157,7 @@ Item {
 
     component ModeBtn: TbBtn {
         property bool active: false
-        variant: "default"
-        color: active ? "#081627" : cPanel2
-        border.color: active ? cOk : cBorder
-        Text {
-            anchors.centerIn: parent; text: parent.lbl
-            color: parent.active ? cOk : cText
-            font.pixelSize: 21; font.bold: true
-        }
+        variant: active ? "primary" : "default"
     }
 
     component CycleChip: Rectangle {
@@ -1405,6 +1410,7 @@ Item {
 
     // Single valve/cylinder row: label + 2 toggle buttons (a/b) — compact
     component IoToggle: Rectangle {
+        id: ioToggle
         property string ioId: ""
         property string statusKey: ""
         property string ioLabel: ""
@@ -1415,27 +1421,32 @@ Item {
         readonly property bool aActive: actionMatches(curLabel, actA)
         readonly property bool bActive: actionMatches(curLabel, actB)
         implicitWidth: 360
-        implicitHeight: 42
-        radius: 5
-        color: cPanel2; border.color: cBorder; border.width: 1
+        implicitHeight: 48
+        radius: 6
+        color: cField; border.color: cBorder; border.width: 1
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 10; anchors.rightMargin: 8
-            spacing: 6
+            anchors.leftMargin: 12; anchors.rightMargin: 8
+            spacing: 8
             Text {
                 text: ioLabel; color: cText
-                font.pixelSize: 20; font.bold: true
+                font.pixelSize: 16; font.bold: true
                 Layout.fillWidth: true; elide: Text.ElideRight
             }
             // Action A button
             Rectangle {
-                implicitWidth: 80; implicitHeight: 32; radius: 5
-                color: parent.parent.aActive ? cOk : cPanel
-                border.color: parent.parent.aActive ? cOk : cBorder; border.width: 1
+                Layout.preferredWidth: 76; Layout.preferredHeight: 34; radius: 6
+                color: "transparent"
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0.0; color: ioToggle.aActive ? cBtnPrimaryStart : cBtnActionStart }
+                    GradientStop { position: 1.0; color: ioToggle.aActive ? cBtnPrimaryEnd : cBtnActionEnd }
+                }
+                border.color: ioToggle.aActive ? cOk : cAccent; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: actA
-                    color: parent.parent.parent.aActive ? "#06101d" : cText
-                    font.pixelSize: 19; font.bold: true
+                    color: "#ffffff"
+                    font.pixelSize: 16; font.bold: true
                 }
                 MotionMouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -1443,13 +1454,18 @@ Item {
                 }
             }
             Rectangle {
-                implicitWidth: 80; implicitHeight: 32; radius: 5
-                color: parent.parent.bActive ? cOk : cPanel
-                border.color: parent.parent.bActive ? cOk : cBorder; border.width: 1
+                Layout.preferredWidth: 76; Layout.preferredHeight: 34; radius: 6
+                color: "transparent"
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0.0; color: ioToggle.bActive ? cBtnPrimaryStart : cBtnActionStart }
+                    GradientStop { position: 1.0; color: ioToggle.bActive ? cBtnPrimaryEnd : cBtnActionEnd }
+                }
+                border.color: ioToggle.bActive ? cOk : cAccent; border.width: 1
                 Text {
                     anchors.centerIn: parent; text: actB
-                    color: parent.parent.parent.bActive ? "#06101d" : cText
-                    font.pixelSize: 19; font.bold: true
+                    color: "#ffffff"
+                    font.pixelSize: 16; font.bold: true
                 }
                 MotionMouseArea {
                     anchors.fill: parent; cursorShape: Qt.PointingHandCursor
@@ -1468,12 +1484,21 @@ Item {
         readonly property color baseBorder: variant === "primary" ? cAccent
                                           : variant === "warn"    ? cWarn
                                           : variant === "danger"  ? cBad : cBorder
-        readonly property color baseFg:     variant === "primary" ? cAccent
-                                          : variant === "warn"    ? cWarn
-                                          : variant === "danger"  ? cBad : cText
+        readonly property color gradStart:  variant === "primary" ? cBtnActionStart
+                                          : variant === "warn"    ? cBtnWarnStart
+                                          : variant === "danger"  ? cBtnDangerStart : cBtnBaseStart
+        readonly property color gradEnd:    variant === "primary" ? cBtnActionEnd
+                                          : variant === "warn"    ? cBtnWarnEnd
+                                          : variant === "danger"  ? cBtnDangerEnd : cBtnBaseEnd
+        readonly property color baseFg:     "#ffffff"
         implicitWidth: 140; implicitHeight: 46
         radius: 6
-        color: _pressed ? Qt.rgba(0.25, 0.65, 0.85, 0.28) : cPanel2
+        color: "transparent"
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: _pressed ? Qt.darker(gradStart, 1.18) : gradStart }
+            GradientStop { position: 1.0; color: _pressed ? Qt.darker(gradEnd, 1.18) : gradEnd }
+        }
         border.color: baseBorder; border.width: 1
         Text {
             anchors.centerIn: parent; text: lbl; color: baseFg
