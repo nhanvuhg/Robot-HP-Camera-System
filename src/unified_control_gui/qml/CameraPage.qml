@@ -335,49 +335,6 @@ Item {
                         }
                     }
 
-                    Item {
-                        Layout.fillWidth: true
-                        Text {
-                            anchors.centerIn: parent
-                            text: "ROS 2 - INKOBOT MONITORING SYSTEM"
-                            font.pixelSize: 24; font.bold: true; color: cAccent; font.letterSpacing: 2
-                        }
-                    }
-
-                    MotionButton {
-                        id: cartridgePageBtn
-                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
-                        hoverScale: 1.012
-                        pressScale: 0.99
-                        onClicked: stackView.push(cartridgePage)
-                        background: Rectangle {
-                            radius: 6
-                            color: "transparent"
-                            border.color: cServoRunEnd
-                            border.width: 1
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: cartridgePageBtn.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
-                                GradientStop { position: 1.0; color: cartridgePageBtn.pressed ? Qt.darker(cServoRunEnd, 1.15) : cServoRunEnd }
-                            }
-                        }
-                        contentItem: Item {
-                            Image {
-                                anchors.centerIn: parent
-                                source: "qrc:/qml/icons/user_cog.svg"
-                                width: 34; height: 34
-                                fillMode: Image.PreserveAspectFit
-                                smooth: true
-                            }
-                            HoverHint {
-                                visible: cartridgePageBtn.hovered
-                                label: "Cartridge Page"
-                                bc: cServoRunEnd
-                                tc: cBtnBaseText
-                            }
-                        }
-                    }
-
                     MotionButton {
                         id: ignoreScaleBtn
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
@@ -454,6 +411,49 @@ Item {
                             HoverHint {
                                 visible: settingsBtn.hovered
                                 label: "Camera Setting"
+                                bc: cServoRunEnd
+                                tc: cBtnBaseText
+                            }
+                        }
+                    }
+
+                    Item {
+                        Layout.fillWidth: true
+                        Text {
+                            anchors.centerIn: parent
+                            text: "ROS 2 - INKOBOT MONITORING SYSTEM"
+                            font.pixelSize: 24; font.bold: true; color: cAccent; font.letterSpacing: 2
+                        }
+                    }
+
+                    MotionButton {
+                        id: cartridgePageBtn
+                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        hoverScale: 1.012
+                        pressScale: 0.99
+                        onClicked: stackView.push(cartridgePage)
+                        background: Rectangle {
+                            radius: 6
+                            color: "transparent"
+                            border.color: cServoRunEnd
+                            border.width: 1
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: cartridgePageBtn.pressed ? Qt.darker(cServoRunStart, 1.15) : cServoRunStart }
+                                GradientStop { position: 1.0; color: cartridgePageBtn.pressed ? Qt.darker(cServoRunEnd, 1.15) : cServoRunEnd }
+                            }
+                        }
+                        contentItem: Item {
+                            Image {
+                                anchors.centerIn: parent
+                                source: "qrc:/qml/icons/user_cog.svg"
+                                width: 34; height: 34
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
+                            }
+                            HoverHint {
+                                visible: cartridgePageBtn.hovered
+                                label: "Cartridge Page"
                                 bc: cServoRunEnd
                                 tc: cBtnBaseText
                             }
