@@ -22,7 +22,7 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     for (int i = 0; i < 6; i++) joint_angles_.append(0.0);
     for (int i = 0; i < 6; i++) cartesian_pose_.append(0.0);
     for (int i = 0; i < 5; i++) row_ready_.append(false);
-    for (int i = 0; i < 9; i++) slot_ready_.append(false);
+    for (int i = 0; i < 10; i++) slot_ready_.append(false);
 
     // Create service clients
     enable_client_ = node_->create_client<std_srvs::srv::SetBool>("/robot/enable_system");
@@ -157,7 +157,7 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
             QMetaObject::invokeMethod(this, [this, msg]() {
                 QVariantList next;
                 // slot_status: 0=empty (ready to place), 1=occupied (blank)
-                for (int i = 0; i < 9; ++i) {
+                for (int i = 0; i < 10; ++i) {
                     next.append(i < (int)msg->data.size() && msg->data[i] == 0);
                 }
                 if (next != slot_ready_) {

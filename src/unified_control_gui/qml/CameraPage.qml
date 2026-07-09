@@ -907,9 +907,12 @@ Item {
                             color: "#74899f"; font.pixelSize: 17
                         }
                     }
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: 3
-                        Repeater { model: 9
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 5
+                        columnSpacing: 3
+                        rowSpacing: 4
+                        Repeater { model: 10
                             delegate: Rectangle {
                                 property int sn: index + 1
                                 property bool aiMode: cameraPageRoot.ctrlMode === "camera_ai"
@@ -917,7 +920,9 @@ Item {
                                 property bool isActive: robotController.selectedSlot === sn
                                 property bool canSelect: cameraPageRoot.ctrlMode === "auto"
                                 readonly property bool isAccent: aiMode ? isReady : isActive
-                                Layout.fillWidth: true; height: 32; radius: 12
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 32
+                                radius: 12
                                 color: isAccent ? "transparent"
                                                 : (aiMode
                                                    ? Qt.rgba(0.03, 0.11, 0.18, 0.68)
@@ -937,7 +942,7 @@ Item {
                                 Text {
                                     anchors.centerIn: parent; text: "O" + sn
                                     color: isAccent ? cServoJogText : "#9fb3c8"
-                                    font.pixelSize: 16; font.bold: isAccent
+                                    font.pixelSize: 18; font.bold: isAccent
                                 }
                                 MotionMouseArea {
                                     id: maSlot
