@@ -318,6 +318,14 @@ Item {
         else if (item.type === "int")  hpController.publishInt(item.topic, Math.round(n));
         else                            hpController.publishFloat(item.topic, n);
     }
+    function settingCurrentValue(item) {
+        if (!item || !item.topic) return "";
+        if (item.topic === "base_pwm") return hpController.basePwmStatus.toString();
+        return settingsMap[item.topic] || "";
+    }
+    function settingDisplayLabel(item) {
+        return item && item.label ? String(item.label).toUpperCase() : "";
+    }
     property string modeStr:   (sysMap["MODE"] || hpController.modeStatus || "-").toString().toUpperCase()
     property string stateStr:  sysMap["STATE"] || hpController.systemStatus || "-"
     property string cycleStr:  sysMap["CYCLE"] || "-"
@@ -486,34 +494,58 @@ Item {
                 }
             }
 
-            // -- PAGE 1: compact overview + safety + grouped sensor signal --
-            ColumnLayout {
+            // -- PAGE 1: compact overview + safety/settings + grouped sensor signal --
+            RowLayout {
                 id: pageOneGroup
+                property real targetHeight: Math.max(820, bodyScrollView.height - 16)
                 Layout.fillWidth: true
-                spacing: 10
+                Layout.preferredHeight: targetHeight
+                spacing: 12
 
-                RowLayout {
+                ColumnLayout {
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
                     Layout.alignment: Qt.AlignTop
-                    spacing: 12
+                    spacing: 10
 
-                    SystemOverviewPanel {
-                        id: topOverviewPanel
-                        Layout.preferredWidth: 560
-                        Layout.maximumWidth: 600
+                    RowLayout {
+                        Layout.fillWidth: true
                         Layout.alignment: Qt.AlignTop
+                        spacing: 12
+
+                        SystemOverviewPanel {
+                            id: topOverviewPanel
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 580
+                            Layout.alignment: Qt.AlignTop
+                        }
+                        SafetyProcessPanel {
+                            id: topSafetyPanel
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 420
+                            Layout.preferredHeight: topOverviewPanel.implicitHeight
+                            Layout.alignment: Qt.AlignTop
+                        }
                     }
-                    SafetyProcessPanel {
-                        id: topSafetyPanel
-                        Layout.preferredWidth: 400
-                        Layout.maximumWidth: 420
-                        Layout.preferredHeight: topOverviewPanel.implicitHeight
-                        Layout.alignment: Qt.AlignTop
+
+                    OperationalSettingsPanel {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(0, pageOneGroup.targetHeight - topOverviewPanel.implicitHeight - 10)
+                        Layout.alignment: Qt.AlignLeft
                     }
+                }
+
+                ColumnLayout {
+                    id: sensorStack
+                    Layout.preferredWidth: 760
+                    Layout.maximumWidth: 760
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 10
+
                     SensorGroupCard {
                         title: "SENSOR"
-                        columns: 4
-                        tileHeight: 48
+                        columns: 6
+                        squareTiles: true
                         items: [
                             "start_button",
                             "stop_button",
@@ -531,38 +563,15 @@ Item {
                             "ball_box_empty",
                             "safety_i_4_i04",
                             "safety_i_5_i04",
-                            "safety_area_clear",
-                            "mag_8",
-                            "tube_8"
-                        ]
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: topOverviewPanel.implicitHeight
-                        Layout.alignment: Qt.AlignTop
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 12
-
-                    SensorGroupCard {
-                        title: "MAG 1-7"
-                        columns: 7
-                        items: [
-                            "mag_1",
-                            "mag_2",
-                            "mag_3",
-                            "mag_4",
-                            "mag_5",
-                            "mag_6",
-                            "mag_7"
+                            "safety_area_clear"
                         ]
                         Layout.fillWidth: true
                     }
 
                     SensorGroupCard {
-                        title: "TUBE 1-7"
-                        columns: 7
+                        title: "TUBE 1-8"
+                        columns: 8
+                        squareTiles: true
                         items: [
                             "tube_1",
                             "tube_2",
@@ -570,7 +579,25 @@ Item {
                             "tube_4",
                             "tube_5",
                             "tube_6",
-                            "tube_7"
+                            "tube_7",
+                            "tube_8"
+                        ]
+                        Layout.fillWidth: true
+                    }
+
+                    SensorGroupCard {
+                        title: "MAG 1-8"
+                        columns: 8
+                        squareTiles: true
+                        items: [
+                            "mag_1",
+                            "mag_2",
+                            "mag_3",
+                            "mag_4",
+                            "mag_5",
+                            "mag_6",
+                            "mag_7",
+                            "mag_8"
                         ]
                         Layout.fillWidth: true
                     }
@@ -720,13 +747,13 @@ Item {
 
             ColumnLayout {
                 width: parent.width
-                spacing: 10
+                spacing: 6
 
                 GridLayout {
                     Layout.fillWidth: true
                     columns: 3
                     columnSpacing: 8
-                    rowSpacing: 8
+                    rowSpacing: 6
                     SafetyBox { lbl: "SAFETY I_4"; ok: tab.safetyOk("safety_i_4_i04") }
                     SafetyBox { lbl: "SAFETY I_5"; ok: tab.safetyOk("safety_i_5_i04") }
                     SafetyBox { lbl: "SAFETY AREA\nCLEAR"; ok: tab.safetyOk("safety_area_clear") }
@@ -735,30 +762,49 @@ Item {
                 Text {
                     text: "TIEN TRINH"
                     color: cMuted
-                    font.pixelSize: 16
+                    font.pixelSize: 12
                     font.bold: true
                     font.letterSpacing: 1.0
                 }
 
                 GridLayout {
+                    id: processGrid
+                    property real cellWidth: width
                     Layout.fillWidth: true
-                    columns: 2
-                    columnSpacing: 8
-                    rowSpacing: 8
-                    ProcessBox { lbl: "AUTO FILL"; val: tab.processAutoText(); active: tab.running && tab.modeStr === "AUTO" }
-                    ProcessBox { lbl: "DOSING"; val: tab.processDosingText(); active: tab.running && (tab.modeStr === "AUTO" || tab.modeStr === "CLEAN" || tab.modeStr === "PREFILL") }
-                    ProcessBox { lbl: "CLEAN / PREFILL"; val: tab.processCleanText(); active: tab.running && (tab.modeStr === "CLEAN" || tab.modeStr === "PREFILL") }
-                    ProcessBox { lbl: "CYCLE / VOLUME"; val: tab.cycleStr + " | " + tab.volumeStr; active: tab.running }
+                    columns: 1
+                    columnSpacing: 0
+                    rowSpacing: 4
+                    ProcessBox {
+                        Layout.preferredWidth: processGrid.cellWidth
+                        lbl: "AUTO FILL"; val: tab.processAutoText(); active: tab.running && tab.modeStr === "AUTO"
+                    }
+                    ProcessBox {
+                        Layout.preferredWidth: processGrid.cellWidth
+                        lbl: "DOSING"; val: tab.processDosingText(); active: tab.running && (tab.modeStr === "AUTO" || tab.modeStr === "CLEAN" || tab.modeStr === "PREFILL")
+                    }
+                    ProcessBox {
+                        Layout.preferredWidth: processGrid.cellWidth
+                        lbl: "CLEAN / PREFILL"; val: tab.processCleanText(); active: tab.running && (tab.modeStr === "CLEAN" || tab.modeStr === "PREFILL")
+                    }
+                    ProcessBox {
+                        Layout.preferredWidth: processGrid.cellWidth
+                        lbl: "CYCLE / VOLUME"; val: tab.cycleStr + " | " + tab.volumeStr; active: tab.running
+                    }
                 }
             }
         }
     }
 
     component SensorGroupCard: Rectangle {
+        id: sensorGroupCard
         property string title: ""
         property var items: []
         property int columns: 4
         property int tileHeight: 36
+        property bool squareTiles: false
+        readonly property real tileSide: squareTiles
+                                         ? Math.max(46, Math.floor((Math.max(0, groupCol.width - ((columns - 1) * 4)) / Math.max(1, columns))))
+                                         : tileHeight
 
         Layout.preferredHeight: implicitHeight
         implicitHeight: groupCol.implicitHeight + 16
@@ -794,7 +840,7 @@ Item {
                     SensorTile {
                         sensorKey: modelData
                         Layout.fillWidth: true
-                        Layout.preferredHeight: tileHeight
+                        Layout.preferredHeight: sensorGroupCard.tileSide
                     }
                 }
             }
@@ -834,7 +880,7 @@ Item {
                 width: parent.width
                 text: getSensorLabel(sensorKey)
                 color: parent.parent.on_ ? tab.cSensorActiveText : tab.cSensorIdleText
-                font.pixelSize: 8
+                font.pixelSize: Math.min(12, Math.max(8, Math.min(parent.parent.width, parent.parent.height) * 0.14))
                 font.bold: true
                 wrapMode: Text.WrapAnywhere
                 horizontalAlignment: Text.AlignHCenter
@@ -846,6 +892,289 @@ Item {
                 color: parent.parent.on_ ? tab.cSensorActiveText : tab.cSensorIdleDot
                 anchors.horizontalCenter: parent.horizontalCenter
             }
+        }
+    }
+
+    component OperationalSettingsPanel: Item {
+        implicitHeight: settingsSect.implicitHeight
+
+        Sect {
+            id: settingsSect
+            width: parent.width
+            height: parent.height > 0 ? parent.height : implicitHeight
+            title: "THÔNG SỐ VẬN HÀNH"
+            fillBodyHeight: true
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 8
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Text {
+                        text: "GỢI Ý BASE PWM"
+                        color: cAccent
+                        font.pixelSize: 13
+                        font.bold: true
+                        font.letterSpacing: 1.0
+                    }
+                    Item { Layout.fillWidth: true }
+                    CompactActionBtn {
+                        lbl: "Khôi phục mặc định"
+                        variant: "warn"
+                        Layout.preferredWidth: 155
+                        Layout.preferredHeight: 28
+                        onClicked: hpController.publishString("parameters_control", "reset_defaults")
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 56
+                    radius: 8
+                    color: cField
+                    border.color: cBorder
+                    border.width: 1
+
+                    Rectangle {
+                        width: 3
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        anchors.topMargin: 10
+                        anchors.bottomMargin: 10
+                        anchors.leftMargin: 8
+                        radius: 2
+                        color: cWarn
+                    }
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 18
+                        anchors.rightMargin: 10
+                        spacing: 8
+
+                        Text {
+                            text: "51.5ml @ 2.0ml/s -> khuyến nghị Base PWM 37% (bạn đang dùng " + hpController.basePwmStatus + "%). Đồng ý áp dụng 37%?"
+                            color: cText
+                            opacity: 0.88
+                            font.pixelSize: 13
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        CompactActionBtn {
+                            lbl: "Áp dụng 37%"
+                            variant: "primary"
+                            labelPixelSize: 12
+                            Layout.preferredWidth: 118
+                            Layout.preferredHeight: 34
+                            onClicked: hpController.publishInt("base_pwm", 37)
+                        }
+                        CompactActionBtn {
+                            lbl: "Bỏ qua"
+                            labelPixelSize: 12
+                            Layout.preferredWidth: 86
+                            Layout.preferredHeight: 34
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Repeater {
+                        model: tab.settingGroups
+                        CompactActionBtn {
+                            lbl: modelData.label
+                            variant: tab.activeSettingsTab === index ? "primary" : "default"
+                            labelPixelSize: 13
+                            Layout.preferredWidth: Math.max(94, implicitWidth + 8)
+                            Layout.preferredHeight: 36
+                            onClicked: tab.activeSettingsTab = index
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+
+                GridLayout {
+                    id: settingsGrid
+                    property real cellWidth: Math.max(0, (width - columnSpacing) / columns)
+                    property int itemCount: tab.settingGroups[tab.activeSettingsTab].items.length
+                    property int rowCount: Math.max(1, Math.ceil(itemCount / columns))
+                    property real cellHeight: 40
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignTop
+                    columns: 2
+                    columnSpacing: 8
+                    rowSpacing: 6
+
+                    Repeater {
+                        model: tab.settingGroups[tab.activeSettingsTab].items
+                        CompactSettingRow {
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: settingsGrid.cellWidth
+                            Layout.preferredHeight: settingsGrid.cellHeight
+                            item: modelData
+                            currentVal: tab.settingCurrentValue(modelData)
+                        }
+                    }
+                }
+
+                Item { Layout.fillHeight: true }
+            }
+        }
+    }
+
+    component CompactSettingRow: Rectangle {
+        property var item: ({})
+        property string currentVal: ""
+        readonly property string currentDisplay: (currentVal || "-") + (item.unit ? " " + item.unit : "")
+
+        radius: 6
+        color: cField
+        border.color: cBorder
+        border.width: 1
+
+        RowLayout {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            height: 30
+            spacing: 6
+
+            Text {
+                text: tab.settingDisplayLabel(item)
+                color: cText
+                font.pixelSize: 13
+                font.bold: true
+                font.letterSpacing: 0.2
+                elide: Text.ElideRight
+                verticalAlignment: Text.AlignVCenter
+                Layout.preferredWidth: 150
+                Layout.fillHeight: true
+            }
+
+            Rectangle {
+                Layout.preferredWidth: 86
+                Layout.preferredHeight: 30
+                Layout.alignment: Qt.AlignVCenter
+                radius: 5
+                color: "#07131f"
+                border.color: cBorder
+                border.width: 1
+                TextInput {
+                    id: compactInp
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    text: currentVal
+                    color: cAccent
+                    font.pixelSize: 16
+                    font.bold: true
+                    font.family: monoFamily
+                    selectByMouse: true
+                    horizontalAlignment: TextInput.AlignHCenter
+                    verticalAlignment: TextInput.AlignVCenter
+                }
+            }
+
+            Text {
+                text: "ĐANG DÙNG"
+                color: cIdle
+                font.pixelSize: 11
+                font.bold: true
+                verticalAlignment: Text.AlignVCenter
+                Layout.preferredWidth: 74
+                Layout.fillHeight: true
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 30
+                Layout.alignment: Qt.AlignVCenter
+                radius: 5
+                color: "#0a1a2b"
+                border.color: cBorder
+                border.width: 1
+
+                Text {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    text: currentDisplay
+                    color: cAccent
+                    font.pixelSize: 13
+                    font.bold: true
+                    font.family: monoFamily
+                    elide: Text.ElideNone
+                    horizontalAlignment: Text.AlignRight
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+
+            CompactActionBtn {
+                lbl: "SET"
+                variant: "primary"
+                labelPixelSize: 12
+                Layout.preferredWidth: 62
+                Layout.preferredHeight: 30
+                Layout.alignment: Qt.AlignVCenter
+                onClicked: tab.publishSetting(item, compactInp.text)
+            }
+        }
+    }
+
+    component CompactActionBtn: Rectangle {
+        id: compactBtn
+        property string lbl: "Btn"
+        property string variant: "default"
+        property int labelPixelSize: 11
+        signal clicked
+
+        readonly property color gradStart: variant === "primary" ? cBtnPrimaryStart
+                                          : variant === "warn" ? cBtnWarnStart
+                                          : cBtnBaseStart
+        readonly property color gradEnd: variant === "primary" ? cBtnPrimaryEnd
+                                        : variant === "warn" ? cBtnWarnEnd
+                                        : cBtnBaseEnd
+        implicitWidth: Math.max(54, labelText.implicitWidth + 22)
+        implicitHeight: 28
+        radius: height / 2
+        color: gradStart
+        border.color: variant === "primary" ? cOk : (variant === "warn" ? cWarn : cBorder)
+        border.width: 1
+
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            gradient: Gradient {
+                orientation: Gradient.Horizontal
+                GradientStop { position: 0.0; color: compactBtn.gradStart }
+                GradientStop { position: 1.0; color: compactBtn.gradEnd }
+            }
+        }
+        Text {
+            id: labelText
+            anchors.centerIn: parent
+            text: lbl
+            color: "#ffffff"
+            font.pixelSize: labelPixelSize
+            font.bold: true
+            elide: Text.ElideRight
+            width: parent.width - 14
+            horizontalAlignment: Text.AlignHCenter
+        }
+        MotionMouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            hoverScale: 1.012
+            pressScale: 0.99
+            shadowEnabled: false
+            shimmerEnabled: false
+            raiseOnHover: true
+            onClicked: compactBtn.clicked()
         }
     }
 
@@ -895,30 +1224,35 @@ Item {
         property string lbl: ""
         property bool ok: false
         Layout.fillWidth: true
-        Layout.preferredHeight: 64
+        Layout.preferredHeight: 48
         radius: 10
         color: ok ? cOkBg : cBadBg
         border.color: ok ? cOk : cBad
         border.width: 1
-        Column {
-            anchors.centerIn: parent
-            width: parent.width - 12
-            spacing: 5
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 6
+            spacing: 1
             Text {
-                width: parent.width
+                Layout.fillWidth: true
+                Layout.fillHeight: true
                 text: lbl
                 color: cIdle
-                font.pixelSize: 10
+                font.pixelSize: 9
                 font.bold: true
-                wrapMode: Text.Wrap
+                wrapMode: Text.WrapAnywhere
+                maximumLineCount: 2
+                elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
             Text {
-                anchors.horizontalCenter: parent.horizontalCenter
+                Layout.fillWidth: true
                 text: ok ? "OK" : "CHAN"
                 color: ok ? cOk : cBad
-                font.pixelSize: 14
+                font.pixelSize: 12
                 font.bold: true
+                horizontalAlignment: Text.AlignHCenter
             }
         }
     }
@@ -928,7 +1262,7 @@ Item {
         property string val: "-"
         property bool active: false
         Layout.fillWidth: true
-        Layout.preferredHeight: 66
+        Layout.preferredHeight: 42
         radius: 10
         color: active ? cAccentSoft : cPanel2
         border.color: active ? cAccent : cBorder
@@ -936,20 +1270,21 @@ Item {
         Column {
             anchors.centerIn: parent
             width: parent.width - 12
-            spacing: 6
+            spacing: 3
             Text {
                 width: parent.width
                 text: lbl
                 color: cIdle
-                font.pixelSize: 12
+                font.pixelSize: 10
                 font.bold: true
+                elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
             }
             Text {
                 width: parent.width
                 text: val
                 color: cText
-                font.pixelSize: 18
+                font.pixelSize: 14
                 font.bold: true
                 font.family: monoFamily
                 elide: Text.ElideRight
@@ -1177,6 +1512,7 @@ Item {
         property color bgColor: cPanel
         property color borderColor: cBorder
         property bool  noTitle: false
+        property bool  fillBodyHeight: false
         default property alias contentChildren: ci.children
 
         color: bgColor; radius: 6
@@ -1189,6 +1525,7 @@ Item {
             id: inner
             x: 12; y: 12
             width: parent.width - 24
+            height: parent.height - 24
             spacing: 10
             Text {
                 id: ttl
@@ -1200,7 +1537,7 @@ Item {
             Item {
                 id: ci
                 Layout.fillWidth: true
-                Layout.fillHeight: false
+                Layout.fillHeight: fillBodyHeight
                 implicitHeight: childrenRect.height
             }
         }
