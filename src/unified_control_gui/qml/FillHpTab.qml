@@ -498,14 +498,16 @@ Item {
                     spacing: 12
 
                     SystemOverviewPanel {
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: 1
+                        id: topOverviewPanel
+                        Layout.preferredWidth: 560
+                        Layout.maximumWidth: 600
                         Layout.alignment: Qt.AlignTop
                     }
                     SafetyProcessPanel {
                         id: topSafetyPanel
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: 1
+                        Layout.preferredWidth: 400
+                        Layout.maximumWidth: 420
+                        Layout.preferredHeight: topOverviewPanel.implicitHeight
                         Layout.alignment: Qt.AlignTop
                     }
                     SensorGroupCard {
@@ -534,8 +536,7 @@ Item {
                             "tube_8"
                         ]
                         Layout.fillWidth: true
-                        Layout.preferredWidth: 1
-                        Layout.preferredHeight: topSafetyPanel.implicitHeight
+                        Layout.preferredHeight: topOverviewPanel.implicitHeight
                         Layout.alignment: Qt.AlignTop
                     }
                 }
@@ -714,6 +715,7 @@ Item {
         Sect {
             id: safetySect
             width: parent.width
+            height: parent.height > 0 ? parent.height : implicitHeight
             title: "AN TOAN"
 
             ColumnLayout {
