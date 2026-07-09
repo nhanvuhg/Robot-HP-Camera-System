@@ -36,7 +36,8 @@ HpController::HpController(rclcpp::Node::SharedPtr node, QObject *parent)
     std::vector<std::string> float_topics = {
         "dosing_volume", "dosing_flow_rate", "dosing_loading_rate", "fill_compensation",
         "cr_volume", "cr_flow_rate", "cr_loading_rate", "tank_min", "tank_max",
-        "cr_valve10_duration", "cr_valve5_duration", "cr_return_duration"
+        "cr_valve10_duration", "cr_valve5_duration", "cr_return_duration",
+        "waste_ink_drain_duration"
     };
     for (const auto &topic : float_topics) {
         pub_floats_[topic] = node_->create_publisher<std_msgs::msg::Float32>(topic, qos);

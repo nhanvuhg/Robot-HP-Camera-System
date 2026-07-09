@@ -58,7 +58,7 @@ Item {
     readonly property color cIoActiveEnd:       cBtnActionEnd
     readonly property color cIoActiveText:      "#ffffff"
 
-    readonly property string monoFamily:  "JetBrains Mono, DejaVu Sans Mono, Consolas, monospace"
+    readonly property string monoFamily:  "monospace"
 
     // ---- Parsers (mirror page4Root logic) ----
     function parseKvPipe(raw) {
@@ -138,6 +138,38 @@ Item {
         if (val >= limitT) return "limit";
         if (val >= highT) return "high";
         return "ok";
+    }
+    function pressureFillStart(cls) {
+        return "#8edcff";
+    }
+    function pressureFillEnd(cls) {
+        return "#0a3d56";
+    }
+    function pressureTrackColor(cls) {
+        return "#071421";
+    }
+    function pressureTextColor(cls) {
+        return "#8edcff";
+    }
+    function getCartridgeStats() {
+        var list = hpController.cartridgePressures;
+        if (!list || list.length === 0) return "Min 0.0   Avg 0.0   Max\n0.0 mbar";
+        var minVal = Number.MAX_VALUE;
+        var maxVal = -Number.MAX_VALUE;
+        var sum = 0.0;
+        var count = 0;
+        for (var i = 0; i < list.length; i++) {
+            var v = parseFloat(list[i]);
+            if (!isNaN(v)) {
+                if (v < minVal) minVal = v;
+                if (v > maxVal) maxVal = v;
+                sum += v;
+                count++;
+            }
+        }
+        if (count === 0) return "Min 0.0   Avg 0.0   Max\n0.0 mbar";
+        var avgVal = sum / count;
+        return "Min " + minVal.toFixed(1) + "   Avg " + avgVal.toFixed(1) + "   Max\n" + maxVal.toFixed(1) + " mbar";
     }
     // Parse valveState format "v1=open:on,v2=ink:on,..." -> { v1: {label, state} }
     function parseValveState(rawStr) {
@@ -282,6 +314,7 @@ Item {
             { topic: "cart_vac",          type: "threshold", label: "Cartridge Vacuum",  min: 0,    max: 1200, unit: "mbar" },
             { topic: "cart_leak",         type: "threshold", label: "Cartridge Leak",    min: 0,    max: 1200, unit: "mbar" },
             { topic: "pressure_balance",  type: "threshold", label: "Pressure Balance",  min: 0,    max: 1200, unit: "mbar" },
+            { topic: "waste_ink_drain_duration", type: "float", label: "Waste Ink Drain Time", min: 0, max: 120, unit: "s" },
             { topic: "chamber_vent",      type: "threshold", label: "Chamber Vent",      min: 0,    max: 1200, unit: "mbar" },
             { topic: "fill_compensation", type: "float",     label: "Fill Compensation", min: -999, max: 999,  unit: "ml" }
         ]},
@@ -380,7 +413,7 @@ Item {
 
             Text {
                 text: "Fill HP Control"
-                color: cText; font.pixelSize: 26; font.bold: true
+                color: cText; font.pixelSize: 28; font.bold: true
             }
 
             Item { Layout.fillWidth: true }
@@ -480,7 +513,7 @@ Item {
                     Text { text: "⛔"; font.pixelSize: 30 }
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { text: "CANH BAO HE THONG"; color: cBad; font.bold: true; font.pixelSize: 22 }
+                        Text { text: "SYSTEM WARNING"; color: cBad; font.bold: true; font.pixelSize: 22 }
                         Text {
                             text: hpController.errorStatus || "-"
                             color: cText; font.pixelSize: 21
@@ -488,7 +521,7 @@ Item {
                         }
                     }
                     TbBtn {
-                        lbl: "Xac nhan & xoa"; variant: "danger"
+                        lbl: "Acknowledge & Clear"; variant: "danger"
                         onClicked: hpController.publishString("error_control", "clear")
                     }
                 }
@@ -503,6 +536,7 @@ Item {
                 spacing: 12
 
                 ColumnLayout {
+                    id: leftPageStack
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     Layout.alignment: Qt.AlignTop
@@ -523,14 +557,15 @@ Item {
                             id: topSafetyPanel
                             Layout.fillWidth: true
                             Layout.preferredWidth: 420
-                            Layout.preferredHeight: topOverviewPanel.implicitHeight
+                            Layout.preferredHeight: Math.max(topOverviewPanel.implicitHeight, implicitHeight)
                             Layout.alignment: Qt.AlignTop
                         }
                     }
 
                     OperationalSettingsPanel {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Math.max(0, pageOneGroup.targetHeight - topOverviewPanel.implicitHeight - 10)
+                        Layout.fillHeight: true
+                        Layout.preferredHeight: Math.max(implicitHeight, pageOneGroup.targetHeight - topOverviewPanel.implicitHeight - 10)
                         Layout.alignment: Qt.AlignLeft
                     }
                 }
@@ -606,12 +641,13 @@ Item {
 
             Item {
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.max(0, bodyScrollView.height - pageOneGroup.implicitHeight - 36)
+                Layout.preferredHeight: Math.max(0, bodyScrollView.height - pageOneGroup.targetHeight - 36)
             }
 
             ManualControlsPage {
                 id: manualPage
                 Layout.fillWidth: true
+                Layout.preferredHeight: Math.max(820, bodyScrollView.height - 24)
                 Layout.topMargin: 18
             }
         }
@@ -627,7 +663,7 @@ Item {
         Sect {
             id: overviewSect
             width: parent.width
-            title: "TONG QUAN HE THONG"
+            title: "SYSTEM OVERVIEW"
 
             ColumnLayout {
                 width: parent.width
@@ -635,7 +671,7 @@ Item {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    implicitHeight: 76
+                    implicitHeight: 88
                     radius: 10
                     color: cPanel2
                     border.color: cBorder
@@ -650,16 +686,16 @@ Item {
                             Layout.fillWidth: true
                             spacing: 6
                             Text {
-                                text: "MUC DANG DUNG :"
+                                text: "CURRENT INK:"
                                 color: cIdle
-                                font.pixelSize: 12
+                                font.pixelSize: 14
                                 font.bold: true
                                 font.letterSpacing: 1.0
                             }
                             Text {
                                 text: tab.inkNameText()
                                 color: cText
-                                font.pixelSize: 17
+                                font.pixelSize: 20
                                 font.bold: true
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
@@ -669,15 +705,15 @@ Item {
                             Layout.fillWidth: true
                             spacing: 6
                             Text {
-                                text: "Mã Quét :"
+                                text: "Scan Code:"
                                 color: cIdle
-                                font.pixelSize: 12
+                                font.pixelSize: 14
                                 font.bold: true
                             }
                             Text {
                                 text: tab.inkCodeLotText()
                                 color: cMuted
-                                font.pixelSize: 13
+                                font.pixelSize: 15
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }
@@ -708,14 +744,14 @@ Item {
                     Layout.fillWidth: true
                     spacing: 5
                     Text {
-                        text: "Phan hoi cuoi"
+                        text: "Last Response"
                         color: cMuted
-                        font.pixelSize: 16
+                        font.pixelSize: 18
                         font.bold: true
                     }
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 38
+                        implicitHeight: 44
                         radius: 8
                         color: "#081627"
                         border.color: cBorder
@@ -725,7 +761,7 @@ Item {
                             anchors.margins: 10
                             text: hpController.manualResponse || "-"
                             color: cText
-                            font.pixelSize: 13
+                            font.pixelSize: 15
                             font.family: monoFamily
                             elide: Text.ElideRight
                             verticalAlignment: Text.AlignVCenter
@@ -743,26 +779,26 @@ Item {
             id: safetySect
             width: parent.width
             height: parent.height > 0 ? parent.height : implicitHeight
-            title: "AN TOAN"
+            title: "SAFETY"
 
             ColumnLayout {
                 width: parent.width
-                spacing: 6
+                spacing: 8
 
                 GridLayout {
                     Layout.fillWidth: true
                     columns: 3
-                    columnSpacing: 8
+                    columnSpacing: 6
                     rowSpacing: 6
                     SafetyBox { lbl: "SAFETY I_4"; ok: tab.safetyOk("safety_i_4_i04") }
                     SafetyBox { lbl: "SAFETY I_5"; ok: tab.safetyOk("safety_i_5_i04") }
-                    SafetyBox { lbl: "SAFETY AREA\nCLEAR"; ok: tab.safetyOk("safety_area_clear") }
+                    SafetyBox { lbl: "SAFETY AREA CLEAR"; ok: tab.safetyOk("safety_area_clear") }
                 }
 
                 Text {
-                    text: "TIEN TRINH"
+                    text: "PROCESS"
                     color: cMuted
-                    font.pixelSize: 12
+                    font.pixelSize: 15
                     font.bold: true
                     font.letterSpacing: 1.0
                 }
@@ -773,7 +809,7 @@ Item {
                     Layout.fillWidth: true
                     columns: 1
                     columnSpacing: 0
-                    rowSpacing: 4
+                    rowSpacing: 5
                     ProcessBox {
                         Layout.preferredWidth: processGrid.cellWidth
                         lbl: "AUTO FILL"; val: tab.processAutoText(); active: tab.running && tab.modeStr === "AUTO"
@@ -823,7 +859,7 @@ Item {
                 Layout.fillWidth: true
                 text: title
                 color: cMuted
-                font.pixelSize: 12
+                font.pixelSize: 14
                 font.bold: true
                 font.letterSpacing: 0.8
                 horizontalAlignment: Text.AlignHCenter
@@ -880,7 +916,7 @@ Item {
                 width: parent.width
                 text: getSensorLabel(sensorKey)
                 color: parent.parent.on_ ? tab.cSensorActiveText : tab.cSensorIdleText
-                font.pixelSize: Math.min(12, Math.max(8, Math.min(parent.parent.width, parent.parent.height) * 0.14))
+                font.pixelSize: Math.min(14, Math.max(10, Math.min(parent.parent.width, parent.parent.height) * 0.15))
                 font.bold: true
                 wrapMode: Text.WrapAnywhere
                 horizontalAlignment: Text.AlignHCenter
@@ -902,35 +938,37 @@ Item {
             id: settingsSect
             width: parent.width
             height: parent.height > 0 ? parent.height : implicitHeight
-            title: "THÔNG SỐ VẬN HÀNH"
+            title: "OPERATING PARAMETERS"
             fillBodyHeight: true
 
             ColumnLayout {
                 anchors.fill: parent
-                spacing: 8
+                spacing: 7
 
                 RowLayout {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 34
                     Text {
-                        text: "GỢI Ý BASE PWM"
+                        text: "BASE PWM SUGGESTION"
                         color: cAccent
-                        font.pixelSize: 13
+                        font.pixelSize: 15
                         font.bold: true
                         font.letterSpacing: 1.0
                     }
                     Item { Layout.fillWidth: true }
                     CompactActionBtn {
-                        lbl: "Khôi phục mặc định"
+                        lbl: "Restore Defaults"
                         variant: "warn"
-                        Layout.preferredWidth: 155
-                        Layout.preferredHeight: 28
+                        Layout.preferredWidth: 180
+                        labelPixelSize: 13
+                        Layout.preferredHeight: 34
                         onClicked: hpController.publishString("parameters_control", "reset_defaults")
                     }
                 }
 
                 Rectangle {
                     Layout.fillWidth: true
-                    implicitHeight: 56
+                    implicitHeight: 58
                     radius: 8
                     color: cField
                     border.color: cBorder
@@ -952,44 +990,45 @@ Item {
                         anchors.fill: parent
                         anchors.leftMargin: 18
                         anchors.rightMargin: 10
-                        spacing: 8
+                        spacing: 6
 
                         Text {
-                            text: "51.5ml @ 2.0ml/s -> khuyến nghị Base PWM 37% (bạn đang dùng " + hpController.basePwmStatus + "%). Đồng ý áp dụng 37%?"
+                            text: "51.5ml @ 2.0ml/s -> recommended Base PWM 37% (current " + hpController.basePwmStatus + "%). Apply 37%?"
                             color: cText
                             opacity: 0.88
-                            font.pixelSize: 13
+                            font.pixelSize: 15
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
                         CompactActionBtn {
-                            lbl: "Áp dụng 37%"
+                            lbl: "Apply 37%"
                             variant: "primary"
-                            labelPixelSize: 12
-                            Layout.preferredWidth: 118
-                            Layout.preferredHeight: 34
+                            labelPixelSize: 14
+                            Layout.preferredWidth: 126
+                            Layout.preferredHeight: 38
                             onClicked: hpController.publishInt("base_pwm", 37)
                         }
                         CompactActionBtn {
-                            lbl: "Bỏ qua"
-                            labelPixelSize: 12
-                            Layout.preferredWidth: 86
-                            Layout.preferredHeight: 34
+                            lbl: "Skip"
+                            labelPixelSize: 14
+                            Layout.preferredWidth: 90
+                            Layout.preferredHeight: 38
                         }
                     }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    Layout.preferredHeight: 40
+                    spacing: 5
                     Repeater {
                         model: tab.settingGroups
                         CompactActionBtn {
                             lbl: modelData.label
                             variant: tab.activeSettingsTab === index ? "primary" : "default"
-                            labelPixelSize: 13
-                            Layout.preferredWidth: Math.max(94, implicitWidth + 8)
-                            Layout.preferredHeight: 36
+                            labelPixelSize: 15
+                            Layout.preferredWidth: Math.max(96, implicitWidth + 10)
+                            Layout.preferredHeight: 40
                             onClicked: tab.activeSettingsTab = index
                         }
                     }
@@ -1001,26 +1040,27 @@ Item {
                     property real cellWidth: Math.max(0, (width - columnSpacing) / columns)
                     property int itemCount: tab.settingGroups[tab.activeSettingsTab].items.length
                     property int rowCount: Math.max(1, Math.ceil(itemCount / columns))
-                    property real cellHeight: 40
+                    property real rowHeight: rowCount > 0
+                                             ? Math.max(42, Math.floor((height - ((rowCount - 1) * rowSpacing)) / rowCount))
+                                             : 42
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
+                    Layout.fillHeight: true
                     columns: 2
-                    columnSpacing: 8
-                    rowSpacing: 6
+                    columnSpacing: 7
+                    rowSpacing: 4
 
                     Repeater {
                         model: tab.settingGroups[tab.activeSettingsTab].items
                         CompactSettingRow {
                             Layout.fillWidth: true
                             Layout.preferredWidth: settingsGrid.cellWidth
-                            Layout.preferredHeight: settingsGrid.cellHeight
+                            Layout.preferredHeight: settingsGrid.rowHeight
                             item: modelData
                             currentVal: tab.settingCurrentValue(modelData)
                         }
                     }
                 }
 
-                Item { Layout.fillHeight: true }
             }
         }
     }
@@ -1039,26 +1079,28 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 10
-            anchors.rightMargin: 10
-            height: 30
+            anchors.leftMargin: 8
+            anchors.rightMargin: 8
+            height: Math.min(38, Math.max(30, parent.height - 10))
             spacing: 6
 
             Text {
                 text: tab.settingDisplayLabel(item)
                 color: cText
-                font.pixelSize: 13
+                font.pixelSize: 14
                 font.bold: true
-                font.letterSpacing: 0.2
+                font.letterSpacing: 0
                 elide: Text.ElideRight
                 verticalAlignment: Text.AlignVCenter
-                Layout.preferredWidth: 150
+                Layout.preferredWidth: Math.max(112, Math.min(148, parent.parent.width * 0.27))
+                Layout.minimumWidth: 104
+                Layout.fillWidth: true
                 Layout.fillHeight: true
             }
 
             Rectangle {
-                Layout.preferredWidth: 86
-                Layout.preferredHeight: 30
+                Layout.preferredWidth: Math.max(82, Math.min(96, parent.parent.width * 0.16))
+                Layout.preferredHeight: parent.height
                 Layout.alignment: Qt.AlignVCenter
                 radius: 5
                 color: "#07131f"
@@ -1071,7 +1113,7 @@ Item {
                     anchors.rightMargin: 10
                     text: currentVal
                     color: cAccent
-                    font.pixelSize: 16
+                    font.pixelSize: 17
                     font.bold: true
                     font.family: monoFamily
                     selectByMouse: true
@@ -1080,37 +1122,44 @@ Item {
                 }
             }
 
-            Text {
-                text: "ĐANG DÙNG"
-                color: cIdle
-                font.pixelSize: 11
-                font.bold: true
-                verticalAlignment: Text.AlignVCenter
-                Layout.preferredWidth: 74
-                Layout.fillHeight: true
-            }
-
             Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 30
+                Layout.minimumWidth: 148
+                Layout.preferredWidth: Math.max(188, Math.min(224, parent.parent.width * 0.36))
+                Layout.preferredHeight: parent.height
                 Layout.alignment: Qt.AlignVCenter
                 radius: 5
                 color: "#0a1a2b"
                 border.color: cBorder
                 border.width: 1
 
-                Text {
+                RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    text: currentDisplay
-                    color: cAccent
-                    font.pixelSize: 13
-                    font.bold: true
-                    font.family: monoFamily
-                    elide: Text.ElideNone
-                    horizontalAlignment: Text.AlignRight
-                    verticalAlignment: Text.AlignVCenter
+                    anchors.rightMargin: 8
+                    spacing: 8
+
+                    Text {
+                        text: "USED"
+                        color: cIdle
+                        font.pixelSize: 11
+                        font.bold: true
+                        horizontalAlignment: Text.AlignLeft
+                        verticalAlignment: Text.AlignVCenter
+                        Layout.preferredWidth: 44
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Text {
+                        text: currentDisplay
+                        color: cAccent
+                        font.pixelSize: 16
+                        font.bold: true
+                        font.family: monoFamily
+                        elide: Text.ElideNone
+                        horizontalAlignment: Text.AlignRight
+                        verticalAlignment: Text.AlignVCenter
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignVCenter
+                    }
                 }
             }
 
@@ -1118,8 +1167,8 @@ Item {
                 lbl: "SET"
                 variant: "primary"
                 labelPixelSize: 12
-                Layout.preferredWidth: 62
-                Layout.preferredHeight: 30
+                Layout.preferredWidth: 52
+                Layout.preferredHeight: Math.min(32, parent.height)
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: tab.publishSetting(item, compactInp.text)
             }
@@ -1139,8 +1188,8 @@ Item {
         readonly property color gradEnd: variant === "primary" ? cBtnPrimaryEnd
                                         : variant === "warn" ? cBtnWarnEnd
                                         : cBtnBaseEnd
-        implicitWidth: Math.max(54, labelText.implicitWidth + 22)
-        implicitHeight: 28
+        implicitWidth: Math.max(62, labelText.implicitWidth + 24)
+        implicitHeight: 34
         radius: height / 2
         color: gradStart
         border.color: variant === "primary" ? cOk : (variant === "warn" ? cWarn : cBorder)
@@ -1183,7 +1232,7 @@ Item {
         property string val: ""
         property Item chip: null
         Layout.fillWidth: true
-        Layout.preferredHeight: 36
+        Layout.preferredHeight: 40
 
         Rectangle {
             anchors.left: parent.left
@@ -1197,7 +1246,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: lbl
             color: cMuted
-            font.pixelSize: 15
+            font.pixelSize: 17
         }
         Loader {
             anchors.right: parent.right
@@ -1208,7 +1257,7 @@ Item {
                 Text {
                     text: val
                     color: cText
-                    font.pixelSize: 16
+                    font.pixelSize: 18
                     font.bold: true
                     horizontalAlignment: Text.AlignRight
                 }
@@ -1224,7 +1273,7 @@ Item {
         property string lbl: ""
         property bool ok: false
         Layout.fillWidth: true
-        Layout.preferredHeight: 48
+        Layout.preferredHeight: 58
         radius: 10
         color: ok ? cOkBg : cBadBg
         border.color: ok ? cOk : cBad
@@ -1238,19 +1287,19 @@ Item {
                 Layout.fillHeight: true
                 text: lbl
                 color: cIdle
-                font.pixelSize: 9
+                font.pixelSize: 10
                 font.bold: true
-                wrapMode: Text.WrapAnywhere
+                wrapMode: Text.WordWrap
                 maximumLineCount: 2
-                elide: Text.ElideRight
+                elide: Text.ElideNone
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
             Text {
                 Layout.fillWidth: true
-                text: ok ? "OK" : "CHAN"
+                text: ok ? "OK" : "BLOCK"
                 color: ok ? cOk : cBad
-                font.pixelSize: 12
+                font.pixelSize: 15
                 font.bold: true
                 horizontalAlignment: Text.AlignHCenter
             }
@@ -1262,245 +1311,428 @@ Item {
         property string val: "-"
         property bool active: false
         Layout.fillWidth: true
-        Layout.preferredHeight: 42
+        Layout.preferredHeight: 48
         radius: 10
         color: active ? cAccentSoft : cPanel2
         border.color: active ? cAccent : cBorder
         border.width: 1
-        Column {
-            anchors.centerIn: parent
-            width: parent.width - 12
-            spacing: 3
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 14
+            anchors.rightMargin: 14
+            spacing: 8
             Text {
-                width: parent.width
                 text: lbl
                 color: cIdle
-                font.pixelSize: 10
+                font.pixelSize: 15
                 font.bold: true
                 elide: Text.ElideRight
-                horizontalAlignment: Text.AlignHCenter
+                horizontalAlignment: Text.AlignLeft
+                verticalAlignment: Text.AlignVCenter
+                Layout.preferredWidth: 126
+                Layout.fillHeight: true
             }
             Text {
-                width: parent.width
+                text: "-"
+                color: cMuted
+                font.pixelSize: 16
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                Layout.preferredWidth: 14
+                Layout.fillHeight: true
+            }
+            Text {
                 text: val
                 color: cText
-                font.pixelSize: 14
+                font.pixelSize: 18
                 font.bold: true
                 font.family: monoFamily
                 elide: Text.ElideRight
-                horizontalAlignment: Text.AlignHCenter
+                horizontalAlignment: Text.AlignLeft
+                verticalAlignment: Text.AlignVCenter
+                Layout.fillWidth: true
+                Layout.fillHeight: true
             }
         }
     }
 
-    component ManualControlsPage: ColumnLayout {
-        spacing: 12
+    component ManualControlsPage: Item {
+        implicitHeight: Math.max(820, bodyScrollView.height - 24)
 
         RowLayout {
-            Layout.fillWidth: true
+            anchors.fill: parent
             spacing: 12
 
-            Sect {
-                title: "Cylinders (manual only)"
-                Layout.preferredWidth: 487
+            ColumnLayout {
+                Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.alignment: Qt.AlignTop
+                spacing: 12
 
                 ColumnLayout {
-                    width: parent.width
-                    enabled: tab.modeStr === "MANUAL"
-                    opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                    spacing: 8
-                    Behavior on opacity { NumberAnimation { duration: 150 } }
-                    Repeater {
-                        model: tab.cylinderModel
-                        IoToggle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 48
-                            ioId:      modelData.id
-                            statusKey: modelData.statusKey
-                            ioLabel:   modelData.label
-                            actA:      modelData.a
-                            actB:      modelData.b
-                        }
-                    }
-                }
-            }
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 12
 
-            Sect {
-                title: "Servo & Motor"
-                Layout.preferredWidth: 325
-                Layout.fillHeight: true
-                Layout.alignment: Qt.AlignTop
-
-                ColumnLayout {
-                    width: parent.width
-                    spacing: 8
-
-                    Text {
-                        text: "Pos: " + hpController.servoPosition.toFixed(2) + " mm"
-                        color: cText
-                        font.pixelSize: 18
-                        font.bold: true
-                        font.family: monoFamily
-                        Layout.alignment: Qt.AlignHCenter
-                    }
-
-                    ColumnLayout {
-                        spacing: 5
+                    RowLayout {
                         Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        spacing: 12
 
-                        TbBtn {
-                            lbl: "Enable"
-                            Layout.fillWidth: true
-                            onClicked: hpController.publishString("servo_command", "enable")
-                        }
-                        TbBtn {
-                            lbl: "Disable"
-                            Layout.fillWidth: true
-                            onClicked: hpController.publishString("servo_command", "disable")
-                        }
-                        TbBtn {
-                            lbl: "Home"
-                            variant: "primary"
-                            Layout.fillWidth: true
-                            onClicked: hpController.publishString("servo_command", "home")
-                        }
-                        TbBtn {
-                            lbl: "Reset Fault"
-                            variant: "danger"
-                            Layout.fillWidth: true
-                            onClicked: hpController.publishString("servo_command", "reset_fault")
-                        }
-                    }
-
-                    ColumnLayout {
-                        spacing: 5
-                        Layout.fillWidth: true
-                        enabled: tab.modeStr === "MANUAL"
-                        opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                        Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                        RowLayout {
-                            spacing: 6
-                            Layout.fillWidth: true
-                            JogBtn {
-                                lbl: "◀ JOG REV"
-                                dir: "rev"
-                                variant: "warn"
-                                Layout.fillWidth: true
-                            }
-                            JogBtn {
-                                lbl: "JOG FWD ▶"
-                                dir: "fwd"
-                                variant: "primary"
-                                Layout.fillWidth: true
-                            }
-                        }
-                        TbBtn {
-                            lbl: "STOP"
-                            variant: "danger"
-                            Layout.fillWidth: true
-                            onClicked: hpController.publishString("servo_jog", "stop")
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-
-                        RowLayout {
-                            width: parent.width; spacing: 6
-                            Text { text: "Base PWM"; color: cText; font.pixelSize: 14; font.bold: true; Layout.fillWidth: true }
-                            PwmInput { id: basePwmIn; valueText: hpController.basePwmStatus.toString(); Layout.preferredWidth: 60 }
-                            TbBtn {
-                                lbl: "Set"; variant: "primary"
-                                Layout.preferredWidth: 50
-                                onClicked: {
-                                    var v = parseInt(basePwmIn.valueText);
-                                    if (!isNaN(v)) hpController.publishInt("base_pwm", Math.max(0, Math.min(100, v)));
-                                }
-                            }
-                        }
-                        RowLayout {
-                            width: parent.width; spacing: 6
-                            enabled: tab.modeStr === "MANUAL"
-                            opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                            Text { text: "V10 PWM"; color: cText; font.pixelSize: 14; font.bold: true; Layout.fillWidth: true }
-                            PwmInput { id: v10In; valueText: (tab.valvesMap["v10"] && tab.valvesMap["v10"].label) ? tab.valvesMap["v10"].label.replace("%","") : "0"; Layout.preferredWidth: 60 }
-                            TbBtn {
-                                lbl: "Set"; variant: "primary"
-                                Layout.preferredWidth: 50
-                                onClicked: {
-                                    var v = parseInt(v10In.valueText);
-                                    if (!isNaN(v)) hpController.publishManual("valve10", String(Math.max(0, Math.min(100, v))));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Sect {
-            title: "Valves (manual only)"
-            Layout.preferredWidth: 320
-            Layout.maximumWidth: 320
-            Layout.fillHeight: true
-            Layout.minimumHeight: implicitHeight
-            Layout.alignment: Qt.AlignTop
-            ColumnLayout {
-                width: parent.width
-                enabled: tab.modeStr === "MANUAL"
-                opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                spacing: 8
-                Behavior on opacity { NumberAnimation { duration: 150 } }
-                Repeater {
-                    model: tab.valveModel
-                    IoToggle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 48
-                        ioId:      modelData.id
-                        statusKey: modelData.statusKey
-                        ioLabel:   modelData.label
-                        actA:      modelData.a
-                        actB:      modelData.b
-                    }
-                }
-            }
-        }
-
-        Sect {
-            title: "Action log"
-            Layout.fillWidth: true
-            visible: tab.actionLog.length > 0
-            ColumnLayout {
-                width: parent.width; spacing: 4
-                RowLayout {
-                    width: parent.width
-                    Text { text: tab.actionLog.length + " thao tac gan day"; color: cMuted; font.pixelSize: 14 }
-                    Item { Layout.fillWidth: true }
-                    TbBtn { lbl: "Xoa log"; onClicked: { tab.actionLog = []; tab.lastActionRaw = "" } }
-                }
-                Item {
-                    width: parent.width
-                    implicitHeight: Math.min(240, logColumn.implicitHeight + 4)
-                    ScrollView {
-                        anchors.fill: parent
-                        clip: true
                         ColumnLayout {
-                            id: logColumn
-                            width: parent.width
-                            spacing: 2
-                            Repeater {
-                                model: tab.actionLog
-                                Text {
-                                    text: modelData; color: cText
-                                    font.pixelSize: 14; font.family: "monospace"
-                                    width: parent.width; elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.preferredWidth: 860
+                            spacing: 12
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                spacing: 12
+
+                                Sect {
+                                    title: "Cylinders (manual only)"
+                                    fillBodyHeight: true
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 500
+                                    Layout.fillHeight: true
+                                    Layout.alignment: Qt.AlignTop
+
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        enabled: tab.modeStr === "MANUAL"
+                                        opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                        spacing: 8
+                                        Behavior on opacity { NumberAnimation { duration: 150 } }
+                                        Repeater {
+                                            model: tab.cylinderModel
+                                            IoToggle {
+                                                Layout.fillWidth: true
+                                                Layout.fillHeight: true
+                                                Layout.minimumHeight: 56
+                                                ioId:      modelData.id
+                                                statusKey: modelData.statusKey
+                                                ioLabel:   modelData.label
+                                                actA:      modelData.a
+                                                actB:      modelData.b
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Sect {
+                                    title: "Servo & Motor"
+                                    fillBodyHeight: true
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 360
+                                    Layout.fillHeight: true
+                                    Layout.alignment: Qt.AlignTop
+
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        spacing: 10
+
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 58
+                                            radius: 8
+                                            color: cField
+                                            border.color: cBorder
+                                            border.width: 1
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: "Pos: " + hpController.servoPosition.toFixed(2) + " mm"
+                                                color: cText
+                                                font.pixelSize: 21
+                                                font.bold: true
+                                                font.family: monoFamily
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            spacing: 8
+                                            Layout.fillWidth: true
+
+                                            TbBtn { lbl: "Enable"; Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "enable") }
+                                            TbBtn { lbl: "Disable"; Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "disable") }
+                                            TbBtn { lbl: "Home"; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "home") }
+                                            TbBtn { lbl: "Reset Fault"; variant: "danger"; Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "reset_fault") }
+                                        }
+
+                                        ColumnLayout {
+                                            spacing: 8
+                                            Layout.fillWidth: true
+                                            enabled: tab.modeStr === "MANUAL"
+                                            opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                            Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                            RowLayout {
+                                                spacing: 8
+                                                Layout.fillWidth: true
+                                                JogBtn { lbl: "JOG REV"; dir: "rev"; variant: "warn"; Layout.fillWidth: true; Layout.preferredHeight: 54 }
+                                                JogBtn { lbl: "JOG FWD"; dir: "fwd"; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 54 }
+                                            }
+                                            TbBtn {
+                                                lbl: "STOP"
+                                                variant: "danger"
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 48
+                                                onClicked: hpController.publishString("servo_jog", "stop")
+                                            }
+                                        }
+
+                                        Item { Layout.fillHeight: true }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 8
+
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 8
+                                                Text { text: "Base PWM"; color: cText; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
+                                                PwmInput { id: basePwmIn; valueText: hpController.basePwmStatus.toString(); Layout.preferredWidth: 70 }
+                                                TbBtn {
+                                                    lbl: "Set"; variant: "primary"
+                                                    Layout.preferredWidth: 70
+                                                    Layout.preferredHeight: 38
+                                                    onClicked: {
+                                                        var v = parseInt(basePwmIn.valueText);
+                                                        if (!isNaN(v)) hpController.publishInt("base_pwm", Math.max(0, Math.min(100, v)));
+                                                    }
+                                                }
+                                            }
+                                            RowLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 8
+                                                enabled: tab.modeStr === "MANUAL"
+                                                opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                                Text { text: "V10 PWM"; color: cText; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
+                                                PwmInput { id: v10In; valueText: (tab.valvesMap["v10"] && tab.valvesMap["v10"].label) ? tab.valvesMap["v10"].label.replace("%","") : "0"; Layout.preferredWidth: 70 }
+                                                TbBtn {
+                                                    lbl: "Set"; variant: "primary"
+                                                    Layout.preferredWidth: 70
+                                                    Layout.preferredHeight: 38
+                                                    onClicked: {
+                                                        var v = parseInt(v10In.valueText);
+                                                        if (!isNaN(v)) hpController.publishManual("valve10", String(Math.max(0, Math.min(100, v))));
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 210
+                                spacing: 12
+
+                                Sect {
+                                    title: "Action log"
+                                    fillBodyHeight: true
+                                    Layout.preferredWidth: 500
+                                    Layout.maximumWidth: 500
+                                    Layout.fillHeight: true
+                                    ColumnLayout {
+                                        anchors.fill: parent
+                                        spacing: 4
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            Text { text: tab.actionLog.length > 0 ? (tab.actionLog.length + " recent actions") : "No actions yet"; color: cMuted; font.pixelSize: 17 }
+                                            Item { Layout.fillWidth: true }
+                                            TbBtn { lbl: "Clear log"; visible: tab.actionLog.length > 0; onClicked: { tab.actionLog = []; tab.lastActionRaw = "" } }
+                                        }
+                                        ScrollView {
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
+                                            clip: true
+                                            ColumnLayout {
+                                                width: parent.width
+                                                spacing: 2
+                                                Repeater {
+                                                    model: tab.actionLog
+                                                    Text {
+                                                        text: modelData; color: cText
+                                                        font.pixelSize: 16; font.family: monoFamily
+                                                        width: parent.width; elide: Text.ElideRight
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                RawStatusPanel {
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 360
+                                    Layout.fillHeight: true
                                 }
                             }
                         }
+
+                        Sect {
+                            title: "Valves (manual only)"
+                            fillBodyHeight: true
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 450
+                            Layout.fillHeight: true
+                            Layout.alignment: Qt.AlignTop
+                            ColumnLayout {
+                                anchors.fill: parent
+                                enabled: tab.modeStr === "MANUAL"
+                                opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
+                                spacing: 8
+                                Behavior on opacity { NumberAnimation { duration: 150 } }
+                                Repeater {
+                                    model: tab.valveModel
+                                    IoToggle {
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        Layout.minimumHeight: 48
+                                        ioId:      modelData.id
+                                        statusKey: modelData.statusKey
+                                        ioLabel:   modelData.label
+                                        actA:      modelData.a
+                                        actB:      modelData.b
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            PressureMonitorPanel {
+                Layout.preferredWidth: 400
+                Layout.maximumWidth: 400
+                Layout.fillHeight: true
+                Layout.alignment: Qt.AlignRight
+            }
+        }
+    }
+
+    component RawStatusPanel: Rectangle {
+        color: cPanel
+        radius: 6
+        border.color: cBorder
+        border.width: 1
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? cControlHover : cBorder }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 8
+
+            Text {
+                text: "Raw Status"
+                color: cMuted
+                font.pixelSize: 18
+                font.bold: true
+                font.letterSpacing: 0.6
+                Layout.fillWidth: true
+            }
+
+            ScrollView {
+                id: rawStatusScroll
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: availableWidth
+                ScrollBar.vertical.policy: ScrollBar.AlwaysOn
+                TextEdit {
+                    width: rawStatusScroll.availableWidth - 8
+                    readOnly: true
+                    selectByMouse: true
+                    textFormat: TextEdit.PlainText
+                    text: "system_status=" + (hpController.systemStatus || "-")
+                          + "\nmode_status=" + (hpController.modeStatus || "-")
+                          + "\nink_status=" + (hpController.inkStatus || "-")
+                          + "\ndosing_status=" + (hpController.dosingStatus || "-")
+                          + "\nfill_status=" + (hpController.fillStatus || "-")
+                          + "\nfix_status=" + (hpController.fixStatus || "-")
+                          + "\ncr_status=" + (hpController.crStatus || "-")
+                          + "\nhw_status=" + (hpController.hwStatus || "-")
+                          + "\ninput_state=" + (hpController.inputState || "-")
+                          + "\nvalve_state=" + (hpController.valveState || "-")
+                          + "\nthresholds=" + (hpController.pressureThresholds || "-")
+                          + "\nmanual_response=" + (hpController.manualResponse || "-")
+                          + "\nbase_pwm=" + hpController.basePwmStatus
+                          + "\nservo_position=" + hpController.servoPosition.toFixed(2)
+                          + "\npressure_s1=" + hpController.pressureS1.toFixed(1)
+                          + "\npressure_s2=" + hpController.pressureS2.toFixed(1)
+                          + "\npressure_s3=" + hpController.pressureS3.toFixed(1)
+                          + "\ncartridge_pressures=" + JSON.stringify(hpController.cartridgePressures)
+                    color: cText
+                    font.pixelSize: 12
+                    font.family: monoFamily
+                    wrapMode: TextEdit.WrapAnywhere
+                }
+            }
+        }
+    }
+
+    component PressureMonitorPanel: Rectangle {
+        radius: 6
+        color: cPanel
+        border.color: cBorder
+        border.width: 1
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? cControlHover : cBorder }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 14
+            spacing: 10
+
+            Text {
+                text: "ANALOG PRESSURE"
+                color: cText
+                font.pixelSize: 22
+                font.bold: true
+                font.letterSpacing: 0.6
+                Layout.fillWidth: true
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                PCard { lbl: "S1 Chamber";   val: hpController.pressureS1; maxVal: 1200 }
+                PCard { lbl: "S2 Cartridge"; val: hpController.pressureS2; maxVal: 1200 }
+                PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1200 }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 6
+                Text {
+                    text: "CARTRIDGE\nPRESSURE"
+                    color: cMuted
+                    font.pixelSize: 18
+                    font.bold: true
+                    Layout.fillWidth: true
+                }
+                Text {
+                    text: tab.getCartridgeStats()
+                    color: cMuted
+                    font.pixelSize: 15
+                    font.bold: true
+                    horizontalAlignment: Text.AlignRight
+                    wrapMode: Text.Wrap
+                    Layout.preferredWidth: 220
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 5
+                Repeater {
+                    model: 8
+                    CartRow {
+                        Layout.fillHeight: true
+                        cartName: "Cart " + (index + 1)
+                        cartVal: (hpController.cartridgePressures && hpController.cartridgePressures.length > index) ? (Number(hpController.cartridgePressures[index]) || 0) : 0
                     }
                 }
             }
@@ -1530,7 +1762,7 @@ Item {
             Text {
                 id: ttl
                 visible: !noTitle && text.length > 0
-                color: cMuted; font.pixelSize: 20; font.bold: true
+                color: cMuted; font.pixelSize: 22; font.bold: true
                 font.letterSpacing: 0.6
                 text: ""
             }
@@ -1615,15 +1847,15 @@ Item {
             id: valText
             anchors.centerIn: parent; text: value
             color: parent.isRun ? cOk : cText
-            font.pixelSize: 21; font.bold: true; font.family: "monospace"
+            font.pixelSize: 21; font.bold: true; font.family: monoFamily
         }
     }
 
     component StatusChip: Rectangle {
         property string state: "mid"
         property string label: state
-        implicitWidth: txt.implicitWidth + 20; implicitHeight: 28
-        radius: 14
+        implicitWidth: txt.implicitWidth + 24; implicitHeight: 34
+        radius: 17
         color:        state === "on" ? cOkBg : state === "off" ? cBadBg : state === "mid" ? cWarnBg : cIdleBg
         border.color: state === "on" ? cOk   : state === "off" ? cBad   : state === "mid" ? cWarn   : cIdle
         border.width: 1
@@ -1688,30 +1920,43 @@ Item {
         property string lbl: ""
         property real   val: 0
         property real   maxVal: 1000
+        readonly property string cls: classifyPressure(val, maxVal * 0.18, maxVal * 0.35, maxVal * 0.90)
         Layout.fillWidth: true
         implicitHeight: pc.implicitHeight + 24
         radius: 8
-        color: cPanel2; border.color: cBorder; border.width: 1
+        color: cPanel2
+        border.color: "#163a52"
+        border.width: 1
+        clip: true
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? cAccent : "#163a52" }
         ColumnLayout {
             id: pc; x: 12; y: 12
-            width: parent.width - 24; spacing: 6
+            width: parent.width - 24; spacing: 8
             RowLayout {
                 width: parent.width
-                Text { text: lbl; color: cMuted; font.pixelSize: 21; font.bold: true }
+                Text { text: lbl; color: cText; font.pixelSize: 18; font.bold: true }
                 Item { Layout.fillWidth: true }
                 RowLayout {
                     spacing: 3
-                    Text { text: val.toFixed(1); color: cText; font.pixelSize: 30; font.bold: true; font.family: "monospace" }
-                    Text { text: "mbar"; color: cMuted; font.pixelSize: 20; font.bold: true }
+                    Text { text: val.toFixed(1); color: pressureTextColor(cls); font.pixelSize: 28; font.bold: true; font.family: monoFamily }
+                    Text { text: "mbar"; color: pressureTextColor(cls); font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 3 }
                 }
             }
             Rectangle {
-                Layout.fillWidth: true; height: 8; radius: 4
-                color: cBorder
+                Layout.fillWidth: true; height: 12; radius: height / 2
+                color: pressureTrackColor(cls)
+                border.color: "#22445c"
+                border.width: 1
+                clip: true
                 Rectangle {
                     height: parent.height; radius: parent.radius
                     width: parent.width * Math.max(0, Math.min(1, val / maxVal))
-                    color: cAccent
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: pressureFillStart(cls) }
+                        GradientStop { position: 0.55; color: "#1e9ed0" }
+                        GradientStop { position: 1.0; color: pressureFillEnd(cls) }
+                    }
                 }
             }
         }
@@ -1722,17 +1967,13 @@ Item {
         property real   cartVal: 0
         readonly property string cls: classifyPressure(cartVal, 280, 400, 600)
         Layout.fillWidth: true
-        implicitHeight: 50
+        implicitHeight: 58
         radius: 6
-        color:        cls === "ok"    ? cOkBg
-                    : cls === "high"  ? cWarnBg
-                    : cls === "limit" ? cBadBg
-                    : Qt.rgba(0.01, 0.51, 0.78, 0.15)
-        border.color: cls === "ok"    ? cOk
-                    : cls === "high"  ? cWarn
-                    : cls === "limit" ? cBad
-                    : "#1f86e0"
+        color: cPanel2
+        clip: true
+        border.color: "#163a52"
         border.width: 1
+        HoverHandler { onHoveredChanged: parent.border.color = hovered ? cAccent : "#163a52" }
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 10; anchors.rightMargin: 10
@@ -1747,19 +1988,24 @@ Item {
                 RowLayout {
                     width: parent.width
                     Item { Layout.fillWidth: true }
-                    Text { text: cartVal.toFixed(0); color: cText; font.pixelSize: 22; font.bold: true; font.family: "monospace" }
-                    Text { text: "mbar"; color: cMuted; font.pixelSize: 18; font.bold: true }
+                    Text { text: cartVal.toFixed(1); color: pressureTextColor(cls); font.pixelSize: 22; font.bold: true; font.family: monoFamily }
+                    Text { text: "mbar"; color: pressureTextColor(cls); font.pixelSize: 13; font.bold: true; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 2 }
                 }
                 Rectangle {
-                    Layout.fillWidth: true; height: 6; radius: 3
-                    color: cBorder
+                    Layout.fillWidth: true; height: 10; radius: height / 2
+                    color: pressureTrackColor(cls)
+                    border.color: "#22445c"
+                    border.width: 1
+                    clip: true
                     Rectangle {
                         height: parent.height; radius: parent.radius
-                        width: parent.width * Math.max(0, Math.min(1, cartVal / 1000))
-                        color: cls === "ok"    ? cOk
-                             : cls === "high"  ? cWarn
-                             : cls === "limit" ? cBad
-                             : "#1f86e0"
+                        width: parent.width * Math.max(0, Math.min(1, cartVal / 1200))
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: pressureFillStart(cls) }
+                            GradientStop { position: 0.55; color: "#1e9ed0" }
+                            GradientStop { position: 1.0; color: pressureFillEnd(cls) }
+                        }
                     }
                 }
             }
@@ -1838,7 +2084,7 @@ Item {
                     Item { Layout.fillWidth: true }
                     Text {
                         text: time; color: cMuted
-                        font.pixelSize: 13; font.family: "monospace"
+                        font.pixelSize: 13; font.family: monoFamily
                     }
                 }
                 Text {
@@ -2014,7 +2260,7 @@ Item {
             anchors.fill: parent; anchors.margins: 6
             text: valueText
             onTextChanged: valueText = text
-            color: cText; font.pixelSize: 21; font.bold: true; font.family: "monospace"
+            color: cText; font.pixelSize: 21; font.bold: true; font.family: monoFamily
             selectByMouse: true; horizontalAlignment: TextInput.AlignHCenter
         }
     }
@@ -2042,7 +2288,7 @@ Item {
                     id: inp
                     anchors.fill: parent; anchors.margins: 6
                     text: currentVal
-                    color: cText; font.pixelSize: 20; font.family: "monospace"
+                    color: cText; font.pixelSize: 20; font.family: monoFamily
                     selectByMouse: true; horizontalAlignment: TextInput.AlignRight
                 }
             }
