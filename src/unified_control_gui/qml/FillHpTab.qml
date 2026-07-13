@@ -10,6 +10,7 @@ import QtQuick.Layouts 1.15
 
 Item {
     id: tab
+    property Item focusHost: null
 
     // ---- Theme tokens (đồng bộ liquid-glass với CameraPage/CartridgePage/InkTab) ----
     readonly property color cBg:          "transparent"
@@ -1002,7 +1003,7 @@ Item {
                         }
                         CompactActionBtn {
                             lbl: "Apply 37%"
-                            variant: "primary"
+                            variant: "action"
                             labelPixelSize: 14
                             Layout.preferredWidth: 126
                             Layout.preferredHeight: 38
@@ -1025,7 +1026,7 @@ Item {
                         model: tab.settingGroups
                         CompactActionBtn {
                             lbl: modelData.label
-                            variant: tab.activeSettingsTab === index ? "primary" : "default"
+                            variant: tab.activeSettingsTab === index ? "action" : "default"
                             labelPixelSize: 15
                             Layout.preferredWidth: Math.max(96, implicitWidth + 10)
                             Layout.preferredHeight: 40
@@ -1106,8 +1107,9 @@ Item {
                 color: "#07131f"
                 border.color: cBorder
                 border.width: 1
-                TextInput {
+                SmartTextInput {
                     id: compactInp
+                    focusHost: tab.focusHost
                     anchors.fill: parent
                     anchors.leftMargin: 10
                     anchors.rightMargin: 10
@@ -1165,7 +1167,7 @@ Item {
 
             CompactActionBtn {
                 lbl: "SET"
-                variant: "primary"
+                variant: "action"
                 labelPixelSize: 12
                 Layout.preferredWidth: 52
                 Layout.preferredHeight: Math.min(32, parent.height)
@@ -1184,15 +1186,17 @@ Item {
 
         readonly property color gradStart: variant === "primary" ? cBtnPrimaryStart
                                           : variant === "warn" ? cBtnWarnStart
+                                          : variant === "action" ? (compactMouse.pressed ? cBtnActionPressStart : (compactMouse.containsMouse ? cBtnActionHoverStart : cBtnActionStart))
                                           : cBtnBaseStart
         readonly property color gradEnd: variant === "primary" ? cBtnPrimaryEnd
                                         : variant === "warn" ? cBtnWarnEnd
+                                        : variant === "action" ? (compactMouse.pressed ? cBtnActionPressEnd : (compactMouse.containsMouse ? cBtnActionHoverEnd : cBtnActionEnd))
                                         : cBtnBaseEnd
         implicitWidth: Math.max(62, labelText.implicitWidth + 24)
         implicitHeight: 34
         radius: height / 2
         color: gradStart
-        border.color: variant === "primary" ? cOk : (variant === "warn" ? cWarn : cBorder)
+        border.color: variant === "primary" ? cOk : (variant === "warn" ? cWarn : (variant === "action" ? cBtnActionEnd : cBorder))
         border.width: 1
 
         Rectangle {
@@ -1216,6 +1220,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
         }
         MotionMouseArea {
+            id: compactMouse
             anchors.fill: parent
             cursorShape: Qt.PointingHandCursor
             hoverScale: 1.012
@@ -1832,7 +1837,7 @@ Item {
 
     component ModeBtn: TbBtn {
         property bool active: false
-        variant: active ? "primary" : "default"
+        variant: active ? "action" : "default"
     }
 
     component CycleChip: Rectangle {
@@ -2256,7 +2261,8 @@ Item {
         implicitWidth: 90; implicitHeight: 34
         radius: 4
         color: cField; border.color: cBorder; border.width: 1
-        TextInput {
+        SmartTextInput {
+            focusHost: tab.focusHost
             anchors.fill: parent; anchors.margins: 6
             text: valueText
             onTextChanged: valueText = text
@@ -2284,8 +2290,9 @@ Item {
             Rectangle {
                 implicitWidth: 95; implicitHeight: 32; radius: 4
                 color: cField; border.color: cBorder; border.width: 1
-                TextInput {
+                SmartTextInput {
                     id: inp
+                    focusHost: tab.focusHost
                     anchors.fill: parent; anchors.margins: 6
                     text: currentVal
                     color: cText; font.pixelSize: 20; font.family: monoFamily

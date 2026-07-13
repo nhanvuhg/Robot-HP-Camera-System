@@ -5,6 +5,7 @@ import QtQuick.Controls.Material 2.15
 
 Item {
     id: inkTab
+    property Item focusHost: null
 
     property string currentTime: Qt.formatDateTime(new Date(), "yyyy-MM-dd hh:mm:ss")
     property bool calActive: scaleController.calStatus === "WAITING_WEIGHT" || scaleController.calStatus.startsWith("CONTINUE_CAL")
@@ -744,8 +745,9 @@ Item {
 	                                    border.color: cFieldBorder
 	                                    border.width: 1
 	                                    radius: 6
-	                                    TextField {
+	                                    SmartTextField {
 	                                        id: inkScanInput
+	                                        focusHost: inkTab.focusHost
 	                                        anchors.fill: parent
 	                                        anchors.margins: 1
 	                                        leftPadding: 11
@@ -829,8 +831,9 @@ Item {
 	                                        border.color: cFieldBorder
 	                                        border.width: 1
 	                                        radius: 5
-		                                        TextField {
+		                                        SmartTextField {
 		                                            id: inkLotCiInput
+		                                            focusHost: inkTab.focusHost
 		                                            anchors.fill: parent
 		                                            anchors.margins: 1
 		                                            leftPadding: 11

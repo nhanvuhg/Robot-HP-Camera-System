@@ -8,6 +8,7 @@ import QtQuick.Layouts 1.15
 
 Item {
     id: prodTab
+    property Item focusHost: null
 
     // ── Theme (CartridgePage palette — bolder) ──
     readonly property color cBg:       "transparent"
@@ -293,8 +294,9 @@ Item {
                     Rectangle {
                         width: 180; height: 38; radius: 8
                         color: "#e61b2050"; border.color: cAccent; border.width: 1
-                        TextInput {
+                        SmartTextInput {
                             id: inkCodeInput
+                            focusHost: prodTab.focusHost
                             anchors.fill: parent; anchors.margins: 8
                             color: cText; font.pixelSize: 15; font.family: prodTab.monoFont
                             clip: true; verticalAlignment: TextInput.AlignVCenter
@@ -404,8 +406,9 @@ Item {
         property alias text: dateField.text
         width: 160; height: 38; radius: 8
         color: "#e61b2050"; border.color: cAccent; border.width: 1
-        TextInput {
+        SmartTextInput {
             id: dateField
+            focusHost: prodTab.focusHost
             anchors.fill: parent; anchors.margins: 8
             color: cText; font.pixelSize: 15; font.family: prodTab.monoFont
             clip: true; verticalAlignment: TextInput.AlignVCenter
