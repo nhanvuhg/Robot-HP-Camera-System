@@ -23,7 +23,7 @@ import sys
 import os
 import time
 import pytest
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, call
 from enum import Enum
 
 # ── Path setup ────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ from cartridge_providesystem_py_node import (
     SystemState,
     S1_BELT_START, S2_BELT_MID, S3_BELT_END,
     S7_TRAY_AT_ROBOT, S9_CYL1_RETRACTED, S10_CYL1_EXTENDED,
-    S17_PLATFORM, S18_FEED_OK, S19_CHECK_TRAY_P2,
+    S17_PLATFORM, S18_FEED_OK, S19_CHECK_TRAY_P2, S20_SCAN_STACK_P2,
     S25_CYL4_RETRACTED, S26_CYL4_EXTENDED,
     S27_CYL5_RETRACTED, S28_CYL5_EXTENDED,
 )
@@ -509,6 +509,29 @@ class TestStateTransitions:
 
         assert node.state_s4 == SystemState.S4_CYL5_SYNC
         node._cyl5_extend.assert_called_once()
+
+    def test_s20_sensor_first_stops_before_reading_outy_position(self):
+        """S20 ON khi armed phải STOP Servo5 trước rồi mới đọc encoder/phân row."""
+        node = _make_node()
+        node.state_s4 = SystemState.S4_OUTY_SCAN_S20
+        node._cmd_sent_s4 = True
+        node._s20_armed = True
+        node._s4_scan_noise_retry = 1
+        node._s4_s20_on_logged = False
+        node.sensor = MagicMock(side_effect=lambda sid: sid == S20_SCAN_STACK_P2)
+        node._notify = MagicMock()
+
+        calls = MagicMock()
+        node._stop = MagicMock(side_effect=lambda sid: calls.stop(sid))
+        node._pos = MagicMock(side_effect=lambda sid: (calls.position(sid), 5.0)[1])
+        node._pos_cached = MagicMock(return_value=5.0)
+
+        node._s4_outy_scan_s20()
+
+        assert calls.mock_calls[:2] == [call.stop(5), call.position(5)]
+        assert node._outy_jog_pos == 40.0
+        assert node._s4_scan_noise_retry == 0
+        assert node.state_s4 == SystemState.S4_OUTY_DROP
 
     def test_s1_abort_resets_to_idle(self):
         """_s1_abort() → state_in = IDLE, state1_enabled = False, pub busy(False)."""

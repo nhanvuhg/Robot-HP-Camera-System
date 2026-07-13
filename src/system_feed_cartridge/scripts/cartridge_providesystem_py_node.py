@@ -606,6 +606,16 @@ class CartridgeSystem(Node):
                     self.get_logger().info("Connected CPX IO Module 1. Keeping valve states unchanged (only read).")
                 else:
                     self.io_module_2 = mod
+                    di_desc = [
+                        f"{getattr(m, 'name', '?')}@{getattr(m, 'position', '?')}"
+                        for m in self._io2_di_modules_locked()
+                    ]
+                    valve = self._io2_valve_module_locked()
+                    valve_desc = (f"{getattr(valve, 'name', '?')}@"
+                                  f"{getattr(valve, 'position', '?')}") if valve else 'NONE'
+                    self.get_logger().info(
+                        f"IO 2 mapping: DI={di_desc} | VALVE={valve_desc}"
+                    )
                 self.get_logger().info(f"IO {idx} {ip} OK")
                 return
             except Exception as e:
@@ -747,13 +757,8 @@ class CartridgeSystem(Node):
             self.get_logger().info("[INIT-CYL2] Module 2 chưa connect → giữ nguyên coil (no-op)")
             return
         try:
-            channels2 = []
             with self._io_bg_lock:
-                for sub in self.io_module_2.modules:
-                    if sub.is_function_supported("read_channels"):
-                        ch = sub.read_channels()
-                        if isinstance(ch, list):
-                            channels2.extend(ch)
+                channels2 = self._read_io2_sensor_channels_locked()
             # S21 = cache2[4], S22 = cache2[5]
             if len(channels2) >= 6:
                 s21 = bool(channels2[4])  # S21_CYL2_RETRACTED
@@ -956,14 +961,41 @@ class CartridgeSystem(Node):
             
             time.sleep(poll_period)
 
+    def _io2_di_modules_locked(self) -> list:
+        """Return CPX41 8DI modules in physical rack-position order."""
+        if self.io_module_2 is None:
+            return []
+        modules = []
+        for mod in self.io_module_2.modules:
+            name = str(getattr(mod, 'name', '')).lower()
+            if mod.is_function_supported("read_channels") and "8di" in name:
+                modules.append(mod)
+        return sorted(modules, key=lambda mod: int(getattr(mod, 'position', 999)))
+
+    def _io2_valve_module_locked(self):
+        """Return only the CPX41 VABX valve manifold, never a DI module."""
+        if self.io_module_2 is None:
+            return None
+        writable = []
+        for mod in self.io_module_2.modules:
+            if (mod.is_function_supported("set_channel")
+                    and mod.is_function_supported("reset_channel")):
+                writable.append(mod)
+        named = [m for m in writable if "vabx" in str(getattr(m, 'name', '')).lower()]
+        if named:
+            return sorted(named, key=lambda mod: int(getattr(mod, 'position', 999)))[0]
+        # Backward-compatible fallback only when hardware exposes exactly one
+        # writable module. Never guess when multiple writable modules exist.
+        return writable[0] if len(writable) == 1 else None
+
     def _read_io2_sensor_channels_locked(self) -> list:
         """Read CPX 254 DI modules only: S17-S24 from first 8DI, S25-S28 from second 8DI."""
         channels: list = []
-        di_modules = []
-        for mod in self.io_module_2.modules:
-            name = str(getattr(mod, 'name', ''))
-            if mod.is_function_supported("read_channels") and "8di" in name.lower():
-                di_modules.append(mod)
+        di_modules = self._io2_di_modules_locked()
+        if len(di_modules) < 2:
+            raise RuntimeError(
+                f"CPX41 mapping invalid: expected 2x 8DI, found {len(di_modules)}"
+            )
         for mod in di_modules[:2]:
             ch = mod.read_channels()
             if isinstance(ch, list):
@@ -1323,16 +1355,20 @@ class CartridgeSystem(Node):
         if not self.io_module_2:
             return False
         with self._io_bg_lock:
-            for mod in self.io_module_2.modules:
-                if mod.is_function_supported("set_channel"):
-                    try:
-                        if state:
-                            mod.set_channel(channel)
-                        else:
-                            mod.reset_channel(channel)
-                        return True
-                    except Exception:
-                        pass
+            mod = self._io2_valve_module_locked()
+            if mod is None:
+                self.get_logger().error(
+                    "CPX41 valve mapping invalid: VABX writable module not found/ambiguous"
+                )
+                return False
+            try:
+                if state:
+                    mod.set_channel(channel)
+                else:
+                    mod.reset_channel(channel)
+                return True
+            except Exception as e:
+                self.get_logger().warn(f"CPX41 valve write ch{channel} failed: {e}")
         return False
 
     def _cyl1_extend(self) -> bool:
@@ -6049,6 +6085,48 @@ class CartridgeSystem(Node):
           - hết retry → fallback row1 + notify warn (operator kiểm tra S19/S20).
         """
         cfg = self.config
+
+        # SENSOR-FIRST: giống S4 tại scan Pos1. Khi scan đã armed, ưu tiên
+        # kiểm tra S20 và gửi STOP trước mọi lần đọc encoder OutY. Feedback
+        # encoder FAS có thể cập nhật chậm hơn tín hiệu DI; đọc vị trí trước
+        # làm OutY tiếp tục chạy thêm một đoạn dù S20 đã ON ngoài thực tế.
+        if (self._cmd_sent_s4
+                and self._s20_armed
+                and self.sensor(S20_SCAN_STACK_P2)):
+            detect_t = time.time()
+            self._stop(5)  # dừng cơ khí trước, vị trí chỉ dùng phân row/log
+            trigger_pos = self._pos(5)
+            if trigger_pos is None:
+                trigger_pos = self._pos_cached(5)
+
+            row = (self._zone_to_row(trigger_pos, cfg.outy_output_zones)
+                   if trigger_pos is not None else None)
+            pos_text = 'N/A' if trigger_pos is None else f'{trigger_pos:.1f}'
+            zone_msg = f'row{row}' if row is not None else 'NO_ZONE'
+            self.get_logger().warn(
+                f'[S4 SENSOR-FIRST] S20 ON -> STOP @ OutY={pos_text}mm ({zone_msg})'
+            )
+
+            self._s4_s20_on_logged = True
+            if row is not None:
+                target_mm = cfg.outy_output_zones[row][2]
+                self._notify(
+                    'silent_ok', 'POS2 S20 — DETECT/STOP',
+                    f'OutY stop={pos_text} mm | Row {row} | Target={target_mm:.1f} mm'
+                    f' | Phản ứng={time.time() - detect_t:.3f}s'
+                )
+                self._outy_jog_pos = target_mm
+                self._s4_scan_noise_retry = 0
+                self._enter_s4(SystemState.S4_OUTY_DROP)
+            else:
+                self._notify(
+                    'silent_info', 'POS2 S20 — DETECT/STOP NGOÀI ZONE',
+                    f'OutY stop={pos_text} mm | Chuyển retry scan an toàn'
+                )
+                # Không chạy mù sau khi đã STOP; về safe rồi scan lại.
+                self._enter_s4(SystemState.S4_RETRY_SCAN_HOME)
+            return
+
         oy = self._pos(5)
         if oy is None:
             return
