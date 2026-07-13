@@ -4845,6 +4845,51 @@ class CartridgeSystem(Node):
 
         Next: S2A_INY_TARGETROW (di chuyển đến row target @ iny_row_vel + nhả Cyl1).
         """
+        # SENSOR-FIRST: sau khi scan đã armed, kiểm tra S4 trước mọi lần đọc
+        # encoder Modbus. Feedback encoder trên FAS cập nhật chậm; nếu đọc vị trí
+        # trước rồi mới đọc S4, InY có thể đi thêm ~20mm ở 50mm/s.
+        if (self._cmd_sent_in
+                and self._s6_snapshot
+                and self._s4_armed_out
+                and self.sensor(S4_SCAN_STACK_P1)):
+            detect_t = time.time()
+            self._stop(2)  # ưu tiên dừng cơ khí, không chờ lấy vị trí để log
+            trigger_pos = self._pos(2)
+            if trigger_pos is None:
+                trigger_pos = self._pos_cached(2)
+
+            row = (self._zone_to_row(trigger_pos, self.config.iny_output_zones)
+                   if trigger_pos is not None else None)
+            pos_text = 'N/A' if trigger_pos is None else f'{trigger_pos:.1f}'
+            zone_msg = f'row{row}' if row is not None else 'NO_ZONE'
+            self.get_logger().warn(
+                f'[S2A SENSOR-FIRST] S4 ON -> STOP @ InY={pos_text}mm ({zone_msg})'
+            )
+
+            if row is not None:
+                target_mm = self.config.iny_output_zones[row][2]
+                occupied = ' | Row 1 đang occupied' if row == 1 and self._row1_occupied else ''
+                self._notify(
+                    'silent_ok', 'OUTPUT ZONE — DETECT/STOP',
+                    f'InY stop={pos_text} mm | Row {row} | Target={target_mm:.1f} mm'
+                    f'{occupied} | Phản ứng={time.time() - detect_t:.3f}s'
+                )
+            else:
+                self._notify(
+                    'silent_info', 'OUTPUT ZONE — DETECT/STOP NGOÀI ZONE',
+                    f'InY stop={pos_text} mm | Chuyển retry scan an toàn'
+                )
+
+            self._s2_s4_on_logged = True
+            if row is not None and not (row == 1 and self._row1_occupied):
+                self._output_target_pos = target_mm
+                self._output_row = row
+                self._enter_in(SystemState.S2A_INY_TARGETROW)
+            else:
+                # Không tiếp tục chạy mù sau khi đã STOP; về home rồi scan lại.
+                self._enter_in(SystemState.S2A_RETRY_SCAN_HOME)
+            return
+
         iny = self._pos(2)
         if iny is None:
             return
