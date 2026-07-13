@@ -3,7 +3,7 @@ import time
 from cpx_io.cpx_system.cpx_ap.cpx_ap import CpxAp
 
 def main():
-    ip = "192.168.27.253"
+    ip = "172.16.11.37"
     print(f"Connecting to CPX at {ip}...")
     try:
         cpx = CpxAp(ip_address=ip, cycle_time=None)

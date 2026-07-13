@@ -60,7 +60,7 @@ Hệ thống tự động nạp cartridge với **5 servo motors** Festo CMMT-AS
 ### **Giao Tiếp**
 ```
 Protocol: Modbus TCP/IP
-Network: 192.168.27.x
+Network: 172.16.11.x
 Servo Control: MotionHandler API
 IO Control: CpxAp API
 ```

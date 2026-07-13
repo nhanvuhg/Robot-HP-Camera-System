@@ -3,7 +3,7 @@ import time
 from cpx_io.cpx_system.cpx_ap.cpx_ap import CpxAp
 
 def setup_initial_state():
-    ip = "192.168.27.253"
+    ip = "172.16.11.37"
     print("Connecting to CPX to setup test state...")
     cpx = CpxAp(ip_address=ip, cycle_time=None)
     mod = cpx.modules[3]
@@ -38,7 +38,7 @@ def setup_initial_state():
     print("Setup complete and disconnected.")
 
 def simulate_startup():
-    ip = "192.168.27.253"
+    ip = "172.16.11.37"
     print("\nSimulating node startup...")
     cpx = CpxAp(ip_address=ip, cycle_time=None)
     mod = cpx.modules[3]

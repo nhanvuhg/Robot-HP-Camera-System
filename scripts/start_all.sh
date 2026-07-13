@@ -262,7 +262,7 @@ echo "        PID=$PID_ROBOT  Log: $LOG_ROBOT"
 echo "$PID_ROBOT" >> "$PIDFILE"
 
 # ── [5] Gripper Node (Festo CPX, venv) ──
-# ⚠️ DISABLED: gripper/picker đã tích hợp trong cartridge_providesystem (cùng CPX 192.168.27.253)
+# ⚠️ DISABLED: gripper/picker đã tích hợp trong cartridge_providesystem (cùng CPX 172.16.11.37)
 #    Chạy riêng gây xung đột channel (2 node ghi ngược coil trên cùng valve).
 LOG_GRIPPER="$LOG_DIR/gripper_festo_node.log"
 # "$WS/run_gripper_node.sh" > "$LOG_GRIPPER" 2>&1 &

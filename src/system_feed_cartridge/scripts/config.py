@@ -28,8 +28,8 @@ class SystemConfig(BaseModel):
     io_ip_2: str
 
     # Cylinder Outputs
-    cylinder1_extend_channel: int = 5
-    cylinder1_retract_channel: int = 4
+    cylinder1_extend_channel: int = 4
+    cylinder1_retract_channel: int = 5
     cylinder2_extend_channel: int = 0
     cylinder2_retract_channel: int = 1
     cyl3_present: bool = True

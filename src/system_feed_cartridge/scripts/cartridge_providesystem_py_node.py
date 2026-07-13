@@ -612,7 +612,13 @@ class CartridgeSystem(Node):
                 mod = CpxAp(ip_address=ip, cycle_time=None)
                 if idx == 1:
                     self.io_module = mod
-                    self.get_logger().info("Connected CPX IO Module 1. Keeping valve states unchanged (only read).")
+                    valve = self._io1_valve_module_locked()
+                    valve_desc = (f"{getattr(valve, 'name', '?')}@"
+                                  f"{getattr(valve, 'position', '?')}") if valve else 'NONE'
+                    self.get_logger().info(
+                        f"Connected CPX IO Module 1. VALVE={valve_desc}. "
+                        "Keeping valve states unchanged (only read)."
+                    )
                 else:
                     self.io_module_2 = mod
                     di_desc = [
@@ -695,14 +701,15 @@ class CartridgeSystem(Node):
         # 1. Gripper & Picker
         if self.io_module:
             try:
-                for mod in self.io_module.modules:
-                    if mod.is_function_supported("set_channel"):
-                        mod.reset_channel(0); mod.set_channel(1)  # nhả gripper
-                        mod.reset_channel(2); mod.set_channel(3)  # nhả picker
-                        mod.reset_channel(9); mod.set_channel(8)  # nhả cyl6/loadcell
-                        self.pub_cyl_loadcell_status.publish(Bool(data=False))
-                        self.get_logger().info("[CPX-SETUP] Gripper + Picker + Cyl6 → NHẢ (safe)")
-                        break
+                with self._io_bg_lock:
+                    mod = self._io1_valve_module_locked()
+                    if mod is None:
+                        raise RuntimeError("CPX37 VABX valve manifold not found/ambiguous")
+                    mod.reset_channel(0); mod.set_channel(1)  # nhả gripper
+                    mod.reset_channel(2); mod.set_channel(3)  # nhả picker
+                    mod.reset_channel(9); mod.set_channel(8)  # nhả cyl6/loadcell
+                    self.pub_cyl_loadcell_status.publish(Bool(data=False))
+                    self.get_logger().info("[CPX-SETUP] Gripper + Picker + Cyl6 → NHẢ (safe)")
             except Exception as e:
                 self.get_logger().error(f"[CPX-SETUP] Failed to init gripper/picker: {e}")
 
@@ -981,21 +988,30 @@ class CartridgeSystem(Node):
                 modules.append(mod)
         return sorted(modules, key=lambda mod: int(getattr(mod, 'position', 999)))
 
+    @staticmethod
+    def _valve_module_from_cpx(cpx):
+        """Select the VABX manifold explicitly; never guess between writable modules."""
+        if cpx is None:
+            return None
+        writable = [
+            mod for mod in cpx.modules
+            if (mod.is_function_supported("set_channel")
+                and mod.is_function_supported("reset_channel"))
+        ]
+        named = [m for m in writable if "vabx" in str(getattr(m, 'name', '')).lower()]
+        if named:
+            return sorted(named, key=lambda mod: int(getattr(mod, 'position', 999)))[0]
+        return writable[0] if len(writable) == 1 else None
+
+    def _io1_valve_module_locked(self):
+        """Return only the CPX37 VABX valve manifold, never a DI module."""
+        return self._valve_module_from_cpx(self.io_module)
+
     def _io2_valve_module_locked(self):
         """Return only the CPX41 VABX valve manifold, never a DI module."""
         if self.io_module_2 is None:
             return None
-        writable = []
-        for mod in self.io_module_2.modules:
-            if (mod.is_function_supported("set_channel")
-                    and mod.is_function_supported("reset_channel")):
-                writable.append(mod)
-        named = [m for m in writable if "vabx" in str(getattr(m, 'name', '')).lower()]
-        if named:
-            return sorted(named, key=lambda mod: int(getattr(mod, 'position', 999)))[0]
-        # Backward-compatible fallback only when hardware exposes exactly one
-        # writable module. Never guess when multiple writable modules exist.
-        return writable[0] if len(writable) == 1 else None
+        return self._valve_module_from_cpx(self.io_module_2)
 
     def _read_io2_sensor_channels_locked(self) -> list:
         """Read CPX 254 DI modules only: S17-S24 from first 8DI, S25-S28 from second 8DI."""
@@ -1342,18 +1358,23 @@ class CartridgeSystem(Node):
     def _set_do(self, channel: int, state: bool) -> bool:
         """
         Ghi giá trị digital output lên IO Module 1 (set/reset một channel).
-        Duyệt qua các module con của CPX-AP và ghi vào module đầu tiên hỗ trợ set_channel.
+        Chọn đích danh manifold VABX, không ghi nhầm module writable khác.
         Trả về False nếu IO module không kết nối.
         """
         if not self.io_module: return False
         with self._io_bg_lock:
-            for mod in self.io_module.modules:
-                if mod.is_function_supported("set_channel"):
-                    try:
-                        if state: mod.set_channel(channel)
-                        else: mod.reset_channel(channel)
-                        return True
-                    except Exception: pass
+            mod = self._io1_valve_module_locked()
+            if mod is None:
+                self.get_logger().error(
+                    "CPX37 valve mapping invalid: VABX writable module not found/ambiguous"
+                )
+                return False
+            try:
+                if state: mod.set_channel(channel)
+                else: mod.reset_channel(channel)
+                return True
+            except Exception as e:
+                self.get_logger().warn(f"CPX37 valve write ch{channel} failed: {e}")
         return False
 
     def _set_do_2(self, channel: int, state: bool) -> bool:
@@ -2420,17 +2441,17 @@ class CartridgeSystem(Node):
         if not self.io_module: return
         with self._io_bg_lock:
             try:
-                for valve_mod in self.io_module.modules:
-                    if valve_mod.is_function_supported("set_channel"):
-                        if msg.data:  # Gắp
-                            valve_mod.reset_channel(1)
-                            valve_mod.set_channel(0)
-                            self.pub_gripper_status.publish(Bool(data=True))
-                        else:  # Nhả
-                            valve_mod.reset_channel(0)
-                            valve_mod.set_channel(1)
-                            self.pub_gripper_status.publish(Bool(data=False))
-                        break
+                valve_mod = self._io1_valve_module_locked()
+                if valve_mod is None:
+                    raise RuntimeError("CPX37 VABX valve manifold not found/ambiguous")
+                if msg.data:  # Gắp
+                    valve_mod.reset_channel(1)
+                    valve_mod.set_channel(0)
+                    self.pub_gripper_status.publish(Bool(data=True))
+                else:  # Nhả
+                    valve_mod.reset_channel(0)
+                    valve_mod.set_channel(1)
+                    self.pub_gripper_status.publish(Bool(data=False))
             except Exception as e:
                 self.get_logger().error(f"Gripper cmd error: {e}")
 
@@ -2445,17 +2466,17 @@ class CartridgeSystem(Node):
         if not self.io_module: return
         with self._io_bg_lock:
             try:
-                for valve_mod in self.io_module.modules:
-                    if valve_mod.is_function_supported("set_channel"):
-                        if msg.data:  # Gắp
-                            valve_mod.reset_channel(3)
-                            valve_mod.set_channel(2)
-                            self.pub_picker_status.publish(Bool(data=True))
-                        else:  # Nhả
-                            valve_mod.reset_channel(2)
-                            valve_mod.set_channel(3)
-                            self.pub_picker_status.publish(Bool(data=False))
-                        break
+                valve_mod = self._io1_valve_module_locked()
+                if valve_mod is None:
+                    raise RuntimeError("CPX37 VABX valve manifold not found/ambiguous")
+                if msg.data:  # Gắp
+                    valve_mod.reset_channel(3)
+                    valve_mod.set_channel(2)
+                    self.pub_picker_status.publish(Bool(data=True))
+                else:  # Nhả
+                    valve_mod.reset_channel(2)
+                    valve_mod.set_channel(3)
+                    self.pub_picker_status.publish(Bool(data=False))
             except Exception as e:
                 self.get_logger().error(f"Picker cmd error: {e}")
 
@@ -2474,19 +2495,19 @@ class CartridgeSystem(Node):
             return
         with self._io_bg_lock:
             try:
-                for valve_mod in self.io_module.modules:
-                    if valve_mod.is_function_supported("set_channel"):
-                        if msg.data:  # Kẹp
-                            valve_mod.reset_channel(8)
-                            valve_mod.set_channel(9)
-                            self.pub_cyl_loadcell_status.publish(Bool(data=True))
-                            self.get_logger().info("Cyl6/loadcell KẸP: ch8 reset, ch9 set")
-                        else:  # Nhả
-                            valve_mod.reset_channel(9)
-                            valve_mod.set_channel(8)
-                            self.pub_cyl_loadcell_status.publish(Bool(data=False))
-                            self.get_logger().info("Cyl6/loadcell NHẢ: ch9 reset, ch8 set")
-                        break
+                valve_mod = self._io1_valve_module_locked()
+                if valve_mod is None:
+                    raise RuntimeError("CPX37 VABX valve manifold not found/ambiguous")
+                if msg.data:  # Kẹp
+                    valve_mod.reset_channel(8)
+                    valve_mod.set_channel(9)
+                    self.pub_cyl_loadcell_status.publish(Bool(data=True))
+                    self.get_logger().info("Cyl6/loadcell KẸP: ch8 reset, ch9 set")
+                else:  # Nhả
+                    valve_mod.reset_channel(9)
+                    valve_mod.set_channel(8)
+                    self.pub_cyl_loadcell_status.publish(Bool(data=False))
+                    self.get_logger().info("Cyl6/loadcell NHẢ: ch9 reset, ch8 set")
             except Exception as e:
                 self.get_logger().error(f"Cyl6/loadcell cmd error: {e}")
 

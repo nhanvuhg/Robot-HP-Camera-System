@@ -42,12 +42,13 @@ File `sim_auto_test.py` đã bị bỏ. Test trực tiếp trên hardware hoặc
 ### Servo / Axis
 | Servo | Tên | IP |
 |-------|-----|----|
-| 1 | InX | 192.168.27.248 |
-| 2 | InY | 192.168.27.249 |
-| 3 | PutTray | 192.168.27.250 |
-| 4 | OutX | 192.168.27.251 |
-| 5 | OutY | 192.168.27.252 |
-| IO | IO Module | 192.168.27.253 |
+| 1 | InX | 172.16.11.35 |
+| 2 | InY | 172.16.11.36 |
+| 3 | PutTray | 172.16.11.38 |
+| 4 | OutX | 172.16.11.39 |
+| 5 | OutY | 172.16.11.40 |
+| IO 1 | IO Module | 172.16.11.37 |
+| IO 2 | IO Module | 172.16.11.41 |
 
 ### Vị trí safe zone
 - **InX home** = `20.0 mm` (Target 1, gần home)

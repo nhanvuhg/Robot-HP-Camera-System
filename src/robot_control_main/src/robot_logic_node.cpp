@@ -2801,6 +2801,15 @@ void RobotLogicNode::statePlaceToOutput()
         return;
     }
 
+    // Keep GUI OUTPUT SLOT synchronized with the actual destination selected
+    // by AUTO/AI. The publisher existed previously but was never used, so the
+    // GUI could not highlight the slot currently being placed.
+    if (selected_slot_pub_) {
+        auto slot_msg = std_msgs::msg::Int32();
+        slot_msg.data = slot;
+        selected_slot_pub_->publish(slot_msg);
+    }
+
     // ── Send motion ──
     RCLCPP_INFO(get_logger(), "[PLACE] 📦 SCALE → Slot %d [ASYNC]", slot);
     async_slot_ = slot;

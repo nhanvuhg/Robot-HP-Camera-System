@@ -2,7 +2,7 @@
 import time
 from edcon.edrive.com_modbus import ComModbus
 
-IP = "192.168.27.248"
+IP = "172.16.11.35"
 com = ComModbus(ip_address=IP, cycle_time=60, timeout_ms=3000)
 
 pnus = [

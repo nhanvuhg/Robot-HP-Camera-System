@@ -57,20 +57,26 @@ for mod in ['rclpy.qos', 'rclpy.executors',
             'std_msgs', 'std_msgs.msg']:
     sys.modules[mod] = MagicMock()
 
-# Festo edcon — must mock BEFORE import so try/except picks EDCON_AVAILABLE=False
-_edcon_mock = MagicMock()
-_edcon_mock.edrive.com_modbus.ComModbus = None
-_edcon_mock.edrive.motion_handler.MotionHandler = None
-for mod in ['edcon', 'edcon.edrive', 'edcon.edrive.com_modbus',
-            'edcon.edrive.motion_handler', 'edcon.utils', 'edcon.utils.logging']:
-    sys.modules[mod] = _edcon_mock
+# Festo edcon — distinct module stubs prevent MagicMock from lazily exposing
+# the real driver or constructing a hardware connection during test collection.
+for mod in ['edcon', 'edcon.edrive', 'edcon.utils']:
+    sys.modules[mod] = types.ModuleType(mod)
+_edcon_com = types.ModuleType('edcon.edrive.com_modbus')
+_edcon_com.ComModbus = None
+sys.modules['edcon.edrive.com_modbus'] = _edcon_com
+_edcon_motion = types.ModuleType('edcon.edrive.motion_handler')
+_edcon_motion.MotionHandler = None
+sys.modules['edcon.edrive.motion_handler'] = _edcon_motion
+_edcon_logging = types.ModuleType('edcon.utils.logging')
+_edcon_logging.Logging = None
+sys.modules['edcon.utils.logging'] = _edcon_logging
 
 # Festo CPX-AP
-_cpx_mock = MagicMock()
-_cpx_mock.cpx_system.cpx_ap.cpx_ap.CpxAp = None
-for mod in ['cpx_io', 'cpx_io.cpx_system', 'cpx_io.cpx_system.cpx_ap',
-            'cpx_io.cpx_system.cpx_ap.cpx_ap']:
-    sys.modules[mod] = _cpx_mock
+for mod in ['cpx_io', 'cpx_io.cpx_system', 'cpx_io.cpx_system.cpx_ap']:
+    sys.modules[mod] = types.ModuleType(mod)
+_cpx_driver = types.ModuleType('cpx_io.cpx_system.cpx_ap.cpx_ap')
+_cpx_driver.CpxAp = None
+sys.modules['cpx_io.cpx_system.cpx_ap.cpx_ap'] = _cpx_driver
 
 # Now we can safely import our modules
 from config import SystemConfig
@@ -121,7 +127,8 @@ class TestSystemConfig:
             iny_input_zones={}, iny_output_zones={}, outy_output_zones={},
         )
         assert config.homing_timeout == 30.0
-        assert config.cylinder1_extend_channel == 5
+        assert config.cylinder1_extend_channel == 4
+        assert config.cylinder1_retract_channel == 5
         assert config.cylinder3_extend_channel == 6
         assert config.cylinder3_retract_channel == 7
         assert config.cylinder2_extend_channel == 0
@@ -220,6 +227,7 @@ def _make_node():
     node._input_tray_done  = False
     node._gui_confirmed    = False
     node._system_paused    = False
+    node._pause_pending    = False
     node._s4_trigger       = False
     node._jog_mode         = False
     node._drain_armed_after_s2 = False
@@ -257,6 +265,7 @@ def _make_node():
     node._homing_abort      = MagicMock(); node._homing_abort.is_set = MagicMock(return_value=False)
     node._homing_done_event = MagicMock(); node._homing_done_event.is_set = MagicMock(return_value=False)
     node._homing_result     = True
+    node._homing_ref_offset = {}
     node._drive_warm_t      = 0.0
     node._s10_off_time      = 0.0
     node._s10_prev          = False
@@ -265,6 +274,8 @@ def _make_node():
 
     # Publishers (mocked)
     node.pub_busy_cartridge   = MagicMock()
+    node.pub_busy_cartridge_pos2 = MagicMock()
+    node.pub_robot_mode        = MagicMock()
     node.pub_homing_done      = MagicMock()
     node.pub_state            = MagicMock()
     node.pub_new_tray         = MagicMock()
@@ -315,7 +326,7 @@ class TestCanStartConditions:
     def test_can_start_s1_happy_path(self):
         """S1 trigger: auto mode, có khay (S1/S2/S3), S7 OFF, S9 ON, S10 OFF."""
         node = _make_node()
-        node.operation_mode = 'auto'
+        node.operation_mode = 'manual'
         _set_sensors(node, S1_BELT_START=True, S7_TRAY_AT_ROBOT=False, S9_CYL1_RETRACTED=True, S10_CYL1_EXTENDED=False)
         # _can_start_s1 reads sensor() which checks operation_mode
         # In auto mode, sensor() calls _sensor_raw() which reads IO cache
@@ -344,7 +355,7 @@ class TestCanStartConditions:
     def test_can_start_s1_no_tray(self):
         """Không có khay nào trên belt → không trigger."""
         node = _make_node()
-        node.operation_mode = 'manual'
+        node.operation_mode = 'auto'
         _set_sensors(node, S1_BELT_START=False, S2_BELT_MID=False, S3_BELT_END=False)
         has_tray = node.sensor(S1_BELT_START) or node.sensor(S2_BELT_MID) or node.sensor(S3_BELT_END)
         assert has_tray is False
@@ -352,7 +363,7 @@ class TestCanStartConditions:
     def test_can_start_s2a(self):
         """S2A trigger: robot done + S7 ON + không busy."""
         node = _make_node()
-        node.operation_mode = 'manual'
+        node.operation_mode = 'auto'
         node._input_tray_done = True
         node._motion_busy = False
         _set_sensors(node, S7_TRAY_AT_ROBOT=True)
@@ -369,7 +380,7 @@ class TestCanStartConditions:
     def test_can_start_s4(self):
         """S4 trigger: có _s4_trigger + S18 ON + không busy."""
         node = _make_node()
-        node.operation_mode = 'manual'
+        node.operation_mode = 'auto'
         node._s4_trigger = True
         node._motion_busy = False
         _set_sensors(node, S18_FEED_OK=True)
@@ -670,7 +681,7 @@ class TestIdleDispatch:
     def test_idle_triggers_s2a_when_ready(self):
         """IDLE + robot done + S7 → phải chuyển sang S2A_CHECK_INTERLOCK."""
         node = _make_node()
-        node.operation_mode = 'manual'
+        node.operation_mode = 'auto'
         node._input_tray_done = True
         node._motion_busy = False
         _set_sensors(node, S7_TRAY_AT_ROBOT=True)

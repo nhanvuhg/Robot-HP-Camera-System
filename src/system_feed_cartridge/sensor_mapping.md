@@ -63,7 +63,7 @@ Bảng mapping phản ánh thứ tự đọc thực tế trong code: `cache1[sid
 
 | Cylinder | Extend DO | Retract DO | Vị trí | Config key |
 |----------|-----------|------------|--------|------------|
-| Cylinder 1 | **5** | **4** | Pos 1 — Input Pickup | `cylinder1_extend_channel` |
+| Cylinder 1 | **4** | **5** | Pos 1 — Input Pickup | `cylinder1_extend_channel` |
 | Cylinder 2 (CPX 254) | **0** | **1** | Pos 2 — Output Pickup | `cylinder2_extend_channel` |
 | Cylinder 3 (CPX 253) | **6** | **7** | Pos 1 — Tray clamp | `cylinder3_extend_channel` |
 | Cylinder 4 (CPX 254) | **2** | **3** | Pos 2 — Platform clamp | `cylinder4_extend_channel` |

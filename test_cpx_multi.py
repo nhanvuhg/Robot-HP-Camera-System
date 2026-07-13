@@ -3,7 +3,7 @@ import time
 from cpx_io.cpx_system.cpx_ap.cpx_ap import CpxAp
 
 def run1():
-    ip = "192.168.27.253"
+    ip = "172.16.11.37"
     print("Run 1: Connecting...")
     cpx = CpxAp(ip_address=ip, cycle_time=None)
     mod = cpx.modules[3]
@@ -14,7 +14,7 @@ def run1():
     print("Run 1: Disconnected.")
 
 def run2():
-    ip = "192.168.27.253"
+    ip = "172.16.11.37"
     print("Run 2: Connecting...")
     cpx = CpxAp(ip_address=ip, cycle_time=None)
     mod = cpx.modules[3]

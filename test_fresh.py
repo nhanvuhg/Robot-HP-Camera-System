@@ -2,7 +2,7 @@ import time
 from edcon.edrive.com_modbus import ComModbus
 from edcon.edrive.motion_handler import MotionHandler
 
-for ip, name in [("192.168.27.248", "S1"), ("192.168.27.249", "S2")]:
+for ip, name in [("172.16.11.35", "S1"), ("172.16.11.36", "S2")]:
     print(f"\n=== {name} ({ip}) ===")
     try:
         com = ComModbus(ip_address=ip, cycle_time=60, timeout_ms=3000)

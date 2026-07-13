@@ -23,8 +23,8 @@ def safe_try(func, retries=3, backoff=2):
             time.sleep(backoff * attempt)
 
 SERVO_IPS = {
-    1: '192.168.27.247',
-    2: '192.168.27.251',
+    1: '172.16.11.35',
+    2: '172.16.11.36',
 }
 
 MOVE_TARGET = 1000000   # 10mm in counts (100000 counts/mm)

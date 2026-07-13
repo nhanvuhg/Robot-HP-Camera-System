@@ -143,7 +143,7 @@ ros2 run system_feed_cartridge cartridge_system_py
 - **5 Servo Motors**: Festo CMMT-AS-C2-3A-MP-S1
 - **Protocol**: Modbus TCP/IP
 - **IO Module**: Festo CPX-AP (EtherNet/IP)
-- **Network**: 192.168.27.x
+- **Network**: 172.16.11.x
 
 ### **Servos:**
 | ID | Name | IP | Function |
