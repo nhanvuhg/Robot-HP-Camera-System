@@ -427,35 +427,22 @@ Item {
             Item { Layout.fillWidth: true }
 
             TbBtn {
-                lbl: "Start"; variant: "primary"
+                lbl: "START"; variant: "primary"
+                iconSource: "qrc:/qml/icons/play.svg"
+                Layout.preferredWidth: 132
+                Layout.preferredHeight: 40
                 onClicked: hpController.publishScreenControl("start")
             }
 
-            CycleChip {
-                value: hpController.ballCycleTime || "00:00"
-                isRun: tab.running
-                Layout.leftMargin: 6
-                Layout.rightMargin: 6
-            }
-
             TbBtn {
-                lbl: "Stop"; variant: "danger"
+                lbl: "STOP"; variant: "danger"
+                iconSource: "qrc:/qml/icons/octagon_x_lucide.svg"
+                Layout.preferredWidth: 132
+                Layout.preferredHeight: 40
                 onClicked: hpController.publishScreenControl("stop")
             }
 
             Item { width: 8 }
-
-            ModeBtn { lbl: "Manual"; active: tab.modeStr === "MANUAL"; onClicked: hpController.publishMode(2) }
-            ModeBtn { lbl: "Auto";   active: tab.modeStr === "AUTO";   onClicked: hpController.publishMode(0) }
-            ModeBtn { lbl: "Clean";  active: tab.modeStr === "CLEAN";  onClicked: hpController.publishMode(1) }
-            ModeBtn { lbl: "Prefill"; active: tab.modeStr === "PREFILL"; onClicked: hpController.publishMode(3) }
-
-            Item { width: 8 }
-
-            TbBtn {
-                lbl: "Reconnect CPX"; variant: "warn"
-                onClicked: hpController.publishString("reconnect_cmd", "cpx")
-            }
 
             TbBtn {
                 lbl: "Clear Error"; variant: "warn"
@@ -551,21 +538,33 @@ Item {
                     spacing: 10
 
                     RowLayout {
+                        id: overviewCardsRow
+                        property real cardHeight: Math.max(modeSelectionPanel.implicitHeight,
+                                                           topOverviewPanel.implicitHeight,
+                                                           topSafetyPanel.implicitHeight)
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignTop
                         spacing: 12
 
+                        ModeSelectionPanel {
+                            id: modeSelectionPanel
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 240
+                            Layout.preferredHeight: overviewCardsRow.cardHeight
+                            Layout.alignment: Qt.AlignTop
+                        }
                         SystemOverviewPanel {
                             id: topOverviewPanel
                             Layout.fillWidth: true
-                            Layout.preferredWidth: 580
+                            Layout.preferredWidth: 440
+                            Layout.preferredHeight: overviewCardsRow.cardHeight
                             Layout.alignment: Qt.AlignTop
                         }
                         SafetyProcessPanel {
                             id: topSafetyPanel
                             Layout.fillWidth: true
-                            Layout.preferredWidth: 420
-                            Layout.preferredHeight: Math.max(topOverviewPanel.implicitHeight, implicitHeight)
+                            Layout.preferredWidth: 340
+                            Layout.preferredHeight: overviewCardsRow.cardHeight
                             Layout.alignment: Qt.AlignTop
                         }
                     }
@@ -664,6 +663,107 @@ Item {
     // ====================================================================
     //  COMPONENTS
     // ====================================================================
+
+    component ModeSelectionPanel: Item {
+        implicitHeight: 286
+
+        Sect {
+            anchors.fill: parent
+            title: "MODE SELECTION"
+            fillBodyHeight: true
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 6
+
+                ModeSelectionButton {
+                    lbl: "AUTO"
+                    desc: "Automatic"
+                    active: tab.modeStr === "AUTO"
+                    onClicked: hpController.publishMode(0)
+                }
+                ModeSelectionButton {
+                    lbl: "CLEAN"
+                    desc: "Cleaning cycle"
+                    active: tab.modeStr === "CLEAN"
+                    onClicked: hpController.publishMode(1)
+                }
+                ModeSelectionButton {
+                    lbl: "MANUAL"
+                    desc: "Direct control"
+                    active: tab.modeStr === "MANUAL"
+                    onClicked: hpController.publishMode(2)
+                }
+                ModeSelectionButton {
+                    lbl: "REFILL"
+                    desc: "Refill cycle"
+                    active: tab.modeStr === "PREFILL" || tab.modeStr === "REFILL"
+                    onClicked: hpController.publishMode(3)
+                }
+            }
+        }
+    }
+
+    component ModeSelectionButton: Rectangle {
+        id: modeCardButton
+        property string lbl: ""
+        property string desc: ""
+        property bool active: false
+        signal clicked()
+
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        Layout.minimumHeight: 48
+        radius: 6
+        color: "transparent"
+        border.color: active ? cSensorActiveBorder : cBorder
+        border.width: 1
+        gradient: active ? selectedModeGradient : idleModeGradient
+
+        Gradient {
+            id: selectedModeGradient
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: cSensorActiveStart }
+            GradientStop { position: 1.0; color: cSensorActiveEnd }
+        }
+        Gradient {
+            id: idleModeGradient
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: cBtnBaseStart }
+            GradientStop { position: 1.0; color: cBtnBaseEnd }
+        }
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 1
+            DashboardText {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: modeCardButton.lbl
+                color: modeCardButton.active ? cSensorActiveText : cText
+                font.pixelSize: 14
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+            }
+            DashboardText {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: modeCardButton.desc
+                color: modeCardButton.active ? cSensorActiveText : cMuted
+                opacity: modeCardButton.active ? 0.8 : 0.65
+                font.pixelSize: 9
+                horizontalAlignment: Text.AlignHCenter
+            }
+        }
+
+        MotionMouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            hoverScale: 1.012
+            pressScale: 0.99
+            shadowEnabled: false
+            shimmerEnabled: false
+            onClicked: modeCardButton.clicked()
+        }
+    }
 
     component SystemOverviewPanel: Item {
         implicitHeight: overviewSect.implicitHeight
@@ -948,6 +1048,7 @@ Item {
             height: parent.height > 0 ? parent.height : implicitHeight
             title: "OPERATING PARAMETERS"
             fillBodyHeight: true
+            frameBorderWidth: 0
 
             ColumnLayout {
                 anchors.fill: parent
@@ -1107,21 +1208,24 @@ Item {
             }
 
             Rectangle {
+                id: compactInputFrame
                 Layout.preferredWidth: Math.max(82, Math.min(96, parent.parent.width * 0.16))
                 Layout.preferredHeight: parent.height
                 Layout.alignment: Qt.AlignVCenter
                 radius: 5
                 color: "#07131f"
-                border.color: cBorder
-                border.width: 1
+                border.color: compactInp.activeFocus ? cBtnActionStart : cBorder
+                border.width: compactInp.activeFocus ? 2 : 1
+                Behavior on border.color { ColorAnimation { duration: 120 } }
                 SmartTextInput {
                     id: compactInp
                     focusHost: tab.focusHost
+                    showFocusBorder: false
                     anchors.fill: parent
                     anchors.leftMargin: 10
                     anchors.rightMargin: 10
                     text: currentVal
-                    color: cAccent
+                    color: cText
                     font.pixelSize: 17
                     font.bold: true
                     font.family: monoFamily
@@ -1318,15 +1422,30 @@ Item {
     }
 
     component ProcessBox: Rectangle {
+        id: processBox
         property string lbl: ""
         property string val: "-"
         property bool active: false
         Layout.fillWidth: true
         Layout.preferredHeight: 48
         radius: 10
-        color: active ? cAccentSoft : cPanel2
-        border.color: active ? cAccent : cBorder
-        border.width: 1
+        color: "transparent"
+        border.color: cBorder
+        border.width: active ? 0 : 1
+        gradient: active ? processActiveGradient : processIdleGradient
+        Gradient {
+            id: processActiveGradient
+            orientation: Gradient.Horizontal
+            // Same selected palette as Robot Control's CONTINUOUS JOG.
+            GradientStop { position: 0.0; color: "#163a52" }
+            GradientStop { position: 1.0; color: "#081627" }
+        }
+        Gradient {
+            id: processIdleGradient
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: cPanel2 }
+            GradientStop { position: 1.0; color: cPanel2 }
+        }
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 14
@@ -1791,6 +1910,7 @@ Item {
         id: tbBtn
         property string lbl: "Btn"
         property string variant: "default"
+        property url iconSource: ""
         signal clicked
 
         readonly property color baseBorder: variant === "primary" ? cOk
@@ -1809,7 +1929,7 @@ Item {
         readonly property color currentStart: ma.pressed ? Qt.darker(gradStart, 1.18) : (ma.containsMouse ? Qt.lighter(gradStart, 1.08) : gradStart)
         readonly property color currentEnd:   ma.pressed ? Qt.darker(gradEnd, 1.18) : (ma.containsMouse ? Qt.lighter(gradEnd, 1.08) : gradEnd)
 
-        implicitWidth: Math.max(80, t.implicitWidth + 26)
+        implicitWidth: Math.max(80, buttonContent.implicitWidth + 26)
         implicitHeight: 38
         radius: 8
         color: currentStart
@@ -1825,10 +1945,27 @@ Item {
             }
         }
 
-        DashboardText {
-            id: t; anchors.centerIn: parent
-            text: lbl; color: baseFg
-            font.pixelSize: 21; font.bold: true
+        Row {
+            id: buttonContent
+            anchors.centerIn: parent
+            spacing: tbBtn.iconSource.toString().length > 0 ? 8 : 0
+            Image {
+                visible: tbBtn.iconSource.toString().length > 0
+                source: tbBtn.iconSource
+                width: visible ? 20 : 0
+                height: visible ? 20 : 0
+                sourceSize.width: 40
+                sourceSize.height: 40
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            DashboardText {
+                id: t
+                text: lbl; color: baseFg
+                font.pixelSize: 21; font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+            }
         }
         MotionMouseArea {
             id: ma; anchors.fill: parent
@@ -1869,8 +2006,7 @@ Item {
         implicitWidth: txt.implicitWidth + 24; implicitHeight: 34
         radius: 17
         color:        state === "on" ? cOkBg : state === "off" ? cBadBg : state === "mid" ? cWarnBg : cIdleBg
-        border.color: state === "on" ? cOk   : state === "off" ? cBad   : state === "mid" ? cWarn   : cIdle
-        border.width: 1
+        border.width: 0
         DashboardText {
             id: txt; anchors.centerIn: parent; text: label
             color: parent.state === "on" ? cOk : parent.state === "off" ? cBad : parent.state === "mid" ? cWarn : cIdle

@@ -4,13 +4,17 @@ TextInput {
     id: control
 
     property Item focusHost: null
-    property color focusBorderColor: "#67d0ff"
+    // Shared CartridgeSystem action-blue palette (same as SET buttons).
+    property color focusBorderColor: "#1a4a6e"
     property int focusBorderRadius: 4
+    property int focusBorderWidth: 2
+    property bool showFocusBorder: true
+    property bool focusBorderOnParent: true
 
     selectByMouse: false
     activeFocusOnTab: true
     selectionColor: focusBorderColor
-    selectedTextColor: "#06101d"
+    selectedTextColor: "#ffffff"
     inputMethodHints: validator ? Qt.ImhFormattedNumbersOnly : Qt.ImhNone
 
     onActiveFocusChanged: {
@@ -35,12 +39,16 @@ TextInput {
     }
 
     Rectangle {
-        anchors.fill: parent
-        radius: control.focusBorderRadius
+        x: control.focusBorderOnParent && control.parent ? -control.x : 0
+        y: control.focusBorderOnParent && control.parent ? -control.y : 0
+        width: control.focusBorderOnParent && control.parent ? control.parent.width : control.width
+        height: control.focusBorderOnParent && control.parent ? control.parent.height : control.height
+        radius: control.focusBorderOnParent && control.parent && control.parent.radius !== undefined
+                ? control.parent.radius : control.focusBorderRadius
         color: "transparent"
         border.color: control.focusBorderColor
-        border.width: control.activeFocus ? 1 : 0
-        visible: control.activeFocus
+        border.width: control.activeFocus ? control.focusBorderWidth : 0
+        visible: control.showFocusBorder && control.activeFocus
         z: 1
     }
 
