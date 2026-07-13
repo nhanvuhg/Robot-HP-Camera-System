@@ -60,6 +60,13 @@ Item {
     readonly property color cIoActiveText:      "#ffffff"
 
     readonly property string monoFamily:  "monospace"
+    readonly property string dashboardTextFamily: Qt.application.font.family
+
+    // Match Control Dashboard typography. Numeric fields can override this
+    // with monoFamily, exactly as they do on the dashboard.
+    component DashboardText: Text {
+        font.family: tab.dashboardTextFamily
+    }
 
     // ---- Parsers (mirror page4Root logic) ----
     function parseKvPipe(raw) {
@@ -412,7 +419,7 @@ Item {
             anchors.rightMargin: 14
             spacing: 8
 
-            Text {
+            DashboardText {
                 text: "Fill HP Control"
                 color: cText; font.pixelSize: 28; font.bold: true
             }
@@ -511,11 +518,11 @@ Item {
                     spacing: 12
                     width: parent.width
 
-                    Text { text: "⛔"; font.pixelSize: 30 }
+                    DashboardText { text: "⛔"; font.pixelSize: 30 }
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { text: "SYSTEM WARNING"; color: cBad; font.bold: true; font.pixelSize: 22 }
-                        Text {
+                        DashboardText { text: "SYSTEM WARNING"; color: cBad; font.bold: true; font.pixelSize: 22 }
+                        DashboardText {
                             text: hpController.errorStatus || "-"
                             color: cText; font.pixelSize: 21
                             wrapMode: Text.WrapAtWordBoundaryOrAnywhere; Layout.fillWidth: true
@@ -580,7 +587,7 @@ Item {
 
                     SensorGroupCard {
                         title: "SENSOR"
-                        columns: 6
+                        columns: 8
                         squareTiles: true
                         items: [
                             "start_button",
@@ -686,14 +693,14 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 6
-                            Text {
+                            DashboardText {
                                 text: "CURRENT INK:"
                                 color: cIdle
                                 font.pixelSize: 14
                                 font.bold: true
                                 font.letterSpacing: 1.0
                             }
-                            Text {
+                            DashboardText {
                                 text: tab.inkNameText()
                                 color: cText
                                 font.pixelSize: 20
@@ -705,13 +712,13 @@ Item {
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 6
-                            Text {
+                            DashboardText {
                                 text: "Scan Code:"
                                 color: cIdle
                                 font.pixelSize: 14
                                 font.bold: true
                             }
-                            Text {
+                            DashboardText {
                                 text: tab.inkCodeLotText()
                                 color: cMuted
                                 font.pixelSize: 15
@@ -744,7 +751,7 @@ Item {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 5
-                    Text {
+                    DashboardText {
                         text: "Last Response"
                         color: cMuted
                         font.pixelSize: 18
@@ -757,7 +764,7 @@ Item {
                         color: "#081627"
                         border.color: cBorder
                         border.width: 1
-                        Text {
+                        DashboardText {
                             anchors.fill: parent
                             anchors.margins: 10
                             text: hpController.manualResponse || "-"
@@ -796,7 +803,7 @@ Item {
                     SafetyBox { lbl: "SAFETY AREA CLEAR"; ok: tab.safetyOk("safety_area_clear") }
                 }
 
-                Text {
+                DashboardText {
                     text: "PROCESS"
                     color: cMuted
                     font.pixelSize: 15
@@ -856,7 +863,7 @@ Item {
             width: parent.width - 16
             spacing: 6
 
-            Text {
+            DashboardText {
                 Layout.fillWidth: true
                 text: title
                 color: cMuted
@@ -913,7 +920,7 @@ Item {
             anchors.centerIn: parent
             width: parent.width - 6
             spacing: 2
-            Text {
+            DashboardText {
                 width: parent.width
                 text: getSensorLabel(sensorKey)
                 color: parent.parent.on_ ? tab.cSensorActiveText : tab.cSensorIdleText
@@ -949,7 +956,7 @@ Item {
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 34
-                    Text {
+                    DashboardText {
                         text: "BASE PWM SUGGESTION"
                         color: cAccent
                         font.pixelSize: 15
@@ -993,7 +1000,7 @@ Item {
                         anchors.rightMargin: 10
                         spacing: 6
 
-                        Text {
+                        DashboardText {
                             text: "51.5ml @ 2.0ml/s -> recommended Base PWM 37% (current " + hpController.basePwmStatus + "%). Apply 37%?"
                             color: cText
                             opacity: 0.88
@@ -1085,7 +1092,7 @@ Item {
             height: Math.min(38, Math.max(30, parent.height - 10))
             spacing: 6
 
-            Text {
+            DashboardText {
                 text: tab.settingDisplayLabel(item)
                 color: cText
                 font.pixelSize: 14
@@ -1125,8 +1132,8 @@ Item {
             }
 
             Rectangle {
-                Layout.minimumWidth: 148
-                Layout.preferredWidth: Math.max(188, Math.min(224, parent.parent.width * 0.36))
+                Layout.minimumWidth: 138
+                Layout.preferredWidth: Math.max(158, Math.min(184, parent.parent.width * 0.30))
                 Layout.preferredHeight: parent.height
                 Layout.alignment: Qt.AlignVCenter
                 radius: 5
@@ -1138,26 +1145,26 @@ Item {
                     anchors.fill: parent
                     anchors.leftMargin: 10
                     anchors.rightMargin: 8
-                    spacing: 8
+                    spacing: 3
 
-                    Text {
+                    DashboardText {
                         text: "USED"
                         color: cIdle
                         font.pixelSize: 11
                         font.bold: true
                         horizontalAlignment: Text.AlignLeft
                         verticalAlignment: Text.AlignVCenter
-                        Layout.preferredWidth: 44
+                        Layout.preferredWidth: 36
                         Layout.alignment: Qt.AlignVCenter
                     }
-                    Text {
+                    DashboardText {
                         text: currentDisplay
                         color: cAccent
                         font.pixelSize: 16
                         font.bold: true
                         font.family: monoFamily
                         elide: Text.ElideNone
-                        horizontalAlignment: Text.AlignRight
+                        horizontalAlignment: Text.AlignLeft
                         verticalAlignment: Text.AlignVCenter
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
@@ -1169,7 +1176,7 @@ Item {
                 lbl: "SET"
                 variant: "action"
                 labelPixelSize: 12
-                Layout.preferredWidth: 52
+                Layout.preferredWidth: 84
                 Layout.preferredHeight: Math.min(32, parent.height)
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: tab.publishSetting(item, compactInp.text)
@@ -1208,7 +1215,7 @@ Item {
                 GradientStop { position: 1.0; color: compactBtn.gradEnd }
             }
         }
-        Text {
+        DashboardText {
             id: labelText
             anchors.centerIn: parent
             text: lbl
@@ -1246,7 +1253,7 @@ Item {
             height: 1
             color: cBorder
         }
-        Text {
+        DashboardText {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             text: lbl
@@ -1259,7 +1266,7 @@ Item {
             sourceComponent: chip ? chipWrap : textComp
             Component {
                 id: textComp
-                Text {
+                DashboardText {
                     text: val
                     color: cText
                     font.pixelSize: 18
@@ -1281,13 +1288,12 @@ Item {
         Layout.preferredHeight: 58
         radius: 10
         color: ok ? cOkBg : cBadBg
-        border.color: ok ? cOk : cBad
-        border.width: 1
+        border.width: 0
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 6
             spacing: 1
-            Text {
+            DashboardText {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 text: lbl
@@ -1300,7 +1306,7 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
-            Text {
+            DashboardText {
                 Layout.fillWidth: true
                 text: ok ? "OK" : "BLOCK"
                 color: ok ? cOk : cBad
@@ -1326,7 +1332,7 @@ Item {
             anchors.leftMargin: 14
             anchors.rightMargin: 14
             spacing: 8
-            Text {
+            DashboardText {
                 text: lbl
                 color: cIdle
                 font.pixelSize: 15
@@ -1337,7 +1343,7 @@ Item {
                 Layout.preferredWidth: 126
                 Layout.fillHeight: true
             }
-            Text {
+            DashboardText {
                 text: "-"
                 color: cMuted
                 font.pixelSize: 16
@@ -1347,7 +1353,7 @@ Item {
                 Layout.preferredWidth: 14
                 Layout.fillHeight: true
             }
-            Text {
+            DashboardText {
                 text: val
                 color: cText
                 font.pixelSize: 18
@@ -1444,7 +1450,7 @@ Item {
                                             color: cField
                                             border.color: cBorder
                                             border.width: 1
-                                            Text {
+                                            DashboardText {
                                                 anchors.centerIn: parent
                                                 text: "Pos: " + hpController.servoPosition.toFixed(2) + " mm"
                                                 color: cText
@@ -1495,7 +1501,7 @@ Item {
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 spacing: 8
-                                                Text { text: "Base PWM"; color: cText; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
+                                                DashboardText { text: "Base PWM"; color: cText; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
                                                 PwmInput { id: basePwmIn; valueText: hpController.basePwmStatus.toString(); Layout.preferredWidth: 70 }
                                                 TbBtn {
                                                     lbl: "Set"; variant: "primary"
@@ -1512,7 +1518,7 @@ Item {
                                                 spacing: 8
                                                 enabled: tab.modeStr === "MANUAL"
                                                 opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                                                Text { text: "V10 PWM"; color: cText; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
+                                                DashboardText { text: "V10 PWM"; color: cText; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
                                                 PwmInput { id: v10In; valueText: (tab.valvesMap["v10"] && tab.valvesMap["v10"].label) ? tab.valvesMap["v10"].label.replace("%","") : "0"; Layout.preferredWidth: 70 }
                                                 TbBtn {
                                                     lbl: "Set"; variant: "primary"
@@ -1545,7 +1551,7 @@ Item {
                                         spacing: 4
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            Text { text: tab.actionLog.length > 0 ? (tab.actionLog.length + " recent actions") : "No actions yet"; color: cMuted; font.pixelSize: 17 }
+                                            DashboardText { text: tab.actionLog.length > 0 ? (tab.actionLog.length + " recent actions") : "No actions yet"; color: cMuted; font.pixelSize: 17 }
                                             Item { Layout.fillWidth: true }
                                             TbBtn { lbl: "Clear log"; visible: tab.actionLog.length > 0; onClicked: { tab.actionLog = []; tab.lastActionRaw = "" } }
                                         }
@@ -1558,7 +1564,7 @@ Item {
                                                 spacing: 2
                                                 Repeater {
                                                     model: tab.actionLog
-                                                    Text {
+                                                    DashboardText {
                                                         text: modelData; color: cText
                                                         font.pixelSize: 16; font.family: monoFamily
                                                         width: parent.width; elide: Text.ElideRight
@@ -1630,7 +1636,7 @@ Item {
             anchors.margins: 12
             spacing: 8
 
-            Text {
+            DashboardText {
                 text: "Raw Status"
                 color: cMuted
                 font.pixelSize: 18
@@ -1690,7 +1696,7 @@ Item {
             anchors.margins: 14
             spacing: 10
 
-            Text {
+            DashboardText {
                 text: "ANALOG PRESSURE"
                 color: cText
                 font.pixelSize: 22
@@ -1710,14 +1716,14 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 Layout.topMargin: 6
-                Text {
+                DashboardText {
                     text: "CARTRIDGE\nPRESSURE"
                     color: cMuted
                     font.pixelSize: 18
                     font.bold: true
                     Layout.fillWidth: true
                 }
-                Text {
+                DashboardText {
                     text: tab.getCartridgeStats()
                     color: cMuted
                     font.pixelSize: 15
@@ -1750,13 +1756,14 @@ Item {
         property color borderColor: cBorder
         property bool  noTitle: false
         property bool  fillBodyHeight: false
+        property real  frameBorderWidth: 1
         default property alias contentChildren: ci.children
 
         color: bgColor; radius: 6
-        border.color: borderColor; border.width: 1
+        border.color: borderColor; border.width: frameBorderWidth
         implicitHeight: inner.implicitHeight + 24
         Layout.preferredHeight: implicitHeight
-        HoverHandler { onHoveredChanged: parent.border.color = hovered ? cControlHover : borderColor }
+        HoverHandler { enabled: parent.frameBorderWidth > 0; onHoveredChanged: parent.border.color = hovered ? cControlHover : borderColor }
 
         ColumnLayout {
             id: inner
@@ -1764,7 +1771,7 @@ Item {
             width: parent.width - 24
             height: parent.height - 24
             spacing: 10
-            Text {
+            DashboardText {
                 id: ttl
                 visible: !noTitle && text.length > 0
                 color: cMuted; font.pixelSize: 22; font.bold: true
@@ -1818,7 +1825,7 @@ Item {
             }
         }
 
-        Text {
+        DashboardText {
             id: t; anchors.centerIn: parent
             text: lbl; color: baseFg
             font.pixelSize: 21; font.bold: true
@@ -1848,7 +1855,7 @@ Item {
         radius: 6
         color: isRun ? cOkBg : cIdleBg
         border.color: isRun ? cOk : cBorder; border.width: 1
-        Text {
+        DashboardText {
             id: valText
             anchors.centerIn: parent; text: value
             color: parent.isRun ? cOk : cText
@@ -1864,7 +1871,7 @@ Item {
         color:        state === "on" ? cOkBg : state === "off" ? cBadBg : state === "mid" ? cWarnBg : cIdleBg
         border.color: state === "on" ? cOk   : state === "off" ? cBad   : state === "mid" ? cWarn   : cIdle
         border.width: 1
-        Text {
+        DashboardText {
             id: txt; anchors.centerIn: parent; text: label
             color: parent.state === "on" ? cOk : parent.state === "off" ? cBad : parent.state === "mid" ? cWarn : cIdle
             font.pixelSize: 19; font.bold: true
@@ -1876,7 +1883,7 @@ Item {
         property string val: ""
         property Item   chip: null
         width: parent.width; spacing: 8
-        Text {
+        DashboardText {
             text: lbl; color: cMuted
             font.pixelSize: 20; font.bold: true
             Layout.preferredWidth: 170
@@ -1886,7 +1893,7 @@ Item {
             sourceComponent: chip ? chipWrap : textComp
             Component {
                 id: textComp
-                Text {
+                DashboardText {
                     text: val; color: cText
                     font.pixelSize: 21
                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
@@ -1911,7 +1918,7 @@ Item {
             anchors.fill: parent
             anchors.leftMargin: 8; anchors.rightMargin: 8
             spacing: 6
-            Text {
+            DashboardText {
                 id: nameTxt
                 text: name; color: cText
                 font.pixelSize: 20
@@ -1939,12 +1946,12 @@ Item {
             width: parent.width - 24; spacing: 8
             RowLayout {
                 width: parent.width
-                Text { text: lbl; color: cText; font.pixelSize: 18; font.bold: true }
+                DashboardText { text: lbl; color: cText; font.pixelSize: 18; font.bold: true }
                 Item { Layout.fillWidth: true }
                 RowLayout {
                     spacing: 3
-                    Text { text: val.toFixed(1); color: pressureTextColor(cls); font.pixelSize: 28; font.bold: true; font.family: monoFamily }
-                    Text { text: "mbar"; color: pressureTextColor(cls); font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 3 }
+                    DashboardText { text: val.toFixed(1); color: pressureTextColor(cls); font.pixelSize: 28; font.bold: true; font.family: monoFamily }
+                    DashboardText { text: "mbar"; color: pressureTextColor(cls); font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 3 }
                 }
             }
             Rectangle {
@@ -1983,7 +1990,7 @@ Item {
             anchors.fill: parent
             anchors.leftMargin: 10; anchors.rightMargin: 10
             spacing: 8
-            Text {
+            DashboardText {
                 text: cartName; color: cText
                 font.pixelSize: 20; font.bold: true
                 Layout.preferredWidth: 95
@@ -1993,8 +2000,8 @@ Item {
                 RowLayout {
                     width: parent.width
                     Item { Layout.fillWidth: true }
-                    Text { text: cartVal.toFixed(1); color: pressureTextColor(cls); font.pixelSize: 22; font.bold: true; font.family: monoFamily }
-                    Text { text: "mbar"; color: pressureTextColor(cls); font.pixelSize: 13; font.bold: true; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 2 }
+                    DashboardText { text: cartVal.toFixed(1); color: pressureTextColor(cls); font.pixelSize: 22; font.bold: true; font.family: monoFamily }
+                    DashboardText { text: "mbar"; color: pressureTextColor(cls); font.pixelSize: 13; font.bold: true; Layout.alignment: Qt.AlignBottom; Layout.bottomMargin: 2 }
                 }
                 Rectangle {
                     Layout.fillWidth: true; height: 10; radius: height / 2
@@ -2042,8 +2049,8 @@ Item {
             anchors.fill: parent
             anchors.margins: 10
             spacing: 5
-            Text { text: lbl; color: parent.parent.active ? cAccent : cMuted; font.pixelSize: 20; font.bold: parent.parent.active }
-            Text { text: val; color: cText; font.pixelSize: 23; font.bold: true; wrapMode: Text.Wrap }
+            DashboardText { text: lbl; color: parent.parent.active ? cAccent : cMuted; font.pixelSize: 20; font.bold: parent.parent.active }
+            DashboardText { text: val; color: cText; font.pixelSize: 23; font.bold: true; wrapMode: Text.Wrap }
         }
     }
 
@@ -2072,7 +2079,7 @@ Item {
             anchors.margins: 10
             spacing: 10
 
-            Text {
+            DashboardText {
                 text: sev === "critical" ? "🔥" : sev === "error" ? "⛔" : sev === "warning" ? "⚠️" : "ℹ️"
                 font.pixelSize: 22
             }
@@ -2080,19 +2087,19 @@ Item {
                 Layout.fillWidth: true; spacing: 2
                 RowLayout {
                     width: parent.width
-                    Text {
+                    DashboardText {
                         text: (area ? area + " · " : "") + sev.toUpperCase()
                         color: parent.parent.parent.parent.parent.sev === "warning" ? cWarn
                              : parent.parent.parent.parent.parent.sev === "info"    ? cAccent : cBad
                         font.pixelSize: 14; font.bold: true
                     }
                     Item { Layout.fillWidth: true }
-                    Text {
+                    DashboardText {
                         text: time; color: cMuted
                         font.pixelSize: 13; font.family: monoFamily
                     }
                 }
-                Text {
+                DashboardText {
                     text: message; color: cText
                     font.pixelSize: 15
                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
@@ -2122,7 +2129,7 @@ Item {
             anchors.fill: parent
             anchors.leftMargin: 12; anchors.rightMargin: 8
             spacing: 8
-            Text {
+            DashboardText {
                 text: ioLabel; color: cText
                 font.pixelSize: 16; font.bold: true
                 Layout.fillWidth: true; elide: Text.ElideRight
@@ -2146,7 +2153,7 @@ Item {
                         GradientStop { position: 1.0; color: actionABtn.endColor }
                     }
                 }
-                Text {
+                DashboardText {
                     anchors.centerIn: parent; text: actA
                     color: ioToggle.aActive ? cIoActiveText : "#ffffff"
                     font.pixelSize: 16; font.bold: true
@@ -2184,7 +2191,7 @@ Item {
                         GradientStop { position: 1.0; color: actionBBtn.endColor }
                     }
                 }
-                Text {
+                DashboardText {
                     anchors.centerIn: parent; text: actB
                     color: ioToggle.bActive ? cIoActiveText : "#ffffff"
                     font.pixelSize: 16; font.bold: true
@@ -2237,7 +2244,7 @@ Item {
                 GradientStop { position: 1.0; color: jogBtn._pressed ? Qt.darker(jogBtn.gradEnd, 1.18) : jogBtn.gradEnd }
             }
         }
-        Text {
+        DashboardText {
             anchors.centerIn: parent; text: lbl; color: baseFg
             font.pixelSize: 21; font.bold: true
         }
@@ -2282,7 +2289,7 @@ Item {
             anchors.fill: parent
             anchors.leftMargin: 10; anchors.rightMargin: 10
             spacing: 6
-            Text {
+            DashboardText {
                 text: item.label || ""; color: cText
                 font.pixelSize: 20; font.bold: true
                 Layout.fillWidth: true; elide: Text.ElideRight
@@ -2299,7 +2306,7 @@ Item {
                     selectByMouse: true; horizontalAlignment: TextInput.AlignRight
                 }
             }
-            Text { text: item.unit || ""; color: cMuted; font.pixelSize: 19; Layout.preferredWidth: 38 }
+            DashboardText { text: item.unit || ""; color: cMuted; font.pixelSize: 19; Layout.preferredWidth: 38 }
             Rectangle {
                 id: setBtn
                 property bool held: false
@@ -2317,7 +2324,7 @@ Item {
                         GradientStop { position: 1.0; color: setBtn.endColor }
                     }
                 }
-                Text {
+                DashboardText {
                     anchors.centerIn: parent; text: "Set"; color: "#ffffff"
                     font.pixelSize: 19; font.bold: true
                 }
