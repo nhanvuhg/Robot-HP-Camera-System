@@ -847,6 +847,45 @@ void RobotController::setJogStepSize(double s) {
     if (jog_step_size_ != s) { jog_step_size_ = s; emit jogStepSizeChanged(); }
 }
 
+void RobotController::jogStep(const QString& axisId, double stepSize)
+{
+    const QString id = axisId.trimmed().toLower();
+    if (id.size() < 2 || (stepSize != 0.1 && stepSize != 1.0 &&
+                          stepSize != 5.0 && stepSize != 10.0)) {
+        qWarning() << "[JOG STEP] Invalid command:" << axisId << stepSize;
+        return;
+    }
+
+    const bool positive = id.endsWith('+');
+    const double delta = positive ? stepSize : -stepSize;
+    const QString axis = id.left(id.size() - 1);
+
+    if (axis.startsWith('j')) {
+        const int idx = jointIdx(axis);
+        if (idx < 0 || joint_angles_.size() < 6 || !joint_movj_client_->service_is_ready()) {
+            qWarning() << "[JOG STEP] Joint command unavailable:" << axisId;
+            return;
+        }
+        double target[6];
+        for (int i = 0; i < 6; ++i) target[i] = joint_angles_[i].toDouble();
+        target[idx] += delta;
+        setJogStepSize(stepSize);
+        moveJoint(target[0], target[1], target[2], target[3], target[4], target[5]);
+        return;
+    }
+
+    const int idx = cartIdx(axis);
+    if (idx < 0 || cartesian_pose_.size() < 6 || !movl_client_->service_is_ready()) {
+        qWarning() << "[JOG STEP] Cartesian command unavailable:" << axisId;
+        return;
+    }
+    double target[6];
+    for (int i = 0; i < 6; ++i) target[i] = cartesian_pose_[i].toDouble();
+    target[idx] += delta;
+    setJogStepSize(stepSize);
+    moveLinear(target[0], target[1], target[2], target[3], target[4], target[5]);
+}
+
 void RobotController::jogStart(const QString& axisId)
 {
     QString fixedId = axisId;

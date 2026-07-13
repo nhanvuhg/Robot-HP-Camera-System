@@ -46,6 +46,7 @@ import QtGraphicalEffects 1.15
         property bool startCommandLocked: false
         property bool suppressJogEchoForManual: false
         property bool pauseLatched: false
+        property Item activeDataInput: null
         readonly property string currentUiMode: mainWindow.selectedCartridgeMode !== ""
                                                 ? mainWindow.selectedCartridgeMode
                                                 : cartridgeController.currentMode
@@ -319,12 +320,44 @@ import QtGraphicalEffects 1.15
             if (clamped === stack.currentIndex)
                 return
 
+            dismissDataInput()
             previousStackIndex = stack.currentIndex
             slideDirection = clamped > previousStackIndex ? 1 : -1
             stack.currentIndex = clamped
             stackSlide.x = slideDirection * Math.min(140, Math.max(70, stack.width * 0.10))
             stack.opacity = 0.68
             stackSlideAnim.restart()
+        }
+
+        function registerDataInput(input) {
+            activeDataInput = input
+        }
+
+        function unregisterDataInput(input) {
+            if (activeDataInput === input)
+                activeDataInput = null
+        }
+
+        function dismissDataInput() {
+            if (!activeDataInput)
+                return
+
+            activeDataInput.deselect()
+            activeDataInput.focus = false
+            activeDataInput = null
+            forceActiveFocus(Qt.MouseFocusReason)
+            Qt.inputMethod.hide()
+        }
+
+        function dismissDataInputOutside(x, y) {
+            if (!activeDataInput)
+                return
+
+            var localPoint = activeDataInput.mapFromItem(root, x, y)
+            if (localPoint.x < 0 || localPoint.y < 0
+                    || localPoint.x > activeDataInput.width
+                    || localPoint.y > activeDataInput.height)
+                dismissDataInput()
         }
 
         Shortcut {
@@ -342,7 +375,23 @@ import QtGraphicalEffects 1.15
         }
 
         Component.onCompleted: forceActiveFocus()
-        onVisibleChanged: if (visible) forceActiveFocus()
+        onVisibleChanged: {
+            if (visible)
+                forceActiveFocus()
+            else
+                dismissDataInput()
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            z: 10000
+            enabled: root.activeDataInput !== null
+            propagateComposedEvents: true
+            onPressed: {
+                root.dismissDataInputOutside(mouse.x, mouse.y)
+                mouse.accepted = false
+            }
+        }
 
         // Ambient glow blobs — creates depth behind glass panels
         Canvas {
@@ -770,7 +819,7 @@ import QtGraphicalEffects 1.15
                         // notifyBanner.visible = true
                         // bannerTimer.restart()
 
-                        if (obj.title === "Da phat hien khay") {
+                        if (obj.title === "Tray detected") {
                             // outputWarningPopup.open()
                         }
                     } catch(e) {}
@@ -1641,19 +1690,22 @@ import QtGraphicalEffects 1.15
                                                         Layout.preferredHeight: cardItem.controlH
                                                         radius: 6
                                                         color: "transparent"
-                                                        border.color: root.cDashButtonBorder
+                                                        border.color: posIn.activeFocus ? root.cAccent : root.cDashButtonBorder
                                                         border.width: 1
                                                         gradient: Gradient {
                                                             orientation: Gradient.Horizontal
                                                             GradientStop { position: 0.0; color: root.cDashButton }
                                                             GradientStop { position: 1.0; color: root.cDashButtonEnd }
                                                         }
-                                                        TextInput {
+                                                        SmartTextInput {
                                                             id: posIn
+                                                            focusHost: root
                                                             anchors.fill: parent; anchors.margins: 4
                                                             text: "0.0"; font.pixelSize: 16; font.bold: true; font.family: "monospace"
                                                             color: root.cFunctionFieldText
                                                             horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter
+                                                            inputMethodHints: Qt.ImhFormattedNumbersOnly
+                                                            validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 3 }
                                                         }
                                                     }
                                                     Text { 
@@ -2071,8 +2123,9 @@ import QtGraphicalEffects 1.15
                                             Rectangle {
                                                 width: parent.width * 0.22; height: 36; radius: 5
                                                 color: "#081627"; border.color: root.cFieldBorder; border.width: 1
-                                                TextInput {
+                                                SmartTextInput {
                                                     id: sInput2
+                                                    focusHost: root
                                                     anchors { fill: parent; margins: 3 }
                                                     text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true
                                                     color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter
@@ -2297,7 +2350,7 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: negMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: negMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep(modelData.neg, page3Root.stepValue) }
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 120; height: 48; radius: 5; color: "transparent"; border.width: 1; border.color: root.cFunctionFieldBorder
@@ -2321,7 +2374,7 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: posMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: posMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep(modelData.pos, page3Root.stepValue) }
                                                 }
                                             }
                                         }
@@ -2334,7 +2387,8 @@ import QtGraphicalEffects 1.15
                                                     Text { text: modelData; color: root.cCardTitle; font.pixelSize: page3Root.helperFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                                     Rectangle {
                                                         width: parent.width; height: 40; radius: 4; color: root.cDashCardField; border.color: root.cFunctionFieldBorder; border.width: 1
-                                                        TextInput { id: cartInp
+                                                        SmartTextInput { id: cartInp
+                                                            focusHost: root
                                                             anchors { fill: parent; margins: 2 }
                                                             color: root.cWhiteText; font.pixelSize: page3Root.inputFont; font.bold: true; horizontalAlignment: Text.AlignHCenter; clip: true
                                                             text: robotController.cartesianPose.length > index ? robotController.cartesianPose[index].toFixed(4) : "0"
@@ -2455,7 +2509,7 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: jnMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: jnMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep("j" + jn + "-", page3Root.stepValue) }
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 120; height: 48; radius: 5; color: "transparent"; border.width: 1; border.color: root.cFunctionFieldBorder
@@ -2479,7 +2533,7 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: jpMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: jpMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep("j" + jn + "+", page3Root.stepValue) }
                                                 }
                                             }
                                         }
@@ -2492,7 +2546,8 @@ import QtGraphicalEffects 1.15
                                                     Text { text: modelData; color: root.cCardTitle; font.pixelSize: page3Root.helperFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                                     Rectangle {
                                                         width: parent.width; height: 40; radius: 4; color: root.cDashCardField; border.color: root.cFunctionFieldBorder; border.width: 1
-                                                        TextInput {
+                                                        SmartTextInput {
+                                                            focusHost: root
                                                             anchors { fill: parent; margins: 2 }
                                                             color: root.cWhiteText; font.pixelSize: page3Root.inputFont; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true
                                                             text: robotController.jointAngles.length > index ? robotController.jointAngles[index].toFixed(4) : "0"
@@ -2596,12 +2651,13 @@ import QtGraphicalEffects 1.15
                                                 // Placeholder hint
                                                 Text {
                                                     anchors { fill: parent; leftMargin: 8; verticalCenter: parent.verticalCenter }
-                                                    text: poseNameInput.text.length === 0 ? "pose name / comment..." : ""
+                                                    text: poseNameInput.text.length === 0 ? "---  Type pose name  ---" : ""
                                                     color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
-                                                TextInput {
+                                                SmartTextInput {
                                                     id: poseNameInput
+                                                    focusHost: root
                                                     anchors { fill: parent; leftMargin: 8; rightMargin: 4; topMargin: 4; bottomMargin: 4 }
                                                     color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true
                                                     clip: true; selectByMouse: true; verticalAlignment: Text.AlignVCenter
@@ -2776,15 +2832,18 @@ import QtGraphicalEffects 1.15
                                                     width: (ioCol.width - 12) / 4; height: 34; radius: 5
                                                     property bool selected: page3Root.stepValue === modelData
                                                     color: "transparent"
-                                                    border.color: selected ? root.cTabSelectedBorder : root.cDashButtonBorder
+                                                    border.color: selected ? root.cGetButtonBorder : root.cDashButtonBorder
                                                     border.width: 1
                                                     gradient: Gradient {
                                                         orientation: Gradient.Horizontal
-                                                        GradientStop { position: 0.0; color: (stepMA.pressed || stepBtn.selected) ? root.pressGradientColor(root.cDashButton) : root.cDashButton }
-                                                        GradientStop { position: 1.0; color: (stepMA.pressed || stepBtn.selected) ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd }
+                                                        GradientStop { position: 0.0; color: stepBtn.selected ? (stepMA.pressed ? root.pressGradientColor(root.cGetButton) : root.cGetButton) : (stepMA.pressed ? root.pressGradientColor(root.cDashButton) : root.cDashButton) }
+                                                        GradientStop { position: 1.0; color: stepBtn.selected ? (stepMA.pressed ? root.pressGradientColor(root.cGetButtonEnd) : root.cGetButtonEnd) : (stepMA.pressed ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd) }
                                                     }
                                                     Text { anchors.centerIn: parent; text: modelData; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
-                                                    MotionMouseArea { id: stepMA; anchors.fill: parent; onClicked: page3Root.stepValue = modelData }
+                                                    MotionMouseArea { id: stepMA; anchors.fill: parent; onClicked: {
+                                                        page3Root.stepValue = modelData
+                                                        robotController.setJogStepSize(modelData)
+                                                    } }
                                                 }
                                             }
                                         }
@@ -2831,7 +2890,7 @@ import QtGraphicalEffects 1.15
                                             }
                                             Rectangle {
                                                 width: 50; height: 34; radius: 5; color: root.cFunctionFieldEnd; border.color: root.cFunctionFieldBorder; border.width: 1
-                                                TextInput { anchors.centerIn: parent; width: 44; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true; horizontalAlignment: Text.AlignHCenter
+                                                SmartTextInput { focusHost: root; anchors.centerIn: parent; width: 44; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true; horizontalAlignment: Text.AlignHCenter
                                                     text: page3Root.speedVal
                                                     validator: IntValidator { bottom: 1; top: 100 }
                                                     selectByMouse: true
@@ -2842,34 +2901,34 @@ import QtGraphicalEffects 1.15
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
-                                        // Gripper DO1 — valve 5/3: GẮP (ch0=T,ch1=F) / NHẢ (ch0=F,ch1=T)
+                                        // Gripper DO1 — valve 5/3: GRIPPING (ch0=T,ch1=F) / RELEASING (ch0=F,ch1=T)
                                         Text { text: "GRIPPER (DO1)"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row {
                                             id: rowGripper
                                             property bool isOn: robotController.gripperOn
                                             spacing: 6; width: parent.width
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "GẮP"; activeChoice: rowGripper.isOn; onClicked: robotController.setDigitalOutput(1, true) }
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "NHẢ"; activeChoice: !rowGripper.isOn; onClicked: robotController.setDigitalOutput(1, false) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "GRIPPING"; activeChoice: rowGripper.isOn; onClicked: robotController.setDigitalOutput(1, true) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "RELEASING"; activeChoice: !rowGripper.isOn; onClicked: robotController.setDigitalOutput(1, false) }
                                         }
 
-                                        // Picker DO2 — valve 5/3: GẮP (ch2=T,ch3=F) / NHẢ (ch2=F,ch3=T)
+                                        // Picker DO2 — valve 5/3: PICKING (ch2=T,ch3=F) / RELEASING (ch2=F,ch3=T)
                                         Text { text: "PICKER (DO2)"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row {
                                             id: rowPicker
                                             property bool isOn: robotController.pickerOn
                                             spacing: 6; width: parent.width
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "GẮP"; activeChoice: rowPicker.isOn; onClicked: robotController.setDigitalOutput(2, true) }
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "NHẢ"; activeChoice: !rowPicker.isOn; onClicked: robotController.setDigitalOutput(2, false) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "PICKING"; activeChoice: rowPicker.isOn; onClicked: robotController.setDigitalOutput(2, true) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "RELEASING"; activeChoice: !rowPicker.isOn; onClicked: robotController.setDigitalOutput(2, false) }
                                         }
 
-                                        // Cyl loadcell DO6 — CPX 27.253 ch8/ch9: KẸP (ch9) / NHẢ (ch8)
+                                        // Cyl loadcell DO6 — CPX 27.253 ch8/ch9: GRIPPING (ch9) / RELEASING (ch8)
                                         Text { text: "CYL LOADCELL (DO6)"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row {
                                             id: rowCylLoadcell
                                             property bool isOn: robotController.cylLoadcellOn
                                             spacing: 6; width: parent.width
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "KẸP"; activeChoice: rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, true) }
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "NHẢ"; activeChoice: !rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, false) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "GRIPPING"; activeChoice: rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, true) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "REALEASING"; activeChoice: !rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, false) }
                                         }
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
@@ -3210,13 +3269,13 @@ import QtGraphicalEffects 1.15
             } // Page 3
 
             // ── PAGE 4: FILL HP CONTROL (redesigned — see FillHpTab.qml) ──
-            FillHpTab { }
+            FillHpTab { focusHost: root }
 
             // ── PAGE 5: INK SYSTEM ──────────────────────────────────────
-            InkTab { }
+            InkTab { focusHost: root }
 
             // ── PAGE 6: PRODUCTION OUTPUT ───────────────────────────────
-            ProductionTab { }
+            ProductionTab { focusHost: root }
 
         } // StackLayout
 
@@ -3429,7 +3488,11 @@ import QtGraphicalEffects 1.15
                 shimmerColor: cbr.glassStyle ? "#88ffffff" : "#55d4faff"
                 raiseOnHover: true
                 onClicked:       { if(cbr.clickEnabled) cbr.clicked() }
-                onPressed:       { cbr._pressed = true;  cbr.pressed() }
+                onPressed:       {
+                    root.dismissDataInput()
+                    cbr._pressed = true
+                    cbr.pressed()
+                }
                 onReleased:      { cbr._pressed = false; cbr.released() }
                 onEntered:       cbr._hovered = true
                 onExited:        { cbr._hovered = false; cbr._pressed = false }
@@ -3529,7 +3592,7 @@ import QtGraphicalEffects 1.15
                             Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 13; font.bold: true
                                    width: 46; anchors.verticalCenter: parent.verticalCenter }
                             Rectangle { width: 94; height: 30; radius: 4; color: "#081627"; border.color: root.cFieldBorder; border.width: 1
-                                TextInput { id: rowInput; anchors { fill: parent; margins: 4 }
+                                SmartTextInput { id: rowInput; focusHost: root; anchors { fill: parent; margins: 4 }
                                     text: "0.0"
                                     font.pixelSize: 14; font.family: "monospace"; color: root.cWhiteText
                                     horizontalAlignment: TextInput.AlignHCenter
@@ -3628,13 +3691,13 @@ import QtGraphicalEffects 1.15
                                 Text { text: "R"+modelData; color: root.cWhiteText; font.pixelSize: 18; font.bold: true; width: parent.width * 0.12; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
 
 	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 1
-	                                    TextInput { id: minInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+	                                    SmartTextInput { id: minInp; focusHost: root; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
 	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; minInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][0]) : "" } } } }
 	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 1
-	                                    TextInput { id: maxInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+	                                    SmartTextInput { id: maxInp; focusHost: root; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
 	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; maxInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][1]) : "" } } } }
 	                                Rectangle { width: parent.width * 0.23; height: 36; radius: 5; color: "#081627"; border.color: root.cFieldBorder; border.width: 1
-	                                    TextInput { id: tgtInp; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
+	                                    SmartTextInput { id: tgtInp; focusHost: root; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
 	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; tgtInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][2]) : "" } } } }
 
                                 Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }

@@ -101,6 +101,7 @@ public slots:
     
     // Jog control (Manual mode)
     void jogStart(const QString& axisId);  // "j1+" "j1-" "x+" "z-" etc
+    void jogStep(const QString& axisId, double stepSize);  // one relative step (mm or deg)
     void jogStop();
     void stopMotionOnly();
     void sendJogStep();  // callback-chaining step for continuous JOG
