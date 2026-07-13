@@ -31,18 +31,17 @@ def generate_launch_description():
         name='dual_csi_camera_node',
         output='screen',
         parameters=[{
-            # Match Funai production params (1280x720 @ 30fps) — stable on Pi5 with
-            # full-sensor 4056:3040 mode. Lower res like 640x480@10fps triggers
-            # heavy ISP downscale + AGC settle timeout (first frame > 30s).
+            # HP GMSL2 chỉ truyền ổn định native full-sensor 4056x3040 12-bit.
+            # Mode này đạt tối đa ~11.7fps; đặt 30fps khiến libcamera tự chọn
+            # 2028x1520 và CFE bị dequeue timeout.
             'width': 1280,
             'height': 720,
-            'fps': 30,
+            'fps': 10,
             'publish_fps': 10,  # Subscribers (YOLO, overlay) only need 10fps
             'cam0_topic': '/cam0HP/image_raw',
             'cam1_topic': '/cam1HP/image_raw',
-            # HP output stack hardware pending. CAM1 absence → 3 fails → kernel
-            # driver reload → kills CAM0 too. Set true after lắp CAM1 hardware.
-            'enable_cam1': False,
+            # Đã lắp đủ hai board RX/camera.
+            'enable_cam1': True,
         }],
         respawn=True,
         respawn_delay=5.0,

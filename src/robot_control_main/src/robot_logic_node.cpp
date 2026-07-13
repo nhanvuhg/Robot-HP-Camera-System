@@ -496,6 +496,11 @@ RobotLogicNode::RobotLogicNode()
     initPublishers();
     initServices();
 
+    // Mốc dự phòng phải hợp lệ ngay từ lúc node khởi động. Một số lệnh chuyển
+    // trạng thái có thể bật system_running_ mà không đi qua Start callback;
+    // nếu giữ giá trị ROS time = 0, uptime sẽ bị tính từ Unix epoch (~495k giờ).
+    system_start_time_ = this->now();
+
     state_machine_thread_ = std::thread(&RobotLogicNode::stateMachineLoop, this);
 
     // Startup safe state: NHẢ cả gripper + picker (đảm bảo không kẹp khay nếu
@@ -517,12 +522,21 @@ RobotLogicNode::RobotLogicNode()
         std::chrono::seconds(1),
         [this]() {
             if (system_enabled_ && system_running_) {
-                auto elapsed = (this->now() - system_start_time_).seconds();
-                int h = static_cast<int>(elapsed) / 3600;
-                int m = (static_cast<int>(elapsed) % 3600) / 60;
-                int s = static_cast<int>(elapsed) % 60;
+                const auto now = this->now();
+                // Tự phục hồi nếu clock ROS vừa reset hoặc một code path cũ bật
+                // running trước khi đặt start time.
+                if (system_start_time_.nanoseconds() <= 0 || system_start_time_ > now)
+                    system_start_time_ = now;
+                const int64_t elapsed = std::max<int64_t>(
+                    0, static_cast<int64_t>((now - system_start_time_).seconds()));
+                int64_t h = elapsed / 3600;
+                int64_t m = (elapsed % 3600) / 60;
+                int64_t s = elapsed % 60;
                 char buf[32];
-                snprintf(buf, sizeof(buf), "%02d:%02d:%02d", h, m, s);
+                snprintf(buf, sizeof(buf), "%02lld:%02lld:%02lld",
+                         static_cast<long long>(h),
+                         static_cast<long long>(m),
+                         static_cast<long long>(s));
                 auto msg = std_msgs::msg::String();
                 msg.data = buf;
                 system_uptime_pub_->publish(msg);

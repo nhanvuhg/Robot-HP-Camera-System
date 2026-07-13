@@ -2089,12 +2089,13 @@ class CartridgeSystem(Node):
 
             except Exception as e:
                 self.get_logger().error(f"  {name} home exception: {e}")
+                servo_ip = self.config.servo_ips.get(sid, 'IP không xác định')
                 self._notify_step('error', 'HOMING', f'{name} (S{sid}) exception',
                     f'Python exception: {str(e)[:80]}',
                     check=['cáp Modbus servo còn cắm không',
                            'drive có cấp điện 24V không',
                            'log cartridge_node.log cho full traceback'],
-                    action=['Check kết nối network 192.168.27.x',
+                    action=[f'Kiểm tra/ping S{sid}: {servo_ip}',
                             'Restart node nếu cần',
                             'Báo dev nếu exception lặp lại'])
                 return False
@@ -3664,6 +3665,7 @@ class CartridgeSystem(Node):
         elif s == SystemState.S1_INY_TO_ROW:       self._s1_iny_to_row()
         elif s == SystemState.S1_CHECK_S5:         self._s1_check_s5()
         elif s == SystemState.S1_FALLBACK_RETRACT: self._s1_fallback_retract()
+        elif s == SystemState.S1_FALLBACK_WAIT_INY: self._s1_fallback_wait_iny()
         elif s == SystemState.S1_WAIT_GUI_CONFIRM: self._s1_wait_gui_confirm()
         elif s == SystemState.S1_INX_TRY_POS_PICK:    self._s1_inx_try_pos_pick()
         elif s == SystemState.S1_RETRY_JOG:        self._s1_retry_jog()
@@ -4083,6 +4085,21 @@ class CartridgeSystem(Node):
                 self.get_logger().warn(
                     f"[S1 SCAN] S4 ON detect @ InY={trigger_pos:.1f}mm ({zone_msg})"
                 )
+                # Gửi sang Log Activity của GUI, không bật notification banner.
+                # Mỗi lượt scan chỉ ghi một lần nhờ _s1_s4_on_logged.
+                if row is not None:
+                    target_mm = self.config.iny_input_zones[row][2]
+                    self._notify(
+                        'silent_ok',
+                        'S4 ON — DETECT',
+                        f'InY={trigger_pos:.1f} mm | Row {row} | Target={target_mm:.1f} mm'
+                    )
+                else:
+                    self._notify(
+                        'silent_info',
+                        'S4 ON — NGOÀI ZONE',
+                        f'InY={trigger_pos:.1f} mm | Không khớp row nào'
+                    )
                 self._s1_s4_on_logged = True
             if row is None:
                 # Trigger rơi khe hở giữa 2 zone (calib lệch / nhiễu) → rơi
@@ -4291,7 +4308,8 @@ class CartridgeSystem(Node):
             self.get_logger().error("Timeout iny ve home")
             self._error("Fallback INY timeout")
             return
-        if self._arrived(2) or self._pos(2) <= self.config.iny_home + 2.0:
+        iny = self._pos(2)
+        if self._arrived(2) or (iny is not None and iny <= self.config.iny_home + 2.0):
             self.get_logger().info("INY ve home safe -> INX ve safe (-60mm)")
             self._nb_move(1, self.config.inx_safe,vel=200)
             self._enter_in(SystemState.S1_CONFIRM_SAFE)

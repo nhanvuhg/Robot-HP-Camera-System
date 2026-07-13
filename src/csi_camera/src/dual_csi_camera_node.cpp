@@ -152,7 +152,8 @@ public:
         // Hardware-safe geometry parameters. 
         declare_parameter("width",      1280);
         declare_parameter("height",      720);
-        declare_parameter("fps",          30);
+        // 4056x3040 12-bit tối đa ~11.7fps. 10fps giữ đúng native mode GMSL2.
+        declare_parameter("fps",          10);
         declare_parameter("publish_fps", 10);  // [OPT-1] Publish at 10fps — matches actual YOLO throughput, saves ~30% CPU
         declare_parameter("cam0_topic", std::string("cam0HP/image_raw"));
         declare_parameter("cam1_topic", std::string("cam1HP/image_raw"));
