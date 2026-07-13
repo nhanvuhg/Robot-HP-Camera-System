@@ -59,8 +59,11 @@ Item {
                         source: "image://" + providerId + "/" + camIndex
 
                         Timer {
-                            interval: 1000 / 30
-                            running: true
+                            // Camera/overlay delivers about 5-10 FPS. Polling at
+                            // 30 FPS forced QML to copy and upload the same large
+                            // frame repeatedly, starving the GUI event loop.
+                            interval: 100
+                            running: root.visible
                             repeat: true
                             onTriggered: camImage.source = "image://" + providerId + "/" + camIndex + "?" + Date.now()
                         }

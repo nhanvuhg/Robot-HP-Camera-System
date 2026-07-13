@@ -2,12 +2,10 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <vision_msgs/msg/detection2_d_array.hpp>
 #include <image_transport/image_transport.hpp>
-#include <message_filters/subscriber.h>
-#include <message_filters/sync_policies/approximate_time.h>
-#include <message_filters/synchronizer.h>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/highgui.hpp>
 #include <cstring>
+#include <mutex>
 
 using vision_msgs::msg::Detection2DArray;
 
@@ -100,23 +98,26 @@ public:
         out_w_       = declare_parameter<int>("output_width",  640);
         out_h_       = declare_parameter<int>("output_height", 360);
 
-        image_sub_.reset(new message_filters::Subscriber<ImageMsg>(this, image_topic_));
-        boxes_sub_.reset(new message_filters::Subscriber<BoxesMsg>(this, boxes_topic_));
-
-        using Policy = message_filters::sync_policies::ApproximateTime<ImageMsg, BoxesMsg>;
-        // [OPT-4] Reduced queue 30→2 and tolerance 200ms→50ms
-        //         Large queue + high tolerance caused sync to match stale frames (200ms old)
-        //         with fresh bbox → visible bbox sliding. Queue=2 + 50ms keeps sync tight.
-        sync_.reset(new message_filters::Synchronizer<Policy>(Policy(2), *image_sub_, *boxes_sub_));
-        sync_->setMaxIntervalDuration(rclcpp::Duration::from_seconds(0.08));
-        sync_->registerCallback(std::bind(&OverlayForOneCam::callback, this, std::placeholders::_1, std::placeholders::_2));
+        // Inference is intentionally slower than the camera stream. Timestamp
+        // synchronization used to discard every pair when AI latency exceeded
+        // 80 ms, leaving image_overlay advertised but completely silent. Keep
+        // the latest detections and render every incoming image instead.
+        boxes_sub_ = create_subscription<BoxesMsg>(
+            boxes_topic_, rclcpp::QoS(2),
+            [this](BoxesMsg::ConstSharedPtr msg) {
+                std::lock_guard<std::mutex> lock(boxes_mutex_);
+                latest_boxes_ = std::move(msg);
+            });
+        image_sub_ = create_subscription<ImageMsg>(
+            image_topic_, rclcpp::QoS(2),
+            std::bind(&OverlayForOneCam::image_callback, this, std::placeholders::_1));
 
         pub_ = image_transport::create_publisher(this, output_topic_);
         RCLCPP_INFO(get_logger(), "[%s] Sub: %s, %s | Pub: %s", ns_.c_str(), image_topic_.c_str(), boxes_topic_.c_str(), output_topic_.c_str());
     }
 
 private:
-    void callback(const ImageMsg::ConstSharedPtr &img_msg, const BoxesMsg::ConstSharedPtr &boxes_msg)
+    void image_callback(const ImageMsg::ConstSharedPtr img_msg)
     {
         cv::Mat bgr;
         if (!rosimg_to_cvmat(*img_msg, bgr)) {
@@ -127,16 +128,24 @@ private:
         cv::resize(bgr, resized, cv::Size(out_w_, out_h_));
         double sx = static_cast<double>(out_w_) / bgr.cols;
         double sy = static_cast<double>(out_h_) / bgr.rows;
-        draw_detections(resized, *boxes_msg, sx, sy);
+        BoxesMsg::ConstSharedPtr boxes_msg;
+        {
+            std::lock_guard<std::mutex> lock(boxes_mutex_);
+            boxes_msg = latest_boxes_;
+        }
+        if (boxes_msg) {
+            draw_detections(resized, *boxes_msg, sx, sy);
+        }
         auto out_msg = cvmat_to_rosimg(resized, img_msg->header);
         pub_.publish(out_msg);
     }
 
     std::string ns_, image_topic_, boxes_topic_, output_topic_;
     int out_w_{960}, out_h_{540};
-    std::shared_ptr<message_filters::Subscriber<ImageMsg>> image_sub_;
-    std::shared_ptr<message_filters::Subscriber<BoxesMsg>> boxes_sub_;
-    std::shared_ptr<message_filters::Synchronizer<message_filters::sync_policies::ApproximateTime<ImageMsg, BoxesMsg>>> sync_;
+    rclcpp::Subscription<ImageMsg>::SharedPtr image_sub_;
+    rclcpp::Subscription<BoxesMsg>::SharedPtr boxes_sub_;
+    BoxesMsg::ConstSharedPtr latest_boxes_;
+    std::mutex boxes_mutex_;
     image_transport::Publisher pub_;
 };
 
