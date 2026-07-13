@@ -260,7 +260,16 @@ class CartridgeSystem(Node):
         self._io_bg_lock        = threading.Lock()
         self._sensor_latch_until: dict = {}
         self._sensor_on_latch_s = max(0.0, float(getattr(self.config, 'sensor_on_latch_s', 0.10)))
-        self._sensor_no_latch_sids = {S18_FEED_OK, S20_SCAN_STACK_P2}
+        # Sensor scan/confirm và các cặp limit cylinder phải phản ánh mức hiện
+        # tại. Latch ON trên limit đôi làm trạng thái cũ (RETRACTED) còn giữ
+        # trong khi trạng thái mới (EXTENDED) đã ON, tạo giả S21=S22=1 hoặc
+        # S25=S26=1 và khiến state machine kẹt cross-check.
+        self._sensor_no_latch_sids = {
+            S18_FEED_OK, S20_SCAN_STACK_P2,
+            S21_CYL2_RETRACTED, S22_CYL2_EXTENDED,
+            S25_CYL4_RETRACTED, S26_CYL4_EXTENDED,
+            S27_CYL5_RETRACTED, S28_CYL5_EXTENDED,
+        }
 
         # Motion flags
         self._inx_moving = False
