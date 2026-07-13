@@ -4967,6 +4967,21 @@ class CartridgeSystem(Node):
                     self.get_logger().warn(
                         f"[S2A SCAN] S4 ON detect @ InY={trigger_pos:.1f}mm ({zone_msg})"
                     )
+                    if row is not None:
+                        target_mm = self.config.iny_output_zones[row][2]
+                        occupied = ' | Row 1 đang occupied' if row == 1 and self._row1_occupied else ''
+                        self._notify(
+                            'silent_ok',
+                            'OUTPUT ZONE — DETECT',
+                            f'InY={trigger_pos:.1f} mm | Row {row} | '
+                            f'Target={target_mm:.1f} mm{occupied}'
+                        )
+                    else:
+                        self._notify(
+                            'silent_info',
+                            'OUTPUT ZONE — NGOÀI ZONE',
+                            f'InY={trigger_pos:.1f} mm | Không khớp row nào'
+                        )
                     self._s2_s4_on_logged = True
                 if row is None:
                     # Trigger rơi khe hở giữa 2 zone / nhiễu → bỏ qua edge này,
@@ -6050,6 +6065,19 @@ class CartridgeSystem(Node):
                 self.get_logger().warn(
                     f"[S4 SCAN] S20 ON detect @ OutY={trigger_pos:.1f}mm ({zone_msg})"
                 )
+                if row is not None:
+                    target_mm = cfg.outy_output_zones[row][2]
+                    self._notify(
+                        'silent_ok',
+                        'POS2 S20 — DETECT',
+                        f'OutY={trigger_pos:.1f} mm | Row {row} | Target={target_mm:.1f} mm'
+                    )
+                else:
+                    self._notify(
+                        'silent_info',
+                        'POS2 S20 — NGOÀI ZONE',
+                        f'OutY={trigger_pos:.1f} mm | Không khớp row nào'
+                    )
                 self._s4_s20_on_logged = True
             if row is None:
                 # Trigger rơi khe hở giữa 2 zone / nhiễu → rơi xuống nhánh fail
