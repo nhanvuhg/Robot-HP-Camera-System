@@ -13,7 +13,7 @@
  * - /vision/input_tray/row_status (Int32MultiArray) - 5 values: 0=empty, 1=full
  * - /vision/input_tray/empty (Bool)
  * - /vision/output_tray/selected_slot (Int32)
- * - /vision/output_tray/slot_status (Int32MultiArray) - 9 values: 0=empty, 1=occupied
+ * - /vision/output_tray/slot_status (Int32MultiArray) - 10 values: 0=empty, 1=occupied
  * 
  * Topics Subscribed:
  * - cam0HP/yolo/bounding_boxes (Detection2DArray) - Input tray
@@ -38,6 +38,9 @@
 #include <atomic>
 #include <chrono>
 #include <numeric>
+
+#include <yaml-cpp/yaml.h>
+#include <ament_index_cpp/get_package_share_directory.hpp>
 
 using vision_msgs::msg::Detection2D;
 using vision_msgs::msg::Detection2DArray;
@@ -151,27 +154,7 @@ static double IoU(const Box& A, const Box& B) {
     return inter / std::max(1e-6, aA + aB - inter);
 }
 
-static std::vector<int> nmsGreedy(const std::vector<Box>& boxes,
-                                   const std::vector<double>& scores, double iou_thresh) {
-    std::vector<int> idx(boxes.size());
-    std::iota(idx.begin(), idx.end(), 0);
-    std::sort(idx.begin(), idx.end(), [&](int a, int b){ return scores[a] > scores[b]; });
-    std::vector<int> keep;
-    std::vector<bool> removed(boxes.size(), false);
-    for (size_t i = 0; i < idx.size(); ++i) {
-        int ia = idx[i];
-        if (removed[ia]) continue;
-        keep.push_back(ia);
-        for (size_t j = i + 1; j < idx.size(); ++j) {
-            int ib = idx[j];
-            if (!removed[ib] && IoU(boxes[ia], boxes[ib]) >= iou_thresh)
-                removed[ib] = true;
-        }
-    }
-    return keep;
-}
-
-static int select_contiguous_empty(const std::vector<int>& empty_slots, int total_slots = 9) {
+static int select_contiguous_empty(const std::vector<int>& empty_slots, int total_slots) {
     std::vector<bool> is_empty(total_slots + 1, false);
     for (int id : empty_slots)
         if (id >= 1 && id <= total_slots) is_empty[id] = true;
@@ -206,8 +189,7 @@ public:
     VisionDecisionNode() : Node("vision_decision_node") {
         RCLCPP_INFO(get_logger(), "[VISION] === Vision Decision Node Starting ===");
         
-        initInputTrayROIs();
-        initOutputTrayROIs();
+        loadROIs();
         
         // Initialize filters
         row_filters_.assign(5, RowFilter{});
@@ -280,7 +262,9 @@ private:
     static constexpr int    INPUT_ROW_THRESHOLD    = 8;
     static constexpr float  DETECTION_SCORE_THRESH = 0.60f;
     static constexpr int    SLOT_CONFIRM_FRAMES    = 2;
-    static constexpr size_t N_OUTPUT_SLOTS         = 9;  // must match output_tray_rois_ size
+    // Phai khop: nut O1-O10 tren GUI, pose index 14-23 trong
+    // joint_pose_params.yaml, va so slot trong config/vision_roi.yaml.
+    static constexpr size_t N_OUTPUT_SLOTS         = 10;
 
     // ========================================================================
     // MODE STATE
@@ -304,11 +288,11 @@ private:
     // ========================================================================
     // OUTPUT TRAY STATE
     // ========================================================================
-    std::array<ROIQuad, 9> output_tray_rois_;
-    std::array<SlotStableState, 9> slot_stable_state_;
-    std::array<int, 9> slot_empty_streak_;
-    std::array<int, 9> slot_occ_streak_;
-    std::array<int, 9> slot_mis_streak_;
+    std::array<ROIQuad, N_OUTPUT_SLOTS> output_tray_rois_;
+    std::array<SlotStableState, N_OUTPUT_SLOTS> slot_stable_state_;
+    std::array<int, N_OUTPUT_SLOTS> slot_empty_streak_;
+    std::array<int, N_OUTPUT_SLOTS> slot_occ_streak_;
+    std::array<int, N_OUTPUT_SLOTS> slot_mis_streak_;
     int selected_output_slot_{-1};
     std::mutex slot_detection_mutex_;
 
@@ -349,60 +333,83 @@ private:
     // ========================================================================
     // INITIALIZATION
     // ========================================================================
-    void initInputTrayROIs() {
-        // [HP] Layer-1 outer TRAY ROI — bao toàn bộ khay (12 cartridge × 5 row).
-        // Toạ độ pick từ roi_picker_web.py @ production 1280×720, 6/2026.
-        std::vector<std::pair<int, int>> tray_corners = {
-            {309, 621}, {342, 66}, {1112, 62}, {1152, 632}
-        };
-        input_tray_outer_roi_ = ROIQuad::FromCorners(tray_corners);
-
-        // [HP] Layer-2 row ROIs — 5 rows trong khay.
-        // Toạ độ pick từ roi_picker_web.py @ production 1280×720, 6/2026.
-        std::vector<std::vector<std::pair<int, int>>> row_corners = {
-            {{357, 585}, {380, 107}, {508, 106}, {496, 584}},   // ROW1
-            {{508, 585}, {519, 105}, {639, 106}, {637, 586}},   // ROW2
-            {{653, 590}, {655, 105}, {772, 105}, {782, 590}},   // ROW3
-            {{801, 590}, {793, 103}, {914, 105}, {933, 594}},   // ROW4
-            {{946, 594}, {930, 103}, {1054, 102}, {1082, 592}}  // ROW5
-        };
-
-        input_tray_rois_.clear();
-        for (const auto& corners : row_corners) {
-            input_tray_rois_.push_back(ROIQuad::FromCorners(corners));
+    // ROIs live in config/vision_roi.yaml, picked on the raw camera image
+    // (640x480 — the exact space YOLO bboxes are published in). The file
+    // records ref_width/ref_height; we scale to image_width/image_height so a
+    // future camera output change is one param edit instead of a re-pick gone
+    // silently stale. The 2026-06 regression came from ROIs hardcoded at
+    // 1280x720 outliving a camera switch to 640x480.
+    ROIQuad quadFromYaml(const YAML::Node& n, double sx, double sy) {
+        if (!n.IsSequence() || n.size() != 4)
+            throw std::runtime_error("ROI phai co dung 4 goc");
+        std::vector<std::pair<int, int>> corners;
+        for (const auto& p : n) {
+            corners.emplace_back(
+                static_cast<int>(std::lround(p[0].as<double>() * sx)),
+                static_cast<int>(std::lround(p[1].as<double>() * sy)));
         }
-        RCLCPP_INFO(get_logger(), "[VISION] Initialized TRAY ROI + %zu row ROIs",
-                    input_tray_rois_.size());
+        return ROIQuad::FromCorners(corners);
     }
 
-    void initOutputTrayROIs() {
-        std::vector<std::vector<std::pair<int, int>>> slot_corners = {
-            {{280, 505}, {280, 415}, {580, 430}, {584, 519}},
-            {{275, 415}, {295, 319}, {579, 327}, {576, 424}},
-            {{297, 315}, {317, 228}, {582, 229}, {580, 320}},
-            {{349, 249}, {362, 172}, {619, 168}, {625, 249}},
-            {{585, 527}, {590, 242}, {690, 240}, {690, 525}},
-            {{699, 517}, {696, 423}, {1010, 415}, {1026, 502}},
-            {{696, 420}, {700, 328}, {989, 328}, {1011, 405}},
-            {{694, 323}, {696, 230}, {966, 230}, {985, 325}},
-        };
-        
-        for (size_t i = 0; i < slot_corners.size() && i < output_tray_rois_.size(); ++i) {
-            output_tray_rois_[i] = ROIQuad::FromCorners(slot_corners[i]);
-        }
+    void loadROIs() {
+        const std::string default_path =
+            ament_index_cpp::get_package_share_directory("robot_control_main")
+            + "/config/vision_roi.yaml";
+        const std::string path = declare_parameter<std::string>("roi_config", default_path);
+        const int img_w = declare_parameter<int>("image_width", 640);
+        const int img_h = declare_parameter<int>("image_height", 480);
 
         slot_stable_state_.fill(SlotStableState::EMPTY);
         slot_empty_streak_.fill(0);
         slot_occ_streak_.fill(0);
         slot_mis_streak_.fill(0);
 
-        // Slots without a defined ROI are treated as occupied so they are
-        // never selected by select_contiguous_empty (avoids ghost-slot bug).
-        for (size_t i = slot_corners.size(); i < N_OUTPUT_SLOTS; ++i)
-            slot_stable_state_[i] = SlotStableState::OCC_OK;
+        try {
+            YAML::Node cfg = YAML::LoadFile(path);
+            const double ref_w = cfg["ref_width"].as<double>();
+            const double ref_h = cfg["ref_height"].as<double>();
+            const double sx = img_w / ref_w, sy = img_h / ref_h;
+            if (sx != 1.0 || sy != 1.0) {
+                RCLCPP_WARN(get_logger(),
+                    "[VISION] ROI scale %.3f x %.3f (ref %.0fx%.0f -> image %dx%d)"
+                    " — kiem tra image_width/height co khop bbox thuc te",
+                    sx, sy, ref_w, ref_h, img_w, img_h);
+            }
 
-        RCLCPP_INFO(get_logger(), "[VISION] Initialized %zu/%zu output tray slots",
-                    slot_corners.size(), N_OUTPUT_SLOTS);
+            input_tray_outer_roi_ = quadFromYaml(cfg["input_tray"]["outer"], sx, sy);
+            input_tray_rois_.clear();
+            for (const auto& row : cfg["input_tray"]["rows"])
+                input_tray_rois_.push_back(quadFromYaml(row, sx, sy));
+
+            size_t n_slots = 0;
+            for (const auto& slot : cfg["output_tray"]["slots"]) {
+                if (n_slots >= N_OUTPUT_SLOTS) break;
+                output_tray_rois_[n_slots++] = quadFromYaml(slot, sx, sy);
+            }
+            // Slot thieu ROI -> ep OCC_OK de select_contiguous_empty khong bao
+            // gio chon no (robot khong duoc dat vao slot chua dinh nghia).
+            for (size_t i = n_slots; i < N_OUTPUT_SLOTS; ++i)
+                slot_stable_state_[i] = SlotStableState::OCC_OK;
+            if (n_slots < N_OUTPUT_SLOTS) {
+                RCLCPP_ERROR(get_logger(),
+                    "[VISION] %s chi co %zu/%zu slot — cac slot thieu bi khoa (coi nhu day)",
+                    path.c_str(), n_slots, N_OUTPUT_SLOTS);
+            }
+
+            RCLCPP_INFO(get_logger(),
+                "[VISION] ROI loaded: outer + %zu rows + %zu/%zu slots tu %s",
+                input_tray_rois_.size(), n_slots, N_OUTPUT_SLOTS, path.c_str());
+        } catch (const std::exception& e) {
+            // Fail-safe on trung tinh: khong row -> khong bao gio chon row;
+            // moi slot OCC_OK -> khong bao gio chon slot. Node van song de
+            // heartbeat/GUI thay loi thay vi crash-respawn loop.
+            RCLCPP_ERROR(get_logger(),
+                "[VISION] KHONG load duoc ROI (%s): %s — vision decision bi khoa toan bo",
+                path.c_str(), e.what());
+            input_tray_rois_.clear();
+            input_tray_outer_roi_ = ROIQuad{};
+            slot_stable_state_.fill(SlotStableState::OCC_OK);
+        }
     }
 
     // ========================================================================
@@ -525,56 +532,38 @@ private:
             return;
         }
 
-        // Step 1: NMS + IoU greedy slot assignment (Nova5-style)
-        struct DetRec { Box box; double score; };
-        std::vector<DetRec> dets_raw;
+        // Slot bi chiem khi BAT KY detection nao nam trong zone: tam bbox trong
+        // quad, hoac bbox de len slot voi IoU >= 0.1. Khong ghep 1-1 nhu
+        // Nova5 cu — mot cartridgefall nam vat ngang 2 slot phai chan CA HAI,
+        // greedy 1-1 chi chan mot va de robot dat de len phan con lai.
+        struct DetRec { Box box; float cx, cy; };
+        std::vector<DetRec> dets;
         for (const auto& det : msg->detections) {
             if (det.results.empty()) continue;
             int cid = -1;
             try { cid = std::stoi(det.results[0].hypothesis.class_id); } catch (...) { continue; }
-            if (cid != 1 && cid != 2 && cid != 3) continue;
-            double score = det.results[0].hypothesis.score;
-            if (score < DETECTION_SCORE_THRESH) continue;
+            // Model 3 class: 0=tray (khong tinh), 1=cartridge, 2=cartridgefall.
+            if (cid != 1 && cid != 2) continue;
+            if (det.results[0].hypothesis.score < DETECTION_SCORE_THRESH) continue;
             double cx = det.bbox.center.position.x;
             double cy = det.bbox.center.position.y;
             double hw = det.bbox.size_x / 2.0, hh = det.bbox.size_y / 2.0;
-            dets_raw.push_back({{cx - hw, cy - hh, cx + hw, cy + hh}, score});
+            dets.push_back({{cx - hw, cy - hh, cx + hw, cy + hh},
+                            (float)cx, (float)cy});
         }
-        std::vector<Box> nms_boxes;
-        std::vector<double> nms_scores;
-        for (auto& d : dets_raw) { nms_boxes.push_back(d.box); nms_scores.push_back(d.score); }
-        auto kept = nmsGreedy(nms_boxes, nms_scores, 0.45);
 
-        // Build candidates sorted by match score
-        struct Cand { int slot; int ki; double sc; };
-        std::vector<Cand> cands;
-        const size_t n_slots = N_OUTPUT_SLOTS;
-        for (size_t s = 0; s < n_slots; ++s) {
+        std::array<SlotStableState, N_OUTPUT_SLOTS> instant_state;
+        instant_state.fill(SlotStableState::EMPTY);
+        for (size_t s = 0; s < N_OUTPUT_SLOTS; ++s) {
             const auto& roi = output_tray_rois_[s];
             Box slot_box{(double)roi.min_x, (double)roi.min_y,
                          (double)roi.max_x, (double)roi.max_y};
-            for (size_t ki = 0; ki < kept.size(); ++ki) {
-                const Box& db = nms_boxes[kept[ki]];
-                double iou = IoU(slot_box, db);
-                float dcx = (float)((db.x1 + db.x2) / 2.0);
-                float dcy = (float)((db.y1 + db.y2) / 2.0);
-                bool inside = roi.contains(dcx, dcy);
-                if (iou < 0.1 && !inside) continue;
-                cands.push_back({(int)s, (int)ki, iou + (inside ? 1.0 : 0.0)});
+            for (const auto& d : dets) {
+                if (roi.contains(d.cx, d.cy) || IoU(slot_box, d.box) >= 0.1) {
+                    instant_state[s] = SlotStableState::OCC_OK;
+                    break;
+                }
             }
-        }
-        std::sort(cands.begin(), cands.end(),
-                  [](const Cand& a, const Cand& b){ return a.sc > b.sc; });
-
-        std::array<SlotStableState, 9> instant_state;
-        instant_state.fill(SlotStableState::EMPTY);
-        std::vector<bool> slot_used(n_slots, false);
-        std::vector<bool> det_used(kept.size(), false);
-        for (auto& c : cands) {
-            if (slot_used[c.slot] || det_used[c.ki]) continue;
-            instant_state[c.slot] = SlotStableState::OCC_OK;
-            slot_used[c.slot] = true;
-            det_used[c.ki] = true;
         }
         
         // Step 2: Update debouncing with mutex

@@ -13,6 +13,8 @@ find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(robot_control_interfaces REQUIRED)
+find_package(yaml-cpp REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 
 
 add_executable(robot_logic_node src/robot_logic_node.cpp)
@@ -60,7 +62,9 @@ ament_target_dependencies(vision_decision_node
   std_msgs
   vision_msgs
   geometry_msgs
+  ament_index_cpp
 )
+target_link_libraries(vision_decision_node yaml-cpp)
 
 install(TARGETS
   vision_decision_node

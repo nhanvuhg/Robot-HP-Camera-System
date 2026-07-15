@@ -153,6 +153,14 @@ def generate_launch_description():
         executable='vision_decision_node',
         name='vision_decision_node',
         output='screen',
+        parameters=[{
+            # He toa do bbox = anh camera publish (output_width/height o tren).
+            # ROI trong vision_roi.yaml duoc scale tu ref_* cua no sang day;
+            # doi output size camera thi PHAI doi cap so nay theo.
+            'image_width': 640,
+            'image_height': 480,
+            # 'roi_config': mac dinh <share>/robot_control_main/config/vision_roi.yaml
+        }],
         respawn=True,
         respawn_delay=3.0,
     )
