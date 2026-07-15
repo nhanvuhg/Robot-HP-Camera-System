@@ -32,6 +32,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <std_msgs/msg/string.hpp>
 #include <cv_bridge/cv_bridge.hpp>
 #include <opencv2/opencv.hpp>
 #include <cstdlib>
@@ -187,6 +188,10 @@ public:
         // Depth 1 ensures subscribers always get the MOST RECENT frame exclusively.
         pub_cam0_ = create_publisher<sensor_msgs::msg::Image>(cam0_topic_, 1);
         pub_cam1_ = create_publisher<sensor_msgs::msg::Image>(cam1_topic_, 1);
+        pub_status_cam0_ = create_publisher<std_msgs::msg::String>("/camera/cam0/health", 10);
+        pub_status_cam1_ = create_publisher<std_msgs::msg::String>("/camera/cam1/health", 10);
+        health_timer_ = create_wall_timer(
+            std::chrono::seconds(5), std::bind(&CSIDualCameraNode::publish_health, this));
 
         yuv_frame_size_ = (size_t)target_width_ * target_height_ * 3 / 2;
         // At 2028x1080 (native mode): 2028 * 1080 * 3/2 = 3,285,360 bytes ≈ 3.1 MB/frame
@@ -674,6 +679,11 @@ private:
                 if      (cam_id == 0 && pub_cam0_) pub_cam0_->publish(*msg);
                 else if (cam_id == 1 && pub_cam1_) pub_cam1_->publish(*msg);
 
+                published_frames_[cam_id].fetch_add(1, std::memory_order_relaxed);
+                const auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch()).count();
+                last_publish_ns_[cam_id].store(now_ns, std::memory_order_relaxed);
+
                 RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 10000,
                     "✓ CAM%d publishing frames (%d fps)", cam_id, publish_fps_);
             }
@@ -701,6 +711,7 @@ private:
                 RCLCPP_WARN(get_logger(),
                     "⚠️  CAM%d: %d consecutive failures — reconnecting (attempt #%d)...",
                     cam_id, fails, reconnect_attempts + 1);
+                reconnect_count_[cam_id].fetch_add(1, std::memory_order_relaxed);
 
                 {
                     FILE* f = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
@@ -810,11 +821,47 @@ private:
         RCLCPP_INFO(get_logger(), "🛑 CAM%d capture thread stopped", cam_id);
     }
 
+    void publish_health()
+    {
+        const auto now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        for (int cam_id = 0; cam_id < 2; ++cam_id) {
+            const uint64_t frames = published_frames_[cam_id].load(std::memory_order_relaxed);
+            const uint64_t delta = frames - health_prev_frames_[cam_id];
+            health_prev_frames_[cam_id] = frames;
+            const double actual_fps = static_cast<double>(delta) / 5.0;
+            const int64_t last_ns = last_publish_ns_[cam_id].load(std::memory_order_relaxed);
+            const double age_s = last_ns > 0
+                ? static_cast<double>(now_ns - last_ns) / 1.0e9 : -1.0;
+            const bool enabled = (cam_id == 0) || enable_cam1_;
+            const bool streaming = enabled && age_s >= 0.0 && age_s < 2.0;
+
+            char json[256];
+            std::snprintf(json, sizeof(json),
+                "{\"camera\":%d,\"enabled\":%s,\"streaming\":%s,"
+                "\"actual_fps\":%.2f,\"frames\":%llu,\"reconnects\":%u,"
+                "\"last_frame_age_s\":%.3f}",
+                cam_id, enabled ? "true" : "false", streaming ? "true" : "false",
+                actual_fps, static_cast<unsigned long long>(frames),
+                reconnect_count_[cam_id].load(std::memory_order_relaxed), age_s);
+            std_msgs::msg::String msg;
+            msg.data = json;
+            (cam_id == 0 ? pub_status_cam0_ : pub_status_cam1_)->publish(msg);
+        }
+    }
+
     // =========================================================================
     // Members
     // =========================================================================
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_cam0_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr pub_cam1_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_status_cam0_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_status_cam1_;
+    rclcpp::TimerBase::SharedPtr health_timer_;
+    std::atomic<uint64_t> published_frames_[2]{{0}, {0}};
+    std::atomic<uint32_t> reconnect_count_[2]{{0}, {0}};
+    std::atomic<int64_t> last_publish_ns_[2]{{0}, {0}};
+    uint64_t health_prev_frames_[2]{0, 0};
 
     CamProcess  cam0_;
     CamProcess  cam1_;

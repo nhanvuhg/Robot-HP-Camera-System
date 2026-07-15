@@ -10,17 +10,20 @@ Both cameras run in parallel, no switching required.
 """
 
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node, ComposableNodeContainer
 from launch_ros.descriptions import ComposableNode
 
 def generate_launch_description():
+    cam0_model = LaunchConfiguration('cam0_model')
+    cam1_model = LaunchConfiguration('cam1_model')
     
     # ================================================================
-    # 1. DUAL CSI CAMERA NODE (Serialized Processing)
+    # 1. DUAL CSI CAMERA NODE (parallel capture with independent drain threads)
     # ================================================================
-    # Uses Picamera2 with SERIALIZED PROCESSING PATTERN:
-    # - Single timer alternates between cameras
-    # - Prevents ISP contention freeze on Pi 5 kernel 6.12
+    # Each rpicam process has a dedicated high-priority pipe-drain thread. ROS
+    # publishes only the newest frame so slow subscribers never block CSI capture.
     # Publishes:
     #   - /cam0HP/image_raw (Camera 0 - Input Tray)
     #   - /cam1HP/image_raw (Camera 1 - Output Tray)
@@ -38,6 +41,11 @@ def generate_launch_description():
             'height': 720,
             'fps': 10,
             'publish_fps': 10,  # Subscribers (YOLO, overlay) only need 10fps
+            # Resize once before ROS publication. YOLO consumes model-sized input
+            # and GUI overlay is 640x480, so publishing 1280x720 only triples DDS
+            # image bandwidth and makes detections arrive in bursts.
+            'output_width': 640,
+            'output_height': 480,
             'cam0_topic': '/cam0HP/image_raw',
             'cam1_topic': '/cam1HP/image_raw',
             # Đã lắp đủ hai board RX/camera.
@@ -64,7 +72,7 @@ def generate_launch_description():
                 plugin='yolo_ros_hailort_cpp::YoloNode',
                 name='yolo_cam0',
                 parameters=[{
-                    'model_path': '/home/pi/yolov8s_trainHP6.hef',
+                    'model_path': cam0_model,
                     'nms_output_name': 'yolov8s_custom/yolov8_nms_postprocess',
                     'src_image_topic_name': '/cam0HP/image_raw',
                     'publish_boundingbox_topic_name': '/cam0HP/yolo/bounding_boxes',
@@ -73,7 +81,21 @@ def generate_launch_description():
                     'publish_resized_image': False,
                 }]
             ),
-            # yolo_cam1 disabled: cam1 hardware pending — re-enable when ready
+            # YOLO for Camera 1 (Output Tray Detection)
+            ComposableNode(
+                package='yolo_ros_hailort_cpp',
+                plugin='yolo_ros_hailort_cpp::YoloNode',
+                name='yolo_cam1',
+                parameters=[{
+                    'model_path': cam1_model,
+                    'nms_output_name': 'yolov8s/yolov8_nms_postprocess',
+                    'src_image_topic_name': '/cam1HP/image_raw',
+                    'publish_boundingbox_topic_name': '/cam1HP/yolo/bounding_boxes',
+                    'publish_image_topic_name': '/cam1HP/yolo/image_raw',
+                    'conf': 0.30,
+                    'publish_resized_image': False,
+                }]
+            ),
         ],
         output='screen',
         respawn=True,
@@ -132,6 +154,16 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'cam0_model',
+            default_value='/home/pi/yolov8s_trainHP6.hef',
+            description='HEF model used by camera 0 input-tray inference',
+        ),
+        DeclareLaunchArgument(
+            'cam1_model',
+            default_value='/home/pi/DataTrayProdutionHP_1.hef',
+            description='HEF model used by camera 1 output-tray inference',
+        ),
         dual_camera_node,
         yolo_container,
         bbox_drawer_node,

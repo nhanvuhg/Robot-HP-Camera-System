@@ -2344,18 +2344,14 @@ import QtGraphicalEffects 1.15
                                                     border.color: root.cJogNegativeButtonBorder; border.width: 1
                                                     gradient: Gradient {
                                                         orientation: Gradient.Horizontal
-                                                        GradientStop { position: 0.0; color: negMA.pressed ? root.pressGradientColor(root.cJogNegativeButton) : root.cJogNegativeButton }
-                                                        GradientStop { position: 1.0; color: negMA.pressed ? root.pressGradientColor(root.cJogNegativeButtonEnd) : root.cJogNegativeButtonEnd }
+                                                        GradientStop { position: 0.0; color: (negContinuousMA.pressed || negStepMA.pressed) ? root.pressGradientColor(root.cJogNegativeButton) : root.cJogNegativeButton }
+                                                        GradientStop { position: 1.0; color: (negContinuousMA.pressed || negStepMA.pressed) ? root.pressGradientColor(root.cJogNegativeButtonEnd) : root.cJogNegativeButtonEnd }
                                                     }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: negMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false
-                                                        onPressed: { if (robotController.jogContinuous) robotController.jogStart(modelData.neg) }
-                                                        onReleased: { if (robotController.jogContinuous) robotController.jogStop() }
-                                                        onCanceled: { if (robotController.jogContinuous) robotController.jogStop() }
-                                                        onClicked: { if (!robotController.jogContinuous) robotController.jogStep(modelData.neg, page3Root.stepValue) }
-                                                    }
+                                                    MotionMouseArea { id: negContinuousMA; anchors.fill: parent; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: negStepMA; anchors.fill: parent; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep(modelData.neg, page3Root.stepValue) }
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 120; height: 48; radius: 5; color: "transparent"; border.width: 1; border.color: root.cFunctionFieldBorder
@@ -2373,18 +2369,14 @@ import QtGraphicalEffects 1.15
                                                     border.color: root.cServoRunBorder; border.width: 1
                                                     gradient: Gradient {
                                                         orientation: Gradient.Horizontal
-                                                        GradientStop { position: 0.0; color: posMA.pressed ? root.pressGradientColor(root.cServoRunStart) : root.cServoRunStart }
-                                                        GradientStop { position: 1.0; color: posMA.pressed ? root.pressGradientColor(root.cServoRunEnd) : root.cServoRunEnd }
+                                                        GradientStop { position: 0.0; color: (posContinuousMA.pressed || posStepMA.pressed) ? root.pressGradientColor(root.cServoRunStart) : root.cServoRunStart }
+                                                        GradientStop { position: 1.0; color: (posContinuousMA.pressed || posStepMA.pressed) ? root.pressGradientColor(root.cServoRunEnd) : root.cServoRunEnd }
                                                     }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: posMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false
-                                                        onPressed: { if (robotController.jogContinuous) robotController.jogStart(modelData.pos) }
-                                                        onReleased: { if (robotController.jogContinuous) robotController.jogStop() }
-                                                        onCanceled: { if (robotController.jogContinuous) robotController.jogStop() }
-                                                        onClicked: { if (!robotController.jogContinuous) robotController.jogStep(modelData.pos, page3Root.stepValue) }
-                                                    }
+                                                    MotionMouseArea { id: posContinuousMA; anchors.fill: parent; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: posStepMA; anchors.fill: parent; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep(modelData.pos, page3Root.stepValue) }
                                                 }
                                             }
                                         }
@@ -2513,18 +2505,14 @@ import QtGraphicalEffects 1.15
                                                     border.color: root.cJogNegativeButtonBorder; border.width: 1
                                                     gradient: Gradient {
                                                         orientation: Gradient.Horizontal
-                                                        GradientStop { position: 0.0; color: jnMA.pressed ? root.pressGradientColor(root.cJogNegativeButton) : root.cJogNegativeButton }
-                                                        GradientStop { position: 1.0; color: jnMA.pressed ? root.pressGradientColor(root.cJogNegativeButtonEnd) : root.cJogNegativeButtonEnd }
+                                                        GradientStop { position: 0.0; color: (jnContinuousMA.pressed || jnStepMA.pressed) ? root.pressGradientColor(root.cJogNegativeButton) : root.cJogNegativeButton }
+                                                        GradientStop { position: 1.0; color: (jnContinuousMA.pressed || jnStepMA.pressed) ? root.pressGradientColor(root.cJogNegativeButtonEnd) : root.cJogNegativeButtonEnd }
                                                     }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: jnMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false
-                                                        onPressed: { if (robotController.jogContinuous) robotController.jogStart("j" + jn + "-") }
-                                                        onReleased: { if (robotController.jogContinuous) robotController.jogStop() }
-                                                        onCanceled: { if (robotController.jogContinuous) robotController.jogStop() }
-                                                        onClicked: { if (!robotController.jogContinuous) robotController.jogStep("j" + jn + "-", page3Root.stepValue) }
-                                                    }
+                                                    MotionMouseArea { id: jnContinuousMA; anchors.fill: parent; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: jnStepMA; anchors.fill: parent; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep("j" + jn + "-", page3Root.stepValue) }
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 120; height: 48; radius: 5; color: "transparent"; border.width: 1; border.color: root.cFunctionFieldBorder
@@ -2542,18 +2530,14 @@ import QtGraphicalEffects 1.15
                                                     border.color: root.cServoRunBorder; border.width: 1
                                                     gradient: Gradient {
                                                         orientation: Gradient.Horizontal
-                                                        GradientStop { position: 0.0; color: jpMA.pressed ? root.pressGradientColor(root.cServoRunStart) : root.cServoRunStart }
-                                                        GradientStop { position: 1.0; color: jpMA.pressed ? root.pressGradientColor(root.cServoRunEnd) : root.cServoRunEnd }
+                                                        GradientStop { position: 0.0; color: (jpContinuousMA.pressed || jpStepMA.pressed) ? root.pressGradientColor(root.cServoRunStart) : root.cServoRunStart }
+                                                        GradientStop { position: 1.0; color: (jpContinuousMA.pressed || jpStepMA.pressed) ? root.pressGradientColor(root.cServoRunEnd) : root.cServoRunEnd }
                                                     }
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: jpMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false
-                                                        onPressed: { if (robotController.jogContinuous) robotController.jogStart("j" + jn + "+") }
-                                                        onReleased: { if (robotController.jogContinuous) robotController.jogStop() }
-                                                        onCanceled: { if (robotController.jogContinuous) robotController.jogStop() }
-                                                        onClicked: { if (!robotController.jogContinuous) robotController.jogStep("j" + jn + "+", page3Root.stepValue) }
-                                                    }
+                                                    MotionMouseArea { id: jpContinuousMA; anchors.fill: parent; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: jpStepMA; anchors.fill: parent; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep("j" + jn + "+", page3Root.stepValue) }
                                                 }
                                             }
                                         }
