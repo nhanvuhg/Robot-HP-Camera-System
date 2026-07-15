@@ -35,7 +35,8 @@ namespace yolo_cpp
 
             for (const Object &obj : objects)
             {
-                const int color_index = obj.label % 80;
+                // color_list holds one row per class, not the 80 the modulo assumed.
+                const int color_index = obj.label % static_cast<int>(sizeof(color_list) / sizeof(color_list[0]));
                 cv::Scalar color = cv::Scalar(color_list[color_index][0], color_list[color_index][1], color_list[color_index][2]);
                 float c_mean = cv::mean(color)[0];
                 cv::Scalar txt_color;
@@ -50,8 +51,12 @@ namespace yolo_cpp
 
                 cv::rectangle(bgr, obj.rect, color * 255, 2);
 
+                // A model with more classes than the label list would index out of bounds.
+                const std::string name = (obj.label >= 0 && obj.label < static_cast<int>(class_names.size()))
+                                       ? class_names[obj.label]
+                                       : std::to_string(obj.label);
                 char text[256];
-                sprintf(text, "%s %.1f%%", class_names[obj.label].c_str(), obj.prob * 100);
+                snprintf(text, sizeof(text), "%s %.1f%%", name.c_str(), obj.prob * 100);
 
                 int baseLine = 0;
                 cv::Size label_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 0.4, 1, &baseLine);

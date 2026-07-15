@@ -2,8 +2,9 @@
 #define _YOLO_CPP_COCO_NAMES_HPP
 
 namespace yolo_cpp{
+    // Must match the model: best.onnx embeds names {0: tray, 1: cartridge, 2: cartridgefall}.
     static const std::vector<std::string> COCO_CLASSES = {
-        "tray", "line_pass", "line_fail", "cartridge"
+        "tray", "cartridge", "cartridgefall"
         // , "airplane", "bus", "train", "truck", "boat", "traffic light",
         // "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
         // "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
