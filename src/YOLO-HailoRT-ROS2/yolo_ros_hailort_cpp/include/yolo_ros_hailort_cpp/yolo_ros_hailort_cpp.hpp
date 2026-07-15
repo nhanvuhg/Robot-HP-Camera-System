@@ -30,7 +30,9 @@ namespace yolo_ros_hailort_cpp{
         void onInit();
         void colorImageCallback(const sensor_msgs::msg::Image::ConstSharedPtr &);
 
-        static vision_msgs::msg::Detection2DArray objects_to_detection2d(const std::vector<yolo_cpp::Object> &, const std_msgs::msg::Header &, float scale_x = 1.0f, float scale_y = 1.0f);
+        // pad_x/pad_y are subtracted before scaling, so letterboxed frames map back
+        // to source pixels. Stretch mode passes zero padding.
+        static vision_msgs::msg::Detection2DArray objects_to_detection2d(const std::vector<yolo_cpp::Object> &, const std_msgs::msg::Header &, float scale_x = 1.0f, float scale_y = 1.0f, float pad_x = 0.0f, float pad_y = 0.0f);
 
     protected:
         std::shared_ptr<yolo_parameters::ParamListener> param_listener_;

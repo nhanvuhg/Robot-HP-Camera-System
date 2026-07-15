@@ -35,3 +35,7 @@ yolo_parameters:
     type: bool
     description: "Enable or disable resized image."
     default_value: false
+  letterbox:
+    type: bool
+    description: "Preserve aspect ratio when resizing to the model input (pad with 114 instead of stretching). Required when the camera aspect ratio differs from the HEF input, e.g. 640x480 into 640x640."
+    default_value: false

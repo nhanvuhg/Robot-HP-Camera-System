@@ -37,13 +37,13 @@ def generate_launch_description():
             # HP GMSL2 chỉ truyền ổn định native full-sensor 4056x3040 12-bit.
             # Mode này đạt tối đa ~11.7fps; đặt 30fps khiến libcamera tự chọn
             # 2028x1520 và CFE bị dequeue timeout.
+            # Preserve the 4:3 full-sensor field of view. 1280x720 is 16:9 and
+            # makes libcamera crop the top/bottom before YOLO sees the tray.
             'width': 1280,
-            'height': 720,
+            'height': 960,
             'fps': 10,
             'publish_fps': 10,  # Subscribers (YOLO, overlay) only need 10fps
-            # Resize once before ROS publication. YOLO consumes model-sized input
-            # and GUI overlay is 640x480, so publishing 1280x720 only triples DDS
-            # image bandwidth and makes detections arrive in bursts.
+            # Resize once before ROS publication while preserving 4:3 geometry.
             'output_width': 640,
             'output_height': 480,
             'cam0_topic': '/cam0HP/image_raw',
@@ -94,6 +94,10 @@ def generate_launch_description():
                     'publish_image_topic_name': '/cam1HP/yolo/image_raw',
                     'conf': 0.30,
                     'publish_resized_image': False,
+                    # Camera is 640x480 (4:3) but this HEF takes 640x640. Stretching
+                    # squashes cartridges enough to drop them below conf: measured
+                    # 0.25 stretched vs 0.82 letterboxed on the same frame.
+                    'letterbox': True,
                 }]
             ),
         ],
