@@ -73,12 +73,15 @@ def generate_launch_description():
                 name='yolo_cam0',
                 parameters=[{
                     'model_path': cam0_model,
-                    'nms_output_name': 'yolov8s_custom/yolov8_nms_postprocess',
+                    'nms_output_name': 'yolov8s/yolov8_nms_postprocess',
                     'src_image_topic_name': '/cam0HP/image_raw',
                     'publish_boundingbox_topic_name': '/cam0HP/yolo/bounding_boxes',
                     'publish_image_topic_name': '/cam0HP/yolo/image_raw',
-                    'conf': 0.7,
+                    'conf': 0.60,
                     'publish_resized_image': False,
+                    # Camera 640x480 (4:3), HEF 640x640. Letterbox giu nguyen
+                    # hinh dang cartridge va mapping bbox ve anh goc.
+                    'letterbox': True,
                 }]
             ),
             # YOLO for Camera 1 (Output Tray Detection)
@@ -159,6 +162,9 @@ def generate_launch_description():
             # doi output size camera thi PHAI doi cap so nay theo.
             'image_width': 640,
             'image_height': 480,
+            # Cam0 chi hop le khi truc InX da ve vi tri nhan khay cua robot.
+            'inx_camera_position_mm': -60.0,
+            'inx_camera_tolerance_mm': 2.0,
             # 'roi_config': mac dinh <share>/robot_control_main/config/vision_roi.yaml
         }],
         respawn=True,
@@ -168,7 +174,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'cam0_model',
-            default_value='/home/pi/yolov8s_trainHP6.hef',
+            default_value='/home/pi/DataTrayInputHP_2.hef',
             description='HEF model used by camera 0 input-tray inference',
         ),
         DeclareLaunchArgument(

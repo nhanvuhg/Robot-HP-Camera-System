@@ -108,8 +108,10 @@ private:
     // SUBSCRIPTIONS
     // ========================================================================
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  vision_row_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int32MultiArray>::SharedPtr vision_row_status_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   vision_empty_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  vision_slot_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int32MultiArray>::SharedPtr vision_slot_status_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   ignore_scale_sub_;
 
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   feed_chamber_sub_;
@@ -271,6 +273,9 @@ private:
 
     std::vector<bool> row_full_;
     bool input_tray_empty_{false};
+    // Sau new_tray_loaded phai thay empty=false cua CHINH khay moi truoc khi
+    // chap nhan canh true. Ngan true con sot tu khay cu kich done sau 0.1s.
+    std::atomic<bool> vision_empty_armed_{false};
     int  selected_input_row_{ROW_UNSET};
     std::mutex row_selection_mutex_;
 
@@ -280,6 +285,7 @@ private:
     int  current_auto_slot_{1};
     int  current_fail_slot_{1};
     int  selected_output_slot_{SLOT_UNSET};
+    std::vector<bool> output_slot_occupied_;
     std::mutex output_slot_selection_mutex_;
 
     // ========================================================================
@@ -487,6 +493,8 @@ RobotLogicNode::RobotLogicNode()
     RCLCPP_INFO(this->get_logger(), "=== Robot Logic Node Starting ===");
 
     row_full_.assign(TOTAL_ROWS, false);
+    // Fail-safe cho toi khi vision gui status dau tien.
+    output_slot_occupied_.assign(TOTAL_OUTPUT_SLOTS, true);
 
     callback_group_reentrant_ = this->create_callback_group(
         rclcpp::CallbackGroupType::Reentrant);
@@ -599,19 +607,47 @@ void RobotLogicNode::initSubscriptions()
             if (msg->data >= 1 && msg->data <= TOTAL_ROWS) {
                 selected_input_row_ = msg->data;
                 row_full_[msg->data - 1] = true;
+            } else {
+                // Vision gate (vd InX chua o -60mm) publish -1 de huy lua
+                // chon cu. Khong duoc giu row stale va gap khi khay dang di.
+                selected_input_row_ = ROW_UNSET;
+            }
+        });
+
+    // Nguon su that cho 5 den READY. Truoc day robot chi set true cho row
+    // duoc selected va khong bao gio nhan false, nen sau khi R1 da pick (GUI
+    // tat dung) cache robot van true va AI gap lai R1.
+    vision_row_status_sub_ = create_subscription<std_msgs::msg::Int32MultiArray>(
+        "/vision/input_tray/row_status", 10,
+        [this](const std_msgs::msg::Int32MultiArray::SharedPtr msg) {
+            std::lock_guard<std::mutex> lock(row_selection_mutex_);
+            for (size_t i = 0; i < row_full_.size(); ++i) {
+                row_full_[i] =
+                    (i < msg->data.size() && msg->data[i] == 1);
             }
         });
 
     vision_empty_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/vision/input_tray/empty", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            // Detection bi che trong luc robot dang gap khong phai bang chung
+            // khay het. Vision cung freeze luc motion; guard nay la lop an toan
+            // cuoi de khong bao done_tray_input do message den tre.
+            if (msg->data && motion_busy_.load()) return;
+            if (!msg->data) {
+                input_tray_empty_ = false;
+                vision_empty_armed_ = true;
+                return;
+            }
+
             bool was_empty = input_tray_empty_;
             input_tray_empty_ = msg->data;
 
             // AI mode: rising edge of "all rows empty" → publish done_tray_input
             // This mirrors advanceAutoRow() last-row logic, gated by vision instead of row counter.
             // The cartridge Python node then checks S7 ON before starting S2A (take back empty tray).
-            if (use_ai_for_control_ && msg->data && !was_empty
+            if (use_ai_for_control_ && vision_empty_armed_.load()
+                && msg->data && !was_empty
                 && !waiting_for_new_input_.load() && system_running_.load())
             {
                 RCLCPP_WARN(get_logger(),
@@ -622,6 +658,7 @@ void RobotLogicNode::initSubscriptions()
                 new_tray_loaded_ = false;
                 new_tray_loaded_pub_->publish(std_msgs::msg::Bool());
                 waiting_for_new_input_ = true;
+                vision_empty_armed_ = false;
                 cartridge_drain_confirmed_ = false;
                 wait_tray_start_time_  = this->now();
                 notifyStateChange();
@@ -633,6 +670,23 @@ void RobotLogicNode::initSubscriptions()
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
             std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
             selected_output_slot_ = msg->data;
+        });
+
+    // Cung nguon voi 10 den O tren GUI: 0=empty/den sang/co the dat,
+    // 1=occupied/den tat/khong duoc dat lai.
+    vision_slot_status_sub_ = create_subscription<std_msgs::msg::Int32MultiArray>(
+        "/vision/output_tray/slot_status", 10,
+        [this](const std_msgs::msg::Int32MultiArray::SharedPtr msg) {
+            std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+            for (size_t i = 0; i < output_slot_occupied_.size(); ++i) {
+                output_slot_occupied_[i] =
+                    !(i < msg->data.size() && msg->data[i] == 0);
+            }
+            if (selected_output_slot_ >= 1 &&
+                selected_output_slot_ <= TOTAL_OUTPUT_SLOTS &&
+                output_slot_occupied_[selected_output_slot_ - 1]) {
+                selected_output_slot_ = SLOT_UNSET;
+            }
         });
 
     feed_chamber_sub_ = create_subscription<std_msgs::msg::Bool>(
@@ -1042,6 +1096,7 @@ void RobotLogicNode::advanceAutoRow()
     }
 }
 
+
 // ============================================================================
 // HELPER: publishDoneTrayOutput
 // ============================================================================
@@ -1087,6 +1142,9 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
     new_tray_loaded_ = true;
     bool was_waiting = waiting_for_new_input_.load();
     waiting_for_new_input_ = false;
+    // Khong chap nhan empty=true con sot tu khay truoc. Vision phai xac nhan
+    // empty=false cua khay moi de arm lai.
+    vision_empty_armed_ = false;
     cartridge_drain_confirmed_ = false;
 
     // Clear scale results sót lại từ batch trước. Loadcell đã có latch, nhưng nếu
@@ -1298,8 +1356,8 @@ void RobotLogicNode::selectedRowCallback(const std_msgs::msg::Int32::SharedPtr m
 {
     std::lock_guard<std::mutex> lock(row_selection_mutex_);
     int row = msg->data;
-    if (row < 1 || row > TOTAL_ROWS) return;
-    selected_input_row_ = row;
+    selected_input_row_ =
+        (row >= 1 && row <= TOTAL_ROWS) ? row : ROW_UNSET;
     notifyStateChange();
 }
 
@@ -2096,26 +2154,11 @@ void RobotLogicNode::stateInitLoadChamberDirect()
                 if (row_full_[i]) { row = (int)i + 1; break; }
         }
         if (row <= 0) {
-            // AI mode: khay tại Robot nhưng vision không thấy row nào ready (ROI rỗng)
-            // → swap khay (pub done_tray_input) thay vì wait vô hạn. Cartridge sẽ chạy
-            // STATE 2 lấy khay rỗng ra, sau đó STATE 1 đưa khay mới vào.
-            if (!waiting_for_new_input_.load()) {
-                RCLCPP_WARN(get_logger(),
-                    "[INIT_LOAD] AI: khay không có row ready → pub done_tray_input để swap");
-                auto done_msg = std_msgs::msg::Bool();
-                done_msg.data = true;
-                done_input_tray_pub_->publish(done_msg);
-                new_tray_loaded_ = false;
-                auto reset_msg = std_msgs::msg::Bool();
-                reset_msg.data = false;
-                new_tray_loaded_pub_->publish(reset_msg);
-                waiting_for_new_input_  = true;
-                wait_tray_start_time_   = this->now();
-                transitionTo(SystemState::IDLE);
-            } else {
-                RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
-                    "[INIT_LOAD] AI: đã pub done_tray_input — chờ khay mới");
-            }
+            // selected_row co the tam thoi -1 trong luc RowFilter warm-up hoac
+            // giua hai callback. Quyen ket luan khay het thuoc ve topic
+            // /vision/input_tray/empty da debounce; tai day chi cho vision.
+            RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
+                "[INIT_LOAD] AI: chua co row ready — cho vision xac nhan");
             return;
         }
     }
@@ -2791,6 +2834,29 @@ void RobotLogicNode::statePlaceToOutput()
     if (slot == SLOT_UNSET || slot <= 0) {
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
             "[OUTPUT] Waiting for slot selection...");
+        return;
+    }
+
+    // Bao ve lan cuoi ngay truoc motion: status co the doi sau callback
+    // selected_slot. O tat nghia la occupied, tuyet doi khong dat lai.
+    // CHI ap dung o AI mode: vision moi la nguon cap slot_status. O AUTO mode
+    // vision KHONG publish slot_status (camera2Callback return som), nen
+    // output_slot_occupied_ giu nguyen all-true fail-safe -> guard nay se
+    // chan MOI slot va treo robot o PLACE_TO_OUTPUT. AUTO tu quan ly bang
+    // current_auto_slot_ nen bo qua guard.
+    if (use_ai_for_control_) {
+        std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+        if (slot > TOTAL_OUTPUT_SLOTS || output_slot_occupied_[slot - 1]) {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                "[OUTPUT] Slot O%d da occupied (den tat) — cho vision chon slot khac",
+                slot);
+            selected_output_slot_ = SLOT_UNSET;
+            return;
+        }
+    } else if (slot > TOTAL_OUTPUT_SLOTS) {
+        // AUTO: chi bao ve gioi han tray, khong tham chieu occupied.
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[OUTPUT] Slot O%d vuot TOTAL_OUTPUT_SLOTS — bo qua", slot);
         return;
     }
 

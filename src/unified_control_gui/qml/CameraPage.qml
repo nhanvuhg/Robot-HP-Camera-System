@@ -715,6 +715,24 @@ Item {
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#163a52" }
 
+                    // ROI hong -> vision decision bi khoa (khong chon row/slot).
+                    // Truoc day chi co RCLCPP_ERROR trong log, man hinh khong bao gi.
+                    Rectangle {
+                        Layout.fillWidth: true
+                        visible: robotController.roiError !== ""
+                        Layout.preferredHeight: visible ? roiErrText.implicitHeight + 12 : 0
+                        radius: 6
+                        color: Qt.rgba(0.55, 0.10, 0.10, 0.85)
+                        border.color: "#ff6b6b"; border.width: 1
+                        Text {
+                            id: roiErrText
+                            anchors.fill: parent; anchors.margins: 6
+                            text: "⚠ " + robotController.roiError
+                            color: "#ffe0e0"; font.pixelSize: 14; font.bold: true
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+
                     // ── 3-Column Layout: Left (Robot Status), Middle (Ink Info), Right (Control Mode) ──
                     RowLayout {
                         Layout.fillWidth: true

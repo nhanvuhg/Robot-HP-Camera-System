@@ -26,6 +26,7 @@
 #include "std_msgs/msg/int32_multi_array.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/header.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "vision_msgs/msg/detection2_d_array.hpp"
 
 
@@ -189,7 +190,6 @@ public:
     VisionDecisionNode() : Node("vision_decision_node") {
         RCLCPP_INFO(get_logger(), "[VISION] === Vision Decision Node Starting ===");
         
-        loadROIs();
         
         // Initialize filters
         row_filters_.assign(5, RowFilter{});
@@ -213,9 +213,22 @@ public:
             "/camera/ai/selected_slot", 10);
         pub_slot_status_ = create_publisher<std_msgs::msg::Int32MultiArray>(
             "/vision/output_tray/slot_status", 10);
+        pub_output_present_ = create_publisher<std_msgs::msg::Bool>(
+            "/vision/output_tray/present", 10);
         pub_heartbeat_ = create_publisher<std_msgs::msg::Header>(
             "/vision/heartbeat", 10);
-        
+        // Topic rieng, KHONG dung chung /robot/error: robot_logic ban
+        // EMERGENCY STOP / MOTION_* vao do, publish lap lai se de mat.
+        // Latched de GUI bat sau van thay ngay trang thai ROI.
+        pub_roi_status_ = create_publisher<std_msgs::msg::String>(
+            "/vision/roi_status", rclcpp::QoS(1).transient_local());
+
+        // Phai xong TRUOC khi subscribe: callback khong duoc phep chay voi ROI
+        // chua load. Hien spin() chi bat dau sau constructor nen chua the xay
+        // ra, nhung dung phu thuoc vao dieu do.
+        loadROIs();
+        publishRoiStatus();
+
         // Tray change publishers
         // Camera → Cartridge trực tiếp (AI mode output tray full)
         pub_change_tray_output_ = create_publisher<std_msgs::msg::Bool>(
@@ -242,6 +255,74 @@ public:
                 RCLCPP_INFO(get_logger(), "[VISION] Mode changed to: %d", msg->data);
             });
 
+        inx_camera_position_mm_ =
+            declare_parameter<double>("inx_camera_position_mm", -60.0);
+        inx_camera_tolerance_mm_ =
+            declare_parameter<double>("inx_camera_tolerance_mm", 2.0);
+        sub_servo_positions_ = create_subscription<std_msgs::msg::String>(
+            "/providesystem/servo_positions", 10,
+            [this](const std_msgs::msg::String::SharedPtr msg) {
+                bool in_range = false;
+                double inx = 0.0;
+                try {
+                    const YAML::Node positions = YAML::Load(msg->data);
+                    if (positions["1"]) {
+                        inx = positions["1"].as<double>();
+                        in_range = std::abs(inx - inx_camera_position_mm_)
+                                   <= inx_camera_tolerance_mm_;
+                    }
+                } catch (const std::exception& e) {
+                    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
+                        "[VISION] Khong parse duoc servo_positions: %s", e.what());
+                }
+
+                inx_position_last_ns_.store(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch()).count());
+                const bool was_ready = inx_camera_ready_.load();
+                if (in_range) {
+                    if (++inx_ready_streak_ >= INX_READY_CONFIRM_SAMPLES)
+                        inx_camera_ready_.store(true);
+                } else {
+                    inx_ready_streak_ = 0;
+                    inx_camera_ready_.store(false);
+                }
+                const bool now_ready = inx_camera_ready_.load();
+                if (was_ready != now_ready) {
+                    RCLCPP_WARN(get_logger(),
+                        "[VISION] Cam0 gate INX: %.2fmm -> %s (target %.2f +/- %.2fmm)",
+                        inx, now_ready ? "READY" : "BLOCKED",
+                        inx_camera_position_mm_, inx_camera_tolerance_mm_);
+                }
+            });
+
+        sub_motion_busy_ = create_subscription<std_msgs::msg::Bool>(
+            "/robot/motion_busy", 10,
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                const bool was_busy = robot_motion_busy_.exchange(msg->data);
+                if (was_busy && !msg->data) {
+                    // Robot vua roi khoi vung camera: cho YOLO nap lai bbox
+                    // sach truoc khi cho phep ket luan row/slot.
+                    vision_resume_after_ =
+                        std::chrono::steady_clock::now() + 1500ms;
+                }
+                if (msg->data) input_empty_streak_ = 0;
+            });
+
+        sub_new_input_tray_ = create_subscription<std_msgs::msg::Bool>(
+            "/cartridge_providesystem/new_tray_loaded", 10,
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                if (!msg->data) return;
+                input_empty_streak_ = 0;
+                input_tray_empty_ = false;
+                auto empty = std_msgs::msg::Bool();
+                empty.data = false;
+                pub_input_empty_->publish(empty);
+                RCLCPP_INFO(get_logger(),
+                    "[VISION] New input tray -> reset/clear EMPTY debounce");
+            });
+
+
         // Heartbeat Timer
         heartbeat_timer_ = create_wall_timer(500ms, [this]() {
             std_msgs::msg::Header h;
@@ -262,6 +343,9 @@ private:
     static constexpr int    INPUT_ROW_THRESHOLD    = 8;
     static constexpr float  DETECTION_SCORE_THRESH = 0.60f;
     static constexpr int    SLOT_CONFIRM_FRAMES    = 2;
+    static constexpr int    INPUT_EMPTY_CONFIRM_FRAMES = 15;
+    static constexpr int    INX_READY_CONFIRM_SAMPLES = 3;
+    static constexpr int64_t INX_POSITION_MAX_AGE_NS = 500000000LL;
     // Phai khop: nut O1-O10 tren GUI, pose index 14-23 trong
     // joint_pose_params.yaml, va so slot trong config/vision_roi.yaml.
     static constexpr size_t N_OUTPUT_SLOTS         = 10;
@@ -272,6 +356,13 @@ private:
     // [HP] Default AI để khi vision khởi động trước GUI mode publish, vẫn dùng
     // YOLO threshold thay vì AUTO branch (fill rows true bỏ qua YOLO).
     std::atomic<ControlMode> current_mode_{ControlMode::AI};
+    std::atomic<bool> inx_camera_ready_{false};
+    std::atomic<int64_t> inx_position_last_ns_{0};
+    int inx_ready_streak_{0};
+    double inx_camera_position_mm_{-60.0};
+    double inx_camera_tolerance_mm_{2.0};
+    std::atomic<bool> robot_motion_busy_{false};
+    std::chrono::steady_clock::time_point vision_resume_after_{};
 
     // ========================================================================
     // INPUT TRAY STATE
@@ -280,6 +371,7 @@ private:
     std::vector<RowFilter> row_filters_;
     std::vector<bool> row_full_;
     std::atomic<bool> input_tray_empty_{false};
+    int input_empty_streak_{0};
     int selected_input_row_{-1};
     // [HP] Layer-1: tray-present ROI (bao toàn bộ khay) + state
     ROIQuad input_tray_outer_roi_;
@@ -293,8 +385,13 @@ private:
     std::array<int, N_OUTPUT_SLOTS> slot_empty_streak_;
     std::array<int, N_OUTPUT_SLOTS> slot_occ_streak_;
     std::array<int, N_OUTPUT_SLOTS> slot_mis_streak_;
+    std::atomic<bool> output_tray_present_{false};
+    int output_tray_present_streak_{0};
     int selected_output_slot_{-1};
     std::mutex slot_detection_mutex_;
+
+    // Rong = ROI OK. Non-empty -> GUI hien canh bao.
+    std::string roi_error_;
 
     // ========================================================================
     // PERFORMANCE TRACKING
@@ -308,6 +405,9 @@ private:
     rclcpp::Subscription<Detection2DArray>::SharedPtr sub_cam0_;
     rclcpp::Subscription<Detection2DArray>::SharedPtr sub_cam1_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr sub_mode_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_motion_busy_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_new_input_tray_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_servo_positions_;
     
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_selected_row_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_ai_row_;
@@ -317,7 +417,9 @@ private:
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_selected_slot_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_ai_slot_;
     rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr pub_slot_status_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_output_present_;
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr pub_heartbeat_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_roi_status_;
     
     // Tray change publishers
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_change_tray_output_;
@@ -394,6 +496,13 @@ private:
                 RCLCPP_ERROR(get_logger(),
                     "[VISION] %s chi co %zu/%zu slot — cac slot thieu bi khoa (coi nhu day)",
                     path.c_str(), n_slots, N_OUTPUT_SLOTS);
+                addRoiError("thieu slot: " + std::to_string(n_slots) + "/"
+                            + std::to_string(N_OUTPUT_SLOTS) + " (slot thieu bi khoa)");
+            }
+            if (input_tray_rois_.size() != 5) {
+                RCLCPP_ERROR(get_logger(), "[VISION] ROI chi co %zu/5 row",
+                             input_tray_rois_.size());
+                addRoiError("thieu row: " + std::to_string(input_tray_rois_.size()) + "/5");
             }
 
             RCLCPP_INFO(get_logger(),
@@ -409,7 +518,55 @@ private:
             input_tray_rois_.clear();
             input_tray_outer_roi_ = ROIQuad{};
             slot_stable_state_.fill(SlotStableState::OCC_OK);
+            addRoiError(std::string("KHONG load duoc — vision bi khoa: ") + e.what());
         }
+    }
+
+    // Gop nhieu loi thay vi de cai sau de cai truoc: YAML thieu ca row lan slot
+    // thi phai thay ca hai, khong thi sua xong cai nay moi lo ra cai kia.
+    void addRoiError(const std::string& msg) {
+        roi_error_ += (roi_error_.empty() ? "ROI " : " | ") + msg;
+    }
+
+    void publishRoiStatus() {
+        std_msgs::msg::String m;
+        m.data = roi_error_;   // rong = OK
+        pub_roi_status_->publish(m);
+    }
+
+    bool isInxCameraReady() const {
+        if (!inx_camera_ready_.load()) return false;
+        const int64_t now_ns =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+        const int64_t last_ns = inx_position_last_ns_.load();
+        return last_ns > 0 && (now_ns - last_ns) <= INX_POSITION_MAX_AGE_NS;
+    }
+
+    void publishInputGateBlocked() {
+        input_empty_streak_ = 0;
+        input_tray_empty_ = false;
+        input_tray_present_ = false;
+        selected_input_row_ = -1;
+        std::fill(row_full_.begin(), row_full_.end(), false);
+        for (auto& filter : row_filters_) filter.clear();
+
+        auto row = std_msgs::msg::Int32();
+        row.data = -1;
+        pub_selected_row_->publish(row);
+        pub_ai_row_->publish(row);
+
+        auto empty = std_msgs::msg::Bool();
+        empty.data = false;  // BLOCKED khong dong nghia voi khay het
+        pub_input_empty_->publish(empty);
+
+        auto present = std_msgs::msg::Bool();
+        present.data = false;
+        pub_input_present_->publish(present);
+
+        auto status = std_msgs::msg::Int32MultiArray();
+        status.data.assign(5, 0);
+        pub_row_status_->publish(status);
     }
 
     // ========================================================================
@@ -419,8 +576,14 @@ private:
         auto start = std::chrono::high_resolution_clock::now();
         
         if (current_mode_ == ControlMode::MANUAL) return;
-
         bool use_ai = (current_mode_ == ControlMode::AI);
+
+        // Khay chi dung he toa do camera khi InX da ve vi tri safe -60mm.
+        // Ngoai vi tri nay moi detection cam0 deu co the la khay dang di chuyen.
+        if (use_ai && !isInxCameraReady()) {
+            publishInputGateBlocked();
+            return;
+        }
 
         if (!use_ai) {
             // AUTO: skip YOLO entirely, assume tray present + all rows full
@@ -475,8 +638,23 @@ private:
             }
         }
         
-        input_tray_empty_ = std::none_of(row_full_.begin(), row_full_.end(),
-                                          [](bool full) { return full; });
+        // Khong duoc bao EMPTY trong cac frame warm-up cua RowFilter: luc do
+        // raw da thay 8 cartridge/row nhung stable van false, tung lam robot
+        // chot done_tray_input truoc khi den R1-R5 kip sang. Chi xac nhan khay
+        // het khi CO tray va khong co row ready lien tiep nhieu frame.
+        const bool any_row_ready = std::any_of(
+            row_full_.begin(), row_full_.end(), [](bool full) { return full; });
+        const bool safe_to_conclude_empty =
+            !robot_motion_busy_.load() &&
+            std::chrono::steady_clock::now() >= vision_resume_after_;
+        if (use_ai && safe_to_conclude_empty &&
+            input_tray_present_.load() && !any_row_ready) {
+            input_empty_streak_++;
+        } else {
+            input_empty_streak_ = 0;
+        }
+        input_tray_empty_ =
+            (input_empty_streak_ >= INPUT_EMPTY_CONFIRM_FRAMES);
         
         // Find first available (full) row for picking
         selected_input_row_ = -1;
@@ -532,7 +710,57 @@ private:
             return;
         }
 
-        // Slot bi chiem khi BAT KY detection nao nam trong zone: tam bbox trong
+        // Layer 1: model cam1 co 3 class, class 0 la toan bo output tray.
+        // Khong co tray thi TUYET DOI khong duoc suy ra "10 slot trong" tu
+        // viec khong thay cartridge — robot se dat vao khoang trong khong co khay.
+        bool raw_tray_present = false;
+        for (const auto& det : msg->detections) {
+            if (det.results.empty()) continue;
+            const auto& h = det.results[0].hypothesis;
+            if (h.class_id == "0" && h.score >= DETECTION_SCORE_THRESH) {
+                raw_tray_present = true;
+                break;
+            }
+        }
+
+        // Can 2 frame de xac nhan luc dat khay vao; mat detection thi khoa ngay
+        // (fail-safe). Khi khoa, coi moi slot la occupied de khong consumer nao
+        // dien giai slot_status=0 thanh vi tri co the dat.
+        if (raw_tray_present) {
+            output_tray_present_streak_++;
+            if (output_tray_present_streak_ >= SLOT_CONFIRM_FRAMES)
+                output_tray_present_.store(true);
+        } else {
+            output_tray_present_streak_ = 0;
+            output_tray_present_.store(false);
+        }
+
+        auto present_msg = std_msgs::msg::Bool();
+        present_msg.data = output_tray_present_.load();
+        pub_output_present_->publish(present_msg);
+
+        if (!output_tray_present_.load()) {
+            std::lock_guard<std::mutex> lock(slot_detection_mutex_);
+            selected_output_slot_ = -1;
+            slot_stable_state_.fill(SlotStableState::OCC_OK);
+            slot_empty_streak_.fill(0);
+            slot_occ_streak_.fill(0);
+            slot_mis_streak_.fill(0);
+            output_full_streak_ = 0;
+            tray_output_change_sent_ = false;
+
+            auto slot_msg = std_msgs::msg::Int32();
+            slot_msg.data = -1;
+            pub_selected_slot_->publish(slot_msg);
+            pub_ai_slot_->publish(slot_msg);
+
+            auto status_msg = std_msgs::msg::Int32MultiArray();
+            status_msg.data.assign(N_OUTPUT_SLOTS, 1);
+            pub_slot_status_->publish(status_msg);
+            return;
+        }
+
+        // Layer 2: Slot bi chiem khi BAT KY detection nao nam trong zone: tam bbox trong
         // quad, hoac bbox de len slot voi IoU >= 0.1. Khong ghep 1-1 nhu
         // Nova5 cu — mot cartridgefall nam vat ngang 2 slot phai chan CA HAI,
         // greedy 1-1 chi chan mot va de robot dat de len phan con lai.

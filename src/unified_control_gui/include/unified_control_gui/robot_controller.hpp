@@ -55,6 +55,8 @@ class RobotController : public QObject
     Q_PROPERTY(QVariantList rowReady READ rowReady NOTIFY rowReadyChanged)
     Q_PROPERTY(QVariantList slotReady READ slotReady NOTIFY slotReadyChanged)
     Q_PROPERTY(QString errorLog READ errorLog NOTIFY errorLogChanged)
+    // Rong = ROI OK. Non-empty = vision decision dang bi khoa/thieu ROI.
+    Q_PROPERTY(QString roiError READ roiError NOTIFY roiErrorChanged)
     Q_PROPERTY(bool gripperOn READ gripperOn NOTIFY gripperOnChanged)
     Q_PROPERTY(bool pickerOn READ pickerOn NOTIFY pickerOnChanged)
     Q_PROPERTY(bool cylLoadcellOn READ cylLoadcellOn NOTIFY cylLoadcellOnChanged)
@@ -64,6 +66,7 @@ public:
     
     QString systemStatus() const { return system_status_; }
     QString errorMessage() const { return error_message_; }
+    QString roiError() const { return roi_error_; }
     int selectedRow() const { return selected_row_; }
     int selectedSlot() const { return selected_slot_; }
     QString systemUptime() const { return system_uptime_; }
@@ -161,6 +164,7 @@ signals:
     void ignoreScaleChanged();
     void rowReadyChanged();
     void slotReadyChanged();
+    void roiErrorChanged();
     void jointPoseSaved(bool success, QString message);
     void gripperOnChanged();
     void pickerOnChanged();
@@ -230,6 +234,7 @@ private:
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_status_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr error_sub_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr roi_status_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr selected_row_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr selected_slot_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr system_uptime_sub_;
@@ -254,6 +259,7 @@ private:
     int speed_ratio_{100};
     int hw_speed_ratio_{0};
     QString error_log_;
+    QString roi_error_;
     QTimer *poll_timer_;
     
     // JOG state

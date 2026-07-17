@@ -118,6 +118,20 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
             }, Qt::QueuedConnection);
         });
     
+    // Latched (transient_local) — GUI bat sau vision_decision_node van nhan
+    // duoc trang thai ROI thay vi cho toi lan publish sau.
+    roi_status_sub_ = node_->create_subscription<std_msgs::msg::String>(
+        "/vision/roi_status", rclcpp::QoS(1).transient_local(),
+        [this](const std_msgs::msg::String::SharedPtr msg) {
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                QString next = QString::fromStdString(msg->data);
+                if (next != roi_error_) {
+                    roi_error_ = next;
+                    emit roiErrorChanged();
+                }
+            }, Qt::QueuedConnection);
+        });
+
     selected_row_sub_ = node_->create_subscription<std_msgs::msg::Int32>(
         "/robot/selected_input_row", 10,
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
