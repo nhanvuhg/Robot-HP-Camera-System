@@ -237,6 +237,12 @@ public:
         pub_output_tray_full_ = create_publisher<std_msgs::msg::Bool>(
             "/vision/output_tray/full", 10);
 
+        // Ghi truc tiep vao LOG ACTIVITY cua CartridgePage: GUI da subscribe
+        // /providesystem/gui_notify (JSON level/title/detail). Banner da tat
+        // trong QML nen level "warn" chi hien dong do trong Activity Log.
+        pub_gui_notify_ = create_publisher<std_msgs::msg::String>(
+            "/providesystem/gui_notify", 10);
+
         
         // Subscriptions with SensorDataQoS for low latency
         sub_cam0_ = create_subscription<Detection2DArray>(
@@ -376,6 +382,7 @@ private:
     // [HP] Layer-1: tray-present ROI (bao toàn bộ khay) + state
     ROIQuad input_tray_outer_roi_;
     std::atomic<bool> input_tray_present_{false};
+    int input_present_streak_{0};   // debounce class-0 tray bbox (2 frame on, instant off)
 
     // ========================================================================
     // OUTPUT TRAY STATE
@@ -424,6 +431,7 @@ private:
     // Tray change publishers
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_change_tray_output_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_output_tray_full_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_gui_notify_;
     
     // Debounce counters for tray change
     std::atomic<int> output_full_streak_{0};
@@ -545,6 +553,7 @@ private:
 
     void publishInputGateBlocked() {
         input_empty_streak_ = 0;
+        input_present_streak_ = 0;
         input_tray_empty_ = false;
         input_tray_present_ = false;
         selected_input_row_ = -1;
@@ -585,6 +594,7 @@ private:
             return;
         }
 
+        int total_in_tray = 0;
         if (!use_ai) {
             // AUTO: skip YOLO entirely, assume tray present + all rows full
             input_tray_present_.store(true);
@@ -594,16 +604,26 @@ private:
             // khay vận hành. Loại nhiễu/khay khác cạnh ra khỏi row counting.
             // [HP Layer-2] Row counting áp dụng RowFilter cho stability.
             std::vector<int> row_counts(5, 0);
-            int total_in_tray = 0;
+            bool tray_frame_seen = false;
 
             for (const auto& det : msg->detections) {
                 if (det.results.empty()) continue;
                 const std::string& class_id = det.results[0].hypothesis.class_id;
                 float score = det.results[0].hypothesis.score;
-                // [HP HEF6] class "1" = CARTRIDGE (class "0" = whole TRAY bbox, ignore).
-                if (class_id != "1" || score < DETECTION_SCORE_THRESH) continue;
                 float cx = det.bbox.center.position.x;
                 float cy = det.bbox.center.position.y;
+                // [HP HEF] class "0" = whole TRAY bbox — nguon DUY NHAT xac dinh
+                // khay co mat (giong camera2Callback ben output). TUYET DOI khong
+                // suy "khay co mat" tu so cartridge: khay pick sach (0 cartridge)
+                // se thanh present=false, empty streak reset mai va khong bao gio
+                // chot duoc done_tray_input -> khong thay khay.
+                if (class_id == "0" && score >= DETECTION_SCORE_THRESH) {
+                    if (input_tray_outer_roi_.bbox_contains(cx, cy))
+                        tray_frame_seen = true;
+                    continue;
+                }
+                // [HP HEF6] class "1" = CARTRIDGE.
+                if (class_id != "1" || score < DETECTION_SCORE_THRESH) continue;
 
                 // L1: spatial filter — bỏ nếu nằm ngoài TRAY ROI
                 if (!input_tray_outer_roi_.bbox_contains(cx, cy)) continue;
@@ -617,15 +637,26 @@ private:
                 }
             }
 
-            // Tray present nếu có bất kỳ detection nào hợp lệ trong TRAY ROI.
-            input_tray_present_.store(total_in_tray > 0);
+            // Tray present = thay bbox KHUNG KHAY (class 0) trong TRAY ROI.
+            // Can 2 frame de xac nhan khi dat khay vao; mat detection thi khoa
+            // ngay (fail-safe, giong output_tray_present_ ben camera2Callback).
+            if (tray_frame_seen) {
+                input_present_streak_++;
+                if (input_present_streak_ >= SLOT_CONFIRM_FRAMES)
+                    input_tray_present_.store(true);
+            } else {
+                input_present_streak_ = 0;
+                input_tray_present_.store(false);
+            }
 
             for (size_t i = 0; i < 5; ++i) {
                 int raw_count  = row_counts[i];
                 int filtered   = row_filters_[i].filter_count(raw_count);
-                // [HP] Row READY chỉ khi ĐÚNG bằng sức chứa (8). Một hàng vật lý
-                // chứa tối đa 8 cartridge → count > 8 là nhân đôi/nhiễu detection,
-                // count < 8 là hàng chưa đầy. Cả hai trường hợp → NOT ready (bỏ qua).
+                // [HP] Row READY chỉ khi ĐÚNG bằng sức chứa (8) — STRICT theo yêu
+                // cầu vận hành: máy fill cần đủ 8 cartridge/hàng mới đủ ÁP SUẤT ÂM
+                // để hoạt động. count > 8 là nhân đôi/nhiễu detection, count < 8 là
+                // hàng thiếu → cả hai NOT ready (bỏ qua hàng, coi như empty dù còn
+                // cartridge lẻ). Không row nào ready → thay khay (by design).
                 bool raw_ready = (raw_count == INPUT_ROW_THRESHOLD);
                 bool stable    = row_filters_[i].update_ready(raw_ready);
                 row_full_[i]   = stable;
@@ -638,10 +669,17 @@ private:
             }
         }
         
-        // Khong duoc bao EMPTY trong cac frame warm-up cua RowFilter: luc do
-        // raw da thay 8 cartridge/row nhung stable van false, tung lam robot
-        // chot done_tray_input truoc khi den R1-R5 kip sang. Chi xac nhan khay
-        // het khi CO tray va khong co row ready lien tiep nhieu frame.
+        // EMPTY (= can thay khay) ⟺ KHUNG KHAY co mat + KHONG row nao ready,
+        // giu lien tiep INPUT_EMPTY_CONFIRM_FRAMES frame. Theo yeu cau van hanh:
+        // row <8 cartridge bi bo qua (khong du ap suat am cho may fill), nen khay
+        // 5 hang x 7 cai => khong row nao ready => THAY KHAY du con cartridge le.
+        // Cac lop gate truoc khi duoc dem frame:
+        //   - isInxCameraReady(): InX phai o vi tri check camera -60mm (camera
+        //     gan tren cum servo, dang di chuyen thi detection khong tin duoc)
+        //   - robot_motion_busy_ + vision_resume_after_ 1500ms sau khi robot roi
+        //     vung camera
+        //   - RowFilter warm-up: khong bao EMPTY khi raw da thay 8/row nhung
+        //     stable chua kip len (tung lam done_tray_input som).
         const bool any_row_ready = std::any_of(
             row_full_.begin(), row_full_.end(), [](bool full) { return full; });
         const bool safe_to_conclude_empty =
@@ -653,8 +691,30 @@ private:
         } else {
             input_empty_streak_ = 0;
         }
+        const bool was_empty_confirmed = input_tray_empty_;
         input_tray_empty_ =
             (input_empty_streak_ >= INPUT_EMPTY_CONFIRM_FRAMES);
+        if (input_tray_empty_ && !was_empty_confirmed && total_in_tray > 0) {
+            // Tray change with cartridges remaining is NORMAL / BY DESIGN
+            // (rows with <8 cartridges are skipped — fill machine needs a full
+            // row of 8 for negative pressure). Trace it as a plain activity
+            // entry: level "silent_ok" -> normal line in Activity Log, no red,
+            // no banner.
+            RCLCPP_INFO(get_logger(),
+                "[VISION] 📥 INPUT EMPTY confirmed: no row has %d/%d cartridges — "
+                "tray change requested with %d cartridges left on tray",
+                INPUT_ROW_THRESHOLD, INPUT_ROW_THRESHOLD, total_in_tray);
+            const std::string detail =
+                "No row has " + std::to_string(INPUT_ROW_THRESHOLD) + "/" +
+                std::to_string(INPUT_ROW_THRESHOLD) +
+                " cartridges - tray change requested with " +
+                std::to_string(total_in_tray) + " cartridges left on tray";
+            std_msgs::msg::String notify;
+            notify.data =
+                "{\"level\":\"silent_ok\",\"title\":\"INPUT TRAY CHANGE\",\"detail\":\"" +
+                detail + "\"}";
+            pub_gui_notify_->publish(notify);
+        }
         
         // Find first available (full) row for picking
         selected_input_row_ = -1;
