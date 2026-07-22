@@ -944,8 +944,17 @@ void RobotLogicNode::initServices()
                 selected_output_slot_ = 1;
                 RCLCPP_INFO(get_logger(), "[MODE] MANUAL (via service)");
             } else {
+                const bool leaving_manual = manual_mode_;
                 manual_mode_ = false;
-                RCLCPP_INFO(get_logger(), "[MODE] MANUAL OFF (via service)");
+                // Roi MANUAL = chu ky moi (dong bo voi setModeCallback case AUTO):
+                // xoa selected=1 cua MANUAL + counter ve 1, cho START.
+                if (leaving_manual) {
+                    std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+                    selected_output_slot_ = SLOT_UNSET;
+                    current_auto_slot_ = 1;
+                }
+                RCLCPP_INFO(get_logger(), "[MODE] MANUAL OFF (via service)%s",
+                    leaving_manual ? " — slot counter reset to 1" : "");
             }
             res->success = true;
             res->message = req->data ? "Manual mode ON" : "Manual mode OFF";
@@ -969,6 +978,12 @@ void RobotLogicNode::initServices()
             if (req->data) {
                 use_ai_for_control_ = true;
                 manual_mode_ = false;
+                // Cung ly do voi setModeCallback case AI: vao AI la xoa selected
+                // mo coi de robot cho vision thay vi dung du lieu cu.
+                {
+                    std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+                    selected_output_slot_ = SLOT_UNSET;
+                }
                 RCLCPP_INFO(get_logger(), "[MODE] AI (via service)");
             } else {
                 use_ai_for_control_ = false;
@@ -1221,6 +1236,12 @@ void RobotLogicNode::newTrayOutputCallback(const std_msgs::msg::Bool::SharedPtr 
     {
         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
         selected_output_slot_ = SLOT_UNSET;
+    }
+    // AUTO: GUI sang den O1 — khay moi bat dau tu slot 1
+    if (!use_ai_for_control_ && selected_slot_pub_) {
+        auto s_msg = std_msgs::msg::Int32();
+        s_msg.data = 1;
+        selected_slot_pub_->publish(s_msg);
     }
 
     RCLCPP_INFO(get_logger(),
@@ -1528,10 +1549,45 @@ void RobotLogicNode::commandSlotCallback(const std_msgs::msg::Int32::SharedPtr m
 {
     int slot = msg->data;
     if (slot < 1 || slot > TOTAL_OUTPUT_SLOTS) return;
+
+    // Mirror commandRowCallback: GUI khong duoc doi slot giua batch. Nut O
+    // tren CameraPage van bam duoc o AUTO (canSelect), va truoc day callback
+    // nay nhan im lang -> selected_output_slot_ de len counter, AUTO nhay coc
+    // (vd dang slot 3 bam O10 -> dat slot 10 -> bao tray full -> thay khay non).
+    if (system_running_ &&
+        current_state_ != SystemState::IDLE &&
+        current_state_ != SystemState::INIT_CHECK &&
+        current_state_ != SystemState::INIT_LOAD_CHAMBER_DIRECT) {
+        RCLCPP_WARN(get_logger(),
+            "[CMD_SLOT] Ignored slot %d — system already executing batch", slot);
+
+        // Force GUI highlight back to the slot AUTO is actually counting
+        if (selected_slot_pub_ && !use_ai_for_control_) {
+            auto s_msg = std_msgs::msg::Int32();
+            s_msg.data = current_auto_slot_;
+            selected_slot_pub_->publish(s_msg);
+        }
+        return;
+    }
+
     {
         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
         selected_output_slot_ = slot;
+        // AUTO: dong bo counter de sau khi dat slot nay, dem tiep slot+1...
+        // (operator chon diem bat dau, vd resume khay dang do tu slot 4).
+        if (!use_ai_for_control_) {
+            current_auto_slot_ = slot;
+        }
     }
+    // Echo lai cho GUI de den O sang dung slot vua chon (GUI chi highlight
+    // theo /robot/selected_output_slot, khong tu sang khi bam nut).
+    if (selected_slot_pub_) {
+        auto s_msg = std_msgs::msg::Int32();
+        s_msg.data = slot;
+        selected_slot_pub_->publish(s_msg);
+    }
+    RCLCPP_INFO(get_logger(), "[CMD_SLOT] Operator selected slot %d%s", slot,
+        use_ai_for_control_ ? "" : " (AUTO counter synced)");
     notifyStateChange();
 }
 
@@ -1834,14 +1890,43 @@ void RobotLogicNode::pauseSystemCallback(
 void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
     switch (msg->data) {
-        case 1:
+        case 1: {
+            // DESIGN: khong co chuyen doi mode giua batch — phai STOP truoc.
+            // Quay lai AUTO = chu ky moi: counter ve slot 1, operator nhan START.
+            // CHI reset khi THUC SU chuyen tu mode khac sang (GUI co luc publish
+            // set_mode AUTO lap lai — message AUTO->AUTO trung lap ma reset thi
+            // counter dang chay batch bi keo ve 1 -> dat de slot co hang).
+            const bool entering_auto = manual_mode_ || use_ai_for_control_;
             manual_mode_ = false;
             use_ai_for_control_ = false;
-            RCLCPP_INFO(get_logger(), "[MODE] AUTO (giữ nguyên new_tray_loaded — tray vẫn còn vật lý)");
+            if (entering_auto) {
+                {
+                    std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+                    selected_output_slot_ = SLOT_UNSET;
+                    current_auto_slot_ = 1;
+                }
+                // GUI sang den O1 ngay khi vao AUTO (chu ky moi)
+                if (selected_slot_pub_) {
+                    auto s_msg = std_msgs::msg::Int32();
+                    s_msg.data = 1;
+                    selected_slot_pub_->publish(s_msg);
+                }
+            }
+            RCLCPP_INFO(get_logger(),
+                "[MODE] AUTO (giữ nguyên new_tray_loaded — tray vẫn còn vật lý)%s",
+                entering_auto ? " — slot counter reset to 1" : "");
             break;
+        }
         case 2:
             manual_mode_ = false;
             use_ai_for_control_ = true;
+            // AI phai thuan vision-driven: xoa selected mo coi (MANUAL set =1)
+            // de neu vision chua/khong publish thi robot CHO camera ("Waiting
+            // for slot selection...") thay vi dat theo du lieu cu.
+            {
+                std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+                selected_output_slot_ = SLOT_UNSET;
+            }
             RCLCPP_INFO(get_logger(), "[MODE] AI camera (Cartridge System syncs as AUTO)");
             break;
         case 3:
@@ -1860,6 +1945,22 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
         default:
             RCLCPP_ERROR(get_logger(), "[MODE] Invalid: %d", msg->data);
             return;
+    }
+
+    // MODE and START arrive on different ROS topics, so START may be handled
+    // first while the node is still in MANUAL.  If AUTO/AI arrives afterwards,
+    // continue the pending start here instead of remaining idle forever.
+    if ((msg->data == 1 || msg->data == 2) &&
+        system_running_ && !system_started_) {
+        if (cartridge_is_homed_) {
+            RCLCPP_INFO(get_logger(),
+                "[MODE] AUTO/AI arrived after START — executing pending Robot HOME");
+            sendMotionActionAsync("HOME");
+            system_started_ = true;
+        } else {
+            RCLCPP_INFO(get_logger(),
+                "[MODE] AUTO/AI arrived after START — waiting for Cartridge Homing");
+        }
     }
 
     notifyStateChange();
@@ -2755,6 +2856,15 @@ void RobotLogicNode::statePlaceToOutput()
                 publishDoneTrayOutput();
             }
             // AI mode: Camera toàn quyền — không can thiệp
+        }
+
+        // AUTO: bao GUI slot KE TIEP se dat ngay sau khi dat xong, de den O
+        // sang dung cho trong suot thoi gian cho fill (~100s). Truoc day chi
+        // publish luc bat dau motion -> GUI sang slot VUA dat thay vi slot toi.
+        if (!use_ai_for_control_ && selected_slot_pub_) {
+            auto next_msg = std_msgs::msg::Int32();
+            next_msg.data = current_auto_slot_;
+            selected_slot_pub_->publish(next_msg);
         }
 
         // Skipped BUFFER→CHAMBER (feed_chamber timeout) → wait operator choice

@@ -2700,6 +2700,29 @@ class CartridgeSystem(Node):
 
             self._reset_auto_triggers_on_mode_enter(old, requested)
 
+        # MODE and START use separate ROS topics. START can therefore arrive
+        # while operation_mode is still MANUAL, in which case _cb_start cannot
+        # begin automatic homing. Converge to the requested running state when
+        # the delayed AUTO/AI mode message arrives.
+        if self._system_running and requested in ('auto', 'ai'):
+            self._jog_mode = False
+            self._state1_enabled = True
+            self._setup_cpx_valves_for_auto_ai()
+            if not self.zero_offset:
+                if self.state not in (SystemState.HOMING, SystemState.HOMING_RUNNING):
+                    self.get_logger().info(
+                        "[MODE] AUTO/AI arrived after START — begin pending HOMING"
+                    )
+                    self._homing_abort.clear()
+                    self._homing_ref_offset.clear()
+                    self._drive_warm_t = -1.0
+                    self._enter(SystemState.HOMING)
+            elif self.state in (SystemState.IDLE, SystemState.ERROR):
+                self.get_logger().info(
+                    "[MODE] AUTO/AI arrived after START — homed, resume automatic process"
+                )
+                self._enter(SystemState.IDLE)
+
     def _cb_jog(self, msg: String):
         """
         Xử lý lệnh JOG từ GUI qua /providesystem/jog_cmd.
