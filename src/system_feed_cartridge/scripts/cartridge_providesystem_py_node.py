@@ -369,6 +369,7 @@ class CartridgeSystem(Node):
 
         # ── Shared / Other ───────────────────────────────────────────
         self._motion_busy       = False
+        self._last_cartridge_busy_published = None
         self._robot_last_seen   = 0.0   # timestamp of last /robot/motion_busy msg
         self._robot_connected   = False # True when robot node is actively publishing
         self._s10_off_time       = 0.0
@@ -396,6 +397,8 @@ class CartridgeSystem(Node):
         self._homing_done_event  = threading.Event()
         self._homing_result      = False
         self._homing_abort       = threading.Event()  # set by STOP to cancel homing thread
+        self._homing_generation  = 0
+        self._homing_thread      = None
         self._servo_home_abort   = set()              # per-servo JOG home abort flags
         self._homing_ref_offset  = {}                 # cleared when hardware homing must be repeated
         self._manual_state_cmd_lock = threading.Lock()
@@ -1896,7 +1899,25 @@ class CartridgeSystem(Node):
         Publish trạng thái bận của hệ thống nạp cartridge lên /cartridge/busy.
         Robot node subscribe topic này để biết khi nào hệ thống nạp đang chạy.
         """
+        busy = bool(busy)
         self.pub_busy_cartridge.publish(Bool(data=busy))
+        self._last_cartridge_busy_published = busy
+
+    def _sync_combined_cartridge_busy(self):
+        """Publish one global interlock for every active cartridge state.
+
+        Input, STATE 3 and STATE 4 may run concurrently.  A per-chain COMPLETE
+        callback can therefore publish False while another chain is still
+        moving.  Recompute the aggregate after every state-machine tick and
+        correct that race before the robot may start a new motion.
+        """
+        homing_busy = self.state in (SystemState.HOMING, SystemState.HOMING_RUNNING)
+        combined = (homing_busy
+                    or self.state_in != SystemState.IDLE
+                    or self.state_s3 != SystemState.IDLE
+                    or self.state_s4 != SystemState.IDLE)
+        if combined != self._last_cartridge_busy_published:
+            self._pub_cartridge_busy(combined)
 
     def _pub_cartridge_pos2_busy(self, busy: bool):
         """
@@ -1982,7 +2003,7 @@ class CartridgeSystem(Node):
     # Homing
     # ══════════════════════════════════════════════════════════════
 
-    def _home_all(self) -> bool:
+    def _home_all(self, abort_event: threading.Event) -> bool:
         """
         Thực hiện homing toàn bộ servo theo 2 cụm song song:
           Pos1/Input : InY → InX
@@ -2022,7 +2043,7 @@ class CartridgeSystem(Node):
             try:
                 ready_ok = False
                 for ready_attempt in range(1, 4):
-                    if self._homing_abort.is_set():
+                    if abort_event.is_set():
                         self.get_logger().warn(f"  {name}: homing aborted (STOP) before ready")
                         return False
                     if self._ensure_ready(mot, sid, timeout=5.0):
@@ -2076,7 +2097,7 @@ class CartridgeSystem(Node):
                 # homing, GUI tracking realtime thay vì freeze sau 2s idle skip.
                 delay_start = time.time()
                 while time.time() - delay_start < 3.0:
-                    if self._homing_abort.is_set():
+                    if abort_event.is_set():
                         self.get_logger().warn(f"  {name}: homing aborted (STOP) during init delay")
                         return False
                     self._servo_motion_t[sid] = time.time()
@@ -2087,7 +2108,7 @@ class CartridgeSystem(Node):
                 # vẫn đang di chuyển về home.
                 start = time.time()
                 while time.time() - start < self.config.homing_timeout:
-                    if self._homing_abort.is_set():
+                    if abort_event.is_set():
                         self.get_logger().warn(f"  {name}: homing aborted (STOP) during poll")
                         return False
                     self._servo_motion_t[sid] = time.time()
@@ -2175,13 +2196,13 @@ class CartridgeSystem(Node):
         def _home_sequence(label: str, order: list, results: dict):
             self.get_logger().info(f"[HOMING] {label} sequence start")
             for sid, name in order:
-                if self._homing_abort.is_set():
+                if abort_event.is_set():
                     results[label] = False
                     self.get_logger().warn(f"[HOMING] {label} aborted before {name}")
                     return
                 if not _home_one(sid, name):
                     results[label] = False
-                    self._homing_abort.set()
+                    abort_event.set()
                     self.get_logger().error(f"[HOMING] {label} failed at {name} (S{sid})")
                     return
             results[label] = True
@@ -2236,7 +2257,6 @@ class CartridgeSystem(Node):
         if not msg.data or self.state == SystemState.HOMING_RUNNING:
             return
 
-        self._homing_abort.clear()
         self._system_paused = False
         self._pause_pending = False
         self._system_running = True
@@ -2286,6 +2306,7 @@ class CartridgeSystem(Node):
             return
         # Signal homing thread to abort FIRST — before acquiring servo_lock in _stop()
         self._homing_abort.set()
+        self._homing_generation += 1  # invalidate any result from the stopped run
         for sid in list(self.servos):
             self._stop(sid)
         # KHÔNG retract Cyl1/Cyl2/Cyl3 khi STOP — giữ nguyên trạng thái valve trên CPX
@@ -2345,6 +2366,7 @@ class CartridgeSystem(Node):
             return
         # Stop motion ngay
         self._homing_abort.set()
+        self._homing_generation += 1  # soft STOP also owns cancellation
         for sid in list(self.servos):
             self._stop(sid)
 
@@ -2719,7 +2741,6 @@ class CartridgeSystem(Node):
                     self.get_logger().info(
                         "[MODE] AUTO/AI arrived after START — begin pending HOMING"
                     )
-                    self._homing_abort.clear()
                     self._homing_ref_offset.clear()
                     self._drive_warm_t = -1.0
                     self._enter(SystemState.HOMING)
@@ -2931,9 +2952,6 @@ class CartridgeSystem(Node):
             return
         if cmd == 'HOMING':
             if self.state != SystemState.HOMING_RUNNING:
-                # Clear abort flag — nếu STOP trước đó set abort mà chưa qua START,
-                # thread homing mới sẽ thoát ngay và state kẹt HOMING_RUNNING.
-                self._homing_abort.clear()
                 # Clear stale event nếu thread trước đã set sau STOP nhưng main
                 # loop chưa consume (state đã về IDLE).
                 self._homing_done_event.clear()
@@ -3529,6 +3547,7 @@ class CartridgeSystem(Node):
 
 
             self._process_state()
+            self._sync_combined_cartridge_busy()
             self._publish_state()
             self._publish_sensors()
             
@@ -3731,7 +3750,6 @@ class CartridgeSystem(Node):
                 else:
                     if self._homing_abort.is_set():
                         self.get_logger().info("Homing cancelled by STOP — về IDLE")
-                        self._homing_abort.clear()  # consume abort flag để lần HOMING sau chạy được
                         self._enter(SystemState.IDLE)
                         # _cb_stop đã set _jog_mode=True nếu user bấm STOP, không cần set lại.
                     else:
@@ -3930,12 +3948,27 @@ class CartridgeSystem(Node):
         """
         self._enter(SystemState.HOMING_RUNNING)
         self._homing_done_event.clear()
+        # Each run owns an immutable cancellation Event.  STOP sets the current
+        # event; a later START creates a different one instead of clear()ing the
+        # old event and accidentally reviving the previous homing threads.
+        self._homing_generation += 1
+        generation = self._homing_generation
+        abort_event = threading.Event()
+        self._homing_abort = abort_event
+
         def _bg():
-            ok = self._home_all()
+            ok = self._home_all(abort_event)
+            if generation != self._homing_generation:
+                self.get_logger().info(
+                    f"[HOMING] Ignore stale result generation {generation}"
+                )
+                return
             # Signal result to main thread — do NOT mutate state_in/s3/s4 here
             self._homing_result = ok
             self._homing_done_event.set()
-        threading.Thread(target=_bg, daemon=True).start()
+        self._homing_thread = threading.Thread(
+            target=_bg, daemon=True, name=f"homing_generation_{generation}")
+        self._homing_thread.start()
 
     def _do_error(self):
         """Trạng thái ERROR: log hướng dẫn phục hồi (STOP → START) mỗi lần vào state."""

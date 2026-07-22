@@ -910,6 +910,15 @@ private:
     if (type == "INPUT_TRAY_CHAMBER")  success = executeInputTrayChamber(param);
     else if (type == "INPUT_TRAY_BUFFER") success = executeInputTrayBuffer(param);
     else if (type == "INIT_INPUT_TRAY_BUFFER") success = executeInitInputTrayBuffer(param);
+    // AI variants include the deterministic camera-safe checkpoint.  The
+    // action only succeeds after index 0 is reached, so vision cannot reopen
+    // merely because the pick portion ended or was aborted above the tray.
+    else if (type == "AI_INPUT_TRAY_CHAMBER")
+        success = executeInputTrayChamber(param) && moveToIndex(0);
+    else if (type == "AI_INPUT_TRAY_BUFFER")
+        success = executeInputTrayBuffer(param) && moveToIndex(0);
+    else if (type == "AI_INIT_INPUT_TRAY_BUFFER")
+        success = executeInitInputTrayBuffer(param);  // already ends at index 0
     else if (type == "CHAMBER_SCALE")  success = executeChamberScale();
     else if (type == "SCALE_OUTPUT")   success = executeScaleOutput(param);
     else if (type == "SCALE_FAIL")     success = executeScaleFail();
@@ -1036,9 +1045,9 @@ private:
         
         // Tính tiến theo row index DỰA TRÊN TRỤC CỦA TAY MÁY (Khay đặt theo góc của tay)
         if (row > 1) {
-            double dx = (row - 1) * (-104.75); // Đi dọc theo khay (hướng đâm thẳng của tay)
-            double dy = (row - 1) * -8.8;      // Đi ngang khay (hướng vuông góc với tay)
-            double dz = (row - 1) * 1.0;
+            double dx = (row - 1) * (-104.56); // Đi dọc theo khay (hướng đâm thẳng của tay)
+            double dy = (row - 1) * -10.14;      // Đi ngang khay (hướng vuông góc với tay)
+            double dz = (row - 1) * 0.7;
             if (!moveR(dx, dy, dz)) return false;
         }
         
@@ -1051,11 +1060,11 @@ private:
         if (!moveToIndex(29)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, 87.5, 0,8)) return false;
+        if (!moveR(0, 87.5, 0,5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(0.5)) return false;
         if (!moveR(0, -56, 0)) return false;
-        if (!moveR(-10, 18, 0,8)) return false;
+        if (!moveR(-10, 20, 0,8)) return false;
         if (!wait(0.5)) return false;
         if (!moveR(0, -75, 0)) return false;
         if (!moveToIndex(37)) return false;
@@ -1179,11 +1188,11 @@ private:
         if (!moveToIndex(35)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, 87.5, 0,8)) return false;
+        if (!moveR(0, 87.5, 0,5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả cart vào chamber
         if (!wait(0.5)) return false;
         if (!moveR(-1, -56, 0)) return false;
-        if (!moveR(-10, 18, 0,8)) return false;
+        if (!moveR(-10, 20, 0,8)) return false;
         if (!wait(0.5)) return false;
         if (!moveR(0, -75, 0)) return false;
         if (!moveToIndex(37)) return false;

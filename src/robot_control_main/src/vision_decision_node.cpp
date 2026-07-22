@@ -349,12 +349,34 @@ public:
         sub_new_input_tray_ = create_subscription<std_msgs::msg::Bool>(
             "/cartridge_providesystem/new_tray_loaded", 10,
             [this](const std_msgs::msg::Bool::SharedPtr msg) {
-                if (!msg->data) return;
                 input_empty_streak_ = 0;
                 input_tray_empty_ = false;
+                if (!msg->data) {
+                    // Physical tray removal is authoritative and remains valid
+                    // even while robot-occlusion gating freezes camera frames.
+                    input_present_streak_ = 0;
+                    input_tray_present_ = false;
+                    selected_input_row_ = -1;
+                    std::fill(row_full_.begin(), row_full_.end(), false);
+                    for (auto& filter : row_filters_) filter.clear();
+
+                    auto row = std_msgs::msg::Int32();
+                    row.data = -1;
+                    pub_selected_row_->publish(row);
+                    pub_ai_row_->publish(row);
+                    auto status = std_msgs::msg::Int32MultiArray();
+                    status.data.assign(5, 0);
+                    pub_row_status_->publish(status);
+                    auto present = std_msgs::msg::Bool();
+                    present.data = false;
+                    pub_input_present_->publish(present);
+                    RCLCPP_INFO(get_logger(),
+                        "[VISION] Input tray removed -> cleared READY snapshot");
+                }
                 auto empty = std_msgs::msg::Bool();
                 empty.data = false;
                 pub_input_empty_->publish(empty);
+                if (!msg->data) return;
                 RCLCPP_INFO(get_logger(),
                     "[VISION] New input tray -> reset/clear EMPTY debounce");
             });
@@ -586,6 +608,10 @@ private:
     }
 
     void publishInputGateBlocked() {
+        // Reset decision internals, but publish nothing while blocked.  The GUI
+        // must keep the last trustworthy camera snapshot (for example row 4
+        // and row 5 READY) while the robot is consuming row 4.  Publishing
+        // zero status here made row 5 incorrectly disappear from the GUI.
         input_empty_streak_ = 0;
         input_present_streak_ = 0;
         input_tray_empty_ = false;
@@ -593,23 +619,6 @@ private:
         selected_input_row_ = -1;
         std::fill(row_full_.begin(), row_full_.end(), false);
         for (auto& filter : row_filters_) filter.clear();
-
-        auto row = std_msgs::msg::Int32();
-        row.data = -1;
-        pub_selected_row_->publish(row);
-        pub_ai_row_->publish(row);
-
-        auto empty = std_msgs::msg::Bool();
-        empty.data = false;  // BLOCKED khong dong nghia voi khay het
-        pub_input_empty_->publish(empty);
-
-        auto present = std_msgs::msg::Bool();
-        present.data = false;
-        pub_input_present_->publish(present);
-
-        auto status = std_msgs::msg::Int32MultiArray();
-        status.data.assign(5, 0);
-        pub_row_status_->publish(status);
     }
 
     // ========================================================================
@@ -693,7 +702,12 @@ private:
                 // để hoạt động. count > 8 là nhân đôi/nhiễu detection, count < 8 là
                 // hàng thiếu → cả hai NOT ready (bỏ qua hàng, coi như empty dù còn
                 // cartridge lẻ). Không row nào ready → thay khay (by design).
-                bool raw_ready = (raw_count == INPUT_ROW_THRESHOLD);
+                // A row can only be READY inside a confirmed physical tray.
+                // Previously the row count alone was sufficient, so detections
+                // from the empty fixture/background could light R4/R5 even
+                // though class-0 tray presence was false.
+                bool raw_ready = input_tray_present_.load() &&
+                                 (raw_count == INPUT_ROW_THRESHOLD);
                 bool stable    = row_filters_[i].update_ready(raw_ready);
                 row_full_[i]   = stable;
                 RCLCPP_INFO(get_logger(),
@@ -809,14 +823,9 @@ private:
 
         if (!output_scan_allowed_.load() ||
             std::chrono::steady_clock::now() < output_resume_after_) {
-            auto slot_msg = std_msgs::msg::Int32();
-            slot_msg.data = -1;
-            pub_selected_slot_->publish(slot_msg);
-            pub_ai_slot_->publish(slot_msg);
-
-            auto status_msg = std_msgs::msg::Int32MultiArray();
-            status_msg.data.assign(N_OUTPUT_SLOTS, 1);
-            pub_slot_status_->publish(status_msg);
+            // Freeze the last trustworthy GUI snapshot during robot occlusion.
+            // Internal slot state was reset by the gate callback and a fresh
+            // decision will be published after the cooldown.
             return;
         }
 

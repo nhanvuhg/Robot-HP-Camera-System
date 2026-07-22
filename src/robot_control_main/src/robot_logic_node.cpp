@@ -57,6 +57,7 @@ enum class SystemState
     INIT_CHECK,
     INIT_LOAD_CHAMBER_DIRECT,   // Row X → CHAMBER (first pick)
     INIT_REFILL_BUFFER,         // Row X+1 → BUFFER (second pick, init only)
+    AI_CHECK_INPUT_TRAY,        // At index 0: wait fresh READY/EMPTY decision
     WAIT_FILLING,               // Wait fill_done; check tray flags
     TAKE_CHAMBER_TO_SCALE,      // CHAMBER → SCALE (8 cartridges)
     LOAD_CHAMBER_FROM_BUFFER,   // BUFFER → CHAMBER
@@ -210,6 +211,7 @@ private:
     // STATE MACHINE
     // ========================================================================
     SystemState       current_state_;
+    SystemState       input_check_next_state_{SystemState::WAIT_FILLING};
     std::thread       state_machine_thread_;
     std::atomic<bool> state_machine_running_{true};
     std::recursive_mutex state_mutex_;
@@ -279,6 +281,7 @@ private:
     // chap nhan canh true. Ngan true con sot tu khay cu kich done sau 0.1s.
     std::atomic<bool> vision_empty_armed_{false};
     std::atomic<bool> input_scan_allowed_{true};
+    std::atomic<bool> input_scan_recovery_required_{false};
     int  selected_input_row_{ROW_UNSET};
     std::mutex row_selection_mutex_;
 
@@ -291,6 +294,7 @@ private:
     std::vector<bool> output_slot_occupied_;
     std::mutex output_slot_selection_mutex_;
     std::atomic<bool> output_scan_allowed_{true};
+    std::atomic<bool> output_scan_recovery_required_{false};
 
     // ========================================================================
     // ROBOT STATE
@@ -401,6 +405,7 @@ private:
     void stateInitCheck();
     void stateInitLoadChamberDirect();
     void stateInitRefillBuffer();
+    void stateAiCheckInputTray();
     void stateWaitFilling();
     void stateTakeChamberToScale();
     void stateLoadChamberFromBuffer();
@@ -1182,7 +1187,19 @@ void RobotLogicNode::requestOutputTrayChangeForDrain(const char* reason)
 void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
 {
     if (!msg->data) {
-        RCLCPP_INFO(get_logger(), "[TRAY_IN] ⚠️ new_tray_loaded = false (ignored)");
+        // Authoritative cartridge state: no tray at the robot position.  Clear
+        // stale READY rows even if vision is frozen by PAUSE/recovery gating.
+        new_tray_loaded_ = false;
+        waiting_for_new_input_ = true;
+        {
+            std::lock_guard<std::mutex> lock(row_selection_mutex_);
+            selected_input_row_ = ROW_UNSET;
+            std::fill(row_full_.begin(), row_full_.end(), false);
+            input_tray_empty_ = false;
+        }
+        RCLCPP_INFO(get_logger(),
+            "[TRAY_IN] new_tray_loaded=false -> cleared stale input rows");
+        notifyStateChange();
         return;
     }
 
@@ -1242,13 +1259,16 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
         }
     }
 
-    // Mark all rows as full (assume full tray; camera/AI will correct if needed)
+    // AUTO may assume a full tray. AI must start unknown/empty and wait for a
+    // fresh camera decision; otherwise all five rows flash READY with no tray.
     {
         std::lock_guard<std::mutex> lock(row_selection_mutex_);
-        for (size_t i=0; i<row_full_.size(); ++i) row_full_[i] = true;
+        std::fill(row_full_.begin(), row_full_.end(), !use_ai_for_control_.load());
         input_tray_empty_ = false;
-        if (should_reset_to_1) {
+        if (should_reset_to_1 && !use_ai_for_control_) {
             selected_input_row_ = 1;
+        } else if (use_ai_for_control_) {
+            selected_input_row_ = ROW_UNSET;
         }
     }
 
@@ -1262,6 +1282,12 @@ void RobotLogicNode::newTrayOutputCallback(const std_msgs::msg::Bool::SharedPtr 
     // Manual mode: bỏ qua trigger từ cartridge — robot không auto chạy ở manual.
     if (manual_mode_.load()) {
         RCLCPP_WARN(get_logger(), "[TRAY_OUT] Manual mode — bỏ qua new_trayoutput_loaded trigger");
+        return;
+    }
+
+    if (use_ai_for_control_ && output_scan_recovery_required_.load()) {
+        RCLCPP_ERROR(get_logger(),
+            "[TRAY_OUT] Ignore new tray: output motion has not recovered to HOME/index 0");
         return;
     }
 
@@ -2044,10 +2070,14 @@ void RobotLogicNode::notifyStateChange()
 void RobotLogicNode::setInputScanAllowed(bool allowed)
 {
     input_scan_allowed_ = allowed;
-    if (!allowed) {
+    {
         std::lock_guard<std::mutex> lock(row_selection_mutex_);
         selected_input_row_ = ROW_UNSET;
-        std::fill(row_full_.begin(), row_full_.end(), false);
+        // While blocked, preserve the last READY snapshot for the GUI.  Clear
+        // it only when scan reopens so state logic must wait for a fresh frame
+        // and cannot reuse the row decision consumed by the previous pick.
+        if (allowed)
+            std::fill(row_full_.begin(), row_full_.end(), false);
     }
     if (!input_scan_allowed_pub_) return;
     auto msg = std_msgs::msg::Bool();
@@ -2060,10 +2090,13 @@ void RobotLogicNode::setInputScanAllowed(bool allowed)
 void RobotLogicNode::setOutputScanAllowed(bool allowed)
 {
     output_scan_allowed_ = allowed;
-    if (!allowed) {
+    {
         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
         selected_output_slot_ = SLOT_UNSET;
-        std::fill(output_slot_occupied_.begin(), output_slot_occupied_.end(), true);
+        // Same snapshot policy as input rows: do not blank the GUI during the
+        // place motion, but require a fresh slot decision after it completes.
+        if (allowed)
+            std::fill(output_slot_occupied_.begin(), output_slot_occupied_.end(), true);
     }
     if (!output_scan_allowed_pub_) return;
     auto msg = std_msgs::msg::Bool();
@@ -2158,6 +2191,7 @@ void RobotLogicNode::handleCurrentState()
         case SystemState::INIT_CHECK:              stateInitCheck();             break;
         case SystemState::INIT_LOAD_CHAMBER_DIRECT: stateInitLoadChamberDirect(); break;
         case SystemState::INIT_REFILL_BUFFER:      stateInitRefillBuffer();      break;
+        case SystemState::AI_CHECK_INPUT_TRAY:     stateAiCheckInputTray();      break;
         case SystemState::WAIT_FILLING:            stateWaitFilling();           break;
         case SystemState::TAKE_CHAMBER_TO_SCALE:   stateTakeChamberToScale();    break;
         case SystemState::LOAD_CHAMBER_FROM_BUFFER: stateLoadChamberFromBuffer(); break;
@@ -2244,12 +2278,15 @@ void RobotLogicNode::stateInitLoadChamberDirect()
     }
 
     // ── Motion result handling ──
-    if (getMotionCmd() == "INPUT_TRAY_CHAMBER") {
+    if (getMotionCmd() == "INPUT_TRAY_CHAMBER" ||
+        getMotionCmd() == "AI_INPUT_TRAY_CHAMBER") {
         if (motion_in_progress_) return;
         clearMotionCmd();
-        if (use_ai_for_control_) setInputScanAllowed(true);
 
         if (!motion_result_) {
+            // Fail-safe: a failed/aborted pick can leave the arm above the tray.
+            // Keep vision blocked so an occluded frame cannot request tray change.
+            input_scan_recovery_required_ = true;
             motion_fail_count_++;
             RCLCPP_ERROR(get_logger(), "[INIT_LOAD] ❌ Motion failed (%d/3)", motion_fail_count_);
             if (motion_fail_count_ >= 3) {
@@ -2260,6 +2297,7 @@ void RobotLogicNode::stateInitLoadChamberDirect()
             }
             return;
         }
+        if (use_ai_for_control_) setInputScanAllowed(true);
         motion_fail_count_ = 0;
         chamber_has_cartridge_ = true;
         chamber_is_empty_ = false;
@@ -2275,7 +2313,12 @@ void RobotLogicNode::stateInitLoadChamberDirect()
             transitionTo(SystemState::IDLE);
         } else {
             feed_chamber_signal_ = false;  // consumed — require new signal on next cycle
-            transitionTo(SystemState::INIT_REFILL_BUFFER);
+            if (use_ai_for_control_) {
+                input_check_next_state_ = SystemState::INIT_REFILL_BUFFER;
+                transitionTo(SystemState::AI_CHECK_INPUT_TRAY);
+            } else {
+                transitionTo(SystemState::INIT_REFILL_BUFFER);
+            }
         }
         return;
     }
@@ -2334,9 +2377,18 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         }
     }
 
+    // Final edge interlock: cartridge may enter STATE 1/2/3/4 after the
+    // earlier state check but before this action send.  Do not consume the row
+    // or close the camera gate until the shared tray area is actually free.
+    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge became BUSY — INPUT_TRAY_CHAMBER not sent");
+        return;
+    }
     RCLCPP_INFO(get_logger(), "[INIT_LOAD] 🤖 Pick Row %d → CHAMBER [ASYNC]", row);
     if (use_ai_for_control_) setInputScanAllowed(false);
-    sendMotionActionAsync("INPUT_TRAY_CHAMBER", row);
+    sendMotionActionAsync(
+        use_ai_for_control_ ? "AI_INPUT_TRAY_CHAMBER" : "INPUT_TRAY_CHAMBER", row);
 
     // Row counter is advanced ONLY after motion succeeds (in the motion_result_ handler block above)
 }
@@ -2356,12 +2408,14 @@ void RobotLogicNode::stateInitRefillBuffer()
     }
 
     // ── Motion result handling ──
-    if (getMotionCmd() == "INIT_INPUT_TRAY_BUFFER") {
+    if (getMotionCmd() == "INIT_INPUT_TRAY_BUFFER" ||
+        getMotionCmd() == "AI_INIT_INPUT_TRAY_BUFFER") {
         if (motion_in_progress_) return;
         clearMotionCmd();
-        if (use_ai_for_control_) setInputScanAllowed(true);
 
         if (!motion_result_) {
+            // The arm position is unknown after failure; do not trust camera.
+            input_scan_recovery_required_ = true;
             motion_fail_count_++;
             RCLCPP_ERROR(get_logger(), "[INIT_REFILL] ❌ Motion failed (%d/3)", motion_fail_count_);
             if (motion_fail_count_ >= 3) {
@@ -2372,6 +2426,7 @@ void RobotLogicNode::stateInitRefillBuffer()
             }
             return;
         }
+        if (use_ai_for_control_) setInputScanAllowed(true);
 
         buffer_is_empty_ = false;
         is_first_batch_ = false;
@@ -2386,7 +2441,12 @@ void RobotLogicNode::stateInitRefillBuffer()
         if (manual_mode_) {
             transitionTo(SystemState::IDLE);
         } else {
-            transitionTo(SystemState::WAIT_FILLING);
+            if (use_ai_for_control_) {
+                input_check_next_state_ = SystemState::WAIT_FILLING;
+                transitionTo(SystemState::AI_CHECK_INPUT_TRAY);
+            } else {
+                transitionTo(SystemState::WAIT_FILLING);
+            }
         }
         return;
     }
@@ -2435,9 +2495,66 @@ void RobotLogicNode::stateInitRefillBuffer()
         }
     }
 
+    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge became BUSY — INIT_INPUT_TRAY_BUFFER not sent");
+        return;
+    }
     RCLCPP_INFO(get_logger(), "[INIT_REFILL] 🤖 Pick Row %d → BUFFER [ASYNC]", row);
     if (use_ai_for_control_) setInputScanAllowed(false);
-    sendMotionActionAsync("INIT_INPUT_TRAY_BUFFER", row);
+    sendMotionActionAsync(
+        use_ai_for_control_ ? "AI_INIT_INPUT_TRAY_BUFFER" : "INIT_INPUT_TRAY_BUFFER", row);
+}
+
+// ============================================================================
+// STATE: AI_CHECK_INPUT_TRAY
+// Robot is confirmed at index 0 by the completed AI pick action.  Hold the
+// pipeline here until vision publishes a fresh READY row or confirms EMPTY.
+// ============================================================================
+
+void RobotLogicNode::stateAiCheckInputTray()
+{
+    publishSystemStatus("AI_CHECK_INPUT_TRAY");
+
+    if (!use_ai_for_control_) {
+        transitionTo(input_check_next_state_);
+        return;
+    }
+    if (waiting_for_new_input_.load()) {
+        // EMPTY after the first chamber pick means there is no second row for
+        // INIT_REFILL_BUFFER.  Preserve the loaded chamber and start filling.
+        const auto next =
+            (input_check_next_state_ == SystemState::INIT_REFILL_BUFFER)
+                ? SystemState::WAIT_FILLING
+                : input_check_next_state_;
+        RCLCPP_WARN(get_logger(),
+            "[AI_CHECK_TRAY] EMPTY confirmed at index 0 -> tray change requested");
+        transitionTo(next);
+        return;
+    }
+
+    if (input_scan_recovery_required_.load() || !input_scan_allowed_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[AI_CHECK_TRAY] Camera locked — waiting for HOME/index 0 recovery");
+        return;
+    }
+
+    bool has_ready_row = false;
+    {
+        std::lock_guard<std::mutex> lock(row_selection_mutex_);
+        has_ready_row = std::any_of(
+            row_full_.begin(), row_full_.end(), [](bool ready) { return ready; });
+    }
+
+    if (has_ready_row) {
+        RCLCPP_INFO(get_logger(),
+            "[AI_CHECK_TRAY] Fresh READY decision received -> continue pipeline");
+        transitionTo(input_check_next_state_);
+        return;
+    }
+
+    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+        "[AI_CHECK_TRAY] At index 0 — waiting for fresh READY/EMPTY decision...");
 }
 
 // ============================================================================
@@ -2552,6 +2669,8 @@ void RobotLogicNode::stateTakeChamberToScale()
         return;
     }
 
+    // Internal transfer: does not enter the shared input/output tray zones, so
+    // it remains allowed while the cartridge state machine is active.
     RCLCPP_INFO(get_logger(), "[SCALE] 🤖 CHAMBER → SCALE [ASYNC]");
     sendMotionActionAsync("CHAMBER_SCALE");
 }
@@ -2643,6 +2762,7 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
     }
     feed_chamber_wait_active_ = false;  // signal arrived → reset timer
 
+    // Internal transfer: intentionally not gated by /cartridge/busy.
     RCLCPP_INFO(get_logger(), "[LOAD_BUFFER] 🤖 BUFFER → CHAMBER [ASYNC]");
     sendMotionActionAsync("BUFFER_CHAMBER");
 }
@@ -2702,12 +2822,15 @@ void RobotLogicNode::stateRefillBuffer()
     }
 
     // ── Motion result handling ──
-    if (getMotionCmd() == "INPUT_TRAY_BUFFER") {
+    if (getMotionCmd() == "INPUT_TRAY_BUFFER" ||
+        getMotionCmd() == "AI_INPUT_TRAY_BUFFER") {
         if (motion_in_progress_) return;
         clearMotionCmd();
-        if (use_ai_for_control_) setInputScanAllowed(true);
 
         if (!motion_result_) {
+            // Keep scan locked until an explicit recovery/HOME.  Continuing
+            // vision here previously converted robot occlusion into EMPTY.
+            input_scan_recovery_required_ = true;
             motion_fail_count_++;
             RCLCPP_ERROR(get_logger(), "[REFILL] ❌ Motion failed (%d/3)", motion_fail_count_);
             if (motion_fail_count_ >= 3) {
@@ -2719,6 +2842,7 @@ void RobotLogicNode::stateRefillBuffer()
             }
             // Don't crash — go process scale anyway
         } else {
+            if (use_ai_for_control_) setInputScanAllowed(true);
             buffer_is_empty_ = false;
             RCLCPP_INFO(get_logger(), "[BUFFER] ✅ Buffer refilled");
 
@@ -2736,11 +2860,21 @@ void RobotLogicNode::stateRefillBuffer()
         //  - scale empty (vd resume sau timeout, scale đã drained) → wait fill_done
         if (scale_has_cartridge_) {
             RCLCPP_INFO(get_logger(), "[PIPELINE] Refill done → PROCESSING_SCALE");
-            transitionTo(SystemState::PROCESSING_SCALE);
+            if (use_ai_for_control_) {
+                input_check_next_state_ = SystemState::PROCESSING_SCALE;
+                transitionTo(SystemState::AI_CHECK_INPUT_TRAY);
+            } else {
+                transitionTo(SystemState::PROCESSING_SCALE);
+            }
         } else {
             RCLCPP_INFO(get_logger(),
                 "[PIPELINE] Refill done, scale empty → WAIT_FILLING (đợi chamber fill_done)");
-            transitionTo(SystemState::WAIT_FILLING);
+            if (use_ai_for_control_) {
+                input_check_next_state_ = SystemState::WAIT_FILLING;
+                transitionTo(SystemState::AI_CHECK_INPUT_TRAY);
+            } else {
+                transitionTo(SystemState::WAIT_FILLING);
+            }
         }
         return;
     }
@@ -2787,9 +2921,15 @@ void RobotLogicNode::stateRefillBuffer()
         }
     }
 
+    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge became BUSY — INPUT_TRAY_BUFFER not sent");
+        return;
+    }
     RCLCPP_INFO(get_logger(), "[REFILL] 🤖 Pick Row %d → BUFFER [ASYNC]", row);
     if (use_ai_for_control_) setInputScanAllowed(false);
-    sendMotionActionAsync("INPUT_TRAY_BUFFER", row);
+    sendMotionActionAsync(
+        use_ai_for_control_ ? "AI_INPUT_TRAY_BUFFER" : "INPUT_TRAY_BUFFER", row);
 
     // Row counter is advanced ONLY after motion succeeds
 }
@@ -2904,14 +3044,18 @@ void RobotLogicNode::statePlaceToOutput()
     if (getMotionCmd() == "SCALE_OUTPUT") {
         if (motion_in_progress_) return;
         clearMotionCmd();
-        if (use_ai_for_control_) setOutputScanAllowed(true);
 
         int placed_slot = async_slot_.load();
 
         if (!motion_result_) {
+            // Failed place may leave the arm covering output tray/slots.
+            // Never reopen output decisions from an unknown robot pose.
+            output_scan_recovery_required_ = true;
             RCLCPP_ERROR(get_logger(), "[PLACE] ❌ SCALE_OUTPUT motion failed");
             return;
         }
+        output_scan_recovery_required_ = false;
+        if (use_ai_for_control_) setOutputScanAllowed(true);
 
         scale_has_cartridge_ = false;
         tray_count_++;
@@ -2991,9 +3135,9 @@ void RobotLogicNode::statePlaceToOutput()
         return;
     }
 
-    if (cartridge_pos2_busy_) {
+    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge Pos2 BUSY (STATE 3/4) — PLACE_TO_OUTPUT blocked");
+            "[INTERLOCK] Cartridge state BUSY — PLACE_TO_OUTPUT pending");
         return;
     }
 
@@ -3064,6 +3208,13 @@ void RobotLogicNode::statePlaceToOutput()
     }
 
     // ── Send motion ──
+    // Final edge guard: scale result/slot selection can arrive while a
+    // cartridge state starts in parallel.  Re-check immediately before goal.
+    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge became BUSY — SCALE_OUTPUT not sent");
+        return;
+    }
     RCLCPP_INFO(get_logger(), "[PLACE] 📦 SCALE → Slot %d [ASYNC]", slot);
     async_slot_ = slot;
     if (use_ai_for_control_) setOutputScanAllowed(false);
@@ -3137,6 +3288,11 @@ void RobotLogicNode::statePlaceToFail()
         return;
     }
 
+    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Cartridge state BUSY — SCALE_FAIL pending");
+        return;
+    }
     RCLCPP_INFO(get_logger(), "[FAIL] 🤖 SCALE → FAIL [ASYNC]");
     sendMotionActionAsync("SCALE_FAIL");
 }
@@ -3288,6 +3444,14 @@ void RobotLogicNode::sendMotionActionAsync(const std::string& cmd, int slot)
                     motion_result_ = result.result->success;
                     RCLCPP_INFO(get_logger(), "[ASYNC] ✅ '%s' done: %s",
                         cmd.c_str(), result.result->message.c_str());
+                    // HOME is the explicit recovery point after an aborted
+                    // pick/place: the arm is back at a known camera-safe pose.
+                    if (cmd == "HOME" && result.result->success && use_ai_for_control_) {
+                        input_scan_recovery_required_ = false;
+                        output_scan_recovery_required_ = false;
+                        setInputScanAllowed(true);
+                        setOutputScanAllowed(true);
+                    }
                     break;
                 case rclcpp_action::ResultCode::ABORTED:
                     motion_result_ = false;
@@ -3370,6 +3534,7 @@ std::string RobotLogicNode::stateToString(SystemState state)
         case SystemState::INIT_CHECK:              return "INIT_CHECK";
         case SystemState::INIT_LOAD_CHAMBER_DIRECT: return "INIT_LOAD_CHAMBER_DIRECT";
         case SystemState::INIT_REFILL_BUFFER:      return "INIT_REFILL_BUFFER";
+        case SystemState::AI_CHECK_INPUT_TRAY:     return "AI_CHECK_INPUT_TRAY";
         case SystemState::WAIT_FILLING:            return "WAIT_FILLING";
         case SystemState::TAKE_CHAMBER_TO_SCALE:   return "TAKE_CHAMBER_TO_SCALE";
         case SystemState::LOAD_CHAMBER_FROM_BUFFER: return "LOAD_CHAMBER_FROM_BUFFER";
