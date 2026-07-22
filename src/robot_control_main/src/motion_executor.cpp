@@ -1149,7 +1149,7 @@ private:
         if (!moveToIndex(13 + slot)) return false;
         if (!moveR(0, 0, -130,8)) return false;
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — thả khay vào output slot
-         if (!wait(0.5)) return false;
+        if (!wait(0.5)) return false;
         if (!moveR(0, 0, 130)) return false;
         if (!setDigitalOutput(6, false)) return false;
         if (!moveToIndex(13)) return false;

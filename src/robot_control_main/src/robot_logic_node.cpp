@@ -158,6 +158,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr system_uptime_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr  tray_count_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   done_input_tray_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   input_scan_allowed_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   output_scan_allowed_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   new_tray_loaded_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   new_trayoutput_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   done_output_tray_pub_;
@@ -276,6 +278,7 @@ private:
     // Sau new_tray_loaded phai thay empty=false cua CHINH khay moi truoc khi
     // chap nhan canh true. Ngan true con sot tu khay cu kich done sau 0.1s.
     std::atomic<bool> vision_empty_armed_{false};
+    std::atomic<bool> input_scan_allowed_{true};
     int  selected_input_row_{ROW_UNSET};
     std::mutex row_selection_mutex_;
 
@@ -287,6 +290,7 @@ private:
     int  selected_output_slot_{SLOT_UNSET};
     std::vector<bool> output_slot_occupied_;
     std::mutex output_slot_selection_mutex_;
+    std::atomic<bool> output_scan_allowed_{true};
 
     // ========================================================================
     // ROBOT STATE
@@ -425,6 +429,8 @@ private:
     // ========================================================================
     void logState(const std::string& message);
     void transitionTo(SystemState new_state);
+    void setInputScanAllowed(bool allowed);
+    void setOutputScanAllowed(bool allowed);
     void softStopToManual(const std::string& source);
     void forceScalePass(const std::string& source);
     bool checkConnection();
@@ -604,6 +610,10 @@ void RobotLogicNode::initSubscriptions()
         "/vision/input_tray/selected_row", 10,
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
             std::lock_guard<std::mutex> lock(row_selection_mutex_);
+            if (!input_scan_allowed_.load()) {
+                selected_input_row_ = ROW_UNSET;
+                return;
+            }
             if (msg->data >= 1 && msg->data <= TOTAL_ROWS) {
                 selected_input_row_ = msg->data;
                 row_full_[msg->data - 1] = true;
@@ -621,6 +631,10 @@ void RobotLogicNode::initSubscriptions()
         "/vision/input_tray/row_status", 10,
         [this](const std_msgs::msg::Int32MultiArray::SharedPtr msg) {
             std::lock_guard<std::mutex> lock(row_selection_mutex_);
+            if (!input_scan_allowed_.load()) {
+                std::fill(row_full_.begin(), row_full_.end(), false);
+                return;
+            }
             for (size_t i = 0; i < row_full_.size(); ++i) {
                 row_full_[i] =
                     (i < msg->data.size() && msg->data[i] == 1);
@@ -630,6 +644,7 @@ void RobotLogicNode::initSubscriptions()
     vision_empty_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/vision/input_tray/empty", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (msg->data && !input_scan_allowed_.load()) return;
             // Detection bi che trong luc robot dang gap khong phai bang chung
             // khay het. Vision cung freeze luc motion; guard nay la lop an toan
             // cuoi de khong bao done_tray_input do message den tre.
@@ -650,6 +665,7 @@ void RobotLogicNode::initSubscriptions()
                 && msg->data && !was_empty
                 && !waiting_for_new_input_.load() && system_running_.load())
             {
+                setInputScanAllowed(false);
                 RCLCPP_WARN(get_logger(),
                     "[AI] Vision: all rows empty → publishing done_tray_input");
                 auto done_msg = std_msgs::msg::Bool();
@@ -669,6 +685,10 @@ void RobotLogicNode::initSubscriptions()
         "/vision/output_tray/selected_slot", 10,
         [this](const std_msgs::msg::Int32::SharedPtr msg) {
             std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+            if (!output_scan_allowed_.load()) {
+                selected_output_slot_ = SLOT_UNSET;
+                return;
+            }
             selected_output_slot_ = msg->data;
         });
 
@@ -678,6 +698,11 @@ void RobotLogicNode::initSubscriptions()
         "/vision/output_tray/slot_status", 10,
         [this](const std_msgs::msg::Int32MultiArray::SharedPtr msg) {
             std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+            if (!output_scan_allowed_.load()) {
+                std::fill(output_slot_occupied_.begin(), output_slot_occupied_.end(), true);
+                selected_output_slot_ = SLOT_UNSET;
+                return;
+            }
             for (size_t i = 0; i < output_slot_occupied_.size(); ++i) {
                 output_slot_occupied_[i] =
                     !(i < msg->data.size() && msg->data[i] == 0);
@@ -867,6 +892,7 @@ void RobotLogicNode::initSubscriptions()
         "/vision/output_tray/full", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             if (msg->data && use_ai_for_control_) {
+                setOutputScanAllowed(false);
                 RCLCPP_WARN(get_logger(),
                     "[VISION_SYNC] 📦 Camera báo OUTPUT TRAY FULL → set waiting_for_new_output_");
                 waiting_for_new_output_ = true;
@@ -892,9 +918,18 @@ void RobotLogicNode::initPublishers()
     system_uptime_pub_  = create_publisher<std_msgs::msg::String>("/robot/system_uptime", 10);
     tray_count_pub_     = create_publisher<std_msgs::msg::Int32> ("/robot/tray_count", 10);
     done_input_tray_pub_  = create_publisher<std_msgs::msg::Bool>("/robot/done_tray_input",  10);
+    input_scan_allowed_pub_ = create_publisher<std_msgs::msg::Bool>(
+        "/vision/input_scan_allowed", rclcpp::QoS(1).reliable().transient_local());
+    output_scan_allowed_pub_ = create_publisher<std_msgs::msg::Bool>(
+        "/vision/output_scan_allowed", rclcpp::QoS(1).reliable().transient_local());
     new_tray_loaded_pub_  = create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_tray_loaded", rclcpp::QoS(10).reliable());
     done_output_tray_pub_ = create_publisher<std_msgs::msg::Bool>("/robot/done_tray_output", 10);
     new_trayoutput_pub_   = create_publisher<std_msgs::msg::Bool>("/cartridge_providesystem/new_trayoutput_loaded", rclcpp::QoS(10).reliable());
+
+    // Idle/default: camera may inspect the input tray. AI pick motions
+    // explicitly close this gate and reopen it when their action completes.
+    setInputScanAllowed(true);
+    setOutputScanAllowed(true);
 }
 
 void RobotLogicNode::initServices()
@@ -1157,6 +1192,7 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
     new_tray_loaded_ = true;
     bool was_waiting = waiting_for_new_input_.load();
     waiting_for_new_input_ = false;
+    setInputScanAllowed(true);
     // Khong chap nhan empty=true con sot tu khay truoc. Vision phai xac nhan
     // empty=false cua khay moi de arm lai.
     vision_empty_armed_ = false;
@@ -1231,6 +1267,7 @@ void RobotLogicNode::newTrayOutputCallback(const std_msgs::msg::Bool::SharedPtr 
 
     new_trayoutput_loaded_ = true;
     waiting_for_new_output_ = false;
+    setOutputScanAllowed(true);
     // Reset output slot counter for new tray
     current_auto_slot_ = 1;
     {
@@ -2004,6 +2041,38 @@ void RobotLogicNode::notifyStateChange()
     state_cv_.notify_all();
 }
 
+void RobotLogicNode::setInputScanAllowed(bool allowed)
+{
+    input_scan_allowed_ = allowed;
+    if (!allowed) {
+        std::lock_guard<std::mutex> lock(row_selection_mutex_);
+        selected_input_row_ = ROW_UNSET;
+        std::fill(row_full_.begin(), row_full_.end(), false);
+    }
+    if (!input_scan_allowed_pub_) return;
+    auto msg = std_msgs::msg::Bool();
+    msg.data = allowed;
+    input_scan_allowed_pub_->publish(msg);
+    RCLCPP_INFO(get_logger(), "[AI_SCAN] Input tray scan %s",
+        allowed ? "ENABLED" : "BLOCKED (input pick motion)");
+}
+
+void RobotLogicNode::setOutputScanAllowed(bool allowed)
+{
+    output_scan_allowed_ = allowed;
+    if (!allowed) {
+        std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+        selected_output_slot_ = SLOT_UNSET;
+        std::fill(output_slot_occupied_.begin(), output_slot_occupied_.end(), true);
+    }
+    if (!output_scan_allowed_pub_) return;
+    auto msg = std_msgs::msg::Bool();
+    msg.data = allowed;
+    output_scan_allowed_pub_->publish(msg);
+    RCLCPP_INFO(get_logger(), "[AI_SCAN] Output tray scan %s",
+        allowed ? "ENABLED" : "BLOCKED (place/full decision)");
+}
+
 void RobotLogicNode::stateMachineLoop()
 {
     RCLCPP_INFO(get_logger(), "[SM] Started");
@@ -2178,6 +2247,7 @@ void RobotLogicNode::stateInitLoadChamberDirect()
     if (getMotionCmd() == "INPUT_TRAY_CHAMBER") {
         if (motion_in_progress_) return;
         clearMotionCmd();
+        if (use_ai_for_control_) setInputScanAllowed(true);
 
         if (!motion_result_) {
             motion_fail_count_++;
@@ -2265,6 +2335,7 @@ void RobotLogicNode::stateInitLoadChamberDirect()
     }
 
     RCLCPP_INFO(get_logger(), "[INIT_LOAD] 🤖 Pick Row %d → CHAMBER [ASYNC]", row);
+    if (use_ai_for_control_) setInputScanAllowed(false);
     sendMotionActionAsync("INPUT_TRAY_CHAMBER", row);
 
     // Row counter is advanced ONLY after motion succeeds (in the motion_result_ handler block above)
@@ -2288,6 +2359,7 @@ void RobotLogicNode::stateInitRefillBuffer()
     if (getMotionCmd() == "INIT_INPUT_TRAY_BUFFER") {
         if (motion_in_progress_) return;
         clearMotionCmd();
+        if (use_ai_for_control_) setInputScanAllowed(true);
 
         if (!motion_result_) {
             motion_fail_count_++;
@@ -2354,15 +2426,17 @@ void RobotLogicNode::stateInitRefillBuffer()
         for (size_t i = 0; i < row_full_.size(); ++i)
             if (row_full_[i]) { row = (int)i + 1; break; }
         if (row <= 0) {
-            RCLCPP_WARN(get_logger(), "[INIT_REFILL] No row for buffer (AI)");
-            buffer_is_empty_ = true;
-            is_first_batch_ = false;
-            transitionTo(SystemState::WAIT_FILLING);
+            // Sau input pick, vision gate mo lai va can frame moi de quyet
+            // dinh READY/EMPTY. Khong duoc suy "tam thoi chua co row" thanh
+            // het khay; /vision/input_tray/empty se debounce va set waiting.
+            RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+                "[INIT_REFILL] AI: waiting for fresh row/EMPTY decision...");
             return;
         }
     }
 
     RCLCPP_INFO(get_logger(), "[INIT_REFILL] 🤖 Pick Row %d → BUFFER [ASYNC]", row);
+    if (use_ai_for_control_) setInputScanAllowed(false);
     sendMotionActionAsync("INIT_INPUT_TRAY_BUFFER", row);
 }
 
@@ -2631,6 +2705,7 @@ void RobotLogicNode::stateRefillBuffer()
     if (getMotionCmd() == "INPUT_TRAY_BUFFER") {
         if (motion_in_progress_) return;
         clearMotionCmd();
+        if (use_ai_for_control_) setInputScanAllowed(true);
 
         if (!motion_result_) {
             motion_fail_count_++;
@@ -2706,13 +2781,14 @@ void RobotLogicNode::stateRefillBuffer()
         for (size_t i = 0; i < row_full_.size(); ++i)
             if (row_full_[i]) { row = (int)i + 1; break; }
         if (row <= 0) {
-            RCLCPP_WARN(get_logger(), "[REFILL] No row (AI) → PROCESSING_SCALE");
-            transitionTo(SystemState::PROCESSING_SCALE);
+            RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+                "[REFILL] AI: waiting for fresh row/EMPTY decision...");
             return;
         }
     }
 
     RCLCPP_INFO(get_logger(), "[REFILL] 🤖 Pick Row %d → BUFFER [ASYNC]", row);
+    if (use_ai_for_control_) setInputScanAllowed(false);
     sendMotionActionAsync("INPUT_TRAY_BUFFER", row);
 
     // Row counter is advanced ONLY after motion succeeds
@@ -2828,6 +2904,7 @@ void RobotLogicNode::statePlaceToOutput()
     if (getMotionCmd() == "SCALE_OUTPUT") {
         if (motion_in_progress_) return;
         clearMotionCmd();
+        if (use_ai_for_control_) setOutputScanAllowed(true);
 
         int placed_slot = async_slot_.load();
 
@@ -2989,6 +3066,7 @@ void RobotLogicNode::statePlaceToOutput()
     // ── Send motion ──
     RCLCPP_INFO(get_logger(), "[PLACE] 📦 SCALE → Slot %d [ASYNC]", slot);
     async_slot_ = slot;
+    if (use_ai_for_control_) setOutputScanAllowed(false);
     sendMotionActionAsync("SCALE_OUTPUT", slot);
 }
 

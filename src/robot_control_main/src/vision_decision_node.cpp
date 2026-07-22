@@ -302,17 +302,48 @@ public:
                 }
             });
 
-        sub_motion_busy_ = create_subscription<std_msgs::msg::Bool>(
-            "/robot/motion_busy", 10,
+        sub_input_scan_allowed_ = create_subscription<std_msgs::msg::Bool>(
+            "/vision/input_scan_allowed",
+            rclcpp::QoS(1).reliable().transient_local(),
             [this](const std_msgs::msg::Bool::SharedPtr msg) {
-                const bool was_busy = robot_motion_busy_.exchange(msg->data);
-                if (was_busy && !msg->data) {
-                    // Robot vua roi khoi vung camera: cho YOLO nap lai bbox
-                    // sach truoc khi cho phep ket luan row/slot.
+                const bool was_allowed = input_scan_allowed_.exchange(msg->data);
+                if (!was_allowed && msg->data) {
+                    // Input pick vua ket thuc: cho YOLO nap bbox sach. Cac
+                    // motion chamber/loadcell/output sau do KHONG khoa scan.
                     vision_resume_after_ =
                         std::chrono::steady_clock::now() + 1500ms;
                 }
-                if (msg->data) input_empty_streak_ = 0;
+                if (!msg->data) {
+                    input_empty_streak_ = 0;
+                    input_tray_empty_ = false;
+                    auto empty = std_msgs::msg::Bool();
+                    empty.data = false;
+                    pub_input_empty_->publish(empty);
+                }
+                RCLCPP_INFO(get_logger(), "[VISION] Input scan %s",
+                    msg->data ? "ENABLED" : "BLOCKED during input pick");
+            });
+
+        sub_output_scan_allowed_ = create_subscription<std_msgs::msg::Bool>(
+            "/vision/output_scan_allowed",
+            rclcpp::QoS(1).reliable().transient_local(),
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                const bool was_allowed = output_scan_allowed_.exchange(msg->data);
+                if (!was_allowed && msg->data) {
+                    output_resume_after_ =
+                        std::chrono::steady_clock::now() + 1500ms;
+                }
+                if (!msg->data) {
+                    std::lock_guard<std::mutex> lock(slot_detection_mutex_);
+                    selected_output_slot_ = -1;
+                    slot_stable_state_.fill(SlotStableState::OCC_OK);
+                    slot_empty_streak_.fill(0);
+                    slot_occ_streak_.fill(0);
+                    slot_mis_streak_.fill(0);
+                    output_full_streak_ = 0;
+                }
+                RCLCPP_INFO(get_logger(), "[VISION] Output scan %s",
+                    msg->data ? "ENABLED" : "BLOCKED during place/full");
             });
 
         sub_new_input_tray_ = create_subscription<std_msgs::msg::Bool>(
@@ -367,8 +398,10 @@ private:
     int inx_ready_streak_{0};
     double inx_camera_position_mm_{-60.0};
     double inx_camera_tolerance_mm_{2.0};
-    std::atomic<bool> robot_motion_busy_{false};
+    std::atomic<bool> input_scan_allowed_{true};
     std::chrono::steady_clock::time_point vision_resume_after_{};
+    std::atomic<bool> output_scan_allowed_{true};
+    std::chrono::steady_clock::time_point output_resume_after_{};
 
     // ========================================================================
     // INPUT TRAY STATE
@@ -412,7 +445,8 @@ private:
     rclcpp::Subscription<Detection2DArray>::SharedPtr sub_cam0_;
     rclcpp::Subscription<Detection2DArray>::SharedPtr sub_cam1_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr sub_mode_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_motion_busy_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_input_scan_allowed_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_output_scan_allowed_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_new_input_tray_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_servo_positions_;
     
@@ -589,7 +623,9 @@ private:
 
         // Khay chi dung he toa do camera khi InX da ve vi tri safe -60mm.
         // Ngoai vi tri nay moi detection cam0 deu co the la khay dang di chuyen.
-        if (use_ai && !isInxCameraReady()) {
+        if (use_ai && (!isInxCameraReady() ||
+                       !input_scan_allowed_.load() ||
+                       std::chrono::steady_clock::now() < vision_resume_after_)) {
             publishInputGateBlocked();
             return;
         }
@@ -676,14 +712,15 @@ private:
         // Cac lop gate truoc khi duoc dem frame:
         //   - isInxCameraReady(): InX phai o vi tri check camera -60mm (camera
         //     gan tren cum servo, dang di chuyen thi detection khong tin duoc)
-        //   - robot_motion_busy_ + vision_resume_after_ 1500ms sau khi robot roi
-        //     vung camera
+        //   - input_scan_allowed_: khoa rieng trong 3 motion pick input; cac
+        //     motion chamber/loadcell/output khong lam cham quyet dinh AI
+        //   - vision_resume_after_: 1500ms sau khi input pick ket thuc
         //   - RowFilter warm-up: khong bao EMPTY khi raw da thay 8/row nhung
         //     stable chua kip len (tung lam done_tray_input som).
         const bool any_row_ready = std::any_of(
             row_full_.begin(), row_full_.end(), [](bool full) { return full; });
         const bool safe_to_conclude_empty =
-            !robot_motion_busy_.load() &&
+            input_scan_allowed_.load() &&
             std::chrono::steady_clock::now() >= vision_resume_after_;
         if (use_ai && safe_to_conclude_empty &&
             input_tray_present_.load() && !any_row_ready) {
@@ -767,6 +804,19 @@ private:
         
         if (current_mode_ == ControlMode::AUTO) {
             // AUTO: Robot logic tự quản lý slot, camera không can thiệp
+            return;
+        }
+
+        if (!output_scan_allowed_.load() ||
+            std::chrono::steady_clock::now() < output_resume_after_) {
+            auto slot_msg = std_msgs::msg::Int32();
+            slot_msg.data = -1;
+            pub_selected_slot_->publish(slot_msg);
+            pub_ai_slot_->publish(slot_msg);
+
+            auto status_msg = std_msgs::msg::Int32MultiArray();
+            status_msg.data.assign(N_OUTPUT_SLOTS, 1);
+            pub_slot_status_->publish(status_msg);
             return;
         }
 
@@ -918,6 +968,7 @@ private:
                 // Thông báo robot logic để set waiting_for_new_output_
                 pub_output_tray_full_->publish(change_msg);
                 tray_output_change_sent_ = true;
+                output_scan_allowed_ = false;
                 RCLCPP_WARN(get_logger(), "[VISION] 📦 OUTPUT TRAY FULL - Change tray signal sent to cartridge + robot");
             }
         } else {
