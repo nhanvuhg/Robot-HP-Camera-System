@@ -418,6 +418,12 @@ class CartridgeSystem(Node):
         self._input_tray_done     = False
         self._state1_enabled = False
         self._gui_confirmed  = False
+        # Must exist before ROS subscriptions become active.  MODE and START
+        # are separate topics and may arrive immediately after node startup;
+        # _cb_mode uses this flag to converge a pending START into AUTO/AI
+        # homing.  Without an explicit initial value that callback can crash
+        # the entire cartridge node before /cartridge/homing_done is emitted.
+        self._system_running = False
         self._system_paused  = False  # True = đã halt thực sự (graceful PAUSE đã promote)
         self._pause_pending  = False  # True = user bấm PAUSE, chờ ranh giới state để promote
         self._input_trays_empty_debounce_count = 0
