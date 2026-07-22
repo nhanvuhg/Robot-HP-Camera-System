@@ -642,6 +642,18 @@ void RobotController::softStopAndManual()
     qDebug() << "Soft Stop & Switch to MANUAL (keep state + CPX)";
     stopManualJogMotion();
 
+    // STOP from MANUAL follows this path (instead of stopAndResetRobot()).
+    // Clear the momentary tray-ready indicators here as well so a subsequent
+    // ENABLE cannot leave IN_READY / OUT_READY visually latched on the GUI.
+    if (in_ready_) {
+        in_ready_ = false;
+        emit inReadyChanged();
+    }
+    if (out_ready_) {
+        out_ready_ = false;
+        emit outReadyChanged();
+    }
+
     // ResetRobot clears the motion buffer without leaving ServoP paused.
     auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
     if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {

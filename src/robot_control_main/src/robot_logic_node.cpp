@@ -800,7 +800,7 @@ void RobotLogicNode::initSubscriptions()
         std::bind(&RobotLogicNode::gotoStateCallback, this, std::placeholders::_1));
 
     cartridge_homing_done_sub_ = create_subscription<std_msgs::msg::Bool>(
-        "/cartridge/homing_done", 10,
+        "/cartridge/homing_done", rclcpp::QoS(1).reliable().transient_local(),
         std::bind(&RobotLogicNode::cartridgeHomingDoneCallback, this, std::placeholders::_1));
 
     command_row_sub_ = create_subscription<std_msgs::msg::Int32>(
