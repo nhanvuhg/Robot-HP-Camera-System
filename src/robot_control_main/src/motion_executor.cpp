@@ -915,6 +915,10 @@ private:
     else if (type == "SCALE_FAIL")     success = executeScaleFail();
     else if (type == "BUFFER_CHAMBER") success = executeBufferChamber();
     else if (type == "HOME")           success = moveToIndex(0);
+    // MOVE_SCAN_POSE: đưa tay về Index 28 — waypoint sau khi nhấc khỏi input row,
+    // KHÔNG che camera khay input. Dùng để re-scan input tray sau REFILL_BUFFER
+    // (AI mode) trước khi quyết định pick tiếp hay thay khay.
+    else if (type == "MOVE_SCAN_POSE") success = moveToIndex(28);
     else RCLCPP_ERROR(get_logger(), "[ACTION] Unknown command: %s", type.c_str());
 
     if (goal_handle->is_canceling()) {
