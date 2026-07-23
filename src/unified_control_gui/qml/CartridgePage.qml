@@ -248,15 +248,6 @@ import QtGraphicalEffects 1.15
         }
 
         function stopFromSystemControl() {
-            if (root.cartridgeStateActive()) {
-                root.abortStateToJog()
-                return
-            }
-            if (root.currentUiMode === "manual" || root.currentUiMode === "jog") {
-                stopManualMotionOnly()
-                return
-            }
-
             mainWindow.stopSynchronizedSystems()
         }
 
@@ -1754,7 +1745,7 @@ import QtGraphicalEffects 1.15
                                                     bgEnd: root.cBtnDangerEnd
                                                     bc: root.cBtnDangerBorder
                                                     tc: "#ffffff"
-                                                    onClicked: cartridgeController.jogStop(model.sid)
+                                                    onClicked: mainWindow.stopSynchronizedSystems()
                                                 }
                                         }
                                      }
@@ -2970,7 +2961,7 @@ import QtGraphicalEffects 1.15
                                                 w: (parent.width - 6) / 2; h: 52
                                                 fontSize: 15
                                                 bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"
-                                                onClicked: root.stopManualMotionOnly()
+                                                onClicked: mainWindow.stopSynchronizedSystems()
                                             }
                                             CBtn {
                                                 lbl: "CLEAR ERROR"
@@ -2981,15 +2972,6 @@ import QtGraphicalEffects 1.15
                                             }
                                         }
 
-                                        CBtn {
-                                            lbl: "⛔  EMERGENCY STOP"
-                                            w: parent.width; h: 64
-                                            radius: 12
-                                            border.width: 2
-                                            fontSize: 15
-                                            bg: root.cBtnEmergencyStart; bgEnd: root.cBtnEmergencyEnd; bc: root.cBtnEmergencyBorder; tc: "#ffffff"
-                                            onClicked: mainWindow.emergencyStopSynchronizedSystems()
-                                        }
                                     }
                                 }
                             }

@@ -1056,6 +1056,22 @@ void RobotController::stopMotionOnly()
     } else {
         qWarning() << "[STOP-ONLY] Pause service not ready";
     }
+
+    auto softStopReq = std::make_shared<std_srvs::srv::SetBool::Request>();
+    softStopReq->data = true;
+    if (soft_stop_to_manual_client_ && soft_stop_to_manual_client_->service_is_ready()) {
+        soft_stop_to_manual_client_->async_send_request(softStopReq,
+            [](rclcpp::Client<std_srvs::srv::SetBool>::SharedFuture future) {
+                try {
+                    qDebug() << "[STOP-ONLY] Motion command cleared:"
+                             << future.get()->message.c_str();
+                } catch (...) {
+                    qWarning() << "[STOP-ONLY] Failed to clear motion command";
+                }
+            });
+    } else {
+        qWarning() << "[STOP-ONLY] /robot/soft_stop_to_manual not available";
+    }
 }
 
 void RobotController::getAngles()

@@ -1228,7 +1228,7 @@ Item {
                                 raiseOnHover: true
                                 onClicked: {
                                 cameraPageRoot.modeLocked = false
-                                mainWindow.emergencyStopSynchronizedSystems()
+                                mainWindow.stopSynchronizedSystems()
                                 }
                             }
                         }
