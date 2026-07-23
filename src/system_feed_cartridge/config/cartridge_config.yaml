@@ -30,6 +30,8 @@ cylinder_timeout: 15.0
 modbus_timeout_ms: 3000
 control_loop_period_s: 0.02
 io_poll_period_s: 0.02
+# Chỉ dùng khi Servo3 đang đẩy khay và chờ S18; không tăng tải CPX liên tục.
+s18_fast_poll_period_s: 0.01
 sensor_on_latch_s: 0.1
 fas_position_velocity: 0.05
 jog_velocity: 0.05

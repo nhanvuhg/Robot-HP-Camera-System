@@ -944,47 +944,62 @@ class CartridgeSystem(Node):
         """
         fail1, fail2 = 0, 0
         poll_period = max(0.01, float(getattr(self.config, 'io_poll_period_s', 0.02)))
+        fast_s18_period = max(
+            0.005,
+            min(poll_period, float(getattr(self.config, 's18_fast_poll_period_s', 0.01))),
+        )
         while rclpy.ok():
-            # Module 1
-            if self.io_module is not None:
-                try:
-                    channels = []
-                    with self._io_bg_lock:
-                        for mod in self.io_module.modules:
-                            if mod.is_function_supported("read_channels"):
-                                ch = mod.read_channels()
-                                if isinstance(ch, list):
-                                    channels.extend(ch)
-                        self._io_sensor_cache = channels
-                        self._update_sensor_latches_locked(channels, 1)
-                        self._io_ready = True
-                    fail1 = 0
-                except Exception as e:
-                    fail1 += 1
-                    if fail1 >= 3:
-                        with self._io_bg_lock: self._io_ready = False
-                        self.io_module = None
-                        self.get_logger().warn(f"[IO-bg 1] reconnecting: {e}")
-                        threading.Thread(target=self._reconnect_io1, daemon=True).start()
-            
-            # Module 2
-            if self.io_module_2 is not None:
-                try:
-                    with self._io_bg_lock:
-                        channels2 = self._read_io2_sensor_channels_locked()
-                        self._io_sensor_cache_2 = channels2
-                        self._update_sensor_latches_locked(channels2, 17)
-                        self._io_ready_2 = True
-                    fail2 = 0
-                except Exception as e:
-                    fail2 += 1
-                    if fail2 >= 3:
-                        with self._io_bg_lock: self._io_ready_2 = False
-                        self.io_module_2 = None
-                        self.get_logger().warn(f"[IO-bg 2] reconnecting: {e}")
-                        threading.Thread(target=self._reconnect_io2, daemon=True).start()
-            
-            time.sleep(poll_period)
+            # S18 nằm trên Module 2. Khi Servo3 đang đẩy khay, đọc Module 2
+            # trước để thời gian đọc Module 1 không nằm trên critical path dừng
+            # Servo3. Ngoài state này giữ nguyên thứ tự lịch sử để không ảnh
+            # hưởng timing của cụm input.
+            s18_critical = (
+                getattr(self, '_s3_state', SystemState.IDLE) == SystemState.S3_SERVO3_FEED
+                and bool(getattr(self, '_cmd_sent_s3', False))
+            )
+            module_order = (2, 1) if s18_critical else (1, 2)
+
+            for module_idx in module_order:
+                if module_idx == 1 and self.io_module is not None:
+                    try:
+                        channels = []
+                        with self._io_bg_lock:
+                            for mod in self.io_module.modules:
+                                if mod.is_function_supported("read_channels"):
+                                    ch = mod.read_channels()
+                                    if isinstance(ch, list):
+                                        channels.extend(ch)
+                            self._io_sensor_cache = channels
+                            self._update_sensor_latches_locked(channels, 1)
+                            self._io_ready = True
+                        fail1 = 0
+                    except Exception as e:
+                        fail1 += 1
+                        if fail1 >= 3:
+                            with self._io_bg_lock:
+                                self._io_ready = False
+                            self.io_module = None
+                            self.get_logger().warn(f"[IO-bg 1] reconnecting: {e}")
+                            threading.Thread(target=self._reconnect_io1, daemon=True).start()
+
+                elif module_idx == 2 and self.io_module_2 is not None:
+                    try:
+                        with self._io_bg_lock:
+                            channels2 = self._read_io2_sensor_channels_locked()
+                            self._io_sensor_cache_2 = channels2
+                            self._update_sensor_latches_locked(channels2, 17)
+                            self._io_ready_2 = True
+                        fail2 = 0
+                    except Exception as e:
+                        fail2 += 1
+                        if fail2 >= 3:
+                            with self._io_bg_lock:
+                                self._io_ready_2 = False
+                            self.io_module_2 = None
+                            self.get_logger().warn(f"[IO-bg 2] reconnecting: {e}")
+                            threading.Thread(target=self._reconnect_io2, daemon=True).start()
+
+            time.sleep(fast_s18_period if s18_critical else poll_period)
 
     def _io2_di_modules_locked(self) -> list:
         """Return CPX41 8DI modules in physical rack-position order."""

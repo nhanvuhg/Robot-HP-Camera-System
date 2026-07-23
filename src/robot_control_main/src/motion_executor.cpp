@@ -1060,11 +1060,11 @@ private:
         if (!moveToIndex(29)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, 87.5, 0,5)) return false;
+        if (!moveR(0, 97.5, 0,5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(0.5)) return false;
         if (!moveR(0, -56, 0)) return false;
-        if (!moveR(-10, 20, 0,8)) return false;
+        if (!moveR(-10, 20.5, 0,8)) return false;
         if (!wait(0.5)) return false;
         if (!moveR(0, -75, 0)) return false;
         if (!moveToIndex(37)) return false;
@@ -1188,13 +1188,13 @@ private:
         if (!moveToIndex(35)) return false;
         if (!moveToIndex(7)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, 87.5, 0,5)) return false;
+        if (!moveR(0, 97.5, 0,5)) return false;
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả cart vào chamber
         if (!wait(0.5)) return false;
         if (!moveR(-1, -56, 0)) return false;
-        if (!moveR(-10, 20, 0,8)) return false;
+        if (!moveR(-10, 20.5, 0,8)) return false;
         if (!wait(0.5)) return false;
-        if (!moveR(0, -75, 0)) return false;
+        if (!moveR(0, -90, 0)) return false;
         if (!moveToIndex(37)) return false;
         return true;
     }
