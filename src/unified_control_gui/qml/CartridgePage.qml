@@ -2460,7 +2460,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                 }
-                                                MotionMouseArea { id: mlMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: { var vals = []; for (var i = 0; i < 6; i++) vals.push(parseFloat(cartInputs.itemAt(i).children[1].children[0].text) || 0); robotController.moveLinear(vals[0],vals[1],vals[2],vals[3],vals[4],vals[5]) } onReleased: robotController.stopMotionOnly(); onCanceled: robotController.stopMotionOnly() }
+                                                MotionMouseArea { id: mlMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: { var vals = []; for (var i = 0; i < 6; i++) { var v = parseFloat(cartInputs.itemAt(i).children[1].children[0].text); if (isNaN(v)) return; vals.push(v) } robotController.startSendMoveL(vals[0],vals[1],vals[2],vals[3],vals[4],vals[5]) } onReleased: robotController.stopSendMove(); onCanceled: robotController.stopSendMove() }
                                             }
                                         }
                                     }
@@ -2621,7 +2621,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                 }
-                                                MotionMouseArea { id: mjMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: { var vals = []; for (var i = 0; i < 6; i++) vals.push(parseFloat(jointInputs.itemAt(i).children[1].children[0].text) || 0); robotController.moveJoint(vals[0],vals[1],vals[2],vals[3],vals[4],vals[5]) } onReleased: robotController.stopMotionOnly(); onCanceled: robotController.stopMotionOnly() }
+                                                MotionMouseArea { id: mjMA; anchors.fill: parent; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: { var vals = []; for (var i = 0; i < 6; i++) vals.push(parseFloat(jointInputs.itemAt(i).children[1].children[0].text) || 0); robotController.startSendMoveJ(vals[0],vals[1],vals[2],vals[3],vals[4],vals[5]) } onReleased: robotController.stopSendMove(); onCanceled: robotController.stopSendMove() }
                                             }
                                         }
 

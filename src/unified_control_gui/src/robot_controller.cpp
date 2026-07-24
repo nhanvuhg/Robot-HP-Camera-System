@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QHash>
 #include <QRegularExpression>
 #include <QSettings>
 #include <QTcpSocket>
@@ -12,6 +13,7 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QCoreApplication>
+#include <cmath>
 #include <sstream>
 #include <thread>
 
@@ -43,6 +45,7 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     servo_p_client_ = node_->create_client<dobot_msgs_v3::srv::ServoP>("/nova5/dobot_bringup/ServoP");
     do_client_ = node_->create_client<dobot_msgs_v3::srv::DO>("/nova5/dobot_bringup/DO");
     pause_client_ = node_->create_client<dobot_msgs_v3::srv::Pause>("/nova5/dobot_bringup/Pause");
+    continue_client_ = node_->create_client<dobot_msgs_v3::srv::Continues>("/nova5/dobot_bringup/Continue");
     dobot_emergency_stop_client_ = node_->create_client<dobot_msgs_v3::srv::EmergencyStop>("/nova5/dobot_bringup/EmergencyStop");
     dobot_stop_script_client_ = node_->create_client<dobot_msgs_v3::srv::StopScript>("/nova5/dobot_bringup/StopScript");
     disable_robot_client_ = node_->create_client<dobot_msgs_v3::srv::DisableRobot>("/nova5/dobot_bringup/DisableRobot");
@@ -653,19 +656,14 @@ void RobotController::stopAndResetRobot()
         }
     };
 
-    // Direct PowerOff (DisableRobot) on STOP: Immediately halts physical motion, disengages motors,
-    // and completely flushes Dobot's TCP motion queue so EnableRobot afterwards never resumes old targets.
-    if (disable_robot_client_ && disable_robot_client_->service_is_ready()) {
-        auto disReq = std::make_shared<dobot_msgs_v3::srv::DisableRobot::Request>();
-        disable_robot_client_->async_send_request(disReq,
-            [this, resetMotion](rclcpp::Client<dobot_msgs_v3::srv::DisableRobot>::SharedFuture df) {
-                try { qDebug() << "DisableRobot (PowerOff) on STOP:" << df.get()->res; } catch (...) {}
-                QMetaObject::invokeMethod(this, [resetMotion]() { resetMotion(); }, Qt::QueuedConnection);
-            });
-    } else {
-        qWarning() << "DisableRobot service not ready; executing motion reset";
-        resetMotion();
-    }
+    // STOP KEEPS THE ROBOT POWERED (user choice: "dừng nhưng giữ nguồn").
+    // No DisableRobot — just halt the motion and flush the queue via ResetRobot
+    // (inside resetMotion: StopScript + ResetRobot, NO Pause). The robot stays
+    // at RobotMode 5 (ENABLE), so JOG (cartesian/joint) and SEND work IMMEDIATELY
+    // after STOP without a separate ENABLE press. Powering off (DisableRobot)
+    // left the robot at Mode 4 (DISABLED) which blocked Cartesian jog until an
+    // explicit ENABLE — that regression is what this removes.
+    resetMotion();
 }
 
 void RobotController::softStopAndManual()
@@ -945,11 +943,43 @@ void RobotController::jogStep(const QString& axisId, double stepSize)
 
 void RobotController::jogStart(const QString& axisId)
 {
-    QString fixedId = axisId;
-    bool isJoint = fixedId.startsWith("j", Qt::CaseInsensitive) && fixedId.length() > 1 && fixedId[1].isDigit();
+    const QString input = axisId.trimmed();
+    if (input.size() < 2) {
+        qWarning() << "[JOG] Invalid axis:" << axisId;
+        return;
+    }
 
-    if (isJoint) {
-        fixedId[0] = 'J';
+    const QChar direction = input.back();
+    const QString axis = input.left(input.size() - 1).toLower();
+    if (direction != '+' && direction != '-') {
+        qWarning() << "[JOG] Invalid direction:" << axisId;
+        return;
+    }
+
+    // Dobot's MoveJog command is case-sensitive.  Always construct the exact
+    // identifiers accepted by the controller instead of trusting QML casing.
+    static const QHash<QString, QString> dobotAxes{
+        {"j1", "J1"}, {"j2", "J2"}, {"j3", "J3"},
+        {"j4", "J4"}, {"j5", "J5"}, {"j6", "J6"},
+        {"x", "X"}, {"y", "Y"}, {"z", "Z"},
+        {"rx", "Rx"}, {"ry", "Ry"}, {"rz", "Rz"}
+    };
+    const auto axisIt = dobotAxes.constFind(axis);
+    if (axisIt == dobotAxes.cend()) {
+        qWarning() << "[JOG] Unsupported axis:" << axisId;
+        return;
+    }
+
+    const QString fixedId = axisIt.value() + direction;
+    const bool isJoint = axis.startsWith('j');
+
+    if (isJoint && (!jog_client_ || !jog_client_->service_is_ready())) {
+        qWarning() << "[JOG] MoveJog service is not ready";
+        return;
+    }
+    if (!isJoint && (!servo_p_client_ || !servo_p_client_->service_is_ready())) {
+        qWarning() << "[JOG] ServoP service is not ready";
+        return;
     }
 
     qDebug() << "Jog start:" << axisId << "→" << fixedId << (isJoint ? "JOINT" : "CART");
@@ -958,32 +988,47 @@ void RobotController::jogStart(const QString& axisId)
     jog_start_time_ = std::chrono::steady_clock::now();
 
     if (isJoint) {
-        // Joint: MoveJog native
         auto req = std::make_shared<dobot_msgs_v3::srv::MoveJog::Request>();
         req->axis_id = fixedId.toStdString();
         req->param_value = {};
         jog_client_->async_send_request(req,
             [this, fixedId](rclcpp::Client<dobot_msgs_v3::srv::MoveJog>::SharedFuture f) {
-                try { qDebug() << "MoveJog:" << fixedId << "res:" << f.get()->res; }
-                catch (...) {}
+                try {
+                    const int result = f.get()->res;
+                    if (result != 0) {
+                        qWarning() << "[JOG] MoveJog rejected:" << fixedId << "error:" << result;
+                        jog_moving_ = false;
+                        jog_axis_.clear();
+                    }
+                } catch (const std::exception& e) {
+                    qWarning() << "[JOG] MoveJog failed:" << fixedId << e.what();
+                    jog_moving_ = false;
+                    jog_axis_.clear();
+                }
             });
-    } else {
-        // Cartesian: MoveJog native (real-time) — SAME path as Joint jog.
-        // The QML passes Dobot axis IDs ("X+/X-/Y+/.../Rz-"); forward fixedId
-        // straight to MoveJog. MoveJog is real-time and bypasses the motion
-        // queue, so Cartesian jog is NEVER blocked/locked by the STOP→ENABLE
-        // queue state (unlike ServoP streaming, which got stuck after a
-        // stop/enable cycle). Stopped via MoveJog("") in stopManualJogMotion(),
-        // exactly like Joint jog. STOP/ENABLE logic is unchanged.
-        auto req = std::make_shared<dobot_msgs_v3::srv::MoveJog::Request>();
-        req->axis_id = fixedId.toStdString();
-        req->param_value = {};
-        jog_client_->async_send_request(req,
-            [this, fixedId](rclcpp::Client<dobot_msgs_v3::srv::MoveJog>::SharedFuture f) {
-                try { qDebug() << "MoveJog(cart):" << fixedId << "res:" << f.get()->res; }
-                catch (...) {}
-            });
+        return;
     }
+
+    // Restore the known-good Cartesian implementation from da6011f:
+    // stream small absolute ServoP setpoints from the latest measured pose.
+    jog_cart_idx_ = cartIdx(axis);
+    jog_cart_positive_ = direction == '+';
+    if (jog_cart_idx_ < 0 || cartesian_pose_.size() < 6) {
+        qWarning() << "[JOG] Current Cartesian pose is unavailable";
+        jog_moving_ = false;
+        jog_axis_.clear();
+        return;
+    }
+    for (int i = 0; i < 6; ++i) {
+        jog_cart_target_[i] = cartesian_pose_[i].toDouble();
+    }
+
+    if (!jog_timer_) {
+        jog_timer_ = new QTimer(this);
+        connect(jog_timer_, &QTimer::timeout, this, &RobotController::sendCartesianStep);
+    }
+    jog_timer_->start(33);
+    sendCartesianStep();
 }
 
 void RobotController::sendCartesianStep()
@@ -1026,10 +1071,19 @@ void RobotController::sendJogStep() {}
 
 void RobotController::stopManualJogMotion()
 {
+    const bool wasJoint = jog_axis_.startsWith('J');
     if (jog_timer_) jog_timer_->stop();
     jog_cart_idx_ = -1;
     jog_moving_ = false;
     jog_axis_.clear();
+
+    // ServoP Cartesian jog stops by ending the stream.  Sending MoveJog("")
+    // here was introduced with the later MoveJog implementation and can
+    // disturb the ServoP command mode on the controller.
+    if (!wasJoint) {
+        qDebug() << "[JOG] Cartesian ServoP stream stopped";
+        return;
+    }
 
     if (!jog_client_ || !jog_client_->service_is_ready()) {
         qWarning() << "[JOG] MoveJog service not ready; cannot send manual jog stop";
@@ -1068,20 +1122,22 @@ void RobotController::stopMotionOnly()
         qWarning() << "[STOP-ONLY] StopScript service not ready";
     }
 
-    if (pause_client_ && pause_client_->service_is_ready()) {
-        auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
-        pause_client_->async_send_request(pauseReq,
-            [this](rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedFuture f) {
-                try { qDebug() << "[STOP-ONLY] Pause res:" << f.get()->res; }
-                catch (...) { qWarning() << "[STOP-ONLY] Pause failed"; }
-                if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
-                    auto resetReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
-                    reset_robot_client_->async_send_request(resetReq);
-                }
-            });
-    } else if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
+    // [HOLD-TO-MOVE RELEASE] Halt with ResetRobot ONLY — never Pause().
+    // Verified live on this firmware: Pause() enters PAUSE (RobotMode 10) and
+    // ONLY Continue() exits it (Continue would resume toward the old target).
+    // ResetRobot from a non-paused state stops the motion, clears the queue,
+    // and leaves the robot at RobotMode 5 (ENABLE) — so the NEXT press's
+    // MovL/MovJ runs again. This is what makes SEND behave like JOG: press →
+    // move toward the entered target, release → stop where it is, repeatable.
+    if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
         auto resetReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
-        reset_robot_client_->async_send_request(resetReq);
+        reset_robot_client_->async_send_request(resetReq,
+            [](rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedFuture f) {
+                try { qDebug() << "[STOP-ONLY] ResetRobot res:" << f.get()->res; }
+                catch (...) { qWarning() << "[STOP-ONLY] ResetRobot failed"; }
+            });
+    } else {
+        qWarning() << "[STOP-ONLY] ResetRobot service not ready — cannot stop on release";
     }
 
     auto softStopReq = std::make_shared<std_srvs::srv::SetBool::Request>();
@@ -1200,6 +1256,219 @@ void RobotController::moveLinear(double x, double y, double z, double rx, double
         [this](rclcpp::Client<dobot_msgs_v3::srv::MovL>::SharedFuture future) {
             try { auto r = future.get(); qDebug() << "MoveLinear result:" << r->res; }
             catch (const std::exception& e) { qWarning() << "MoveLinear failed:" << e.what(); }
+        });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SEND as HOLD-TO-MOVE, using Dobot's native planners:
+//   SEND MovL → Cartesian linear interpolation (TCP follows a straight line).
+//   SEND MovJ → JointMovJ interpolation (coordinated joint-space movement).
+// Releasing either button aborts the active command and clears the queue.
+// ═══════════════════════════════════════════════════════════════
+void RobotController::startSendMoveL(double x, double y, double z, double rx, double ry, double rz)
+{
+    const double dst[6] = {x, y, z, rx, ry, rz};
+    for (double value : dst) {
+        if (!std::isfinite(value)) {
+            qWarning() << "[SEND-L] Invalid Cartesian target";
+            return;
+        }
+    }
+    if (!movl_client_ || !movl_client_->service_is_ready()) {
+        qWarning() << "[SEND-L] MovL service is not ready";
+        return;
+    }
+    if (send_recovering_) {
+        qWarning() << "[SEND-L] Still clearing the previous motion; press again";
+        return;
+    }
+
+    send_button_held_ = true;
+    if (send_paused_) {
+        if (!continue_client_ || !continue_client_->service_is_ready()) {
+            qWarning() << "[SEND-L] Continue service is not ready";
+            send_button_held_ = false;
+            return;
+        }
+        auto req = std::make_shared<dobot_msgs_v3::srv::Continues::Request>();
+        continue_client_->async_send_request(req,
+            [this, x, y, z, rx, ry, rz](
+                rclcpp::Client<dobot_msgs_v3::srv::Continues>::SharedFuture future) {
+                int result = -1;
+                try { result = future.get()->res; }
+                catch (...) { qWarning() << "[SEND-L] Continue failed"; }
+                QMetaObject::invokeMethod(this, [this, result, x, y, z, rx, ry, rz]() {
+                    if (result == 0) {
+                        send_paused_ = false;
+                        if (send_button_held_) dispatchSendMoveL(x, y, z, rx, ry, rz);
+                    } else {
+                        qWarning() << "[SEND-L] Continue rejected, error:" << result;
+                        send_button_held_ = false;
+                    }
+                }, Qt::QueuedConnection);
+            });
+        return;
+    }
+
+    dispatchSendMoveL(x, y, z, rx, ry, rz);
+}
+
+void RobotController::dispatchSendMoveL(
+    double x, double y, double z, double rx, double ry, double rz)
+{
+    if (!send_button_held_) return;
+    send_point_motion_active_ = true;
+    auto req = std::make_shared<dobot_msgs_v3::srv::MovL::Request>();
+    req->x = x; req->y = y; req->z = z;
+    req->rx = rx; req->ry = ry; req->rz = rz;
+    req->param_value = {};
+    qDebug() << "[SEND-L] Native MovL →" << x << y << z << rx << ry << rz;
+    movl_client_->async_send_request(req,
+        [this](rclcpp::Client<dobot_msgs_v3::srv::MovL>::SharedFuture future) {
+            try {
+                const int result = future.get()->res;
+                if (result != 0) {
+                    qWarning() << "[SEND-L] MovL rejected, error:" << result;
+                    send_point_motion_active_ = false;
+                }
+            } catch (const std::exception& e) {
+                qWarning() << "[SEND-L] MovL failed:" << e.what();
+                send_point_motion_active_ = false;
+            }
+        });
+}
+
+void RobotController::startSendMoveJ(double j1, double j2, double j3, double j4, double j5, double j6)
+{
+    const double dst[6] = {j1, j2, j3, j4, j5, j6};
+    for (double value : dst) {
+        if (!std::isfinite(value)) {
+            qWarning() << "[SEND-J] Invalid joint target";
+            return;
+        }
+    }
+    if (!joint_movj_client_ || !joint_movj_client_->service_is_ready()) {
+        qWarning() << "[SEND-J] JointMovJ service is not ready";
+        return;
+    }
+    if (send_recovering_) {
+        qWarning() << "[SEND-J] Still clearing the previous motion; press again";
+        return;
+    }
+
+    send_button_held_ = true;
+    if (send_paused_) {
+        if (!continue_client_ || !continue_client_->service_is_ready()) {
+            qWarning() << "[SEND-J] Continue service is not ready";
+            send_button_held_ = false;
+            return;
+        }
+        auto req = std::make_shared<dobot_msgs_v3::srv::Continues::Request>();
+        continue_client_->async_send_request(req,
+            [this, j1, j2, j3, j4, j5, j6](
+                rclcpp::Client<dobot_msgs_v3::srv::Continues>::SharedFuture future) {
+                int result = -1;
+                try { result = future.get()->res; }
+                catch (...) { qWarning() << "[SEND-J] Continue failed"; }
+                QMetaObject::invokeMethod(this, [this, result, j1, j2, j3, j4, j5, j6]() {
+                    if (result == 0) {
+                        send_paused_ = false;
+                        if (send_button_held_) dispatchSendMoveJ(j1, j2, j3, j4, j5, j6);
+                    } else {
+                        qWarning() << "[SEND-J] Continue rejected, error:" << result;
+                        send_button_held_ = false;
+                    }
+                }, Qt::QueuedConnection);
+            });
+        return;
+    }
+
+    dispatchSendMoveJ(j1, j2, j3, j4, j5, j6);
+}
+
+void RobotController::dispatchSendMoveJ(
+    double j1, double j2, double j3, double j4, double j5, double j6)
+{
+    if (!send_button_held_) return;
+    send_point_motion_active_ = true;
+    auto req = std::make_shared<dobot_msgs_v3::srv::JointMovJ::Request>();
+    req->j1 = j1; req->j2 = j2; req->j3 = j3;
+    req->j4 = j4; req->j5 = j5; req->j6 = j6;
+    req->param_value = {};
+    qDebug() << "[SEND-J] Native JointMovJ →" << j1 << j2 << j3 << j4 << j5 << j6;
+    joint_movj_client_->async_send_request(req,
+        [this](rclcpp::Client<dobot_msgs_v3::srv::JointMovJ>::SharedFuture future) {
+            try {
+                const int result = future.get()->res;
+                if (result != 0) {
+                    qWarning() << "[SEND-J] JointMovJ rejected, error:" << result;
+                    send_point_motion_active_ = false;
+                }
+            } catch (const std::exception& e) {
+                qWarning() << "[SEND-J] JointMovJ failed:" << e.what();
+                send_point_motion_active_ = false;
+            }
+        });
+}
+
+void RobotController::stopSendMove()
+{
+    send_button_held_ = false;
+    if (!send_point_motion_active_ || send_recovering_) return;
+
+    send_point_motion_active_ = false;
+    send_recovering_ = true;
+
+    // Pause is the command that physically decelerates an active MovL/MovJ.
+    // Once stopped, clear the old command before allowing Continue on the next
+    // press, otherwise the previous target can resume.
+    if (!pause_client_ || !pause_client_->service_is_ready()) {
+        qWarning() << "[SEND] Pause service is not ready; cannot stop safely";
+        send_recovering_ = false;
+        return;
+    }
+
+    auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
+    pause_client_->async_send_request(pauseReq,
+        [this](rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedFuture pauseFuture) {
+            try { qDebug() << "[SEND] release Pause:" << pauseFuture.get()->res; }
+            catch (...) { qWarning() << "[SEND] Pause failed"; }
+
+            QMetaObject::invokeMethod(this, [this]() {
+                auto resetAfterStop = [this]() {
+                    if (!reset_robot_client_ || !reset_robot_client_->service_is_ready()) {
+                        qWarning() << "[SEND] ResetRobot service is not ready";
+                        send_paused_ = true;
+                        send_recovering_ = false;
+                        return;
+                    }
+                    auto resetReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
+                    reset_robot_client_->async_send_request(resetReq,
+                        [this](rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedFuture resetFuture) {
+                            try { qDebug() << "[SEND] release ResetRobot:" << resetFuture.get()->res; }
+                            catch (...) { qWarning() << "[SEND] ResetRobot failed"; }
+                            QMetaObject::invokeMethod(this, [this]() {
+                                send_paused_ = true;
+                                send_recovering_ = false;
+                                qDebug() << "[SEND] stopped; queue cleared and ready for next target";
+                            }, Qt::QueuedConnection);
+                        });
+                };
+
+                if (dobot_stop_script_client_ && dobot_stop_script_client_->service_is_ready()) {
+                    auto stopReq = std::make_shared<dobot_msgs_v3::srv::StopScript::Request>();
+                    dobot_stop_script_client_->async_send_request(stopReq,
+                        [this, resetAfterStop](
+                            rclcpp::Client<dobot_msgs_v3::srv::StopScript>::SharedFuture stopFuture) {
+                            try { qDebug() << "[SEND] release StopScript:" << stopFuture.get()->res; }
+                            catch (...) { qWarning() << "[SEND] StopScript failed"; }
+                            QMetaObject::invokeMethod(this, resetAfterStop, Qt::QueuedConnection);
+                        });
+                } else {
+                    qWarning() << "[SEND] StopScript service is not ready";
+                    resetAfterStop();
+                }
+            }, Qt::QueuedConnection);
         });
 }
 

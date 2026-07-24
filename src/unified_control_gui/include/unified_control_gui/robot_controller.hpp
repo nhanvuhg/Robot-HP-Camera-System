@@ -21,6 +21,7 @@
 #include "dobot_msgs_v3/srv/servo_p.hpp"
 #include "dobot_msgs_v3/srv/do.hpp"
 #include "dobot_msgs_v3/srv/pause.hpp"
+#include "dobot_msgs_v3/srv/continues.hpp"
 #include "dobot_msgs_v3/srv/emergency_stop.hpp"
 #include "dobot_msgs_v3/srv/stop_script.hpp"
 #include "dobot_msgs_v3/srv/disable_robot.hpp"
@@ -117,6 +118,13 @@ public slots:
     // Move to exact position
     void moveJoint(double j1, double j2, double j3, double j4, double j5, double j6);
     void moveLinear(double x, double y, double z, double rx, double ry, double rz);
+
+    // SEND as hold-to-move (like JOG): stream ServoP/ServoJ toward an absolute
+    // target while the button is held; release stops the stream so the robot
+    // halts in place (no PAUSE, no point-to-point overshoot, repeatable).
+    Q_INVOKABLE void startSendMoveL(double x, double y, double z, double rx, double ry, double rz);
+    Q_INVOKABLE void startSendMoveJ(double j1, double j2, double j3, double j4, double j5, double j6);
+    Q_INVOKABLE void stopSendMove();
     void saveJointPose(const QString& name, double j1, double j2, double j3, double j4, double j5, double j6);
     Q_INVOKABLE QVariantList getSavedPoses();
     
@@ -190,6 +198,7 @@ private:
     rclcpp::Client<dobot_msgs_v3::srv::ServoP>::SharedPtr servo_p_client_;
     rclcpp::Client<dobot_msgs_v3::srv::DO>::SharedPtr do_client_;
     rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedPtr pause_client_;
+    rclcpp::Client<dobot_msgs_v3::srv::Continues>::SharedPtr continue_client_;
     rclcpp::Client<dobot_msgs_v3::srv::EmergencyStop>::SharedPtr dobot_emergency_stop_client_;
     rclcpp::Client<dobot_msgs_v3::srv::StopScript>::SharedPtr dobot_stop_script_client_;
     rclcpp::Client<dobot_msgs_v3::srv::DisableRobot>::SharedPtr disable_robot_client_;
@@ -279,11 +288,19 @@ private:
     int jog_cart_idx_{-1};
     bool jog_cart_positive_{true};
     double jog_cart_target_[6]{0};
-    
+
+    // Native Dobot point motion used by the press-and-hold SEND buttons.
+    bool send_point_motion_active_{false};
+    bool send_button_held_{false};
+    bool send_paused_{false};
+    bool send_recovering_{false};
+
     void callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr client, bool value);
     void pollRobotState();
     void sendMoveJog(const QString& axisId);  // native MoveJog for continuous
     void stopManualJogMotion();
+    void dispatchSendMoveL(double x, double y, double z, double rx, double ry, double rz);
+    void dispatchSendMoveJ(double j1, double j2, double j3, double j4, double j5, double j6);
 
     // Thread-safe high-frequency GUI updates
     std::mutex status_mutex_;

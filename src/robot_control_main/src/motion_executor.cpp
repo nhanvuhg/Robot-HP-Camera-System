@@ -1112,7 +1112,7 @@ private:
     bool executeChamberScale() {
         RCLCPP_INFO(get_logger(), "[MOTION] Chamber → Scale");
         if (!moveToIndex(7)) return false;
-        if (!moveR(0, 89.5, 0)) return false;
+        if (!moveR(0, 97.5, 0)) return false;
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại chamber
         if (!wait(0.9)) return false;
         if (!moveR(0, -70, 0)) return false;
