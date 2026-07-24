@@ -1675,9 +1675,8 @@ void RobotLogicNode::enableSystemCallback(
         callService<EnableRobot>(enable_client_, enable_req, "EnableRobot");
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-        // Continue service removed from EnableSystem: Continue() causes Dobot to exit
-        // PAUSE state and resume old buffered motion targets after a STOP button press.
-        // EnableSystem should only power on motors (ClearError + EnableRobot).
+        auto continue_req = std::make_shared<Continues::Request>();
+        callService<Continues>(continue_client_, continue_req, "Continue");
 
         response->success = true;
         response->message = "Robot Power ON";
