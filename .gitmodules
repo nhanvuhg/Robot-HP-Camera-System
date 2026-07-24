@@ -1,0 +1,30 @@
+[submodule "src/_ref_funai"]
+	path = src/_ref_funai
+	url = https://github.com/nhanvuhg/RobotSystemFunai.git
+[submodule "src/diagnostics"]
+	path = src/diagnostics
+	url = https://github.com/ros/diagnostics.git
+[submodule "src/generate_parameter_library"]
+	path = src/generate_parameter_library
+	url = https://github.com/PickNikRobotics/generate_parameter_library.git
+[submodule "src/image_common"]
+	path = src/image_common
+	url = https://github.com/ros-perception/image_common.git
+[submodule "src/rqt_image_view"]
+	path = src/rqt_image_view
+	url = https://github.com/ros-visualization/rqt_image_view.git
+[submodule "src/rsl"]
+	path = src/rsl
+	url = https://github.com/PickNikRobotics/rsl.git
+[submodule "src/tcb_span"]
+	path = src/tcb_span
+	url = https://github.com/tcbrindle/span.git
+[submodule "src/tl_expected"]
+	path = src/tl_expected
+	url = https://github.com/TartanLlama/expected.git
+[submodule "src/vision_msgs"]
+	path = src/vision_msgs
+	url = https://github.com/ros-perception/vision_msgs.git
+[submodule "src/vision_opencv"]
+	path = src/vision_opencv
+	url = https://github.com/ros-perception/vision_opencv.git
