@@ -496,30 +496,6 @@ void RobotController::enableSystem(bool enable)
 {
     qDebug() << "Enable system:" << enable;
     callServiceAsync(enable_client_, enable);
-
-    if (enable) {
-        // STOP calls Dobot Pause() for a smooth deceleration, which leaves the
-        // controller in PAUSE mode (RobotMode 10). Verified on this firmware:
-        // ResetRobot / ClearError / EnableRobot do NOT exit PAUSE — only
-        // Continue() does. STOP already emptied the queue (StopScript +
-        // ResetRobot), so Continue() here exits PAUSE WITHOUT resuming any old
-        // MovL/MovJ (empty queue → no motion). The delay lets robot_logic_node
-        // finish its ClearError+EnableRobot first. Without this, Jog and Send
-        // stay dead after a STOP→ENABLE cycle (robot stuck at RobotMode 10).
-        // Static local client (kept in the .cpp) so we don't touch the .hpp and
-        // trigger a heavy Qt MOC rebuild. Created once, lazily, on the node.
-        static auto continue_client =
-            node_->create_client<dobot_msgs_v3::srv::Continues>("/nova5/dobot_bringup/Continue");
-        QTimer::singleShot(800, this, [this]() {
-            if (continue_client && continue_client->service_is_ready()) {
-                auto req = std::make_shared<dobot_msgs_v3::srv::Continues::Request>();
-                continue_client->async_send_request(req);
-                qDebug() << "  -> Continue (exit PAUSE after ENABLE; queue empty → no resume)";
-            } else {
-                qWarning() << "  -> Continue service not ready; robot may stay PAUSED after ENABLE";
-            }
-        });
-    }
 }
 
 void RobotController::stopAndResetRobot()
@@ -677,15 +653,17 @@ void RobotController::stopAndResetRobot()
         }
     };
 
-    if (pause_client_ && pause_client_->service_is_ready()) {
-        auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
-        pause_client_->async_send_request(pauseReq,
-            [this, resetMotion](rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedFuture future) {
-                try { qDebug() << "Pause before reset:" << future.get()->res; } catch (...) {}
+    // Direct PowerOff (DisableRobot) on STOP: Immediately halts physical motion, disengages motors,
+    // and completely flushes Dobot's TCP motion queue so EnableRobot afterwards never resumes old targets.
+    if (disable_robot_client_ && disable_robot_client_->service_is_ready()) {
+        auto disReq = std::make_shared<dobot_msgs_v3::srv::DisableRobot::Request>();
+        disable_robot_client_->async_send_request(disReq,
+            [this, resetMotion](rclcpp::Client<dobot_msgs_v3::srv::DisableRobot>::SharedFuture df) {
+                try { qDebug() << "DisableRobot (PowerOff) on STOP:" << df.get()->res; } catch (...) {}
                 QMetaObject::invokeMethod(this, [resetMotion]() { resetMotion(); }, Qt::QueuedConnection);
             });
     } else {
-        qWarning() << "Pause service not ready; resetting motion without soft stop";
+        qWarning() << "DisableRobot service not ready; executing motion reset";
         resetMotion();
     }
 }
