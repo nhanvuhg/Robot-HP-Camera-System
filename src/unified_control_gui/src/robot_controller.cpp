@@ -1,4 +1,5 @@
 #include "unified_control_gui/robot_controller.hpp"
+#include "dobot_msgs_v3/srv/continues.hpp"
 #include <QDebug>
 #include <QDir>
 #include <QFile>
@@ -495,6 +496,30 @@ void RobotController::enableSystem(bool enable)
 {
     qDebug() << "Enable system:" << enable;
     callServiceAsync(enable_client_, enable);
+
+    if (enable) {
+        // STOP calls Dobot Pause() for a smooth deceleration, which leaves the
+        // controller in PAUSE mode (RobotMode 10). Verified on this firmware:
+        // ResetRobot / ClearError / EnableRobot do NOT exit PAUSE — only
+        // Continue() does. STOP already emptied the queue (StopScript +
+        // ResetRobot), so Continue() here exits PAUSE WITHOUT resuming any old
+        // MovL/MovJ (empty queue → no motion). The delay lets robot_logic_node
+        // finish its ClearError+EnableRobot first. Without this, Jog and Send
+        // stay dead after a STOP→ENABLE cycle (robot stuck at RobotMode 10).
+        // Static local client (kept in the .cpp) so we don't touch the .hpp and
+        // trigger a heavy Qt MOC rebuild. Created once, lazily, on the node.
+        static auto continue_client =
+            node_->create_client<dobot_msgs_v3::srv::Continues>("/nova5/dobot_bringup/Continue");
+        QTimer::singleShot(800, this, [this]() {
+            if (continue_client && continue_client->service_is_ready()) {
+                auto req = std::make_shared<dobot_msgs_v3::srv::Continues::Request>();
+                continue_client->async_send_request(req);
+                qDebug() << "  -> Continue (exit PAUSE after ENABLE; queue empty → no resume)";
+            } else {
+                qWarning() << "  -> Continue service not ready; robot may stay PAUSED after ENABLE";
+            }
+        });
+    }
 }
 
 void RobotController::stopAndResetRobot()
@@ -554,22 +579,8 @@ void RobotController::stopAndResetRobot()
     qDebug() << "  -> Snapshot gripper=" << snapshot_gripper
              << ", picker=" << snapshot_picker;
 
-    // Normal STOP halts motion, clears the queued command, and leaves Dobot
-    // disabled until the operator explicitly presses ENABLE.
-    auto stopScriptReq = std::make_shared<dobot_msgs_v3::srv::StopScript::Request>();
-    if (dobot_stop_script_client_ && dobot_stop_script_client_->service_is_ready()) {
-        qDebug() << "  -> StopScript (abort script)";
-        dobot_stop_script_client_->async_send_request(stopScriptReq);
-    }
-
-    if (pause_client_ && pause_client_->service_is_ready()) {
-        qDebug() << "  -> Pause (cut active manual Send motion)";
-        auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
-        pause_client_->async_send_request(pauseReq);
-    }
-
-    // Pause is used only to interrupt active MovL/JointMovJ. ResetRobot below
-    // clears the paused motion state before manual Cartesian/ServoP is reused.
+    // A normal STOP pauses first so a running MovL/MovJ decelerates smoothly,
+    // then StopScript clears the queued command before ResetRobot recovers.
 
     // Step 1: Reset state machine → IDLE (stops auto mode, clears all flags)
     auto resetReq = std::make_shared<std_srvs::srv::SetBool::Request>();
@@ -590,51 +601,93 @@ void RobotController::stopAndResetRobot()
         emergency_stop_client_->async_send_request(estopReq);
     }
 
-    // Step 3: Clear the current motion command, then hold disabled until the
-    // operator explicitly presses ENABLE. Do not ClearError/Enable/Continue
+    // Step 3: Clear the current motion command. Do not ClearError/Enable/Continue
     // here, otherwise a paused MovL/ServoP can resume toward the old target.
-    QTimer::singleShot(300, this, [this, snapshot_gripper, snapshot_picker]() {
-        auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
-        if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
-            reset_robot_client_->async_send_request(resetRobotReq,
-                [this, snapshot_gripper, snapshot_picker](rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedFuture f) {
-                    try { qDebug() << "ResetRobot:" << f.get()->res; } catch (...) {}
+    auto resetMotion = [this, snapshot_gripper, snapshot_picker]() {
+        auto stopScriptReq = std::make_shared<dobot_msgs_v3::srv::StopScript::Request>();
+        if (dobot_stop_script_client_ && dobot_stop_script_client_->service_is_ready()) {
+            dobot_stop_script_client_->async_send_request(stopScriptReq,
+                [this, snapshot_gripper, snapshot_picker](rclcpp::Client<dobot_msgs_v3::srv::StopScript>::SharedFuture sf) {
+                    try { qDebug() << "StopScript after Pause:" << sf.get()->res; } catch (...) {}
                     QMetaObject::invokeMethod(this, [this, snapshot_gripper, snapshot_picker]() {
-                        QTimer::singleShot(150, this, [this, snapshot_gripper, snapshot_picker]() {
-                            if (disable_robot_client_ && disable_robot_client_->service_is_ready()) {
-                                auto disableReq = std::make_shared<dobot_msgs_v3::srv::DisableRobot::Request>();
-                                disable_robot_client_->async_send_request(disableReq,
-                                    [](rclcpp::Client<dobot_msgs_v3::srv::DisableRobot>::SharedFuture df) {
-                                        try { qDebug() << "DisableRobot after STOP:" << df.get()->res; } catch (...) {}
+                        QTimer::singleShot(100, this, [this, snapshot_gripper, snapshot_picker]() {
+                            auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
+                            if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
+                                reset_robot_client_->async_send_request(resetRobotReq,
+                                    [this, snapshot_gripper, snapshot_picker](rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedFuture f) {
+                                        try { qDebug() << "ResetRobot:" << f.get()->res; } catch (...) {}
+                                        QMetaObject::invokeMethod(this, [this, snapshot_gripper, snapshot_picker]() {
+                                            QTimer::singleShot(150, this, [this, snapshot_gripper, snapshot_picker]() {
+                                                qDebug() << "Robot stopped and command queue cleared — press ENABLE for new commands";
+
+                                                QTimer::singleShot(200, this, [this, snapshot_gripper, snapshot_picker]() {
+                                                    if (gripper_cmd_pub_) {
+                                                        auto gMsg = std_msgs::msg::Bool();
+                                                        gMsg.data = snapshot_gripper;
+                                                        gripper_cmd_pub_->publish(gMsg);
+                                                    }
+                                                    if (picker_cmd_pub_) {
+                                                        auto pMsg = std_msgs::msg::Bool();
+                                                        pMsg.data = snapshot_picker;
+                                                        picker_cmd_pub_->publish(pMsg);
+                                                    }
+                                                    qDebug() << "  -> Restored gripper=" << snapshot_gripper
+                                                             << ", picker=" << snapshot_picker;
+                                                });
+                                            });
+                                        }, Qt::QueuedConnection);
                                     });
                             } else {
-                                qWarning() << "DisableRobot service not ready after STOP";
+                                qWarning() << "ResetRobot service not ready after STOP";
                             }
-
-                            callServiceAsync(enable_client_, false);
-                            qDebug() << "Robot stopped and disabled — press ENABLE to move again";
-
-                            QTimer::singleShot(200, this, [this, snapshot_gripper, snapshot_picker]() {
-                                if (gripper_cmd_pub_) {
-                                    auto gMsg = std_msgs::msg::Bool();
-                                    gMsg.data = snapshot_gripper;
-                                    gripper_cmd_pub_->publish(gMsg);
-                                }
-                                if (picker_cmd_pub_) {
-                                    auto pMsg = std_msgs::msg::Bool();
-                                    pMsg.data = snapshot_picker;
-                                    picker_cmd_pub_->publish(pMsg);
-                                }
-                                qDebug() << "  -> Restored gripper=" << snapshot_gripper
-                                         << ", picker=" << snapshot_picker;
-                            });
                         });
                     }, Qt::QueuedConnection);
                 });
         } else {
-            qWarning() << "ResetRobot service not ready after STOP";
+            qWarning() << "StopScript service not ready after Pause; reset may not clear queued motion";
+            auto resetRobotReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
+            if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
+                reset_robot_client_->async_send_request(resetRobotReq,
+                    [this, snapshot_gripper, snapshot_picker](rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedFuture f) {
+                        try { qDebug() << "ResetRobot:" << f.get()->res; } catch (...) {}
+                        QMetaObject::invokeMethod(this, [this, snapshot_gripper, snapshot_picker]() {
+                            QTimer::singleShot(150, this, [this, snapshot_gripper, snapshot_picker]() {
+                                qDebug() << "Robot paused and command queue cleared — press ENABLE to move again";
+
+                                QTimer::singleShot(200, this, [this, snapshot_gripper, snapshot_picker]() {
+                                    if (gripper_cmd_pub_) {
+                                        auto gMsg = std_msgs::msg::Bool();
+                                        gMsg.data = snapshot_gripper;
+                                        gripper_cmd_pub_->publish(gMsg);
+                                    }
+                                    if (picker_cmd_pub_) {
+                                        auto pMsg = std_msgs::msg::Bool();
+                                        pMsg.data = snapshot_picker;
+                                        picker_cmd_pub_->publish(pMsg);
+                                    }
+                                    qDebug() << "  -> Restored gripper=" << snapshot_gripper
+                                             << ", picker=" << snapshot_picker;
+                                });
+                            });
+                        }, Qt::QueuedConnection);
+                    });
+            } else {
+                qWarning() << "ResetRobot service not ready after STOP";
+            }
         }
-    });
+    };
+
+    if (pause_client_ && pause_client_->service_is_ready()) {
+        auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
+        pause_client_->async_send_request(pauseReq,
+            [this, resetMotion](rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedFuture future) {
+                try { qDebug() << "Pause before reset:" << future.get()->res; } catch (...) {}
+                QMetaObject::invokeMethod(this, [resetMotion]() { resetMotion(); }, Qt::QueuedConnection);
+            });
+    } else {
+        qWarning() << "Pause service not ready; resetting motion without soft stop";
+        resetMotion();
+    }
 }
 
 void RobotController::softStopAndManual()
@@ -937,30 +990,21 @@ void RobotController::jogStart(const QString& axisId)
                 catch (...) {}
             });
     } else {
-        // Cartesian: ServoP streaming via QTimer
-        QString ax = fixedId.toLower();
-        jog_cart_positive_ = ax.endsWith("+");
-        ax.chop(1);
-        jog_cart_idx_ = -1;
-        if (ax == "x") jog_cart_idx_ = 0;
-        else if (ax == "y") jog_cart_idx_ = 1;
-        else if (ax == "z") jog_cart_idx_ = 2;
-        else if (ax == "rx") jog_cart_idx_ = 3;
-        else if (ax == "ry") jog_cart_idx_ = 4;
-        else if (ax == "rz") jog_cart_idx_ = 5;
-        if (jog_cart_idx_ < 0) return;
-
-        // Initialize target from cached pose
-        for (int i = 0; i < 6 && i < cartesian_pose_.size(); i++)
-            jog_cart_target_[i] = cartesian_pose_[i].toDouble();
-
-        // Start streaming timer: 33ms interval (~30Hz), 0.5mm/tick = ~15mm/s
-        if (!jog_timer_) {
-            jog_timer_ = new QTimer(this);
-            connect(jog_timer_, &QTimer::timeout, this, &RobotController::sendCartesianStep);
-        }
-        jog_timer_->start(33);
-        sendCartesianStep();  // first tick immediately
+        // Cartesian: MoveJog native (real-time) — SAME path as Joint jog.
+        // The QML passes Dobot axis IDs ("X+/X-/Y+/.../Rz-"); forward fixedId
+        // straight to MoveJog. MoveJog is real-time and bypasses the motion
+        // queue, so Cartesian jog is NEVER blocked/locked by the STOP→ENABLE
+        // queue state (unlike ServoP streaming, which got stuck after a
+        // stop/enable cycle). Stopped via MoveJog("") in stopManualJogMotion(),
+        // exactly like Joint jog. STOP/ENABLE logic is unchanged.
+        auto req = std::make_shared<dobot_msgs_v3::srv::MoveJog::Request>();
+        req->axis_id = fixedId.toStdString();
+        req->param_value = {};
+        jog_client_->async_send_request(req,
+            [this, fixedId](rclcpp::Client<dobot_msgs_v3::srv::MoveJog>::SharedFuture f) {
+                try { qDebug() << "MoveJog(cart):" << fixedId << "res:" << f.get()->res; }
+                catch (...) {}
+            });
     }
 }
 
