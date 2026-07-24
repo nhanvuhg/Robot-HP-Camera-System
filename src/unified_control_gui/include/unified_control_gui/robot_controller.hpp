@@ -213,7 +213,9 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr cyl_loadcell_status_sub_;
     bool last_gripper_state_{false};
     bool last_picker_state_{false};
-    bool last_cyl_loadcell_state_{false};
+    // DO6 wiring convention: true = RELEASING. Use the physical default for
+    // the initial GUI indication until the first status feedback arrives.
+    bool last_cyl_loadcell_state_{true};
     rclcpp::Client<dobot_msgs_v3::srv::ResetRobot>::SharedPtr reset_robot_client_;
     rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedPtr speed_factor_client_;
     rclcpp::Client<dobot_msgs_v3::srv::GetErrorID>::SharedPtr get_error_id_client_;
