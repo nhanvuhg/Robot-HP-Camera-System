@@ -75,12 +75,12 @@ class FestoGripperNode(Node):
                             self.myIO.reset_channel(3)
                             self.myIO.reset_channel(2)
 
-                        # Cyl_loadcell: mặc định NHẢ khi node khởi động.
+                        # Cyl_loadcell: mặc định KẸP khi node khởi động.
                         # ch8 = NHẢ/release coil, ch9 = KẸP/clamp coil.
                         if len(channels) > 9:
-                            self.get_logger().info('Initializing Cyl_loadcell to default RELEASE state (ch8 set)...')
-                            self.myIO.reset_channel(9)
-                            self.myIO.set_channel(8)
+                            self.get_logger().info('Initializing Cyl_loadcell to default CLAMP state (ch9 set)...')
+                            self.myIO.reset_channel(8)
+                            self.myIO.set_channel(9)
 
                         time.sleep(0.1)
                     except Exception as e:
@@ -100,8 +100,8 @@ class FestoGripperNode(Node):
         # State flags for gripper and picker (separate devices/channels)
         self.gripper_open = True
         self.picker_open = True
-        # Cyl_loadcell state: True = KẸP/clamp, False = NHẢ/release.
-        self.cyl_loadcell_clamped = False
+        # Cyl_loadcell state: True = NHẢ/release, False = KẸP/clamp.
+        self.cyl_loadcell_status = True
 
         # Subscriptions from robot_logic_node
         self.gripper_sub = self.create_subscription(
@@ -131,7 +131,7 @@ class FestoGripperNode(Node):
         self.gripper_pub = self.create_publisher(Bool, '/robot/gripper_status', 10)
         self.picker_pub = self.create_publisher(Bool, '/robot/picker_status', 10)
         self.cyl_loadcell_pub = self.create_publisher(Bool, '/robot/cyl_loadcell_status', 10)
-        self.cyl_loadcell_pub.publish(Bool(data=False))
+        self.cyl_loadcell_pub.publish(Bool(data=True))
 
         mode_str = "SIMULATION" if self.simulation_mode else "LIVE"
         self.get_logger().info(f'[{mode_str}] Waiting for commands on /robot/gripper_cmd, /robot/picker_cmd, /robot/cyl_loadcell_cmd...')
@@ -262,29 +262,28 @@ class FestoGripperNode(Node):
 
     # =========================================================================
     # Cyl_loadcell cylinder — double-solenoid valve on CPX channels 8/9 (same module)
-    #   ch8 = NHẢ/release coil, ch9 = KẸP/clamp coil
-    #   msg.data True  → KẸP  (set ch9, reset ch8)
-    #   msg.data False → NHẢ  (set ch8, reset ch9)
-    # NOTE: Nếu hướng bị ngược ngoài thực tế, đổi 2 channel 8<->9 ở 2 method dưới.
+    # (Đã đổi dây khí ngoài thực tế)
+    #   msg.data True  → NHẢ / EXTEND / RELEASE (set ch9, reset ch8)
+    #   msg.data False → KẸP / RETRACT / CLAMP   (set ch8, reset ch9)
     # =========================================================================
     def cyl_loadcell_callback(self, msg: Bool):
-        """Callback for cyl_loadcell commands. True = KẸP (clamp), False = NHẢ (release)."""
+        """Callback for cyl_loadcell commands. True = NHẢ (release), False = KẸP (clamp)."""
         try:
             if msg.data:
-                self.cyl_loadcell_clamp()
-            else:
                 self.cyl_loadcell_release()
+            else:
+                self.cyl_loadcell_clamp()
         except Exception as e:
             self.get_logger().error(f'Error controlling cyl_loadcell: {e}')
 
-    def cyl_loadcell_clamp(self):
-        """Cyl_loadcell KẸP — energize clamp coil (ch9), release coil (ch8) off."""
-        if not self.cyl_loadcell_clamped:
-            self.get_logger().info('🟢 Cyl_loadcell: KẸP (set ch9, reset ch8)')
+    def cyl_loadcell_release(self):
+        """Cyl_loadcell NHẢ — energize release coil (ch9), clamp coil (ch8) off."""
+        if not self.cyl_loadcell_status:
+            self.get_logger().info('🟢 Cyl_loadcell: NHẢ / EXTEND (set ch9, reset ch8)')
 
             if self.simulation_mode:
-                self.get_logger().info('[SIM] Cyl_loadcell clamped (channels: 8=reset, 9=set)')
-                self.cyl_loadcell_clamped = True
+                self.get_logger().info('[SIM] Cyl_loadcell released (channels: 8=reset, 9=set)')
+                self.cyl_loadcell_status = True
                 return
 
             try:
@@ -292,22 +291,22 @@ class FestoGripperNode(Node):
                     raise RuntimeError('CPX IO not available')
                 self.myIO.reset_channel(8)
                 self.myIO.set_channel(9)
-                self.cyl_loadcell_clamped = True
+                self.cyl_loadcell_status = True
                 time.sleep(0.05)
                 msg = Bool()
-                msg.data = True  # Cyl_loadcell clamped = ON
+                msg.data = True  # Cyl_loadcell released/extended = True
                 self.cyl_loadcell_pub.publish(msg)
             except Exception as e:
-                self.get_logger().error(f'Failed to clamp cyl_loadcell: {e}')
+                self.get_logger().error(f'Failed to release cyl_loadcell: {e}')
 
-    def cyl_loadcell_release(self):
-        """Cyl_loadcell NHẢ — energize release coil (ch8), clamp coil (ch9) off."""
-        if self.cyl_loadcell_clamped:
-            self.get_logger().info('🔴 Cyl_loadcell: NHẢ (set ch8, reset ch9)')
+    def cyl_loadcell_clamp(self):
+        """Cyl_loadcell KẸP — energize clamp coil (ch8), release coil (ch9) off."""
+        if self.cyl_loadcell_status:
+            self.get_logger().info('🔴 Cyl_loadcell: KẸP / RETRACT (set ch8, reset ch9)')
 
             if self.simulation_mode:
-                self.get_logger().info('[SIM] Cyl_loadcell released (channels: 9=reset, 8=set)')
-                self.cyl_loadcell_clamped = False
+                self.get_logger().info('[SIM] Cyl_loadcell clamped (channels: 9=reset, 8=set)')
+                self.cyl_loadcell_status = False
                 return
 
             try:
@@ -315,13 +314,13 @@ class FestoGripperNode(Node):
                     raise RuntimeError('CPX IO not available')
                 self.myIO.reset_channel(9)
                 self.myIO.set_channel(8)
-                self.cyl_loadcell_clamped = False
+                self.cyl_loadcell_status = False
                 time.sleep(0.05)
                 msg = Bool()
-                msg.data = False  # Cyl_loadcell released = OFF
+                msg.data = False  # Cyl_loadcell clamped/retracted = False
                 self.cyl_loadcell_pub.publish(msg)
             except Exception as e:
-                self.get_logger().error(f'Failed to release cyl_loadcell: {e}')
+                self.get_logger().error(f'Failed to clamp cyl_loadcell: {e}')
 
     def shutdown(self):
         """Cleanup on shutdown"""
@@ -344,8 +343,8 @@ class FestoGripperNode(Node):
             # Cyl_loadcell: giữ trạng thái an toàn NHẢ khi shutdown.
             try:
                 if self.myIO:
-                    self.myIO.reset_channel(9)
-                    self.myIO.set_channel(8)
+                    self.myIO.reset_channel(8)
+                    self.myIO.set_channel(9)
             except Exception:
                 pass
             if self.myCPX:

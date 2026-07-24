@@ -2932,14 +2932,14 @@ import QtGraphicalEffects 1.15
                                             IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "RELEASING"; activeChoice: !rowPicker.isOn; onClicked: robotController.setDigitalOutput(2, false) }
                                         }
 
-                                        // Cyl loadcell DO6 — CPX 27.253 ch8/ch9: GRIPPING (ch9) / RELEASING (ch8)
+                                        // Cyl loadcell DO6 — sau khi đổi dây khí: true = RELEASING/mở (nhả), false = GRIPPING/kẹp
                                         Text { text: "CYL LOADCELL (DO6)"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row {
                                             id: rowCylLoadcell
                                             property bool isOn: robotController.cylLoadcellOn
                                             spacing: 6; width: parent.width
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "GRIPPING"; activeChoice: rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, true) }
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "REALEASING"; activeChoice: !rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, false) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "GRIPPING"; activeChoice: !rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, false) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "RELEASING"; activeChoice: rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, true) }
                                         }
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }

@@ -75,10 +75,11 @@ ApplicationWindow {
 
     function stopSynchronizedSystems() {
         synchronizedStopRequested()
-        if (autoAiStartedSinceModeSelect)
-            robotController.stopAndResetRobot()
-        else
-            robotController.softStopAndManual()
+        // STOP must always abort the active motion and clear its queued
+        // command.  The Robot Control tab is also used in manual mode, where
+        // the previous soft-stop path could leave a paused driver command
+        // that resumed after ENABLE.
+        robotController.stopAndResetRobot()
         autoAiStartedSinceModeSelect = false
         selectedCartridgeMode = "manual"
         cartridgeController.stopSystem()

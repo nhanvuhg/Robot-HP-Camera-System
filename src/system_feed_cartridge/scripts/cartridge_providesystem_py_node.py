@@ -716,8 +716,8 @@ class CartridgeSystem(Node):
                         raise RuntimeError("CPX37 VABX valve manifold not found/ambiguous")
                     mod.reset_channel(0); mod.set_channel(1)  # nhả gripper
                     mod.reset_channel(2); mod.set_channel(3)  # nhả picker
-                    mod.reset_channel(9); mod.set_channel(8)  # nhả cyl6/loadcell
-                    self.pub_cyl_loadcell_status.publish(Bool(data=False))
+                    mod.reset_channel(8); mod.set_channel(9)  # nhả cyl6/loadcell
+                    self.pub_cyl_loadcell_status.publish(Bool(data=True))
                     self.get_logger().info("[CPX-SETUP] Gripper + Picker + Cyl6 → NHẢ (safe)")
             except Exception as e:
                 self.get_logger().error(f"[CPX-SETUP] Failed to init gripper/picker: {e}")
@@ -2526,8 +2526,9 @@ class CartridgeSystem(Node):
     def _cb_cyl_loadcell_cmd(self, msg: Bool):
         """
         Điều khiển cyl6/loadcell trên CPX 172.16.11.37, channel 8/9:
-          msg.data=True  → Kẹp/extend  (reset ch8, set ch9)
-          msg.data=False → Nhả/retract (reset ch9, set ch8)
+          (Đã đổi dây khí ngoài thực tế)
+          msg.data=True  → Nhả/extend  (reset ch8, set ch9)
+          msg.data=False → Kẹp/retract (reset ch9, set ch8)
 
         Node này đang sở hữu CPX 253, nên xử lý tại đây thay vì
         gripper_festo_node.py (node đó bị tắt trong start_all để tránh ghi
@@ -2541,16 +2542,16 @@ class CartridgeSystem(Node):
                 valve_mod = self._io1_valve_module_locked()
                 if valve_mod is None:
                     raise RuntimeError("CPX37 VABX valve manifold not found/ambiguous")
-                if msg.data:  # Kẹp
+                if msg.data:  # Nhả
                     valve_mod.reset_channel(8)
                     valve_mod.set_channel(9)
                     self.pub_cyl_loadcell_status.publish(Bool(data=True))
-                    self.get_logger().info("Cyl6/loadcell KẸP: ch8 reset, ch9 set")
-                else:  # Nhả
+                    self.get_logger().info("Cyl6/loadcell NHẢ: ch8 reset, ch9 set")
+                else:  # Kẹp
                     valve_mod.reset_channel(9)
                     valve_mod.set_channel(8)
                     self.pub_cyl_loadcell_status.publish(Bool(data=False))
-                    self.get_logger().info("Cyl6/loadcell NHẢ: ch9 reset, ch8 set")
+                    self.get_logger().info("Cyl6/loadcell KẸP: ch9 reset, ch8 set")
             except Exception as e:
                 self.get_logger().error(f"Cyl6/loadcell cmd error: {e}")
 

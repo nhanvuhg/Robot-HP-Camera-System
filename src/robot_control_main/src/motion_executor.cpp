@@ -1116,7 +1116,7 @@ private:
         if (!setDigitalOutput(1, true)) return false;   // Picker GẮP — kẹp khay tại chamber
         if (!wait(0.9)) return false;
         if (!moveR(0, -70, 0)) return false;
-        if (!setDigitalOutput(6, false)) return false;  // nhả loadcell cartridge
+        if (!setDigitalOutput(6, true)) return false;  // 1 nhả loadcell cartridge
         if (!wait(0.2)) return false;
         if (!moveToIndex(9)) return false;
         if (!moveR(0, 0, -104,8)) return false;
@@ -1146,9 +1146,9 @@ private:
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — đảm bảo gripper mở trước khi pick up
         if (!wait(0.2)) return false;
         if (!moveToIndex(32)) return false;
-        if (!setDigitalOutput(6, true)) return false; // kẹp cartridge
+        if (!setDigitalOutput(6, false)) return false; //2 kẹp cartridge
         if (!wait(2.5)) return false;
-        if (!setDigitalOutput(6, false)) return false;  // nhả cartridge
+        if (!setDigitalOutput(6, true)) return false;  //3 nhả cartridge
         if (!moveToIndex(12)) return false; 
         if (!moveR(0, 0, -59.5,5)) return false;
         if (!setDigitalOutput(2, true)) return false;   // Gripper GẮP — kẹp khay tại Index 11
@@ -1160,7 +1160,6 @@ private:
         if (!setDigitalOutput(2, false)) return false;  // Gripper NHẢ — thả khay vào output slot
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 130)) return false;
-        if (!setDigitalOutput(6, false)) return false;
         if (!moveToIndex(13)) return false;
         if (!moveToIndex(0)) return false;
         return true;

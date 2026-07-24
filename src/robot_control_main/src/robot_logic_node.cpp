@@ -1708,6 +1708,7 @@ void RobotLogicNode::startSystemCallback(
         RCLCPP_INFO(get_logger(), "[INIT] Ensuring Gripper & Picker are OPEN (DO 1 & 2 = False) before init...");
         setDigitalOutput(1, false);  // Gripper NHẢ — safe state trước khi init
         setDigitalOutput(2, false);  // Picker  NHẢ — safe state trước khi init
+        setDigitalOutput(6, true);   // Cyl loadcell EXTEND — mặc định mở xy lanh cho robot đặt khay vào (sau khi đổi dây khí)
 
         // REMOVED: waiting_for_new_input_ = false; (must wait for actual tray)
 
