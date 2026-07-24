@@ -1071,12 +1071,17 @@ void RobotController::stopMotionOnly()
     if (pause_client_ && pause_client_->service_is_ready()) {
         auto pauseReq = std::make_shared<dobot_msgs_v3::srv::Pause::Request>();
         pause_client_->async_send_request(pauseReq,
-            [](rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedFuture f) {
+            [this](rclcpp::Client<dobot_msgs_v3::srv::Pause>::SharedFuture f) {
                 try { qDebug() << "[STOP-ONLY] Pause res:" << f.get()->res; }
                 catch (...) { qWarning() << "[STOP-ONLY] Pause failed"; }
+                if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
+                    auto resetReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
+                    reset_robot_client_->async_send_request(resetReq);
+                }
             });
-    } else {
-        qWarning() << "[STOP-ONLY] Pause service not ready";
+    } else if (reset_robot_client_ && reset_robot_client_->service_is_ready()) {
+        auto resetReq = std::make_shared<dobot_msgs_v3::srv::ResetRobot::Request>();
+        reset_robot_client_->async_send_request(resetReq);
     }
 
     auto softStopReq = std::make_shared<std_srvs::srv::SetBool::Request>();
